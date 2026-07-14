@@ -33,6 +33,10 @@ export interface SwarmState {
 	agents: Record<string, AgentState>;
 	startedAt: number;
 	completedAt?: number;
+	/** Loop-specific fields (set when mode === "loop") */
+	loopIteration?: number;
+	roundtablePhase?: string;
+	reviewVerdict?: string;
 }
 
 // ============================================================================
