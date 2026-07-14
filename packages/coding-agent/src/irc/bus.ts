@@ -62,6 +62,63 @@ export class IrcBus {
 		IrcBus.#global = undefined;
 	}
 
+	// ==========================================================================
+	// Loop / Roundtable helpers (NEW — non-invasive additions)
+	// ==========================================================================
+
+	/**
+	 * Send a message to a group of agents concurrently. Each delivery is
+	 * independent — a failure for one participant does not block others.
+	 * Returns a map of agentId → delivery receipt.
+	 */
+	async sendToGroup(
+		agentIds: string[],
+		msg: Omit<IrcMessage, "id" | "ts" | "to">,
+		opts?: { expectsReply?: boolean; suppressRelay?: boolean },
+	): Promise<Map<string, IrcDeliveryReceipt>> {
+		const results = new Map<string, IrcDeliveryReceipt>();
+		const deliveries = agentIds.map(async (id) => {
+			const receipt = await this.send({ ...msg, to: id }, opts);
+			results.set(id, receipt);
+		});
+		await Promise.allSettled(deliveries);
+		return results;
+	}
+
+	/**
+	 * Send to a group then collect responses from recipients within a
+	 * configurable timeout. Returns responses keyed by sender agent id.
+	 * Agents that time out or fail are excluded from the map.
+	 *
+	 * @param callerId — the agent id that will receive the replies (e.g. Merlin).
+	 */
+	async collectResponses(
+		callerId: string,
+		agentIds: string[],
+		msg: Omit<IrcMessage, "id" | "ts" | "to">,
+		filter: { from?: string } = {},
+		timeoutMs: number = 30_000,
+		signal?: AbortSignal,
+	): Promise<Map<string, IrcMessage>> {
+		// Fire the group send first so recipients start receiving.
+		await this.sendToGroup(agentIds, msg, { expectsReply: true });
+
+		// Collect responses in parallel with individual timeouts.
+		const results = new Map<string, IrcMessage>();
+		const collectors = agentIds.map(async (id) => {
+			const reply = await this.wait(
+				callerId,
+				{ from: filter.from ?? id },
+				timeoutMs,
+				signal,
+				{ drainPending: false },
+			);
+			if (reply) results.set(reply.from, reply);
+		});
+		await Promise.allSettled(collectors);
+		return results;
+	}
+
 	readonly #registry: AgentRegistry;
 	readonly #lifecycle: () => AgentLifecycleManager;
 	readonly #mailboxes = new Map<string, IrcMessage[]>();
