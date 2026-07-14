@@ -76,6 +76,7 @@ export async function executeSwarmAgent(
 			settings,
 			enableLsp: false,
 			artifactsDir: path.join(stateTracker.swarmDir, "context"),
+			keepAlive: false,
 		});
 
 		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);

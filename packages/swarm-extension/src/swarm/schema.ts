@@ -158,16 +158,19 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 		});
 	}
 
+	// Resolve loop config first so targetCount can inherit maxIterations
+	const loopConfig =
+		mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined;
+
 	return {
 		name: swarm.name,
 		workspace: swarm.workspace,
 		mode: mode as SwarmMode,
-		targetCount: swarm.target_count ?? 1,
+		targetCount: loopConfig?.maxIterations ?? swarm.target_count ?? 1,
 		model: typeof swarm.model === "string" ? swarm.model.trim() : undefined,
 		agents,
 		agentOrder,
-		loopConfig:
-			mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined,
+		loopConfig,
 	};
 }
 

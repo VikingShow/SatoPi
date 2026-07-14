@@ -138,3 +138,4 @@ if (def.mode === "loop" && def.loopConfig) {
 // Final state dump
 const lines = renderSwarmProgress(stateTracker.state);
 console.log(lines.join("\n"));
+process.exit(0);

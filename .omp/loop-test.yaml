@@ -46,9 +46,10 @@ swarm:
 
     bedivere:
       role: "Loyal Knight — documentation and UX"
+      waits_for: [lancelot]
       task: |
         Review the README.md created by Lancelot.
-        If it exists and looks good, create test-workspace/REVIEW.md containing:
+        If it exists and looks good, create REVIEW.md containing:
         "# Review Passed"
         "The README.md created by Lancelot has been reviewed and approved by Bedivere."
-        If README.md doesn't exist, create test-workspace/ERROR.md with the error details.
+        If README.md doesn't exist, create ERROR.md with the error details.
