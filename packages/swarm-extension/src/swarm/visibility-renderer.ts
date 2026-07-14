@@ -10,7 +10,8 @@
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import type { RoundtableResult } from "./roundtable";
-import type { ReviewVerdict, EmergenceReport } from "./bid-assigner";
+import type { ReviewVerdict } from "./loop-controller";
+import type { EmergenceReport } from "./bid-assigner";
 
 export interface VisibilityConfig {
 	enabled: boolean;

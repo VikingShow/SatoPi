@@ -45,6 +45,8 @@ export interface SwarmDefinition {
 	agents: Map<string, SwarmAgent>;
 	/** Preserves YAML declaration order for implicit pipeline sequencing. */
 	agentOrder: string[];
+	/** Loop-mode configuration (set when mode === "loop"). */
+	loopConfig?: LoopSwarmConfig;
 }
 
 // ============================================================================
@@ -164,6 +166,8 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 		model: typeof swarm.model === "string" ? swarm.model.trim() : undefined,
 		agents,
 		agentOrder,
+		loopConfig:
+			mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined,
 	};
 }
 

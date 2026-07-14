@@ -11,6 +11,7 @@ import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
+import { LoopController } from "./swarm/loop-controller";
 import { PipelineController } from "./swarm/pipeline";
 import { renderSwarmProgress } from "./swarm/render";
 import { parseSwarmYaml, validateSwarmDefinition } from "./swarm/schema";
@@ -71,35 +72,68 @@ const settings = Settings.isolated();
 let lastProgressDump = 0;
 const PROGRESS_INTERVAL_MS = 5000;
 
-// Run
+// Run — route by mode
 console.log("\n--- Pipeline starting ---\n");
 
-const controller = new PipelineController(def, waves, stateTracker);
-const result = await controller.run({
-	workspace,
-	onProgress: () => {
-		const now = Date.now();
-		if (now - lastProgressDump > PROGRESS_INTERVAL_MS) {
-			lastProgressDump = now;
-			const lines = renderSwarmProgress(stateTracker.state);
-			console.log(lines.join("\n"));
-			console.log();
-		}
-	},
-	modelRegistry,
-	settings,
-});
+if (def.mode === "loop" && def.loopConfig) {
+	const loopCtrl = new LoopController(def, waves, stateTracker, {
+		loopConfig: def.loopConfig,
+		workspace,
+	});
 
-console.log("\n--- Pipeline finished ---\n");
-console.log(`Status: ${result.status}`);
-console.log(`Iterations completed: ${result.iterations}/${def.targetCount}`);
-if (result.errors.length > 0) {
-	console.log(`Errors (${result.errors.length}):`);
-	for (const err of result.errors) {
-		console.log(`  - ${err}`);
+	const loopResult = await loopCtrl.runLoop({
+		workspace,
+		onProgress: () => {
+			const now = Date.now();
+			if (now - lastProgressDump > PROGRESS_INTERVAL_MS) {
+				lastProgressDump = now;
+				const lines = renderSwarmProgress(stateTracker.state);
+				console.log(lines.join("\n"));
+				console.log();
+			}
+		},
+		modelRegistry,
+		settings,
+	});
+
+	console.log("\n--- Loop finished ---\n");
+	console.log(`Status: ${loopResult.status}`);
+	console.log(`Iterations completed: ${loopResult.iterations}/${def.loopConfig.maxIterations}`);
+	if (loopResult.errors.length > 0) {
+		console.log(`Errors (${loopResult.errors.length}):`);
+		for (const err of loopResult.errors) {
+			console.log(`  - ${err}`);
+		}
 	}
+	console.log(`\nState saved to: ${stateTracker.swarmDir}`);
+} else {
+	const controller = new PipelineController(def, waves, stateTracker);
+	const result = await controller.run({
+		workspace,
+		onProgress: () => {
+			const now = Date.now();
+			if (now - lastProgressDump > PROGRESS_INTERVAL_MS) {
+				lastProgressDump = now;
+				const lines = renderSwarmProgress(stateTracker.state);
+				console.log(lines.join("\n"));
+				console.log();
+			}
+		},
+		modelRegistry,
+		settings,
+	});
+
+	console.log("\n--- Pipeline finished ---\n");
+	console.log(`Status: ${result.status}`);
+	console.log(`Iterations completed: ${result.iterations}/${def.targetCount}`);
+	if (result.errors.length > 0) {
+		console.log(`Errors (${result.errors.length}):`);
+		for (const err of result.errors) {
+			console.log(`  - ${err}`);
+		}
+	}
+	console.log(`\nState saved to: ${stateTracker.swarmDir}`);
 }
-console.log(`\nState saved to: ${stateTracker.swarmDir}`);
 
 // Final state dump
 const lines = renderSwarmProgress(stateTracker.state);

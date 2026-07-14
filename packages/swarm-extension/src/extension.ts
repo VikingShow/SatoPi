@@ -14,6 +14,7 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
+import { LoopController } from "./swarm/loop-controller";
 import { PipelineController } from "./swarm/pipeline";
 import { renderSwarmProgress } from "./swarm/render";
 import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "./swarm/schema";
@@ -141,7 +142,75 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 	};
 	updateWidget();
 
-	// 9. Run pipeline
+	// 9. Run pipeline — route by mode
+	if (def.mode === "loop" && def.loopConfig) {
+		const loopCtrl = new LoopController(def, waves, stateTracker, {
+			loopConfig: def.loopConfig,
+			workspace,
+		});
+
+		const loopResult = await loopCtrl.runLoop({
+			workspace,
+			onProgress: () => updateWidget(),
+			modelRegistry: ctx.modelRegistry,
+			settings: pi.pi.settings,
+		});
+
+		const loopStatus =
+			loopResult.status === "completed"
+				? "completed"
+				: loopResult.status === "aborted"
+					? "aborted"
+					: "failed";
+		const result = {
+			status: loopStatus,
+			iterations: loopResult.iterations,
+			errors: loopResult.errors,
+		};
+
+		// 10. Clear widget and show summary (loop)
+		ctx.ui.setWidget(widgetKey, undefined);
+
+		const elapsed = stateTracker.state.completedAt
+			? formatDuration(stateTracker.state.completedAt - stateTracker.state.startedAt)
+			: "unknown";
+
+		const summaryParts = [
+			`Swarm '${def.name}' ${result.status}`,
+			`${result.iterations}/${def.loopConfig.maxIterations} iterations`,
+			`elapsed: ${elapsed}`,
+		];
+
+		if (result.errors.length > 0) {
+			summaryParts.push(`${result.errors.length} error(s)`);
+		}
+
+		const summaryType = result.status === "completed" ? "info" : "error";
+		ctx.ui.notify(summaryParts.join(" | "), summaryType);
+
+		if (result.errors.length > 0) {
+			pi.logger.warn("Loop completed with errors", { errors: result.errors });
+		}
+
+		const summaryMessage = buildSummaryMessage(def, result, stateTracker, workspace);
+		pi.sendMessage(
+			{
+				customType: "swarm-result",
+				content: [{ type: "text", text: summaryMessage }],
+				display: true,
+				details: {
+					swarmName: def.name,
+					status: result.status,
+					iterations: result.iterations,
+					errorCount: result.errors.length,
+				},
+			},
+			{ triggerTurn: false },
+		);
+		return;
+	}
+
+	// Pipeline / parallel / sequential modes
 	const controller = new PipelineController(def, waves, stateTracker);
 
 	const result = await controller.run({
