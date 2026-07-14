@@ -158,7 +158,7 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 		});
 	}
 
-	// Resolve loop config first so targetCount can inherit maxIterations
+	// Resolve loop config when mode is "loop"
 	const loopConfig =
 		mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined;
 
@@ -166,7 +166,10 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 		name: swarm.name,
 		workspace: swarm.workspace,
 		mode: mode as SwarmMode,
-		targetCount: loopConfig?.maxIterations ?? swarm.target_count ?? 1,
+		// targetCount is the pipeline's internal iteration count (1 per loop iteration).
+		// loopConfig.maxIterations controls the outer review-gate loop.
+		// They are separate — do NOT conflate them.
+		targetCount: swarm.target_count ?? 1,
 		model: typeof swarm.model === "string" ? swarm.model.trim() : undefined,
 		agents,
 		agentOrder,

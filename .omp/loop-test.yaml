@@ -38,7 +38,7 @@ swarm:
     lancelot:
       role: "Chief Knight — architecture and coding"
       task: |
-        Create a file test-workspace/README.md with a simple project description.
+        Create a file named README.md in the current working directory with a simple project description.
         The file should contain:
         1. A title: "# Loop Engineering Test"
         2. A paragraph explaining this is a test of the SatoPi Loop Engineering system
@@ -48,8 +48,8 @@ swarm:
       role: "Loyal Knight — documentation and UX"
       waits_for: [lancelot]
       task: |
-        Review the README.md created by Lancelot.
-        If it exists and looks good, create REVIEW.md containing:
+        Review the README.md file in the current working directory, created by Lancelot.
+        If it exists and looks good, create a file named REVIEW.md (in the current directory) containing:
         "# Review Passed"
         "The README.md created by Lancelot has been reviewed and approved by Bedivere."
-        If README.md doesn't exist, create ERROR.md with the error details.
+        If README.md does not exist, create a file named ERROR.md with the error details.
