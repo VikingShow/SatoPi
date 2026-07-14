@@ -1,0 +1,54 @@
+# Minimal Loop Engineering Test — 2 knights, 1 simple task
+swarm:
+  name: loop-test
+  workspace: ./test-workspace
+  mode: loop
+  max_iterations: 2
+  review_gate: atropos_veto
+  auto_retry: false
+  human_escalation: false
+
+  roundtable:
+    propose_timeout: 30000
+    debate_timeout: 60000
+    vote_timeout: 15000
+
+  reviewers:
+    core:
+      - clotho
+      - lachesis
+      - atropos
+    pool:
+      - urania
+      - daedalus
+      - iris
+      - minerva
+      - mnemosyne
+      - vulcan
+    max_optional: 2
+    tag_mapping:
+      api: urania
+      algorithm: daedalus
+      ui: iris
+      architecture: minerva
+      docs: mnemosyne
+      infra: vulcan
+
+  agents:
+    lancelot:
+      role: "Chief Knight — architecture and coding"
+      task: |
+        Create a file test-workspace/README.md with a simple project description.
+        The file should contain:
+        1. A title: "# Loop Engineering Test"
+        2. A paragraph explaining this is a test of the SatoPi Loop Engineering system
+        3. List the knights who participated (Lancelot and Bedivere)
+
+    bedivere:
+      role: "Loyal Knight — documentation and UX"
+      task: |
+        Review the README.md created by Lancelot.
+        If it exists and looks good, create test-workspace/REVIEW.md containing:
+        "# Review Passed"
+        "The README.md created by Lancelot has been reviewed and approved by Bedivere."
+        If README.md doesn't exist, create test-workspace/ERROR.md with the error details.

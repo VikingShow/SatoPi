@@ -1,0 +1,22 @@
+{
+  "name": "loop-test",
+  "status": "running",
+  "mode": "loop",
+  "iteration": 0,
+  "targetCount": 2,
+  "agents": {
+    "lancelot": {
+      "name": "lancelot",
+      "status": "pending",
+      "iteration": 0,
+      "wave": 0
+    },
+    "bedivere": {
+      "name": "bedivere",
+      "status": "pending",
+      "iteration": 0,
+      "wave": 0
+    }
+  },
+  "startedAt": 1784019991511
+}
