@@ -2,8 +2,9 @@
  * Swarm Extension — Multi-agent pipeline orchestration from YAML definitions.
  *
  * Registers:
- * - /swarm run <file.yaml>   — Execute a swarm pipeline
- * - /swarm status             — Show current pipeline status
+ * - /swarm run <file.yaml>    — Execute a swarm pipeline
+ * - /swarm status              — Show current pipeline status
+ * - /loopeng [file.yaml]       — Start Loop Engineering (auto-resolves YAML)
  *
  * Usage: Add this extension's directory to your extensions config,
  * then use /swarm in any oh-my-pi session.
@@ -61,6 +62,27 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 					);
 					return;
 			}
+		},
+	});
+
+	// /loopeng — shortcut for Loop Engineering mode (delegates to /swarm run)
+	// Auto-resolves .omp/loop.yaml → .omp/loop-test.yaml when no path given.
+	pi.registerCommand("loopeng", {
+		description: "Start Loop Engineering — multi-knight swarm with roundtable & review council",
+		getArgumentCompletions: prefix => {
+			if (!prefix) return [{ label: ".omp/loop-test.yaml", value: ".omp/loop-test.yaml" }, { label: ".omp/loop.yaml", value: ".omp/loop.yaml" }];
+			return [];
+		},
+		handler: async (args: string, ctx: ExtensionCommandContext) => {
+			const candidates = [".omp/loop.yaml", ".omp/loop-test.yaml"];
+			const yamlPath = args.trim() || candidates.find(p => {
+				try { return Bun.file(path.resolve(ctx.cwd, p)).size > 0; } catch { return false; }
+			});
+			if (!yamlPath) {
+				ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or pass a path: /loopeng <file.yaml>", "error");
+				return;
+			}
+			await handleRun(yamlPath, ctx, pi);
 		},
 	});
 }

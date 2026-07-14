@@ -32,19 +32,21 @@ description: |
 4. 当覆盖度 ≥ 90% 且无未解决模糊点时，产出 plan.md
 5. 向用户确认："细节足够清楚了，是否开始执行？"
 
-### 阶段 2：In Loop（/swarm run）
+### 阶段 2：In Loop（启动 Loop Engineering）
 
 用户确认后，执行：
 
 ```
-/swarm run .omp/loop.yaml
+/loopeng
 ```
 
-或使用测试配置：
+或指定自定义 YAML：
 
 ```
-/swarm run .omp/loop-test.yaml
+/loopeng .omp/loop.yaml
 ```
+
+（内部委托给 `/swarm run`，`.omp/loop.yaml` 或 `.omp/loop-test.yaml` 自动解析，无需每次指定路径）
 
 ### 阶段 3：After Loop（总结）
 
@@ -54,6 +56,7 @@ description: |
 
 | 命令 | 用途 |
 |------|------|
-| `/swarm run .omp/loop-test.yaml` | 最小化测试（2骑士） |
-| `/swarm run .omp/loop.yaml` | 完整 12 骑士池 |
-| `/swarm status loop-test` | 查看运行状态 |
+| `/loopeng` | 启动 Loop Engineering（自动解析 .omp/loop.yaml → .omp/loop-test.yaml） |
+| `/loopeng <file.yaml>` | 指定自定义 YAML 启动 |
+| `/swarm run <file.yaml>` | 底层命令（等价于 `/loopeng <file.yaml>`） |
+| `/swarm status <name>` | 查看运行状态 |
