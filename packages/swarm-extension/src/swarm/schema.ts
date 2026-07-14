@@ -24,7 +24,7 @@ interface RawSwarmConfig {
 // Normalized types (camelCase, defaults applied)
 // ============================================================================
 
-export type SwarmMode = "pipeline" | "parallel" | "sequential";
+export type SwarmMode = "pipeline" | "parallel" | "sequential" | "loop";
 
 export interface SwarmAgent {
 	name: string;
@@ -48,10 +48,64 @@ export interface SwarmDefinition {
 }
 
 // ============================================================================
+// Loop mode configuration (NEW)
+// ============================================================================
+
+export interface LoopSwarmConfig {
+	mode: "loop";
+	/** Maximum review-retry iterations before escalating to human. Default: 5. */
+	maxIterations: number;
+	/** How review verdicts are tallied. "atropos_veto" = Atropos veto OR unified fail. */
+	reviewGate: "atropos_veto";
+	/** If true, rejected outputs trigger automatic retry without human input. */
+	autoRetry: boolean;
+	/** If true, escalate to human when maxIterations exhausted. */
+	humanEscalation: boolean;
+	/** Timeouts for each roundtable phase (ms). */
+	roundtable: {
+		proposeTimeout: number;
+		debateTimeout: number;
+		voteTimeout: number;
+	};
+	reviewers: {
+		/** Core reviewer IDs — always present, 3 required. */
+		core: string[];
+		/** Optional reviewer pool — drawn by tag-matching. */
+		pool: string[];
+		/** Max optional reviewers per iteration. Default: 4. */
+		maxOptional: number;
+		/** Task feature tag → reviewer id mapping. */
+		tagMapping: Record<string, string>;
+	};
+}
+
+/** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
+export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
+	return {
+		mode: "loop",
+		maxIterations: (raw.max_iterations as number) ?? 5,
+		reviewGate: (raw.review_gate as LoopSwarmConfig["reviewGate"]) ?? "atropos_veto",
+		autoRetry: (raw.auto_retry as boolean) ?? true,
+		humanEscalation: (raw.human_escalation as boolean) ?? true,
+		roundtable: {
+			proposeTimeout: (raw.roundtable as Record<string, number>)?.propose_timeout ?? 60_000,
+			debateTimeout: (raw.roundtable as Record<string, number>)?.debate_timeout ?? 120_000,
+			voteTimeout: (raw.roundtable as Record<string, number>)?.vote_timeout ?? 30_000,
+		},
+		reviewers: {
+			core: (raw.reviewers as Record<string, string[]>)?.core ?? ["clotho", "lachesis", "atropos"],
+			pool: (raw.reviewers as Record<string, string[]>)?.pool ?? ["urania", "daedalus", "iris", "minerva", "mnemosyne", "vulcan"],
+			maxOptional: (raw.reviewers as Record<string, number>)?.max_optional ?? 4,
+			tagMapping: (raw.reviewers as Record<string, Record<string, string>>)?.tag_mapping ?? {},
+		},
+	};
+}
+
+// ============================================================================
 // Parsing
 // ============================================================================
 
-const VALID_MODES = new Set<string>(["pipeline", "parallel", "sequential"]);
+const VALID_MODES = new Set<string>(["pipeline", "parallel", "sequential", "loop"]);
 const VALID_SWARM_NAME = /^[a-zA-Z0-9._-]+$/;
 
 export function parseSwarmYaml(content: string): SwarmDefinition {
@@ -149,8 +203,8 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 	if (def.targetCount < 1) {
 		errors.push("target_count must be at least 1");
 	}
-	if (def.mode !== "pipeline" && def.targetCount !== 1) {
-		errors.push("target_count is only supported in pipeline mode");
+	if (def.mode !== "pipeline" && def.mode !== "loop" && def.targetCount !== 1) {
+		errors.push("target_count is only supported in pipeline and loop mode");
 	}
 
 	return errors;
