@@ -15,7 +15,7 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
-import { LoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
+import { createLoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
@@ -171,7 +171,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
-		const loopCtrl = new LoopController(def, waves, stateTracker, {
+		const loopCtrl = createLoopController(def, waves, stateTracker, {
 			loopConfig: def.loopConfig,
 			workspace,
 		});
