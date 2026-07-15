@@ -146,7 +146,7 @@ export class LoopController {
 			let verdict: ReviewVerdict;
 			try {
 			// 1. Spawn workers (parallel)
-			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, iterSignal);
+			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, iterSignal, errors);
 			if (iterSignal?.aborted) {
 				return {
 					status: "aborted",
@@ -275,12 +275,13 @@ export class LoopController {
 		modelRegistry?: ModelRegistry,
 		settings?: Settings,
 		signal?: AbortSignal,
+		errors: string[] = [],
 	): Promise<SingleResult[]> {
 		const feedbackBlock = previousFeedback.length > 0
 			? `\n## Previous Review Feedback\n\n${previousFeedback.map((f, i) => `(Iteration ${i + 1}) ${f}`).join("\n")}\n`
 			: "";
 
-		const results = await Promise.all(
+		const results = await Promise.allSettled(
 			workerIds.map((id, i) =>
 				runSubprocess({
 					cwd: workspace,
@@ -308,7 +309,25 @@ export class LoopController {
 			),
 		);
 
-		return results;
+		return results.map((r, i) => {
+			if (r.status === "fulfilled") return r.value;
+			const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+			errors.push(`Worker ${workerIds[i]} crashed: ${errMsg}`);
+			return {
+				index: i,
+				id: `worker-${workerIds[i]}`,
+				agent: workerIds[i],
+				agentSource: "project" as const,
+				task: "",
+				exitCode: 1,
+				output: `[CRASHED] ${errMsg}`,
+				stderr: "",
+				truncated: false,
+				durationMs: 0,
+				tokens: 0,
+				requests: 0,
+			};
+		});
 	}
 	// -------------------------------------------------------------------
 	// Run cloner review via ClonerCouncil
