@@ -146,11 +146,7 @@ export class RoundtableOrchestrator {
 					`Please question ${target.agentId}'s proposal or defend yours.`,
 			};
 
-			// Send individually to allow targeted debate
-			const receipt = await this.#bus.sendToGroup([participantId], msg, {
-				expectsReply: true,
-			});
-
+			// collectResponses fires the send internally
 			const replies = await this.#bus.collectResponses(
 				this.#senderId,
 				[participantId],
@@ -176,7 +172,7 @@ export class RoundtableOrchestrator {
 	// Phase 3: VOTE — 参与者投票
 	// -------------------------------------------------------------------
 	async #votePhase(
-		proposals: RoundtableProposal[],
+		_proposals: RoundtableProposal[],
 		signal?: AbortSignal,
 	): Promise<RoundtableVote[]> {
 		const msg = {

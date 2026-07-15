@@ -10,12 +10,12 @@ import * as path from "node:path";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
-import { LoopController } from "./swarm/loop-controller";
-import { PipelineController } from "./swarm/pipeline";
-import { renderSwarmProgress } from "./swarm/render";
-import { parseSwarmYaml, validateSwarmDefinition } from "./swarm/schema";
-import { StateTracker } from "./swarm/state";
+import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
+import { LoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
+import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
+import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
+import { parseSwarmYaml, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
+import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
 
 const yamlPath = process.argv[2];
 if (!yamlPath) {

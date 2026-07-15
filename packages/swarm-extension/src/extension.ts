@@ -14,12 +14,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { formatDuration } from "@oh-my-pi/pi-utils";
-import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
-import { LoopController } from "./swarm/loop-controller";
-import { PipelineController } from "./swarm/pipeline";
-import { renderSwarmProgress } from "./swarm/render";
-import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "./swarm/schema";
-import { StateTracker } from "./swarm/state";
+import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
+import { LoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
+import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
+import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
+import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
+import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
 	pi.setLabel("Swarm Orchestrator");
