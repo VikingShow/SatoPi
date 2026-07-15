@@ -528,6 +528,10 @@
       "types": "./src/stt/*.ts",
       "import": "./src/stt/*.ts"
     },
+    "./swarm/after-loop": {
+      "types": "./src/swarm/after-loop/index.ts",
+      "import": "./src/swarm/after-loop/index.ts"
+    },
     "./task": {
       "types": "./src/task/index.ts",
       "import": "./src/task/index.ts"

@@ -20,6 +20,8 @@ import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
+import { extractLessons, ExperienceStore } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
+import { planExists } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
 	pi.setLabel("Swarm Orchestrator");
@@ -64,30 +66,76 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			}
 		},
 	});
-
-	// /loopeng — shortcut for Loop Engineering mode (delegates to /swarm run)
-	// Auto-resolves .omp/loop.yaml → .omp/loop-test.yaml when no path given.
+	// /loopeng — Loop Engineering mode with Before Loop planning phase.
+	// /loopeng             → start Before Loop (or run if plan.md exists)
+	// /loopeng start       → force-start the loop
+	// /loopeng <file.yaml> → run with explicit YAML (skip Before Loop)
 	pi.registerCommand("loopeng", {
-		description: "Start Loop Engineering — multi-knight swarm with roundtable & review council",
+		description: "Start Loop Engineering — multi-agent swarm with roundtable & review council",
 		getArgumentCompletions: prefix => {
-			if (!prefix) return [{ label: ".omp/loop-test.yaml", value: ".omp/loop-test.yaml" }, { label: ".omp/loop.yaml", value: ".omp/loop.yaml" }];
+			const actions = ["start"];
+			if (!prefix) return [
+				...actions.map(s => ({ label: s, value: s })),
+				{ label: ".omp/loop-test.yaml", value: ".omp/loop-test.yaml" },
+				{ label: ".omp/loop.yaml", value: ".omp/loop.yaml" },
+			];
+			const matching = actions.filter(s => s.startsWith(prefix));
+			if (matching.length > 0) return matching.map(s => ({ label: s, value: s }));
 			return [];
 		},
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
-			if (args.trim()) {
-				await handleRun(args.trim(), ctx, pi);
+			const trimmed = args.trim();
+
+			// Subcommand: /loopeng start — force-start, skip Before Loop
+			if (trimmed === "start") {
+				const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml")
+					|| findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
+				if (!yamlPath) {
+					ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or .omp/loop-test.yaml first.", "error");
+					return;
+				}
+				await handleRun(yamlPath, ctx, pi);
 				return;
 			}
-			// Walk up from ctx.cwd to find .omp/loop.yaml or .omp/loop-test.yaml.
-			// ctx.cwd may be a subdirectory (e.g. bun run dev cwd = packages/coding-agent)
-			// while .omp/ lives at the project root.
+
+			// Explicit YAML path — run directly, skip Before Loop
+			if (trimmed && trimmed !== "start") {
+				await handleRun(trimmed, ctx, pi);
+				return;
+			}
+
+			// /loopeng (no args) — start Before Loop if plan.md missing
 			const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml")
 				|| findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
 			if (!yamlPath) {
 				ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or pass a path: /loopeng <file.yaml>", "error");
 				return;
 			}
-			await handleRun(yamlPath, ctx, pi);
+
+			// Resolve workspace to check for plan.md
+			const yamlDir = path.dirname(yamlPath);
+			const hasPlan = await planExists(yamlDir);
+
+			if (hasPlan) {
+				// Plan exists — run directly
+				await handleRun(yamlPath, ctx, pi);
+				return;
+			}
+
+			// No plan.md — start Before Loop phase
+			ctx.ui.notify(
+				[
+					"# Before Loop — Planning Phase",
+					"",
+					"I'll help you plan this task. Let me understand what you want to achieve.",
+					"",
+					"Tell me about the task, and I'll ask clarifying questions.",
+					"Once we're clear, I'll write the plan and propose worker/cloner counts.",
+					"",
+					"When ready, type `/loopeng start` to begin execution.",
+				].join("\n"),
+				"info",
+			);
 		},
 	});
 }
@@ -171,7 +219,13 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
-		const loopCtrl = createLoopController(def, waves, stateTracker, {
+		// Read plan.md from workspace if it exists
+		let planContent: string | undefined;
+		try {
+			planContent = await Bun.file(path.join(workspace, ".omp", "plan.md")).text();
+		} catch { /* plan.md is optional */ }
+
+		const loopCtrl = createLoopController(stateTracker, {
 			loopConfig: def.loopConfig,
 			workspace,
 		});
@@ -181,6 +235,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			onProgress: () => updateWidget(),
 			modelRegistry: ctx.modelRegistry,
 			settings: pi.pi.settings,
+			planContent,
 		});
 
 		const loopStatus =
@@ -194,6 +249,33 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			iterations: loopResult.iterations,
 			errors: loopResult.errors,
 		};
+
+		// After Loop — persist experience for future runs
+		try {
+			const store = new ExperienceStore(workspace);
+			await store.init();
+			const extraction = extractLessons(loopResult, def.loopConfig.workers.initial, def.loopConfig.cloners.count);
+			for (const lesson of extraction.lessons) {
+				store.saveLesson({
+					runId: `loop-${def.name}-${Date.now()}`,
+					timestamp: new Date().toISOString(),
+					lesson,
+					stats: extraction.stats,
+				});
+			}
+			// Write human-readable summary
+			const summary = buildSummaryMessage(def, result, stateTracker, workspace) +
+				`\n\n### Lessons Learned\n\n` +
+				extraction.lessons.map(l => `- [${l.type}] ${l.summary}`).join("\n");
+			await store.writeSummary(`loop-${def.name}-${Date.now()}`, summary);
+			pi.logger.debug("Loop experience persisted", {
+				lessonCount: extraction.lessons.length,
+				workspace,
+			});
+		} catch (err) {
+			// Non-fatal: loop succeeded, just logging failed
+			pi.logger.warn("Failed to persist loop experience", { error: String(err) });
+		}
 
 		// 10. Clear widget and show summary (loop)
 		ctx.ui.setWidget(widgetKey, undefined);

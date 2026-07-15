@@ -61,41 +61,37 @@ swarm:
 	it("resolves loop config with defaults", () => {
 		const raw = {};
 		const config = resolveLoopConfig(raw);
-		expect(config.mode).toBe("loop");
 		expect(config.maxIterations).toBe(5);
-		expect(config.reviewGate).toBe("atropos_veto");
 		expect(config.autoRetry).toBe(true);
 		expect(config.humanEscalation).toBe(true);
-		expect(config.roundtable.proposeTimeout).toBe(60_000);
-		expect(config.reviewers.core).toEqual(["clotho", "lachesis", "atropos"]);
-		expect(config.reviewers.pool).toContain("urania");
+		expect(config.workers.initial).toBe(3);
+		expect(config.workers.min).toBe(1);
+		expect(config.workers.max).toBe(6);
+		expect(config.cloners.count).toBe(3);
 	});
 
 	it("resolves loop config with custom values", () => {
 		const raw = {
 			max_iterations: 10,
-			review_gate: "atropos_veto",
 			auto_retry: false,
 			human_escalation: false,
-			roundtable: {
-				propose_timeout: 10_000,
-				debate_timeout: 30_000,
-				vote_timeout: 5_000,
+			workers: {
+				initial: 5,
+				min: 2,
+				max: 10,
 			},
-			reviewers: {
-				core: ["clotho", "lachesis", "atropos"],
-				pool: ["minerva", "vulcan"],
-				max_optional: 3,
-				tag_mapping: { ui: "minerva", infra: "vulcan" },
+			cloners: {
+				count: 3,
 			},
 		};
 		const config = resolveLoopConfig(raw);
 		expect(config.maxIterations).toBe(10);
 		expect(config.autoRetry).toBe(false);
 		expect(config.humanEscalation).toBe(false);
-		expect(config.roundtable.proposeTimeout).toBe(10_000);
-		expect(config.reviewers.maxOptional).toBe(3);
-		expect(config.reviewers.pool).toEqual(["minerva", "vulcan"]);
+		expect(config.workers.initial).toBe(5);
+		expect(config.workers.min).toBe(2);
+		expect(config.workers.max).toBe(10);
+		expect(config.cloners.count).toBe(3);
 	});
 });
 

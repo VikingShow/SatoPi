@@ -54,51 +54,44 @@ export interface SwarmDefinition {
 // ============================================================================
 
 export interface LoopSwarmConfig {
-	mode: "loop";
 	/** Maximum review-retry iterations before escalating to human. Default: 5. */
 	maxIterations: number;
-	/** How review verdicts are tallied. "atropos_veto" = Atropos veto OR unified fail. */
-	reviewGate: "atropos_veto";
 	/** If true, rejected outputs trigger automatic retry without human input. */
 	autoRetry: boolean;
 	/** If true, escalate to human when maxIterations exhausted. */
 	humanEscalation: boolean;
-	/** Timeouts for each roundtable phase (ms). */
-	roundtable: {
-		proposeTimeout: number;
-		debateTimeout: number;
-		voteTimeout: number;
+	/** Worker configuration. */
+	workers: {
+		/** Initial worker count (proposed by Cloner, confirmed by human). */
+		initial: number;
+		/** Minimum workers allowed during dynamic scaling. */
+		min: number;
+		/** Maximum workers allowed during dynamic scaling. */
+		max: number;
 	};
-	reviewers: {
-		/** Core reviewer IDs — always present, 3 required. */
-		core: string[];
-		/** Optional reviewer pool — drawn by tag-matching. */
-		pool: string[];
-		/** Max optional reviewers per iteration. Default: 4. */
-		maxOptional: number;
-		/** Task feature tag → reviewer id mapping. */
-		tagMapping: Record<string, string>;
+	/** Cloner configuration. */
+	cloners: {
+		/** Cloner count (default = workers.initial, may be fewer). */
+		count: number;
 	};
 }
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
+	const workersRaw = (raw.workers as Record<string, number>) ?? {};
+	const clonersRaw = (raw.cloners as Record<string, number>) ?? {};
+	const workerInitial = workersRaw.initial ?? 3;
 	return {
-		mode: "loop",
 		maxIterations: (raw.max_iterations as number) ?? 5,
-		reviewGate: (raw.review_gate as LoopSwarmConfig["reviewGate"]) ?? "atropos_veto",
 		autoRetry: (raw.auto_retry as boolean) ?? true,
 		humanEscalation: (raw.human_escalation as boolean) ?? true,
-		roundtable: {
-			proposeTimeout: (raw.roundtable as Record<string, number>)?.propose_timeout ?? 60_000,
-			debateTimeout: (raw.roundtable as Record<string, number>)?.debate_timeout ?? 120_000,
-			voteTimeout: (raw.roundtable as Record<string, number>)?.vote_timeout ?? 30_000,
+		workers: {
+			initial: workerInitial,
+			min: workersRaw.min ?? 1,
+			max: workersRaw.max ?? 6,
 		},
-		reviewers: {
-			core: (raw.reviewers as Record<string, string[]>)?.core ?? ["clotho", "lachesis", "atropos"],
-			pool: (raw.reviewers as Record<string, string[]>)?.pool ?? ["urania", "daedalus", "iris", "minerva", "mnemosyne", "vulcan"],
-			maxOptional: (raw.reviewers as Record<string, number>)?.max_optional ?? 4,
-			tagMapping: (raw.reviewers as Record<string, Record<string, string>>)?.tag_mapping ?? {},
+		cloners: {
+			count: clonersRaw.count ?? workerInitial,
 		},
 	};
 }
@@ -126,11 +119,14 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 	if (!swarm.workspace || typeof swarm.workspace !== "string") {
 		throw new Error("swarm.workspace is required and must be a string");
 	}
-	if (!swarm.agents || typeof swarm.agents !== "object" || Object.keys(swarm.agents).length === 0) {
-		throw new Error("swarm.agents must contain at least one agent");
+	const mode = swarm.mode ?? "sequential";
+	if (!swarm.agents || typeof swarm.agents !== "object") {
+		throw new Error("swarm.agents must be an object");
+	}
+	if (mode !== "loop" && Object.keys(swarm.agents).length === 0) {
+		throw new Error("swarm.agents must contain at least one agent (empty allowed for loop mode)");
 	}
 
-	const mode = swarm.mode ?? "sequential";
 	if (!VALID_MODES.has(mode)) {
 		throw new Error(`Invalid mode '${mode}'. Must be one of: ${[...VALID_MODES].join(", ")}`);
 	}

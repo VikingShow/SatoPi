@@ -15,6 +15,7 @@ import { LoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller"
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import { parseSwarmYaml, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
+import { extractLessons, ExperienceStore } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
 
 const yamlPath = process.argv[2];
@@ -75,26 +76,51 @@ const PROGRESS_INTERVAL_MS = 5000;
 // Run — route by mode
 console.log("\n--- Pipeline starting ---\n");
 
-if (def.mode === "loop" && def.loopConfig) {
-	const loopCtrl = new LoopController(def, waves, stateTracker, {
-		loopConfig: def.loopConfig,
-		workspace,
-	});
+	if (def.mode === "loop" && def.loopConfig) {
+		// Read plan.md from workspace if it exists
+		let planContent: string | undefined;
+		try {
+			planContent = await Bun.file(path.join(workspace, ".omp", "plan.md")).text();
+		} catch { /* plan.md is optional */ }
 
-	const loopResult = await loopCtrl.runLoop({
-		workspace,
-		onProgress: () => {
-			const now = Date.now();
-			if (now - lastProgressDump > PROGRESS_INTERVAL_MS) {
-				lastProgressDump = now;
-				const lines = renderSwarmProgress(stateTracker.state);
-				console.log(lines.join("\n"));
-				console.log();
-			}
-		},
-		modelRegistry,
-		settings,
-	});
+		const loopCtrl = new LoopController({
+			loopConfig: def.loopConfig,
+			workspace,
+		});
+
+		const loopResult = await loopCtrl.runLoop({
+			workspace,
+			onProgress: () => {
+				const now = Date.now();
+				if (now - lastProgressDump > PROGRESS_INTERVAL_MS) {
+					lastProgressDump = now;
+					const lines = renderSwarmProgress(stateTracker.state);
+					console.log(lines.join("\n"));
+					console.log();
+				}
+			},
+			modelRegistry,
+			settings,
+			planContent,
+		});
+
+	// After Loop — persist experience for future runs
+	try {
+		const store = new ExperienceStore(workspace);
+		await store.init();
+		const extraction = extractLessons(loopResult, def.loopConfig!.workers.initial, def.loopConfig!.cloners.count);
+		for (const lesson of extraction.lessons) {
+			store.saveLesson({
+				runId: `loop-${def.name}-${Date.now()}`,
+				timestamp: new Date().toISOString(),
+				lesson,
+				stats: extraction.stats,
+			});
+		}
+		console.log(`\nLessons persisted: ${extraction.lessons.length}`);
+	} catch (err) {
+		console.warn(`Failed to persist loop experience: ${String(err)}`);
+	}
 
 	console.log("\n--- Loop finished ---\n");
 	console.log(`Status: ${loopResult.status}`);

@@ -1,221 +1,198 @@
 /**
- * RoundtableOrchestrator — PROPOSE → DEBATE → VOTE 三轮协议编排。
+ * ClonerCouncil — Cloner 圆桌审查。
  *
- * 基于 IrcBus 扩展的 sendToGroup / collectResponses，在圆桌参与者之间
- * 实现去中心化讨论。不引入新的通信层，复用 SatoPi 进程内事件驱动通信。
+ * 每位 Cloner 独立审查 worker 产出，按多维度评估后投票。
+ * 多数通过 → PASS；否则 FAIL（附带全部 findings 反馈给 workers）。
+ *
+ * 无 atropos_veto 特殊角色 —— 所有 Cloner 平等，一人一票。
  */
 
-import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
+import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import { WorkerChannel } from "./worker-channel";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface RoundtableProposal {
-	agentId: string;
-	body: string;
-	timestamp: number;
+export interface ReviewVerdict {
+	passed: boolean;
+	approvalCount: number;
+	totalCount: number;
+	findings: string[];
 }
 
-export interface RoundtableDebateReply {
-	from: string;
-	to: string;
-	body: string;
-	timestamp: number;
-}
-
-export interface RoundtableVote {
-	agentId: string;
-	verdict: "approve" | "reject";
-	confidence: number; // 0.0-1.0
-	rationale: string;
-}
-
-export type RoundtablePhase = "propose" | "debate" | "vote";
-
-export interface RoundtableResult {
-	phase: RoundtablePhase;
-	proposals: RoundtableProposal[];
-	debates: RoundtableDebateReply[];
-	votes: RoundtableVote[];
-	verdict: "approved" | "rejected";
-	approvalRate: number;
-}
-
-export interface RoundtableConfig {
-	proposeTimeout: number;
-	debateTimeout: number;
-	voteTimeout: number;
+export interface ClonerReviewConfig {
+	/** Cloner agent IDs. */
+	clonerIds: string[];
+	/** Workspace directory. */
+	workspace: string;
+	/** Iteration number (0-indexed). */
+	iteration: number;
+	/** Worker output text for review context. */
+	workerOutput: string;
+	/** plan.md content from Before Loop. Cloners review against this. */
+	planContent?: string;
+	/** Findings from previous iterations. Cloners avoid re-flagging resolved issues. */
+	previousFindings?: string[];
 }
 
 // ============================================================================
-// Orchestrator
+// ClonerCouncil
 // ============================================================================
 
-export class RoundtableOrchestrator {
-	readonly #bus: IrcBus;
-	readonly #senderId: string; // Merlin / caller
-	readonly #participants: string[];
-	readonly #topic: string;
-	readonly #config: RoundtableConfig;
+export class ClonerCouncil {
+	readonly #channel: WorkerChannel;
 
-	constructor(
-		bus: IrcBus,
-		senderId: string,
-		participants: string[],
-		topic: string,
-		config?: Partial<RoundtableConfig>,
-	) {
-		this.#bus = bus;
-		this.#senderId = senderId;
-		this.#participants = participants;
-		this.#topic = topic;
-		this.#config = {
-			proposeTimeout: config?.proposeTimeout ?? 60_000,
-			debateTimeout: config?.debateTimeout ?? 120_000,
-			voteTimeout: config?.voteTimeout ?? 30_000,
-		};
+	constructor(channel: WorkerChannel) {
+		this.#channel = channel;
 	}
 
-	async run(signal?: AbortSignal): Promise<RoundtableResult> {
-		const proposals = await this.#proposePhase(signal);
-		const debates = await this.#debatePhase(proposals, signal);
-		const votes = await this.#votePhase(proposals, signal);
-		const verdict = this.#tallyVotes(votes);
+	/**
+	 * Run a full review cycle:
+	 * 1. Spawn cloner subprocesses in parallel
+	 * 2. Each cloner independently reviews worker output
+	 * 3. Parse JSON verdicts from cloner output
+	 * 4. Tally votes — majority rule
+	 */
+	async review(
+		config: ClonerReviewConfig,
+		modelRegistry?: ModelRegistry,
+		settings?: Settings,
+		signal?: AbortSignal,
+	): Promise<ReviewVerdict> {
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings } = config;
 
-		return {
-			phase: "vote",
-			proposals,
-			debates,
-			votes,
-			verdict: verdict.approved ? "approved" : "rejected",
-			approvalRate: verdict.rate,
-		};
-	}
+		const previousFindingsBlock = previousFindings && previousFindings.length > 0
+			? `\n## Previous Iteration Findings\n\n${previousFindings.map((f, i) => `- (Round ${i + 1}) ${f}`).join("\n")}\n\nAvoid re-flagging issues that have been addressed in subsequent iterations.`
+			: "";
 
-	// -------------------------------------------------------------------
-	// Phase 1: PROPOSE — 参与者各自提交方案
-	// -------------------------------------------------------------------
-	async #proposePhase(signal?: AbortSignal): Promise<RoundtableProposal[]> {
-		const msg = {
-			from: this.#senderId,
-			body: `[ROUNDTABLE:PROPOSE] Topic: ${this.#topic}\n\nPlease submit your proposal.`,
-		};
+		const reviewPrompt = [
+			`Review the output from iteration ${iteration + 1}.`,
+			planContent ? `\n## Plan (what was requested)\n\n${planContent}\n` : "",
+			previousFindingsBlock,
+			`\n## Worker Output Summary\n\n${workerOutput}\n`,
+			`\n## Instructions`,
+			`- The workspace at \`${workspace}\` contains the actual files produced by workers.`,
+			`- Read and inspect those files directly — the summary above is for orientation only.`,
+			`- Evaluate against the plan's goals, constraints, and acceptance criteria.`,
+			`- Consider these dimensions:`,
+			`  - Alignment: Does the output match the plan's goals?`,
+			`  - Quality: Is the code/documentation quality acceptable?`,
+			`  - Safety: Are there security vulnerabilities or dangerous patterns?`,
+			`  - Completeness: How much of the acceptance criteria is covered?`,
+			`\nReturn a single JSON line:`,
+			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"]}`,
+		].join("\n");
 
-		const responses = await this.#bus.collectResponses(
-			this.#senderId,
-			this.#participants,
-			msg,
-			{},
-			this.#config.proposeTimeout,
-			signal,
+		const results = await Promise.all(
+			clonerIds.map((id, i) =>
+				runSubprocess({
+					cwd: workspace,
+					agent: {
+						name: id,
+						description: `Cloner reviewer ${i + 1}`,
+						systemPrompt: this.#clonerSystemPrompt(),
+						source: "project",
+					},
+					task: reviewPrompt,
+					index: i,
+					id: `cloner-review-${id}-${iteration}`,
+					modelRegistry,
+					settings,
+					signal,
+				}),
+			),
 		);
 
-		return [...responses.entries()].map(([agentId, reply]) => ({
-			agentId,
-			body: reply.body,
-			timestamp: reply.ts,
-		}));
+		return tallyVerdicts(results);
 	}
 
-	// -------------------------------------------------------------------
-	// Phase 2: DEBATE — 参与者互相质疑和辩护
-	// -------------------------------------------------------------------
-	async #debatePhase(
-		proposals: RoundtableProposal[],
-		signal?: AbortSignal,
-	): Promise<RoundtableDebateReply[]> {
-		if (proposals.length <= 1) return [];
+	#clonerSystemPrompt(): string {
+		return [
+			`You are a Cloner in the Loop Engineering system.`,
+			`You are a clone of the agent that spoke with the human —`,
+			`you carry the human's intent and know exactly what they want.`,
+			``,
+			`Review worker output against the plan's goals, constraints, and acceptance criteria.`,
+			`The plan is included in your task prompt.`,
+			`Inspect the actual workspace files — do not rely solely on the worker output summary.`,
+			`Consider alignment, quality, safety, and completeness.`,
+			`Output ONLY a JSON verdict line — no other commentary.`,
+		].join("\n");
+	}
+}
 
-		// Broadcast all proposals to all participants for cross-review
-		const proposalSummary = proposals
-			.map((p, i) => `[${i + 1}] ${p.agentId}: ${p.body.slice(0, 200)}`)
-			.join("\n");
+// ============================================================================
+// Helpers
+// ============================================================================
 
-		// Each participant may question any other
-		const debatePrompts = this.#participants.map(async (participantId) => {
-			const otherProposals = proposals.filter((p) => p.agentId !== participantId);
-			if (otherProposals.length === 0) return [];
+interface ParsedVerdict {
+	passed: boolean;
+	findings: string[];
+	confidence: number;
+}
 
-			// Pick one other proposal to debate (round-robin)
-			const target = otherProposals[0];
-			const msg = {
-				from: this.#senderId,
-				body: `[ROUNDTABLE:DEBATE] Reviewing ${participantId}:\n\n` +
-					`Other proposals:\n${proposalSummary}\n\n` +
-					`Please question ${target.agentId}'s proposal or defend yours.`,
+/**
+ * Parse a JSON verdict from cloner output.
+ * Falls back to heuristic keyword detection if JSON parse fails.
+ */
+export function extractVerdict(reviewerId: string, text: string): ParsedVerdict | null {
+	// Try JSON first
+	const jsonMatch = text.match(/\{[^}]*"verdict"[^}]*\}/);
+	if (jsonMatch) {
+		try {
+			const parsed = JSON.parse(jsonMatch[0]) as {
+				verdict: string;
+				confidence: number;
+				findings: string | string[];
 			};
-
-			// collectResponses fires the send internally
-			const replies = await this.#bus.collectResponses(
-				this.#senderId,
-				[participantId],
-				msg,
-				{},
-				this.#config.debateTimeout / Math.max(1, this.#participants.length),
-				signal,
-			);
-
-			return [...replies.values()].map((reply) => ({
-				from: reply.from,
-				to: target.agentId,
-				body: reply.body,
-				timestamp: reply.ts,
-			}));
-		});
-
-		const allReplies = await Promise.all(debatePrompts);
-		return allReplies.flat();
-	}
-
-	// -------------------------------------------------------------------
-	// Phase 3: VOTE — 参与者投票
-	// -------------------------------------------------------------------
-	async #votePhase(
-		_proposals: RoundtableProposal[],
-		signal?: AbortSignal,
-	): Promise<RoundtableVote[]> {
-		const msg = {
-			from: this.#senderId,
-			body: `[ROUNDTABLE:VOTE] Vote on the proposals. Reply with:\n` +
-				`  verdict: approve|reject\n  confidence: 0.0-1.0\n  rationale: <one sentence>`,
-		};
-
-		const responses = await this.#bus.collectResponses(
-			this.#senderId,
-			this.#participants,
-			msg,
-			{},
-			this.#config.voteTimeout,
-			signal,
-		);
-
-		return [...responses.entries()].map(([agentId, reply]) => {
-			const lines = reply.body.split("\n");
-			const verdictLine = lines.find((l) => l.startsWith("verdict:")) ?? "";
-			const confLine = lines.find((l) => l.startsWith("confidence:")) ?? "";
-			const ratLine = lines.find((l) => l.startsWith("rationale:")) ?? "";
-
+			const findingsArr = Array.isArray(parsed.findings)
+				? parsed.findings
+				: [parsed.findings ?? ""];
 			return {
-				agentId,
-				verdict: verdictLine.includes("approve") ? "approve" : "reject",
-				confidence: Number.parseFloat(confLine.replace("confidence:", "").trim()) || 0.5,
-				rationale: ratLine.replace("rationale:", "").trim(),
+				passed: parsed.verdict === "PASS",
+				findings: findingsArr,
+				confidence: parsed.confidence ?? 0.5,
 			};
-		});
+		} catch {
+			// fall through to heuristic
+		}
 	}
 
-	// -------------------------------------------------------------------
-	// Tally
-	// -------------------------------------------------------------------
-	#tallyVotes(votes: RoundtableVote[]): { approved: boolean; rate: number } {
-		const total = votes.length;
-		if (total === 0) return { approved: false, rate: 0 };
-
-		const approved = votes.filter((v) => v.verdict === "approve").length;
-		const rate = approved / total;
-
-		// Simple majority wins
-		return { approved: rate > 0.5, rate };
+	// Heuristic: FAIL keywords without PASS.
+	const hasFail = /\b(?:FAIL|REJECT)/i.test(text) && !/\bPASS/i.test(text);
+	if (hasFail) {
+		return {
+			passed: false,
+			findings: [`${reviewerId}: ${text.slice(0, 200)}`],
+			confidence: 0.5,
+		};
 	}
+
+	return null;
+}
+
+/**
+ * Tally verdicts from cloner results.
+ * Majority rule: if >= ceil(N/2) approve → PASS.
+ */
+export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
+	const findings: string[] = [];
+	let approvalCount = 0;
+	let totalCount = 0;
+
+	for (const result of results) {
+		totalCount++;
+		const verdict = extractVerdict(result.agent, result.output);
+		if (verdict) {
+			findings.push(...verdict.findings.map((f) => `[${result.agent}] ${f}`));
+			if (verdict.passed) approvalCount++;
+		}
+	}
+
+	const passed = totalCount > 0 && approvalCount >= Math.ceil(totalCount / 2);
+
+	return { passed, approvalCount, totalCount, findings };
 }

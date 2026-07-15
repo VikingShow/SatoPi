@@ -1,88 +1,22 @@
-# Loop Engineering Configuration
-# Before Loop → In Loop → After Loop 完整工作流定义
+# Loop Engineering v2 Configuration
+# Before Loop (Cloner对话→plan.md) → In Loop (Workers自组织→Cloner审查) → After Loop (经验沉淀)
 
 swarm:
   name: loop-engineering
   workspace: .
   mode: loop
 
-  # ── Loop Control ──
   max_iterations: 5
-  review_gate: atropos_veto
   auto_retry: true
   human_escalation: true
 
-  # ── Roundtable Timeouts (ms) ──
-  roundtable:
-    propose_timeout: 60000
-    debate_timeout: 120000
-    vote_timeout: 30000
+  workers:
+    initial: 3
+    min: 1
+    max: 6
 
-  # ── Review Council ──
-  reviewers:
-    core:
-      - clotho
-      - lachesis
-      - atropos
-    pool:
-      - urania
-      - daedalus
-      - iris
-      - minerva
-      - mnemosyne
-      - vulcan
-    max_optional: 4
-    tag_mapping:
-      api: urania
-      rpc: urania
-      algorithm: daedalus
-      data-structure: daedalus
-      ui: iris
-      a11y: iris
-      i18n: iris
-      architecture: minerva
-      module: minerva
-      docs: mnemosyne
-      knowledge: mnemosyne
-      ci-cd: vulcan
-      infra: vulcan
-      build: vulcan
+  cloners:
+    count: 3
 
-  # ── Knight Pool (dynamic summoning) ──
-  agents:
-    lancelot:
-      role: "Chief Knight — architecture, coding, design patterns"
-      task: "Implement core architecture and write elegant code"
-    gawain:
-      role: "Knight of Testing — reliability, CI/CD"
-      task: "Write tests and verify CI/CD pipelines"
-    percival:
-      role: "Grail Knight — codebase exploration"
-      task: "Explore codebase for patterns and dependencies"
-    galahad:
-      role: "Pure Knight — security audit"
-      task: "Audit code for vulnerabilities and compliance issues"
-    tristan:
-      role: "Bridge Knight — cross-domain integration"
-      task: "Handle API contracts and inter-service communication"
-    bors:
-      role: "Steadfast Knight — databases and infrastructure"
-      task: "Handle database migrations and infrastructure config"
-    kay:
-      role: "Sharp Knight — performance optimization"
-      task: "Profile and optimize performance bottlenecks"
-    bedivere:
-      role: "Loyal Knight — documentation and UX"
-      task: "Write documentation and verify accessibility"
-    gareth:
-      role: "Kitchen Knight — refactoring and cleanup"
-      task: "Refactor messy code and reduce technical debt"
-    palamedes:
-      role: "Saracen Sage — measurement and data analysis"
-      task: "Run benchmarks and provide data-driven insights"
-    lamorak:
-      role: "Wild Knight — concurrency and async"
-      task: "Handle concurrent code and race conditions"
-    dinadan:
-      role: "Jester Knight — rapid prototyping"
-      task: "Build quick prototypes to validate ideas"
+  # Agents are created dynamically — no preset knights.
+  agents: {}
