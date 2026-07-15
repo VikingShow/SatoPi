@@ -1,0 +1,107 @@
+{
+  "name": "loop-engineering",
+  "status": "completed",
+  "mode": "loop",
+  "iteration": 0,
+  "targetCount": 1,
+  "agents": {
+    "lancelot": {
+      "name": "lancelot",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082417,
+      "completedAt": 1784026267172
+    },
+    "gawain": {
+      "name": "gawain",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082414,
+      "completedAt": 1784026561040
+    },
+    "percival": {
+      "name": "percival",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082419,
+      "completedAt": 1784026161727
+    },
+    "galahad": {
+      "name": "galahad",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082412,
+      "completedAt": 1784026359498
+    },
+    "tristan": {
+      "name": "tristan",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082420,
+      "completedAt": 1784026300213
+    },
+    "bors": {
+      "name": "bors",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082411,
+      "completedAt": 1784026233796
+    },
+    "kay": {
+      "name": "kay",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082414,
+      "completedAt": 1784026462676
+    },
+    "bedivere": {
+      "name": "bedivere",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082410,
+      "completedAt": 1784026302041
+    },
+    "gareth": {
+      "name": "gareth",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082413,
+      "completedAt": 1784026307341
+    },
+    "palamedes": {
+      "name": "palamedes",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082418,
+      "completedAt": 1784026558516
+    },
+    "lamorak": {
+      "name": "lamorak",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082415,
+      "completedAt": 1784026301562
+    },
+    "dinadan": {
+      "name": "dinadan",
+      "status": "completed",
+      "iteration": 0,
+      "wave": 0,
+      "startedAt": 1784026082412,
+      "completedAt": 1784026269849
+    }
+  },
+  "startedAt": 1784026082387,
+  "completedAt": 1784026561041
+}

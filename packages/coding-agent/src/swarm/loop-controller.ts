@@ -32,7 +32,7 @@ export interface LoopOptions extends PipelineOptions {
 
 
 export interface LoopResult {
-	status: "completed" | "failed" | "aborted" | "escalated";
+	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed";
 	iterations: number;
 	reviewVerdicts: ReviewVerdict[];
 	errors: string[];
@@ -87,21 +87,28 @@ export class LoopController {
 		const verdicts: ReviewVerdict[] = [];
 		const errors: string[] = [];
 		const clonerFeedbackHistory: string[] = [];
+		// Convergence tracking
+		const convergenceThreshold = this.#loopConfig.convergenceThreshold;
+		let stagnationCount = 0;
+		let lastFindingsKey = "";
+		// Dynamic worker tracking
+		let currentWorkerCount = this.#loopConfig.workers.initial;
+		const workerIds: string[] = [];
+		let clonerIds: string[] = [];
 		const { workspace, modelRegistry, settings, signal, planContent } = options;
 
-		const workerCount = this.#loopConfig.workers.initial;
+		const initialWorkerCount = this.#loopConfig.workers.initial;
 		const clonerCount = this.#loopConfig.cloners.count;
 
-		// Create WorkerChannel
-		const workerIds = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
-		const clonerIds = Array.from({ length: clonerCount }, (_, i) => `cloner-${i + 1}`);
+		// Initialize worker and cloner IDs
+		for (let i = 0; i < initialWorkerCount; i++) workerIds.push(`worker-${i + 1}`);
+		clonerIds = Array.from({ length: clonerCount }, (_, i) => `cloner-${i + 1}`);
+
 		this.#channel = new WorkerChannel(this.#ircBus, {
 			workers: workerIds,
 			cloners: clonerIds,
 		});
-
-		// Broadcast initial plan
-		await this.#channel.broadcast(this.#clonerId, `Plan broadcast. Workers: ${workerCount}, Cloners: ${clonerCount}.`);
+		await this.#channel.broadcast(this.#clonerId, `Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`);
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
 			if (signal?.aborted) {
@@ -113,6 +120,21 @@ export class LoopController {
 				};
 			}
 
+			// Per-iteration timeout: create a combined signal
+			const iterationTimeout = this.#loopConfig.iterationTimeoutMs;
+			let iterSignal = signal;
+			if (iterationTimeout > 0) {
+				const timeoutController = new AbortController();
+				const timer = setTimeout(() => timeoutController.abort(new DOMException("iteration timeout", "TimeoutError")), iterationTimeout);
+				iterSignal = signal
+					? AbortSignal.any([signal, timeoutController.signal])
+					: timeoutController.signal;
+				// Clean up timer after iteration completes or times out
+				const cleanup = () => clearTimeout(timer);
+				if (signal) signal.addEventListener("abort", cleanup, { once: true });
+				timeoutController.signal.addEventListener("abort", cleanup, { once: true });
+			}
+
 			options.onProgress?.({
 				iteration: iter,
 				targetCount: this.#loopConfig.maxIterations,
@@ -121,9 +143,11 @@ export class LoopController {
 				agents: Object.fromEntries(workerIds.map((id) => [id, { status: "running", iteration: iter }])),
 			});
 
+			let verdict: ReviewVerdict;
+			try {
 			// 1. Spawn workers (parallel)
-			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, signal);
-			if (signal?.aborted) {
+			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, iterSignal);
+			if (iterSignal?.aborted) {
 				return {
 					status: "aborted",
 					iterations: iter + 1,
@@ -138,7 +162,7 @@ export class LoopController {
 				.join("\n\n---\n\n");
 
 			// 4. Spawn cloners to review (parallel)
-			const verdict = await this.#runClonerReview(
+			verdict = await this.#runClonerReview(
 				clonerIds,
 				iter,
 				workerOutput,
@@ -146,8 +170,11 @@ export class LoopController {
 				planContent,
 				clonerFeedbackHistory,
 				modelRegistry,
+				settings,
+				iterSignal,
 			);
 
+			verdicts.push(verdict);
 			if (verdict.passed) {
 				return {
 					status: "completed",
@@ -156,8 +183,65 @@ export class LoopController {
 					errors,
 				};
 			}
+			} catch (err) {
+				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+				const message = isTimeout
+					? `Iteration ${iter + 1} timed out after ${this.#loopConfig.iterationTimeoutMs}ms`
+					: `Iteration ${iter + 1} error: ${err instanceof Error ? err.message : String(err)}`;
+				errors.push(message);
+				if (signal?.aborted) {
+					return {
+						status: "aborted",
+						iterations: iter + 1,
+						reviewVerdicts: verdicts,
+						errors,
+					};
+				}
+				// Timeout → skip to next iteration
+				continue;
+			}
 
-			// 5. Broadcast feedback and accumulate for cross-iteration memory
+			// Convergence detection: compare findings with previous iteration
+			if (convergenceThreshold > 0) {
+				const findingsKey = [...verdict.findings].sort().join("||");
+				if (findingsKey === lastFindingsKey) {
+					stagnationCount++;
+					if (stagnationCount >= convergenceThreshold) {
+						return {
+							status: "converged_failed",
+							iterations: iter + 1,
+							reviewVerdicts: verdicts,
+							errors: [...errors, `Converged after ${stagnationCount} identical review rounds with no progress`],
+						};
+					}
+				} else {
+					stagnationCount = 0;
+				}
+				lastFindingsKey = findingsKey;
+			}
+			// 5. Dynamic worker scaling: adjust worker count based on cloner suggestions
+			const { min, max } = this.#loopConfig.workers;
+			const suggestions = verdict.workerCountSuggestions;
+			if (suggestions.length >= Math.ceil(clonerIds.length / 2)) {
+				suggestions.sort((a, b) => a - b);
+				const median = suggestions[Math.floor(suggestions.length / 2)];
+				const clamped = Math.max(min, Math.min(max, median));
+				const diff = clamped - currentWorkerCount;
+				if (diff > 0) {
+					// Scale up: add one worker per iteration
+					const newId = `worker-${workerIds.length + 1}`;
+					this.#channel.addWorker(newId);
+					workerIds.push(newId);
+					currentWorkerCount++;
+				} else if (diff < 0 && currentWorkerCount > min) {
+					// Scale down: remove last worker
+					const removed = workerIds.pop()!;
+					this.#channel.removeWorker(removed);
+					currentWorkerCount--;
+				}
+			}
+
+			// 6. Broadcast feedback and accumulate for cross-iteration memory
 			const feedback = verdict.findings.join("\n");
 			clonerFeedbackHistory.push(feedback);
 			await this.#channel.broadcast(this.#clonerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
@@ -237,6 +321,8 @@ export class LoopController {
 		planContent: string | undefined,
 		previousFindings: string[],
 		modelRegistry?: ModelRegistry,
+		settings?: Settings,
+		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
 		const council = new ClonerCouncil(this.#channel!);
 		return council.review({
@@ -246,7 +332,8 @@ export class LoopController {
 			workerOutput,
 			planContent,
 			previousFindings,
-		}, modelRegistry);
+			deliberation: this.#loopConfig.enableDeliberation,
+		}, modelRegistry, settings, signal);
 	}
 }
 

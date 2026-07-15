@@ -1,0 +1,4 @@
+{
+  "file": ".omp/test-workspace/lancelot.md",
+  "summary": "Notification architecture design for swarm extension covering: hook points in pipeline lifecycle (post-result, pre-summary in handleRun()), NotificationChannel interface (name, type, send()), NotificationRouter (fan-out with Promise.allSettled, never throws), NotificationEvent payload schema, integration pseudocode, error handling contract, file layout, and 5 key design decisions. The design is non-blocking (fire-and-forget), fail-isolated (per-channel), and consistent with existing onProgress/StateTracker patterns — no changes to PipelineController or LoopController internals required."
+}

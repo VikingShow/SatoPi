@@ -1,0 +1,9 @@
+{
+  "name": "loop-test",
+  "status": "running",
+  "mode": "loop",
+  "iteration": 0,
+  "targetCount": 2,
+  "agents": {},
+  "startedAt": 1784107872605
+}

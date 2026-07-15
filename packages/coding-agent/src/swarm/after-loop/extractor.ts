@@ -42,7 +42,7 @@ export interface ExtractionResult {
 
 export interface LoopRunStats {
 	totalIterations: number;
-	finalStatus: "completed" | "failed" | "aborted" | "escalated";
+	finalStatus: "completed" | "failed" | "aborted" | "escalated" | "converged_failed";
 	clonerApprovalRatio: number;
 	workerCount: number;
 	clonerCount: number;

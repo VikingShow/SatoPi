@@ -1,0 +1,4 @@
+{
+  "file": "/root/workspace/SatoPi/.omp/test-workspace/gareth.md",
+  "summary": "Identified two nearly-identical pipeline completion paths in extension.ts (loop mode lines 173-237, pipeline mode lines 240-290) sharing ~30 lines of duplicated ceremony. Proposed 4-step minimal refactoring: (1) extract finishRun() shared completion function, (2) normalize LoopResult status mapping closer to source, (3) insert single notification dispatch point after buildSummaryMessage, (4) add optional notify field to SwarmDefinition. Net delta: approximately -5 lines — removes duplication while adding one notification hook. No changes needed to PipelineController, LoopController, Executor, StateTracker, or buildSummaryMessage itself."
+}

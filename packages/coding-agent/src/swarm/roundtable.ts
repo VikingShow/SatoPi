@@ -21,6 +21,10 @@ export interface ReviewVerdict {
 	approvalCount: number;
 	totalCount: number;
 	findings: string[];
+	/** Cloner-suggested worker counts for next iteration. */
+	workerCountSuggestions: number[];
+	/** True when findings across cloners diverge significantly. */
+	disagreed: boolean;
 }
 
 export interface ClonerReviewConfig {
@@ -36,6 +40,8 @@ export interface ClonerReviewConfig {
 	planContent?: string;
 	/** Findings from previous iterations. Cloners avoid re-flagging resolved issues. */
 	previousFindings?: string[];
+	/** Enable cross-examination round when findings diverge. Default false. */
+	deliberation?: boolean;
 }
 
 // ============================================================================
@@ -54,7 +60,8 @@ export class ClonerCouncil {
 	 * 1. Spawn cloner subprocesses in parallel
 	 * 2. Each cloner independently reviews worker output
 	 * 3. Parse JSON verdicts from cloner output
-	 * 4. Tally votes — majority rule
+	 * 4. Tally votes — majority rule.
+	 * 5. Optionally run deliberation cross-examination round.
 	 */
 	async review(
 		config: ClonerReviewConfig,
@@ -62,7 +69,7 @@ export class ClonerCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings } = config;
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation } = config;
 
 		const previousFindingsBlock = previousFindings && previousFindings.length > 0
 			? `\n## Previous Iteration Findings\n\n${previousFindings.map((f, i) => `- (Round ${i + 1}) ${f}`).join("\n")}\n\nAvoid re-flagging issues that have been addressed in subsequent iterations.`
@@ -82,8 +89,9 @@ export class ClonerCouncil {
 			`  - Quality: Is the code/documentation quality acceptable?`,
 			`  - Safety: Are there security vulnerabilities or dangerous patterns?`,
 			`  - Completeness: How much of the acceptance criteria is covered?`,
+			`- Optionally suggest \`worker_count\`: the ideal number of workers for the next iteration (integer).`,
 			`\nReturn a single JSON line:`,
-			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"]}`,
+			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count":<number>}`,
 		].join("\n");
 
 		const results = await Promise.all(
@@ -106,7 +114,54 @@ export class ClonerCouncil {
 			),
 		);
 
-		return tallyVerdicts(results);
+		const firstVerdict = tallyVerdicts(results);
+
+		// Deliberation: if FAIL + findings diverge + deliberation enabled, run cross-examination
+		if (!firstVerdict.passed && firstVerdict.disagreed && deliberation) {
+			const findingsSummary = firstVerdict.findings
+				.map((f, i) => `${i + 1}. ${f}`)
+				.join("\n");
+
+			const deliberationPrompt = [
+				`Your initial review resulted in a FAIL with split findings.`,
+				`Re-evaluate after examining your peers' perspectives:`,
+				``,
+				`## All Cloner Findings (cross-examination round)`,
+				findingsSummary,
+				``,
+				`## Instructions`,
+				`- Re-read the workspace files at \`${workspace}\`.`,
+				`- Consider whether your peers raised valid concerns you missed, or whether their concerns are unfounded.`,
+				`- Adjust your verdict if persuaded; otherwise, stand your ground.`,
+				planContent ? `- Measure against the plan's goals: ${planContent.slice(0, 200)}` : "",
+				`\nReturn a single JSON line:`,
+				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"worker_count":<number>}`,
+			].join("\n");
+
+			const deliberationResults = await Promise.all(
+				clonerIds.map((id, i) =>
+					runSubprocess({
+						cwd: workspace,
+						agent: {
+							name: id,
+							description: `Cloner reviewer ${i + 1}`,
+							systemPrompt: this.#clonerSystemPrompt(),
+							source: "project",
+						},
+						task: deliberationPrompt,
+						index: i,
+						id: `cloner-deliberation-${id}-${iteration}`,
+						modelRegistry,
+						settings,
+						signal,
+					}),
+				),
+			);
+
+			return tallyVerdicts(deliberationResults);
+		}
+
+		return firstVerdict;
 	}
 
 	#clonerSystemPrompt(): string {
@@ -132,6 +187,8 @@ interface ParsedVerdict {
 	passed: boolean;
 	findings: string[];
 	confidence: number;
+	/** Cloner's suggested worker count for the next iteration. */
+	workerCount?: number;
 }
 
 /**
@@ -147,6 +204,7 @@ export function extractVerdict(reviewerId: string, text: string): ParsedVerdict 
 				verdict: string;
 				confidence: number;
 				findings: string | string[];
+				worker_count?: number;
 			};
 			const findingsArr = Array.isArray(parsed.findings)
 				? parsed.findings
@@ -155,6 +213,7 @@ export function extractVerdict(reviewerId: string, text: string): ParsedVerdict 
 				passed: parsed.verdict === "PASS",
 				findings: findingsArr,
 				confidence: parsed.confidence ?? 0.5,
+				workerCount: typeof parsed.worker_count === "number" ? parsed.worker_count : undefined,
 			};
 		} catch {
 			// fall through to heuristic
@@ -174,12 +233,9 @@ export function extractVerdict(reviewerId: string, text: string): ParsedVerdict 
 	return null;
 }
 
-/**
- * Tally verdicts from cloner results.
- * Majority rule: if >= ceil(N/2) approve → PASS.
- */
 export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 	const findings: string[] = [];
+	const workerCounts: number[] = [];
 	let approvalCount = 0;
 	let totalCount = 0;
 
@@ -189,10 +245,13 @@ export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 		if (verdict) {
 			findings.push(...verdict.findings.map((f) => `[${result.agent}] ${f}`));
 			if (verdict.passed) approvalCount++;
+			if (verdict.workerCount !== undefined) workerCounts.push(verdict.workerCount);
 		}
 	}
 
 	const passed = totalCount > 0 && approvalCount >= Math.ceil(totalCount / 2);
+	// Findings diverge when each cloner reports different findings
+	const disagreed = !passed && findings.length > 1 && new Set(findings.map((f) => f.replace(/^\[.*?\]\s*/, ""))).size >= Math.ceil(totalCount / 2);
 
-	return { passed, approvalCount, totalCount, findings };
+	return { passed, approvalCount, totalCount, findings, workerCountSuggestions: workerCounts, disagreed };
 }

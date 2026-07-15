@@ -58,7 +58,6 @@ export interface LoopSwarmConfig {
 	maxIterations: number;
 	/** If true, rejected outputs trigger automatic retry without human input. */
 	autoRetry: boolean;
-	/** If true, escalate to human when maxIterations exhausted. */
 	humanEscalation: boolean;
 	/** Worker configuration. */
 	workers: {
@@ -74,6 +73,25 @@ export interface LoopSwarmConfig {
 		/** Cloner count (default = workers.initial, may be fewer). */
 		count: number;
 	};
+	/**
+	 * Convergence detection: stop the loop early when cloner findings
+	 * are identical for this many consecutive iterations.
+	 * 0 disables convergence detection (backward-compatible).
+	 * Default: 2.
+	 */
+	convergenceThreshold: number;
+	/**
+	 * Per-iteration timeout in milliseconds. Workers or cloners that
+	 * exceed this are aborted and the iteration continues to the next.
+	 * Default: 300_000 (5 minutes). 0 disables timeout.
+	 */
+	iterationTimeoutMs: number;
+	/**
+	 * Enable cloner deliberation: when a review FAILs with split findings,
+	 * cloners cross-examine each other's findings and re-vote.
+	 * Default: true.
+	 */
+	enableDeliberation: boolean;
 }
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
@@ -93,6 +111,9 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		cloners: {
 			count: clonersRaw.count ?? workerInitial,
 		},
+		convergenceThreshold: (raw.convergence_threshold as number) ?? 2,
+		iterationTimeoutMs: (raw.iteration_timeout_ms as number) ?? 300_000,
+		enableDeliberation: (raw.enable_deliberation as boolean) ?? true,
 	};
 }
 
