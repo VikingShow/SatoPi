@@ -678,6 +678,24 @@ export class InputController {
 					text = slashResult;
 				}
 			}
+			// Dispatch extension-registered slash commands (e.g. /swarm, /loopeng).
+			// executeBuiltinSlashCommand only handles builtins; extension commands
+			if (text?.startsWith("/") && runner) {
+				const spaceIdx = text.indexOf(" ");
+				const cmdName = text.slice(1, spaceIdx === -1 ? undefined : spaceIdx);
+				const command = runner.getCommand(cmdName);
+				if (command) {
+					const args = spaceIdx === -1 ? "" : text.slice(spaceIdx + 1);
+					try {
+						await command.handler(args, runner.createCommandContext());
+					} catch (err) {
+						logger.error("Extension command failed", { command: cmdName, error: String(err) });
+						this.ctx.showStatus(`/${cmdName} failed: ${String(err).slice(0, 200)}`);
+					}
+					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
+					return;
+				}
+			}
 
 			// Collab guest: prompts execute on the host; local slash/skill/bash/
 			// python execution is host-only (builtins are gated inside

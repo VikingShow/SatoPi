@@ -74,10 +74,15 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			return [];
 		},
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
-			const candidates = [".omp/loop.yaml", ".omp/loop-test.yaml"];
-			const yamlPath = args.trim() || candidates.find(p => {
-				try { return Bun.file(path.resolve(ctx.cwd, p)).size > 0; } catch { return false; }
-			});
+			if (args.trim()) {
+				await handleRun(args.trim(), ctx, pi);
+				return;
+			}
+			// Walk up from ctx.cwd to find .omp/loop.yaml or .omp/loop-test.yaml.
+			// ctx.cwd may be a subdirectory (e.g. bun run dev cwd = packages/coding-agent)
+			// while .omp/ lives at the project root.
+			const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml")
+				|| findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
 			if (!yamlPath) {
 				ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or pass a path: /loopeng <file.yaml>", "error");
 				return;
@@ -309,6 +314,21 @@ async function handleStatus(name: string | undefined, ctx: ExtensionCommandConte
 // ============================================================================
 // Helpers
 // ============================================================================
+function findOmpYaml(cwd: string, fileName: string): string | null {
+	let dir = cwd;
+	const root = path.parse(dir).root;
+	while (dir !== root) {
+		const candidate = path.join(dir, fileName);
+		try {
+			if (Bun.file(candidate).size > 0) return candidate;
+		} catch { /* not found, walk up */ }
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
+}
+
 
 function buildSummaryMessage(
 	def: SwarmDefinition,

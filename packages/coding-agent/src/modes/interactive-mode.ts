@@ -974,6 +974,9 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Initialize hooks with TUI-based UI context
 		await this.initHooksAndCustomTools();
+		// Rebuild autocomplete to pick up extension-registered commands (e.g. /swarm, /loopeng)
+		// that were registered during initHooksAndCustomTools above.
+		await this.refreshSlashCommandState();
 
 		// Restore mode from session (e.g. plan mode on resume)
 		this.session.setSessionSwitchReconciler?.(() => this.#reconcileModeFromSession({ preserveActiveGoal: true }));
@@ -1108,8 +1111,17 @@ export class InteractiveMode implements InteractiveModeContext {
 				// source suffix (e.g. "Review code (project)"), so pass it through verbatim.
 				description: template.description,
 			}));
+		// Extension commands are registered after init (initHooksAndCustomTools runs
+		// after the constructor), so they are NOT in #pendingSlashCommands. Re-read
+		// them live so /swarm, /loopeng, etc. appear in autocomplete.
+		const extensionCommands: SlashCommand[] = (
+			this.session.extensionRunner?.getRegisteredCommands(BUILTIN_SLASH_COMMAND_RESERVED_NAMES) ?? []
+		).map(cmd => ({
+			name: cmd.name,
+			description: cmd.description ?? "(extension)",
+		}));
 		this.#baseAutocompleteProvider = this.#inputController.createAutocompleteProvider(
-			[...this.#pendingSlashCommands, ...fileSlashCommands, ...promptTemplateCommands],
+			[...this.#pendingSlashCommands, ...fileSlashCommands, ...promptTemplateCommands, ...extensionCommands],
 			basePath,
 		);
 		this.#applyAutocompleteProvider();
