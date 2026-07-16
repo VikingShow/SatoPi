@@ -14,12 +14,17 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
-import { planExists } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
+import { generatePlanningPrompt, planExists, stampPlanMd } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
-import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
+import {
+	parseSwarmYaml,
+	resolveLoopConfig,
+	type SwarmDefinition,
+	validateSwarmDefinition,
+} from "@oh-my-pi/pi-coding-agent/swarm/schema";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 
@@ -121,19 +126,38 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 				return;
 			}
 
-			// No plan.md — start Before Loop phase
-			ctx.ui.notify(
-				[
-					"# Before Loop — Planning Phase",
-					"",
-					"I'll help you plan this task. Let me understand what you want to achieve.",
-					"",
-					"Tell me about the task, and I'll ask clarifying questions.",
-					"Once we're clear, I'll write the plan and propose worker/cloner counts.",
-					"",
-					"When ready, type `/loopeng start` to begin execution.",
-				].join("\n"),
-				"info",
+			// No plan.md — start Before Loop phase with experience readback
+			const resolvedPath = path.resolve(yamlPath);
+			let def: SwarmDefinition;
+			try {
+				const yamlContent = await Bun.file(resolvedPath).text();
+				def = parseSwarmYaml(yamlContent);
+			} catch {
+				def = { name: "loop", workspace: yamlDir, mode: "loop", agents: new Map(), agentOrder: [], targetCount: 1 };
+			}
+
+			const workspace = path.isAbsolute(def.workspace) ? def.workspace : path.resolve(yamlDir, def.workspace);
+
+			// Load past experience
+			let store: ExperienceStore | undefined;
+			try {
+				store = new ExperienceStore(workspace);
+				await store.init();
+			} catch {
+				/* experience store is optional */
+			}
+
+			const loopConfig = def.loopConfig ?? resolveLoopConfig({});
+
+			const prompt = await generatePlanningPrompt({ workspace, loopConfig, taskDescription: undefined }, store);
+
+			pi.sendMessage(
+				{
+					customType: "before-loop-planning",
+					content: [{ type: "text", text: prompt }],
+					display: true,
+				},
+				{ triggerTurn: true },
 			);
 		},
 	});
@@ -218,14 +242,13 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
-		// Read plan.md from workspace if it exists
+		// Read plan.md from workspace if it exists (stamp with timestamp on first read)
 		let planContent: string | undefined;
 		try {
-			planContent = await Bun.file(path.join(workspace, ".omp", "plan.md")).text();
+			planContent = await stampPlanMd(workspace);
 		} catch {
 			/* plan.md is optional */
 		}
-
 		// 9. Run loop with human escalation loop
 		let loopResult: LoopResult = { status: "failed", iterations: 0, reviewVerdicts: [], errors: [] };
 		let retries = 0;

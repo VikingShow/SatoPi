@@ -15,7 +15,7 @@
 
 import type { LoopSwarmConfig } from "./schema";
 import { ExperienceStore } from "./after-loop/experience";
-import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
 // ============================================================================
 // Types
@@ -134,10 +134,19 @@ export async function generatePlanningPrompt(
 	return sections.join("\n");
 }
 export async function planExists(workspace: string): Promise<boolean> {
-	try {
-		await fs.access(`${workspace}/plan.md`);
-		return true;
-	} catch {
-		return false;
-	}
+	return Bun.file(path.join(workspace, ".omp", "plan.md")).exists();
+}
+
+/**
+ * Stamp plan.md with a generation timestamp if not already stamped.
+ * Returns the content with the timestamp prepended, or unchanged if already stamped.
+ */
+export async function stampPlanMd(workspace: string): Promise<string> {
+	const planPath = path.join(workspace, ".omp", "plan.md");
+	const content = await Bun.file(planPath).text();
+	if (content.startsWith("<!-- plan-generated:")) return content;
+	const stamp = `<!-- plan-generated: ${new Date().toISOString()} -->\n`;
+	const stamped = stamp + content;
+	await Bun.write(planPath, stamped);
+	return stamped;
 }
