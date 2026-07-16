@@ -532,6 +532,10 @@
       "types": "./src/swarm/after-loop/index.ts",
       "import": "./src/swarm/after-loop/index.ts"
     },
+    "./swarm/task-analyzer": {
+      "types": "./src/swarm/task-analyzer.ts",
+      "import": "./src/swarm/task-analyzer.ts"
+    },
     "./task": {
       "types": "./src/task/index.ts",
       "import": "./src/task/index.ts"

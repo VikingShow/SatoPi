@@ -77,7 +77,7 @@ export class IrcBus {
 		opts?: { expectsReply?: boolean; suppressRelay?: boolean },
 	): Promise<Map<string, IrcDeliveryReceipt>> {
 		const results = new Map<string, IrcDeliveryReceipt>();
-		const deliveries = agentIds.map(async (id) => {
+		const deliveries = agentIds.map(async id => {
 			const receipt = await this.send({ ...msg, to: id }, opts);
 			results.set(id, receipt);
 		});
@@ -105,14 +105,10 @@ export class IrcBus {
 
 		// Collect responses in parallel with individual timeouts.
 		const results = new Map<string, IrcMessage>();
-		const collectors = agentIds.map(async (id) => {
-			const reply = await this.wait(
-				callerId,
-				{ from: filter.from ?? id },
-				timeoutMs,
-				signal,
-				{ drainPending: false },
-			);
+		const collectors = agentIds.map(async id => {
+			const reply = await this.wait(callerId, { from: filter.from ?? id }, timeoutMs, signal, {
+				drainPending: false,
+			});
 			if (reply) results.set(reply.from, reply);
 		});
 		await Promise.allSettled(collectors);

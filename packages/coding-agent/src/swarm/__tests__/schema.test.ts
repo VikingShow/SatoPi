@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parseSwarmYaml, validateSwarmDefinition, resolveLoopConfig } from "../schema";
+import { parseSwarmYaml, resolveLoopConfig, validateSwarmDefinition } from "../schema";
 
 describe("schema - loop mode", () => {
 	it("parses a loop mode swarm YAML", () => {

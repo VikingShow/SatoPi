@@ -10,7 +10,7 @@
  * Worker 不知道 cloner 的存在 —— 所有 cloner 消息通过 suppressRelay 秘密送达。
  */
 
-import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
+import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 
 // ============================================================================
 // Types
@@ -47,8 +47,12 @@ export class WorkerChannel {
 
 	// -- lifecycle -------------------------------------------------------
 
-	get workers(): ReadonlySet<string> { return this.#workers; }
-	get cloners(): ReadonlySet<string> { return this.#cloners; }
+	get workers(): ReadonlySet<string> {
+		return this.#workers;
+	}
+	get cloners(): ReadonlySet<string> {
+		return this.#cloners;
+	}
 
 	addWorker(agentId: string): void {
 		this.#workers.add(agentId);
@@ -74,18 +78,10 @@ export class WorkerChannel {
 		const workerList = [...this.#workers];
 
 		// Send to all workers in parallel
-		await Promise.all(
-			workerList.map((to) =>
-				this.#ircBus.send({ from, to, body }),
-			),
-		);
+		await Promise.all(workerList.map(to => this.#ircBus.send({ from, to, body })));
 
 		// Secret CC to cloners — suppressed from UI relay
-		await Promise.all(
-			[...this.#cloners].map((to) =>
-				this.#ircBus.send({ from, to, body }, { suppressRelay: true }),
-			),
-		);
+		await Promise.all([...this.#cloners].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
 	}
 
 	// -- sub-groups ------------------------------------------------------
@@ -96,7 +92,7 @@ export class WorkerChannel {
 	 */
 	createSubGroup(name: string, members: string[]): void {
 		// Validate members are workers
-		const valid = members.filter((m) => this.#workers.has(m));
+		const valid = members.filter(m => this.#workers.has(m));
 		this.#groups.set(name, new Set(valid));
 	}
 
@@ -108,18 +104,10 @@ export class WorkerChannel {
 		if (!members || members.size === 0) return;
 
 		const memberList = [...members];
-		await Promise.all(
-			memberList.map((to) =>
-				this.#ircBus.send({ from, to, body }),
-			),
-		);
+		await Promise.all(memberList.map(to => this.#ircBus.send({ from, to, body })));
 
 		// Cloners monitor all sub-groups
-		await Promise.all(
-			[...this.#cloners].map((to) =>
-				this.#ircBus.send({ from, to, body }, { suppressRelay: true }),
-			),
-		);
+		await Promise.all([...this.#cloners].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
 	}
 
 	addToSubGroup(groupName: string, workerId: string): void {
@@ -151,9 +139,7 @@ export class WorkerChannel {
 	 */
 	async broadcastSteering(clonerId: string, body: string): Promise<void> {
 		await Promise.all(
-			[...this.#workers].map((to) =>
-				this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` }),
-			),
+			[...this.#workers].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
 		);
 	}
 }

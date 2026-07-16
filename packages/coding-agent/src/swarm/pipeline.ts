@@ -54,10 +54,14 @@ export class PipelineController {
 	}
 
 	/** The swarm definition — accessible to subclasses like LoopController. */
-	protected get def(): SwarmDefinition { return this.#def; }
+	protected get def(): SwarmDefinition {
+		return this.#def;
+	}
 
 	/** The state tracker — accessible to subclasses like LoopController. */
-	protected get stateTracker(): StateTracker { return this.#stateTracker; }
+	protected get stateTracker(): StateTracker {
+		return this.#stateTracker;
+	}
 
 	async run(options: PipelineOptions): Promise<PipelineResult> {
 		const { workspace, signal, onProgress, modelRegistry, settings } = options;

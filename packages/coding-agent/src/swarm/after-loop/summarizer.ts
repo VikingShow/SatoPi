@@ -9,7 +9,7 @@
  * (manual substitution, not full Handlebars — no external deps needed).
  */
 
-import type { ExtractedLesson, ExtractionResult } from "./extractor";
+import type { ExtractionResult } from "./extractor";
 
 // ============================================================================
 // Types
@@ -50,18 +50,18 @@ export function generateRunSummary(runId: string, result: ExtractionResult): Run
 
 	// Categorize lessons
 	const topFindings = lessons
-		.filter((l) => l.type === "insight")
-		.map((l) => l.summary)
+		.filter(l => l.type === "insight")
+		.map(l => l.summary)
 		.slice(0, 5);
 
 	const keyInsights = lessons
-		.filter((l) => l.type === "success")
-		.map((l) => l.summary)
+		.filter(l => l.type === "success")
+		.map(l => l.summary)
 		.slice(0, 3);
 
 	const warnings = lessons
-		.filter((l) => l.type === "warning" || l.type === "error")
-		.map((l) => l.summary)
+		.filter(l => l.type === "warning" || l.type === "error")
+		.map(l => l.summary)
 		.slice(0, 5);
 
 	const timestamp = new Date().toISOString();
@@ -90,9 +90,7 @@ export function generateRunSummary(runId: string, result: ExtractionResult): Run
 
 function generateMarkdownSummary(data: SummaryData, totalLessons: number): string {
 	const statusEmoji =
-		data.status === "completed" ? "✅" :
-		data.status === "escalated" ? "⚠️" :
-		data.status === "failed" ? "❌" : "⏹️";
+		data.status === "completed" ? "✅" : data.status === "escalated" ? "⚠️" : data.status === "failed" ? "❌" : "⏹️";
 
 	const lines = [
 		`# Loop Engineering Run Summary`,

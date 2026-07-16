@@ -1,3 +1,4 @@
-export { extractLessons, type ExtractedLesson, type ExtractionResult, type LoopRunStats } from "./extractor";
-export { ExperienceStore, type ExperienceEntry, type SearchResult } from "./experience";
+export { type ExperienceEntry, ExperienceStore, type SearchResult } from "./experience";
+export { type ExtractedLesson, type ExtractionResult, extractLessons, type LoopRunStats } from "./extractor";
+export { type DeepReflection, reflectDeep, reflectionToLesson } from "./reflector";
 export { generateRunSummary, type RunSummary, type SummaryData } from "./summarizer";

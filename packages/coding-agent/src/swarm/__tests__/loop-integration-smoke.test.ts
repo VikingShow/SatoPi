@@ -4,15 +4,15 @@
  * No LLM calls — tests the orchestration machinery only.
  */
 
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { ExperienceStore, extractLessons } from "../after-loop";
+import { generatePlanningPrompt } from "../before-loop";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "../dag";
 import { LoopController } from "../loop-controller";
+import { ClonerCouncil } from "../roundtable";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
 import { StateTracker } from "../state";
-import { generatePlanningPrompt } from "../before-loop";
-import { ExperienceStore, extractLessons } from "../after-loop";
-import { ClonerCouncil } from "../roundtable";
-import * as fs from "node:fs/promises";
 
 // Paths relative to the SatoPi project root
 const PROJECT_ROOT = path.resolve(import.meta.dirname!, "../../../../..");
@@ -72,6 +72,7 @@ async function main() {
 		loopConfig: def.loopConfig!,
 		workspace: WORKSPACE,
 		planContent: testPlan,
+		stateTracker: tracker,
 	});
 	console.log(`  ✓  LoopController created`);
 	console.log(`  ✓  Workers: ${def.loopConfig!.workers.initial}`);
@@ -81,7 +82,11 @@ async function main() {
 	// 6. Phase 2 — Cross-iteration memory and experience store
 	console.log("[6/6] Phase 2 checks...");
 	// generatePlanningPrompt is async and accepts optional ExperienceStore
-	const prompt = await generatePlanningPrompt({ workspace: WORKSPACE, loopConfig: def.loopConfig!, taskDescription: "test" });
+	const prompt = await generatePlanningPrompt({
+		workspace: WORKSPACE,
+		loopConfig: def.loopConfig!,
+		taskDescription: "test",
+	});
 	console.log(`  ✓  generatePlanningPrompt: ${prompt.length} chars (async, accepts optional ExperienceStore)`);
 	// Verify after-loop exports are importable
 	console.log(`  ✓  ExperienceStore: ${typeof ExperienceStore === "function" ? "class" : "?"}`);
@@ -104,7 +109,7 @@ async function main() {
 	void controller;
 }
 
-main().catch((err) => {
+main().catch(err => {
 	console.error(`FATAL: ${err.message}`);
 	process.exit(1);
 });

@@ -6,9 +6,9 @@
  *   - tallyVerdicts: majority vote, tie-breaking, edge cases
  */
 
-import { describe, it, expect } from "bun:test";
-import { extractVerdict, tallyVerdicts } from "../roundtable";
+import { describe, expect, it } from "bun:test";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import { extractVerdict, tallyVerdicts } from "../roundtable";
 
 // ============================================================================
 // extractVerdict

@@ -68,6 +68,12 @@ export interface LoopSwarmConfig {
 		/** Maximum workers allowed during dynamic scaling. */
 		max: number;
 		/**
+		 * When true, the TaskComplexityAnalyzer evaluates plan.md before
+		 * the loop starts and overrides `initial` and `cloners.count` with
+		 * its recommendations (clamped to min/max). Default: false (opt-in).
+		 */
+		auto: boolean;
+		/**
 		 * Number of deliberation rounds within one iteration.
 		 * Workers in each round see prior rounds' outputs and refine.
 		 * Default: 1 (single round, backward-compatible).
@@ -119,6 +125,7 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 			initial: workerInitial,
 			min: (workersRaw.min as number) ?? 1,
 			max: (workersRaw.max as number) ?? 6,
+			auto: (workersRaw.auto as boolean) ?? false,
 			maxRounds: (workersRaw.max_rounds as number) ?? 1,
 			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
 		},
@@ -190,8 +197,7 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 	}
 
 	// Resolve loop config when mode is "loop"
-	const loopConfig =
-		mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined;
+	const loopConfig = mode === "loop" ? resolveLoopConfig(raw.swarm as unknown as Record<string, unknown>) : undefined;
 
 	return {
 		name: swarm.name,
@@ -249,7 +255,9 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 			errors.push("workers.max_rounds must be at least 1");
 		}
 		if (def.loopConfig.workers.maxRounds > def.loopConfig.workers.initial) {
-			errors.push(`workers.max_rounds (${def.loopConfig.workers.maxRounds}) cannot exceed workers.initial (${def.loopConfig.workers.initial})`);
+			errors.push(
+				`workers.max_rounds (${def.loopConfig.workers.maxRounds}) cannot exceed workers.initial (${def.loopConfig.workers.initial})`,
+			);
 		}
 	}
 	if (def.mode !== "pipeline" && def.mode !== "loop" && def.targetCount !== 1) {

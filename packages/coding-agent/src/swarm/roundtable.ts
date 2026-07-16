@@ -7,10 +7,10 @@
  * 无 atropos_veto 特殊角色 —— 所有 Cloner 平等，一人一票。
  */
 
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { WorkerChannel } from "./worker-channel";
+import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import type { WorkerChannel } from "./worker-channel";
 
 // ============================================================================
 // Types
@@ -21,10 +21,16 @@ export interface ReviewVerdict {
 	approvalCount: number;
 	totalCount: number;
 	findings: string[];
-	/** Cloner-suggested worker counts for next iteration. */
+	/** Cloner-suggested worker count deltas for next iteration. */
 	workerCountSuggestions: number[];
 	/** True when findings across cloners diverge significantly. */
 	disagreed: boolean;
+	/** Cloner-suggested roles for workers (Round 2+). key=workerId, value=role name. */
+	roleSuggestions: Record<string, string>;
+	/** Worker IDs praised by cloners this round. */
+	praisedWorkers: string[];
+	/** Worker IDs criticized by cloners this round. */
+	criticizedWorkers: string[];
 }
 
 export interface ClonerReviewConfig {
@@ -49,10 +55,8 @@ export interface ClonerReviewConfig {
 // ============================================================================
 
 export class ClonerCouncil {
-	readonly #channel: WorkerChannel;
-
-	constructor(channel: WorkerChannel) {
-		this.#channel = channel;
+	constructor(_channel: WorkerChannel) {
+		// WorkerChannel reference retained for future use (broadcast, IRC).
 	}
 
 	/**
@@ -71,9 +75,10 @@ export class ClonerCouncil {
 	): Promise<ReviewVerdict> {
 		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation } = config;
 
-		const previousFindingsBlock = previousFindings && previousFindings.length > 0
-			? `\n## Previous Iteration Findings\n\n${previousFindings.map((f, i) => `- (Round ${i + 1}) ${f}`).join("\n")}\n\nAvoid re-flagging issues that have been addressed in subsequent iterations.`
-			: "";
+		const previousFindingsBlock =
+			previousFindings && previousFindings.length > 0
+				? `\n## Previous Iteration Findings\n\n${previousFindings.map((f, i) => `- (Round ${i + 1}) ${f}`).join("\n")}\n\nAvoid re-flagging issues that have been addressed in subsequent iterations.`
+				: "";
 
 		const reviewPrompt = [
 			`Review the output from iteration ${iteration + 1}.`,
@@ -81,17 +86,11 @@ export class ClonerCouncil {
 			previousFindingsBlock,
 			`\n## Worker Output Summary\n\n${workerOutput}\n`,
 			`\n## Instructions`,
-			`- The workspace at \`${workspace}\` contains the actual files produced by workers.`,
-			`- Read and inspect those files directly — the summary above is for orientation only.`,
-			`- Evaluate against the plan's goals, constraints, and acceptance criteria.`,
-			`- Consider these dimensions:`,
-			`  - Alignment: Does the output match the plan's goals?`,
-			`  - Quality: Is the code/documentation quality acceptable?`,
-			`  - Safety: Are there security vulnerabilities or dangerous patterns?`,
-			`  - Completeness: How much of the acceptance criteria is covered?`,
-			`- Optionally suggest \`worker_count\`: the ideal number of workers for the next iteration (integer).`,
+			`- Optionally suggest \`worker_count_delta\`: signed integer adjustment to worker count (+2 to add 2, -1 to remove 1).`,
+			`- After Round 1+, optionally suggest \`role_suggestions\`: {"worker-1": "implementer", "worker-2": "reviewer", ...}.`,
+			`- Optionally list \`praised_workers\` and \`criticized_workers\` by worker ID.`,
 			`\nReturn a single JSON line:`,
-			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count":<number>}`,
+			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 		].join("\n");
 
 		const results = await Promise.all(
@@ -118,9 +117,7 @@ export class ClonerCouncil {
 
 		// Deliberation: if FAIL + findings diverge + deliberation enabled, run cross-examination
 		if (!firstVerdict.passed && firstVerdict.disagreed && deliberation) {
-			const findingsSummary = firstVerdict.findings
-				.map((f, i) => `${i + 1}. ${f}`)
-				.join("\n");
+			const findingsSummary = firstVerdict.findings.map((f, i) => `${i + 1}. ${f}`).join("\n");
 
 			const deliberationPrompt = [
 				`Your initial review resulted in a FAIL with split findings.`,
@@ -135,7 +132,7 @@ export class ClonerCouncil {
 				`- Adjust your verdict if persuaded; otherwise, stand your ground.`,
 				planContent ? `- Measure against the plan's goals: ${planContent.slice(0, 200)}` : "",
 				`\nReturn a single JSON line:`,
-				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"worker_count":<number>}`,
+				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 			].join("\n");
 
 			const deliberationResults = await Promise.all(
@@ -187,15 +184,16 @@ interface ParsedVerdict {
 	passed: boolean;
 	findings: string[];
 	confidence: number;
-	/** Cloner's suggested worker count for the next iteration. */
-	workerCount?: number;
+	/** Cloner's suggested worker count delta for the next iteration (signed integer). */
+	workerCountDelta?: number;
+	/** Cloner's role assignment for each worker. key=workerId, value=role name. */
+	roleSuggestions?: Record<string, string>;
+	/** Worker IDs the cloner praised. */
+	praisedWorkers?: string[];
+	/** Worker IDs the cloner criticized. */
+	criticizedWorkers?: string[];
 }
-
-/**
- * Parse a JSON verdict from cloner output.
- * Falls back to heuristic keyword detection if JSON parse fails.
- */
-export function extractVerdict(reviewerId: string, text: string): ParsedVerdict | null {
+export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict | null {
 	// Try JSON first
 	const jsonMatch = text.match(/\{[^}]*"verdict"[^}]*\}/);
 	if (jsonMatch) {
@@ -205,27 +203,49 @@ export function extractVerdict(reviewerId: string, text: string): ParsedVerdict 
 				confidence: number;
 				findings: string | string[];
 				worker_count?: number;
+				worker_count_delta?: number;
+				role_suggestions?: Record<string, string>;
+				praised_workers?: string[];
+				criticized_workers?: string[];
 			};
-			const findingsArr = Array.isArray(parsed.findings)
-				? parsed.findings
-				: [parsed.findings ?? ""];
+			const findingsArr = Array.isArray(parsed.findings) ? parsed.findings : [parsed.findings ?? ""];
+			// worker_count_delta takes precedence; fall back to legacy worker_count
+			const delta =
+				typeof parsed.worker_count_delta === "number"
+					? parsed.worker_count_delta
+					: typeof parsed.worker_count === "number"
+						? parsed.worker_count - 3 // legacy: approximate delta from absolute count
+						: undefined;
 			return {
 				passed: parsed.verdict === "PASS",
 				findings: findingsArr,
 				confidence: parsed.confidence ?? 0.5,
-				workerCount: typeof parsed.worker_count === "number" ? parsed.worker_count : undefined,
+				workerCountDelta: delta,
+				roleSuggestions: parsed.role_suggestions,
+				praisedWorkers: parsed.praised_workers,
+				criticizedWorkers: parsed.criticized_workers,
 			};
 		} catch {
 			// fall through to heuristic
 		}
 	}
 
-	// Heuristic: FAIL keywords without PASS.
+	// Heuristic: FAIL keywords without PASS
 	const hasFail = /\b(?:FAIL|REJECT)/i.test(text) && !/\bPASS/i.test(text);
 	if (hasFail) {
 		return {
 			passed: false,
-			findings: [`${reviewerId}: ${text.slice(0, 200)}`],
+			findings: [`${_reviewerId}: ${text.slice(0, 200)}`],
+			confidence: 0.5,
+		};
+	}
+
+	// Heuristic: PASS keyword present
+	const hasPass = /\bPASS\b/i.test(text);
+	if (hasPass) {
+		return {
+			passed: true,
+			findings: [],
 			confidence: 0.5,
 		};
 	}
@@ -238,20 +258,39 @@ export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 	const workerCounts: number[] = [];
 	let approvalCount = 0;
 	let totalCount = 0;
+	const allRoleSuggestions: Record<string, string> = {};
+	const praisedWorkers = new Set<string>();
+	const criticizedWorkers = new Set<string>();
 
 	for (const result of results) {
 		totalCount++;
 		const verdict = extractVerdict(result.agent, result.output);
 		if (verdict) {
-			findings.push(...verdict.findings.map((f) => `[${result.agent}] ${f}`));
+			findings.push(...verdict.findings.map(f => `[${result.agent}] ${f}`));
 			if (verdict.passed) approvalCount++;
-			if (verdict.workerCount !== undefined) workerCounts.push(verdict.workerCount);
+			if (verdict.workerCountDelta !== undefined) workerCounts.push(verdict.workerCountDelta);
+			if (verdict.roleSuggestions) Object.assign(allRoleSuggestions, verdict.roleSuggestions);
+			if (verdict.praisedWorkers) for (const w of verdict.praisedWorkers) praisedWorkers.add(w);
+			if (verdict.criticizedWorkers) for (const w of verdict.criticizedWorkers) criticizedWorkers.add(w);
 		}
 	}
 
 	const passed = totalCount > 0 && approvalCount >= Math.ceil(totalCount / 2);
 	// Findings diverge when each cloner reports different findings
-	const disagreed = !passed && findings.length > 1 && new Set(findings.map((f) => f.replace(/^\[.*?\]\s*/, ""))).size >= Math.ceil(totalCount / 2);
+	const disagreed =
+		!passed &&
+		findings.length > 1 &&
+		new Set(findings.map(f => f.replace(/^\[.*?\]\s*/, ""))).size >= Math.ceil(totalCount / 2);
 
-	return { passed, approvalCount, totalCount, findings, workerCountSuggestions: workerCounts, disagreed };
+	return {
+		passed,
+		approvalCount,
+		totalCount,
+		findings,
+		workerCountSuggestions: workerCounts,
+		disagreed,
+		roleSuggestions: allRoleSuggestions,
+		praisedWorkers: [...praisedWorkers],
+		criticizedWorkers: [...criticizedWorkers],
+	};
 }

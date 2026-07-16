@@ -23,9 +23,7 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 	lines.push(`Swarm: ${state.name} [${statusLabel}]`);
 	if (isLoop) {
 		const phase = state.roundtablePhase ?? "Initializing";
-		const iterInfo = state.loopIteration != null
-			? `Iter ${state.loopIteration}/${state.targetCount}`
-			: "";
+		const iterInfo = state.loopIteration != null ? `Iter ${state.loopIteration}/${state.targetCount}` : "";
 		lines.push(`Mode: loop | Phase: ${phase} | ${iterInfo}`);
 	} else {
 		lines.push(`Mode: ${state.mode} | Iteration: ${state.iteration + 1}/${state.targetCount}`);

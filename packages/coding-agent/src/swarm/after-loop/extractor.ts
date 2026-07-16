@@ -20,7 +20,7 @@ import type { LoopResult } from "../loop-controller";
 
 export interface ExtractedLesson {
 	/** Type of insight. */
-	type: "error" | "success" | "insight" | "pattern" | "warning";
+	type: "error" | "success" | "insight" | "pattern" | "warning" | "reflection";
 	/** Human-readable summary. */
 	summary: string;
 	/** Full detail for later retrieval. */
@@ -42,7 +42,7 @@ export interface ExtractionResult {
 
 export interface LoopRunStats {
 	totalIterations: number;
-	finalStatus: "completed" | "failed" | "aborted" | "escalated" | "converged_failed";
+	finalStatus: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
 	clonerApprovalRatio: number;
 	workerCount: number;
 	clonerCount: number;
@@ -70,7 +70,8 @@ export function extractLessons(result: LoopResult, workerCount: number, clonerCo
 		lessons.push({
 			type: "warning",
 			summary: `Loop escalated to human after ${result.iterations} iteration(s)`,
-			detail: "The swarm could not reach consensus. Cloners disagreed or confidence was too low. Human intervention needed.",
+			detail:
+				"The swarm could not reach consensus. Cloners disagreed or confidence was too low. Human intervention needed.",
 			tags: ["escalation", "no-consensus", "human-intervention"],
 			confidence: 0.8,
 			source: "loop-controller",
