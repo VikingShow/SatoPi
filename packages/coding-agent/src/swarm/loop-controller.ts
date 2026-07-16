@@ -36,6 +36,12 @@ export interface LoopResult {
 	iterations: number;
 	reviewVerdicts: ReviewVerdict[];
 	errors: string[];
+	/** When status is "escalated", carries context for human decision. */
+	escalationContext?: {
+		lastWorkerOutput: string;
+		lastFindings: string[];
+		approvalRatio: number;
+	};
 }
 
 // ============================================================================
@@ -144,6 +150,7 @@ export class LoopController {
 			});
 
 			let verdict: ReviewVerdict;
+			let lastWorkerOutput = "";
 			try {
 			// 1. Spawn workers (parallel)
 			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, iterSignal, errors);
@@ -157,7 +164,7 @@ export class LoopController {
 			}
 
 			// 3. Collect worker output for review context
-			const workerOutput = workerResults
+			lastWorkerOutput = workerResults
 				.map((r) => `[${r.agent}] ${r.output.slice(0, 4000)}`)
 				.join("\n\n---\n\n");
 
@@ -165,7 +172,7 @@ export class LoopController {
 			verdict = await this.#runClonerReview(
 				clonerIds,
 				iter,
-				workerOutput,
+				lastWorkerOutput,
 				workspace,
 				planContent,
 				clonerFeedbackHistory,
@@ -207,12 +214,20 @@ export class LoopController {
 				if (findingsKey === lastFindingsKey) {
 					stagnationCount++;
 					if (stagnationCount >= convergenceThreshold) {
-						return {
+						const result: LoopResult = {
 							status: "converged_failed",
 							iterations: iter + 1,
 							reviewVerdicts: verdicts,
 							errors: [...errors, `Converged after ${stagnationCount} identical review rounds with no progress`],
 						};
+						if (this.#loopConfig.humanEscalation) {
+							result.escalationContext = {
+								lastWorkerOutput,
+								lastFindings: verdict.findings,
+								approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
+							};
+						}
+						return result;
 					}
 				} else {
 					stagnationCount = 0;
@@ -247,12 +262,20 @@ export class LoopController {
 			await this.#channel.broadcast(this.#clonerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
 			if (iter === this.#loopConfig.maxIterations - 1) {
 				const status = this.#loopConfig.humanEscalation ? "escalated" : "failed";
-				return {
+				const result: LoopResult = {
 					status,
 					iterations: iter + 1,
 					reviewVerdicts: verdicts,
 					errors,
 				};
+				if (status === "escalated") {
+					result.escalationContext = {
+						lastWorkerOutput,
+						lastFindings: verdict.findings,
+						approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
+					};
+				}
+				return result;
 			}
 		}
 

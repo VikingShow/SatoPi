@@ -13,15 +13,15 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
-import { formatDuration } from "@oh-my-pi/pi-utils";
+import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
+import { planExists } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
-import { createLoopController } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
+import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
-import { extractLessons, ExperienceStore } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
-import { planExists } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
+import { formatDuration } from "@oh-my-pi/pi-utils";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
 	pi.setLabel("Swarm Orchestrator");
@@ -74,11 +74,12 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 		description: "Start Loop Engineering — multi-agent swarm with roundtable & review council",
 		getArgumentCompletions: prefix => {
 			const actions = ["start"];
-			if (!prefix) return [
-				...actions.map(s => ({ label: s, value: s })),
-				{ label: ".omp/loop-test.yaml", value: ".omp/loop-test.yaml" },
-				{ label: ".omp/loop.yaml", value: ".omp/loop.yaml" },
-			];
+			if (!prefix)
+				return [
+					...actions.map(s => ({ label: s, value: s })),
+					{ label: ".omp/loop-test.yaml", value: ".omp/loop-test.yaml" },
+					{ label: ".omp/loop.yaml", value: ".omp/loop.yaml" },
+				];
 			const matching = actions.filter(s => s.startsWith(prefix));
 			if (matching.length > 0) return matching.map(s => ({ label: s, value: s }));
 			return [];
@@ -88,8 +89,7 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 
 			// Subcommand: /loopeng start — force-start, skip Before Loop
 			if (trimmed === "start") {
-				const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml")
-					|| findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
+				const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml") || findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
 				if (!yamlPath) {
 					ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or .omp/loop-test.yaml first.", "error");
 					return;
@@ -105,8 +105,7 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			}
 
 			// /loopeng (no args) — start Before Loop if plan.md missing
-			const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml")
-				|| findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
+			const yamlPath = findOmpYaml(ctx.cwd, ".omp/loop.yaml") || findOmpYaml(ctx.cwd, ".omp/loop-test.yaml");
 			if (!yamlPath) {
 				ctx.ui.notify("No swarm YAML found. Create .omp/loop.yaml or pass a path: /loopeng <file.yaml>", "error");
 				return;
@@ -223,27 +222,174 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		let planContent: string | undefined;
 		try {
 			planContent = await Bun.file(path.join(workspace, ".omp", "plan.md")).text();
-		} catch { /* plan.md is optional */ }
+		} catch {
+			/* plan.md is optional */
+		}
 
-		const loopCtrl = createLoopController(stateTracker, {
-			loopConfig: def.loopConfig,
-			workspace,
-		});
+		// 9. Run loop with human escalation loop
+		let loopResult: LoopResult = { status: "failed", iterations: 0, reviewVerdicts: [], errors: [] };
+		let retries = 0;
+		const maxEscalationRetries = 3;
 
-		const loopResult = await loopCtrl.runLoop({
-			workspace,
-			onProgress: () => updateWidget(),
-			modelRegistry: ctx.modelRegistry,
-			settings: pi.pi.settings,
-			planContent,
-		});
+		while (true) {
+			const loopCtrl = createLoopController(stateTracker, {
+				loopConfig: def.loopConfig,
+				workspace,
+			});
+
+			// -- Run the loop (catch unrecoverable crashes) --
+			try {
+				loopResult = await loopCtrl.runLoop({
+					workspace,
+					onProgress: () => updateWidget(),
+					modelRegistry: ctx.modelRegistry,
+					settings: pi.pi.settings,
+					planContent,
+				});
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err);
+				pi.logger.error("Loop crashed", {
+					error: errorMsg,
+					workspace,
+					retries,
+				});
+
+				retries++;
+
+				// No UI → auto-fail
+				if (!ctx.hasUI || !ctx.ui.askDialog) {
+					loopResult = {
+						status: "failed",
+						iterations: loopResult?.iterations ?? 0,
+						reviewVerdicts: loopResult?.reviewVerdicts ?? [],
+						errors: [...(loopResult?.errors ?? []), `Loop crashed: ${errorMsg}`],
+					};
+					break;
+				}
+
+				const crashAnswer = await ctx.ui.askDialog([
+					{
+						id: "action",
+						question: [
+							`## Loop Crashed — ${def.name}`,
+							``,
+							`**Error**: ${errorMsg}`,
+							``,
+							`Retry ${retries}/${maxEscalationRetries}`,
+						].join("\n"),
+						options: [
+							{ label: "Retry", description: "Restart the loop from scratch" },
+							{ label: "Abandon", description: "Abandon as failed" },
+						],
+						recommended: 0,
+					},
+				]);
+
+				if (!crashAnswer || crashAnswer.kind === "chat") {
+					loopResult = {
+						status: "failed",
+						iterations: loopResult?.iterations ?? 0,
+						reviewVerdicts: loopResult?.reviewVerdicts ?? [],
+						errors: [...(loopResult?.errors ?? []), `Loop crashed: ${errorMsg}`],
+					};
+					break;
+				}
+
+				const crashChosen = crashAnswer.kind === "submit" ? crashAnswer.results[0]?.selectedOptions[0] : undefined;
+				if (crashChosen === "Retry" && retries < maxEscalationRetries) {
+					pi.logger.debug("Loop crash retry", {
+						retry: retries,
+						maxRetries: maxEscalationRetries,
+						workspace,
+					});
+					continue;
+				}
+
+				// Abandon or retry limit exhausted
+				loopResult = {
+					status: "failed",
+					iterations: loopResult?.iterations ?? 0,
+					reviewVerdicts: loopResult?.reviewVerdicts ?? [],
+					errors: [...(loopResult?.errors ?? []), `Loop crashed: ${errorMsg}`],
+				};
+				break;
+			}
+
+			// Check if escalation is needed
+			const needsEscalation =
+				(loopResult.status === "escalated" || loopResult.status === "converged_failed") &&
+				loopResult.escalationContext;
+			if (!needsEscalation) break;
+
+			// No UI → treat as terminal failure
+			if (!ctx.hasUI || !ctx.ui.askDialog) break;
+
+			const ec = loopResult.escalationContext!;
+			const findingsLines =
+				ec.lastFindings.length > 0 ? ec.lastFindings.map(f => `- ${f}`).join("\n") : "(no findings)";
+			const reason =
+				loopResult.status === "converged_failed"
+					? "Findings converged with no progress"
+					: `All ${def.loopConfig.maxIterations} iterations used but unresolved`;
+
+			const answer = await ctx.ui.askDialog([
+				{
+					id: "action",
+					question: [
+						`## Loop Escalation — ${def.name}`,
+						`**Reason**: ${reason}`,
+						`**Approval ratio**: ${(ec.approvalRatio * 100).toFixed(0)}%`,
+						``,
+						`**Findings**:`,
+						findingsLines,
+					].join("\n"),
+					options: [
+						{ label: "Accept", description: "Mark as completed with current results" },
+						{
+							label: "Retry",
+							description: `Run another loop iteration (retry ${retries + 1}/${maxEscalationRetries})`,
+						},
+						{ label: "Reject", description: "Abandon as failed" },
+					],
+					recommended: 0,
+				},
+			]);
+
+			if (!answer || answer.kind === "chat") break;
+
+			const chosen = answer.kind === "submit" ? answer.results[0]?.selectedOptions[0] : undefined;
+			switch (chosen) {
+				case "Accept":
+					loopResult = { ...loopResult, status: "completed" };
+					break;
+				case "Reject":
+					loopResult = { ...loopResult, status: "failed" };
+					break;
+				case "Retry":
+					retries++;
+					if (retries >= maxEscalationRetries) {
+						loopResult = {
+							...loopResult,
+							status: "failed",
+							errors: [...loopResult.errors, `Escalation retry limit (${maxEscalationRetries}) reached`],
+						};
+						break;
+					}
+					// Log retry
+					pi.logger.debug("Loop escalation retry", {
+						retry: retries,
+						maxRetries: maxEscalationRetries,
+						workspace,
+					});
+					continue;
+				default:
+					break;
+			}
+			break;
+		}
 
 		const loopStatus =
-			loopResult.status === "completed"
-				? "completed"
-				: loopResult.status === "aborted"
-					? "aborted"
-					: "failed";
+			loopResult.status === "completed" ? "completed" : loopResult.status === "aborted" ? "aborted" : "failed";
 		const result = {
 			status: loopStatus,
 			iterations: loopResult.iterations,
@@ -263,8 +409,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 					stats: extraction.stats,
 				});
 			}
-			// Write human-readable summary
-			const summary = buildSummaryMessage(def, result, stateTracker, workspace) +
+			const summary =
+				buildSummaryMessage(def, result, stateTracker, workspace) +
 				`\n\n### Lessons Learned\n\n` +
 				extraction.lessons.map(l => `- [${l.type}] ${l.summary}`).join("\n");
 			await store.writeSummary(`loop-${def.name}-${Date.now()}`, summary);
@@ -273,7 +419,6 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 				workspace,
 			});
 		} catch (err) {
-			// Non-fatal: loop succeeded, just logging failed
 			pi.logger.warn("Failed to persist loop experience", { error: String(err) });
 		}
 
@@ -403,14 +548,15 @@ function findOmpYaml(cwd: string, fileName: string): string | null {
 		const candidate = path.join(dir, fileName);
 		try {
 			if (Bun.file(candidate).size > 0) return candidate;
-		} catch { /* not found, walk up */ }
+		} catch {
+			/* not found, walk up */
+		}
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
 	}
 	return null;
 }
-
 
 function buildSummaryMessage(
 	def: SwarmDefinition,
