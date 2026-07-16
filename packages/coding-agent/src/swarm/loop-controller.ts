@@ -28,6 +28,23 @@ export interface LoopOptions extends PipelineOptions {
 	stateTracker: StateTracker;
 }
 
+/** Structured round summary produced by the elected reviewer. */
+export interface RoundSummaryData {
+	round: number;
+	reviewer: string;
+	accomplished: Record<string, string>;
+	issues: Array<{
+		severity: "blocker" | "major" | "minor";
+		workers: string[];
+		file?: string;
+		description: string;
+		resolution?: string;
+	}>;
+	remaining: string[];
+	recommended_division: Record<string, string>;
+	convergence_opinion: "converging" | "diverging" | "stalled";
+}
+
 export interface LoopResult {
 	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
 	iterations: number;
@@ -154,6 +171,23 @@ function findingsSimilarity(prev: string[], curr: string[]): number {
 	const prevTokens = prev.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
 	const currTokens = curr.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
 	return jaccardSimilarity(prevTokens, currTokens);
+}
+
+/**
+ * Parse the reviewer's Round Summary JSON from a worker's output.
+ * Looks for a JSON code block after `## Round Summary`.
+ * Returns null if no valid JSON round summary is found.
+ */
+function parseRoundSummaryJson(output: string): RoundSummaryData | null {
+	const jsonBlock = output.match(/```json\n([\s\S]*?)\n```/);
+	if (!jsonBlock?.[1]) return null;
+	try {
+		const parsed = JSON.parse(jsonBlock[1]) as RoundSummaryData;
+		if (typeof parsed.round !== "number" || typeof parsed.convergence_opinion !== "string") return null;
+		return parsed;
+	} catch {
+		return null;
+	}
 }
 
 // ============================================================================
@@ -341,25 +375,46 @@ export class LoopController {
 						.map(r => `[${r.agent}]\n${extractRoundSummary(r.output)}`)
 						.join("\n\n---\n\n");
 
-					// Convergence detection on worker outputs (not cloner findings)
+					// Convergence detection: Round 1+ uses Reviewer's RoundSummary JSON;
+					// Round 0 falls back to Jaccard text similarity.
 					if (round > 0 && convergenceNeeded > 0) {
-						const currKey = roundResults
-							.map(r => r.output.slice(0, 500))
-							.sort()
-							.join("||");
-						const similarity = lastRoundOutputsKey
-							? findingsSimilarity(lastRoundOutputsKey.split("||"), currKey.split("||"))
-							: 0;
-						lastRoundOutputsKey = currKey;
-
-						if (similarity >= 0.85) {
-							convergenceStreak++;
-							if (convergenceStreak >= convergenceNeeded) {
-								workersConverged = true;
-								break;
+						let converged = false;
+						// Try reviewer's structured summary first
+						if (reviewerId) {
+							const reviewerResult = roundResults.find(r => r.agent === reviewerId);
+							if (reviewerResult) {
+								const summary = parseRoundSummaryJson(reviewerResult.output);
+								if (summary) {
+									const hasBlocker = summary.issues.some(i => i.severity === "blocker");
+									if (summary.convergence_opinion === "converging" && !hasBlocker) {
+										convergenceStreak++;
+										if (convergenceStreak >= convergenceNeeded) converged = true;
+									} else {
+										convergenceStreak = 0;
+									}
+								}
 							}
-						} else {
-							convergenceStreak = 0;
+						}
+						// Fallback: Jaccard text similarity when no reviewer summary is available
+						if (!reviewerId || convergenceStreak === 0) {
+							const currKey = roundResults
+								.map(r => r.output.slice(0, 500))
+								.sort()
+								.join("||");
+							const similarity = lastRoundOutputsKey
+								? findingsSimilarity(lastRoundOutputsKey.split("||"), currKey.split("||"))
+								: 0;
+							lastRoundOutputsKey = currKey;
+							if (similarity >= 0.85) {
+								convergenceStreak++;
+								if (convergenceStreak >= convergenceNeeded) converged = true;
+							} else {
+								convergenceStreak = 0;
+							}
+						}
+						if (converged) {
+							workersConverged = true;
+							break;
 						}
 					}
 
