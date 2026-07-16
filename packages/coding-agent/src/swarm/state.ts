@@ -30,6 +30,8 @@ export interface AgentState {
 	conflictCount: number;
 	/** Mentor worker ID, set on scale-up for new workers. */
 	mentorId?: string;
+	/** Role override — "reviewer" when elected, undefined for normal workers. */
+	role?: "reviewer";
 }
 
 export interface SwarmState {

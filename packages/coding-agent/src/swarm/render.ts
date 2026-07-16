@@ -100,8 +100,9 @@ function formatAgentDuration(agent: { startedAt?: number; completedAt?: number; 
 function formatAgentLine(agent: AgentState): string {
 	const icon = STATUS_LABELS[agent.status] ?? "[????]";
 	const dur = formatAgentDuration(agent);
+	const roleTag = agent.role === "reviewer" ? " [R]" : "";
 	const err = agent.error ? ` - ${truncate(agent.error, 40)}` : "";
-	return `${icon} ${agent.name}: ${agent.status}${dur}${err}`;
+	return `${icon} ${agent.name}${roleTag}: ${agent.status}${dur}${err}`;
 }
 
 function summarizeGroup(agents: AgentState[]): string {

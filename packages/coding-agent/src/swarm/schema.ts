@@ -94,6 +94,21 @@ export interface LoopSwarmConfig {
 		 */
 		roundtablePrompt?: string;
 	};
+	/** Reviewer election configuration. */
+	reviewer: {
+		/**
+		 * Enable reviewer election before round 1+.
+		 * Round 0 collects nominations; round 1+ has an elected reviewer.
+		 * Default: true.
+		 */
+		enabled: boolean;
+		/**
+		 * Timeout in milliseconds for nomination phase. Workers must
+		 * include `## Nomination` in their output within this window.
+		 * Default: 0 (no timeout — collected at end of round).
+		 */
+		electionTimeoutMs: number;
+	};
 	/** Plan debate configuration (Before Loop phase). */
 	planDebate: {
 		/** Enable multi-cloner plan debate before execution. Default: true. */
@@ -161,6 +176,10 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 			maxRounds: (workersRaw.max_rounds as number) ?? 5,
 			roundsConvergenceThreshold: (workersRaw.rounds_convergence_threshold as number) ?? 3,
 			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
+		},
+		reviewer: {
+			enabled: ((raw.reviewer as Record<string, unknown>)?.enabled as boolean) ?? true,
+			electionTimeoutMs: ((raw.reviewer as Record<string, unknown>)?.election_timeout_ms as number) ?? 0,
 		},
 		cloners: {
 			count: clonersRaw.count ?? Math.min(3, workerInitial),

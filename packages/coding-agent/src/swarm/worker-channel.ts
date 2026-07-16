@@ -30,14 +30,32 @@ export interface WorkerChannelConfig {
 }
 
 // ============================================================================
-// WorkerChannel
+// Nomination types
 // ============================================================================
 
+export interface Nomination {
+	/** Who made the nomination. */
+	nominator: string;
+	/** Who they nominated. */
+	nominee: string;
+}
+
+export interface NominationResult {
+	/** Elected worker ID, or null if no consensus. */
+	elected: string | null;
+	/** All nominations cast, grouped by nominee. */
+	votes: Record<string, string[]>;
+	round: number;
+}
+
+// ============================================================================
 export class WorkerChannel {
 	readonly #ircBus: IrcBus;
 	readonly #workers = new Set<string>();
 	readonly #cloners = new Set<string>();
 	readonly #groups = new Map<string, Set<string>>();
+	#nominationRound = 0;
+	#nominations: Nomination[] = [];
 
 	constructor(ircBus: IrcBus, config: WorkerChannelConfig) {
 		this.#ircBus = ircBus;
@@ -74,7 +92,6 @@ export class WorkerChannel {
 	 * Cloners receive a copy silently.
 	 */
 	async broadcast(from: string, body: string): Promise<void> {
-		const message = { from, body, timestamp: Date.now() };
 		const workerList = [...this.#workers];
 
 		// Send to all workers in parallel
@@ -134,12 +151,133 @@ export class WorkerChannel {
 		});
 	}
 
-	/**
-	 * Cloner 向全体 worker 广播指导。
-	 */
 	async broadcastSteering(clonerId: string, body: string): Promise<void> {
 		await Promise.all(
 			[...this.#workers].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
 		);
+	}
+
+	// -- nomination --------------------------------------------------------
+
+	/**
+	 * Start a new nomination round. Clears any previous nomination state.
+	 * Workers are expected to produce `## Nomination` sections in their output
+	 * for this round; those are collected and fed to {@link tally}.
+	 */
+	startNomination(round: number): void {
+		this.#nominationRound = round;
+		this.#nominations = [];
+	}
+
+	/** Record a nomination from a worker. Self-nominations are ignored. */
+	processNomination(nominator: string, nominee: string): void {
+		if (nominator === nominee) return;
+		if (!this.#workers.has(nominator)) return;
+		if (!this.#workers.has(nominee)) return;
+		this.#nominations.push({ nominator, nominee });
+	}
+
+	/**
+	 * Build a nomination prompt for workers at the start of a round.
+	 * Injected into the worker task before execution begins.
+	 */
+	buildNominationPrompt(): string {
+		const workerList = [...this.#workers].join(", ");
+		return [
+			`## Reviewer Election (Round ${this.#nominationRound})`,
+			``,
+			`At the END of your output, include a \`## Nomination\` section with ONE line:`,
+			``,
+			`\`\`\``,
+			`## Nomination`,
+			`nominated: <worker-id>`,
+			`reason: <one sentence explaining why>`,
+			`\`\`\``,
+			``,
+			`Available workers: ${workerList}`,
+			`You may nominate any worker (including yourself).`,
+			`The worker with the most nominations becomes the Reviewer for this round.`,
+			`The Reviewer will NOT write code — they review all outputs and produce a Round Summary.`,
+			`Choose the worker best suited to assess this round's work against the plan's acceptance criteria.`,
+		].join("\n");
+	}
+
+	/**
+	 * Tally nominations and elect a reviewer.
+	 * Returns the elected worker ID, or null if no nominations were cast.
+	 * Ties are broken by choosing the first nominee to reach the highest count.
+	 */
+	tally(): NominationResult {
+		const votes: Record<string, string[]> = {};
+		for (const nom of this.#nominations) {
+			if (!votes[nom.nominee]) votes[nom.nominee] = [];
+			votes[nom.nominee].push(nom.nominator);
+		}
+
+		let elected: string | null = null;
+		let bestCount = 0;
+		for (const [nominee, nominators] of Object.entries(votes)) {
+			if (nominators.length > bestCount) {
+				bestCount = nominators.length;
+				elected = nominee;
+			}
+		}
+
+		return {
+			elected: bestCount > 0 ? elected : null,
+			votes,
+			round: this.#nominationRound,
+		};
+	}
+
+	/**
+	 * Build the reviewer-specific system prompt suffix.
+	 * Appended to the base WORKER_SYSTEM_PROMPT for the elected reviewer.
+	 */
+	static buildReviewerPrompt(): string {
+		return [
+			``,
+			`## REVIEWER ROLE`,
+			``,
+			`You have been ELECTED as the Reviewer for this round. Your role is DIFFERENT from other workers:`,
+			``,
+			`WHAT YOU DO:`,
+			`- Read EVERY worker's output (use read tool on workspace files they produced)`,
+			`- Assess each output against plan.md acceptance criteria`,
+			`- Identify conflicts between workers (same file, contradicting logic)`,
+			`- Produce a structured Round Summary (format below)`,
+			``,
+			`WHAT YOU DO NOT DO:`,
+			`- Do NOT write or edit code (no edit, write, or bash that modifies files)`,
+			`- Do NOT produce your own implementation`,
+			`- Your output IS the Round Summary — that is your deliverable`,
+			``,
+			`ROUND SUMMARY FORMAT (output this EXACTLY as a code block in your final message):`,
+			``,
+			`\`\`\`json`,
+			`{`,
+			`  "round": <number>,`,
+			`  "reviewer": "<your-worker-id>",`,
+			`  "accomplished": {`,
+			`    "worker-1": "one-line summary of what they did",`,
+			`    "worker-2": "one-line summary of what they did"`,
+			`  },`,
+			`  "issues": [`,
+			`    {`,
+			`      "severity": "blocker|major|minor",`,
+			`      "workers": ["worker-1"],`,
+			`      "file": "path/to/file",`,
+			`      "description": "what's wrong",`,
+			`      "resolution": "your ruling or suggested fix"`,
+			`    }`,
+			`  ],`,
+			`  "remaining": ["task A", "task B"],`,
+			`  "recommended_division": {`,
+			`    "worker-1": "suggested next task"`,
+			`  },`,
+			`  "convergence_opinion": "converging|diverging|stalled"`,
+			`}`,
+			`\`\`\``,
+		].join("\n");
 	}
 }

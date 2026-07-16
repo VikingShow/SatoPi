@@ -12,7 +12,7 @@ import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
-import { WorkerChannel } from "./worker-channel";
+import { type Nomination, WorkerChannel } from "./worker-channel";
 
 // ============================================================================
 // Types
@@ -88,9 +88,55 @@ BEHAVIOR:
 - If you're blocked, broadcast for help.
 - Before finishing a round, self-audit your output against the plan's acceptance criteria.
 - Record what you did and what you learned.
-- Always produce verifiable output in the workspace.`;
+- Always produce verifiable output in the workspace.
 
+OUTPUT FORMAT (critical):
+At the end of every round's output, you MUST include a **## Round Summary** section.
+This is the ONLY part of your output that other workers will read in the next round.
+Make it self-contained — a peer who reads only this summary must understand:
+- What files you created or modified (with exact paths)
+- What decisions you made and why
+- What's incomplete and needs follow-up
+- Any conflicts or quality concerns you noticed about other workers' work
+
+Keep it concise (200-500 words). Do not paste code — reference files instead.
+Example:
+
+## Round Summary
+- Created src/auth/login.ts: JWT-based login with bcrypt password verification
+- Modified src/db/schema.ts: added users and sessions tables
+- Decision: used RS256 instead of HS256 for JWT (asymmetric, better for distributed verification)
+- Incomplete: password reset flow not yet implemented
+- Concern: worker-2's auth middleware duplicates token validation logic from login.ts — coordinate to deduplicate
+- Next: implement token refresh endpoint, then integration tests`;
+
+// ============================================================================
+// Similarity & Summary Utilities
+// ============================================================================
+
+/** Extract the `## Round Summary` section from a worker's output.
+ * Falls back to the first 2000 chars when no summary section is found. */
+function extractRoundSummary(output: string): string {
+	const match = output.match(/## Round Summary\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
+	return match?.[1]?.trim() || output.slice(0, 2000);
+}
+
+/**
+ * Parse a `## Nomination` section from a worker's output.
+ * Format expected:
+ *   ## Nomination
+ *   nominated: worker-3
+ *   reason: has auth expertise
+ */
+function parseNomination(output: string): Nomination | null {
+	const section = output.match(/## Nomination\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
+	if (!section?.[1]) return null;
+	const nominated = section[1].match(/nominated:\s*(\S+)/);
+	if (!nominated?.[1]) return null;
+	return { nominator: "", nominee: nominated[1] };
+}
 /** Jaccard similarity between two arrays of tokens. Returns 0–1. */
+
 function jaccardSimilarity(a: string[], b: string[]): number {
 	const setA = new Set(a);
 	const setB = new Set(b);
@@ -141,7 +187,6 @@ export class LoopController {
 		let currentWorkerCount = this.#loopConfig.workers.initial;
 		let currentMaxRounds = this.#loopConfig.workers.maxRounds;
 		let currentConvergenceNeeded = this.#loopConfig.workers.roundsConvergenceThreshold;
-		let lastConflictReport: FileRoundSummary | null = null;
 
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
@@ -233,25 +278,15 @@ export class LoopController {
 				let priorOutputs = "";
 				let convergenceStreak = 0;
 				let lastRoundOutputsKey = "";
+				let lastConflictReport: FileRoundSummary | null = null;
+				let reviewerId: string | undefined;
 
 				for (let round = 0; round < hardLimit; round++) {
 					if (iterSignal?.aborted) break;
 
-					const roundLabel =
-						maxRounds === 0
-							? `Workers round ${round + 1} (convergence-driven)`
-							: `Workers round ${round + 1}/${hardLimit}`;
-					await this.#stateTracker.updatePipeline({ roundtablePhase: roundLabel });
-					for (const id of workerIds) {
-						await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
-					}
-					options.onProgress?.({
-						iteration: iter,
-						targetCount: this.#loopConfig.maxIterations,
-						currentWave: 0,
-						totalWaves: 1,
-						agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
-					});
+					// Start nomination for this round
+					this.#channel?.startNomination(round);
+					nominationPrompt = this.#channel?.buildNominationPrompt();
 
 					// Snapshot workspace before this round's workers execute
 					await this.#fileTracker.startRound(workspace);
@@ -270,6 +305,7 @@ export class LoopController {
 							: `\n## Prior Round Outputs\n\nCross-examine these outputs. Flag gaps, contradictions, and quality issues. Be direct — your peers expect honest critique. Refine and improve upon the prior work.\n`;
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
+
 					const roundResults = await this.#spawnWorkers(
 						workerIds,
 						workspace,
@@ -283,6 +319,8 @@ export class LoopController {
 						currentRoleSuggestions,
 						lockMgr,
 						this.#channel,
+						reviewerId,
+						nominationPrompt,
 					);
 
 					if (iterSignal?.aborted) {
@@ -299,7 +337,9 @@ export class LoopController {
 					allWorkerResults.push(...roundResults);
 
 					// Build prior outputs for next round
-					priorOutputs = roundResults.map(r => `[${r.agent}] ${r.output.slice(0, 2000)}`).join("\n\n---\n\n");
+					priorOutputs = roundResults
+						.map(r => `[${r.agent}]\n${extractRoundSummary(r.output)}`)
+						.join("\n\n---\n\n");
 
 					// Convergence detection on worker outputs (not cloner findings)
 					if (round > 0 && convergenceNeeded > 0) {
@@ -321,11 +361,23 @@ export class LoopController {
 						} else {
 							convergenceStreak = 0;
 						}
-					} else {
-						lastRoundOutputsKey = roundResults
-							.map(r => r.output.slice(0, 500))
-							.sort()
-							.join("||");
+					}
+
+					// Parse nominations from worker outputs and elect reviewer for next round
+					for (const result of roundResults) {
+						const nom = parseNomination(result.output);
+						if (nom) {
+							this.#channel?.processNomination(result.agent, nom.nominee);
+						}
+					}
+					const nominationResult = this.#channel?.tally();
+					reviewerId = nominationResult?.elected ?? undefined;
+
+					// Update state tracker: mark reviewer role, clear previous
+					for (const id of workerIds) {
+						await this.#stateTracker.updateAgent(id, {
+							role: id === reviewerId ? "reviewer" : undefined,
+						});
 					}
 				}
 
@@ -610,6 +662,8 @@ export class LoopController {
 		roleSuggestions?: Record<string, string>,
 		lockMgr?: RegionLockManager,
 		channel?: WorkerChannel,
+		reviewerId?: string,
+		nominationPrompt?: string,
 	): Promise<SingleResult[]> {
 		const feedbackBlock =
 			previousFeedback.length > 0
@@ -622,12 +676,17 @@ export class LoopController {
 		const results = await Promise.allSettled(
 			workerIds.map((id, i) => {
 				const workerHooks = hooks?.(id);
+				const isReviewer = reviewerId !== undefined && id === reviewerId;
+				const systemPrompt = isReviewer
+					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
+					: WORKER_SYSTEM_PROMPT;
+
 				return runSubprocess({
 					cwd: workspace,
 					agent: {
 						name: id,
 						description: `Loop Engineering Worker ${i + 1}`,
-						systemPrompt: WORKER_SYSTEM_PROMPT,
+						systemPrompt,
 						source: "project",
 					},
 					task: [
@@ -640,8 +699,8 @@ export class LoopController {
 						roleSuggestions?.[id]
 							? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
 							: "",
+						nominationPrompt ?? "",
 						extraContext ?? "",
-						`\nProduce your output in the workspace directory.`,
 					].join("\n"),
 					index: i,
 					id: `worker-${id}`,
