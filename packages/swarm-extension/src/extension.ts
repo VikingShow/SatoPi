@@ -14,7 +14,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
-import { generatePlanningPrompt, planExists, stampPlanMd } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
+import { generatePlanningPrompt, planExists, stampAndArchivePlanMd } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
@@ -26,6 +26,7 @@ import {
 	validateSwarmDefinition,
 } from "@oh-my-pi/pi-coding-agent/swarm/schema";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
+import { TaskComplexityAnalyzer } from "@oh-my-pi/pi-coding-agent/swarm/task-analyzer";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
@@ -116,17 +117,10 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 				return;
 			}
 
-			// Resolve workspace to check for plan.md
+			// Parse YAML to resolve workspace, then check for plan.md in the
+			// correct location ({workspace}/.omp/plan.md).  Using yamlDir here
+			// would check {yamlDir}/.omp/plan.md — a nested .omp/.omp/ path.
 			const yamlDir = path.dirname(yamlPath);
-			const hasPlan = await planExists(yamlDir);
-
-			if (hasPlan) {
-				// Plan exists — run directly
-				await handleRun(yamlPath, ctx, pi);
-				return;
-			}
-
-			// No plan.md — start Before Loop phase with experience readback
 			const resolvedPath = path.resolve(yamlPath);
 			let def: SwarmDefinition;
 			try {
@@ -137,6 +131,15 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			}
 
 			const workspace = path.isAbsolute(def.workspace) ? def.workspace : path.resolve(yamlDir, def.workspace);
+			const hasPlan = await planExists(workspace);
+
+			if (hasPlan) {
+				// Plan exists — run directly
+				await handleRun(yamlPath, ctx, pi);
+				return;
+			}
+
+			// No plan.md — start Before Loop phase with experience readback
 
 			// Load past experience
 			let store: ExperienceStore | undefined;
@@ -245,9 +248,29 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		// Read plan.md from workspace if it exists (stamp with timestamp on first read)
 		let planContent: string | undefined;
 		try {
-			planContent = await stampPlanMd(workspace);
+			planContent = await stampAndArchivePlanMd(workspace);
 		} catch {
 			/* plan.md is optional */
+		}
+
+		// TaskComplexityAnalyzer — when workers.auto is enabled, evaluate plan.md
+		// to dynamically determine worker/cloner counts instead of YAML defaults.
+		if (def.loopConfig.workers.auto && planContent) {
+			try {
+				const analyzer = new TaskComplexityAnalyzer(ctx.modelRegistry, pi.pi.settings);
+				const recommendation = await analyzer.analyze(planContent, def.loopConfig);
+				def.loopConfig = {
+					...def.loopConfig,
+					workers: { ...def.loopConfig.workers, initial: recommendation.workers },
+					cloners: { ...def.loopConfig.cloners, count: recommendation.cloners },
+				};
+				pi.logger.debug("TaskComplexityAnalyzer: dynamic worker/cloner counts", {
+					workers: recommendation.workers,
+					cloners: recommendation.cloners,
+				});
+			} catch (err) {
+				pi.logger.warn("TaskComplexityAnalyzer failed, using YAML defaults", { error: String(err) });
+			}
 		}
 		// 9. Run loop with human escalation loop
 		let loopResult: LoopResult = { status: "failed", iterations: 0, reviewVerdicts: [], errors: [] };
@@ -424,19 +447,41 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			const store = new ExperienceStore(workspace);
 			await store.init();
 			const extraction = extractLessons(loopResult, def.loopConfig.workers.initial, def.loopConfig.cloners.count);
-			for (const lesson of extraction.lessons) {
+			const runIdBase = `loop-${def.name}-${Date.now()}`;
+			const timestamp = new Date().toISOString();
+			const savedRunIds: string[] = [];
+			for (const [i, lesson] of extraction.lessons.entries()) {
+				const runId = `${runIdBase}-${i}`;
+				savedRunIds.push(runId);
 				store.saveLesson({
-					runId: `loop-${def.name}-${Date.now()}`,
-					timestamp: new Date().toISOString(),
+					runId,
+					timestamp,
 					lesson,
 					stats: extraction.stats,
+					weight: 1.0,
+					lastReferencedAt: null,
 				});
 			}
+
+			// Decay unreferenced lessons (experience quality decay)
+			store.decayUnreferenced(savedRunIds);
+
+			// Check if wisdom principles should be generated
+			if (store.shouldGeneratePrinciples()) {
+				pi.logger.debug("Principle generation interval reached", { workspace });
+				// Principle generation requires LLM call — fire-and-forget,
+				// not blocking the main loop flow.
+				store
+					.buildPrinciplesPrompt()
+					.then(() => pi.logger.debug("Principles prompt ready", { workspace }))
+					.catch(() => {});
+			}
+
 			const summary =
 				buildSummaryMessage(def, result, stateTracker, workspace) +
 				`\n\n### Lessons Learned\n\n` +
 				extraction.lessons.map(l => `- [${l.type}] ${l.summary}`).join("\n");
-			await store.writeSummary(`loop-${def.name}-${Date.now()}`, summary);
+			await store.writeSummary(runIdBase, summary);
 			pi.logger.debug("Loop experience persisted", {
 				lessonCount: extraction.lessons.length,
 				workspace,
