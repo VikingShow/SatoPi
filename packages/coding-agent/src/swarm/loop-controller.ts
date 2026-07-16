@@ -137,7 +137,7 @@ export class LoopController {
 		// TaskComplexityAnalyzer: override worker count, maxRounds, and convergence
 		// based on plan.md content when workers.auto is enabled.
 		if (this.#loopConfig.workers.auto && planContent) {
-			const analyzer = new TaskComplexityAnalyzer(modelRegistry!, settings!);
+			const analyzer = new TaskComplexityAnalyzer();
 			const rec = await analyzer.analyze(planContent, this.#loopConfig);
 			currentWorkerCount = rec.workers;
 			currentMaxRounds = rec.maxRounds;
@@ -637,7 +637,7 @@ export class LoopController {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const council = new ClonerCouncil(this.#channel!);
+		const council = new ClonerCouncil();
 		return council.review(
 			{
 				clonerIds,

@@ -262,7 +262,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		// to dynamically determine worker/cloner counts instead of YAML defaults.
 		if (def.loopConfig.workers.auto && planContent) {
 			try {
-				const analyzer = new TaskComplexityAnalyzer(ctx.modelRegistry, pi.pi.settings);
+				const analyzer = new TaskComplexityAnalyzer();
 				const recommendation = await analyzer.analyze(planContent, def.loopConfig);
 				def.loopConfig = {
 					...def.loopConfig,

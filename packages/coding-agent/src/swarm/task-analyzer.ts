@@ -156,6 +156,14 @@ function recommendFromSignals(
 	if (configMaxRounds > 0) maxRounds = Math.min(maxRounds, configMaxRounds);
 	roundsConvergenceThreshold = Math.max(1, Math.min(roundsConvergenceThreshold, maxRounds > 0 ? maxRounds : 10));
 
+	const parts: string[] = [
+		`complexity=${complexity}`,
+		`parallelism=${signals.parallelism}`,
+		`codeSurface=${signals.codeSurface}`,
+	];
+	if (signals.safetyCritical) parts.push("safety-critical");
+	if (signals.crossPackage) parts.push("cross-package");
+
 	return {
 		workers,
 		cloners,
