@@ -459,7 +459,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 					lesson,
 					stats: extraction.stats,
 					weight: 1.0,
-					lastReferencedAt: null,
+					lastReferencedAt: undefined,
 				});
 			}
 
