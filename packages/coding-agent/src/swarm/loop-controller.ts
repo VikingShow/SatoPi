@@ -159,37 +159,73 @@ export class LoopController {
 			let verdict: ReviewVerdict;
 			let lastWorkerOutput = "";
 			try {
-			// 1. Spawn workers (parallel)
-			const workerResults = await this.#spawnWorkers(workerIds, workspace, planContent, clonerFeedbackHistory, modelRegistry, settings, iterSignal, errors);
-			if (iterSignal?.aborted) {
-				return {
-					status: "aborted",
-					iterations: iter + 1,
-					reviewVerdicts: verdicts,
-					errors,
-				};
-			}
+			// 1. Spawn workers in rounds (roundtable deliberation)
+			const maxRounds = this.#loopConfig.workers.maxRounds;
+			const allWorkerResults: SingleResult[] = [];
+			let priorOutputs = "";
 
-			// Progress: workers completed
-			for (const r of workerResults) {
-				const status = r.exitCode === 0 ? "completed" : "failed";
-				await this.#stateTracker.updateAgent(r.agent, {
-					status,
+			for (let round = 0; round < maxRounds; round++) {
+				if (iterSignal?.aborted) break;
+
+				// Progress: workers round N/M
+				for (const id of workerIds) {
+					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
+				}
+				await this.#stateTracker.updatePipeline({ roundtablePhase: `Workers round ${round + 1}/${maxRounds}` });
+				options.onProgress?.({
 					iteration: iter,
-					completedAt: Date.now(),
+					targetCount: this.#loopConfig.maxIterations,
+					currentWave: 0,
+					totalWaves: 1,
+					agents: Object.fromEntries(workerIds.map((id) => [id, { status: "running", iteration: iter }])),
 				});
-			}
-			await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing" });
-			options.onProgress?.({
-				iteration: iter,
-				targetCount: this.#loopConfig.maxIterations,
-				currentWave: 0,
-				totalWaves: 1,
-				agents: Object.fromEntries(workerResults.map((r) => [r.agent, { status: r.exitCode === 0 ? "completed" : "failed", iteration: iter }])),
-			});
 
-			// 3. Collect worker output for review context
-			lastWorkerOutput = workerResults
+				// Build roundtable context — inject prior outputs for rounds > 0
+				let extraContext = "";
+				if (round > 0) {
+					const prompt = this.#loopConfig.workers.roundtablePrompt
+						? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
+						: `\n## Prior Round Outputs\n\nReview the outputs below and refine or improve upon them.\n`;
+					extraContext = `${prompt}\n${priorOutputs}`;
+				}
+
+				const roundResults = await this.#spawnWorkers(
+					workerIds, workspace, planContent, clonerFeedbackHistory,
+					modelRegistry, settings, iterSignal, errors, extraContext,
+				);
+
+				if (iterSignal?.aborted) {
+					return {
+						status: "aborted",
+						iterations: iter + 1,
+						reviewVerdicts: verdicts,
+						errors,
+					};
+				}
+
+				// Progress: workers round completed
+				for (const r of roundResults) {
+					const status = r.exitCode === 0 ? "completed" : "failed";
+					await this.#stateTracker.updateAgent(r.agent, { status, iteration: iter, completedAt: Date.now() });
+				}
+				options.onProgress?.({
+					iteration: iter,
+					targetCount: this.#loopConfig.maxIterations,
+					currentWave: 0,
+					totalWaves: 1,
+					agents: Object.fromEntries(roundResults.map((r) => [r.agent, { status: r.exitCode === 0 ? "completed" : "failed", iteration: iter }])),
+				});
+
+				allWorkerResults.push(...roundResults);
+
+				// Build prior outputs for next round
+				priorOutputs = roundResults
+					.map((r) => `[${r.agent}] ${r.output.slice(0, 2000)}`)
+					.join("\n\n---\n\n");
+			}
+
+			// 3. Collect worker output for review context (all rounds)
+			lastWorkerOutput = allWorkerResults
 				.map((r) => `[${r.agent}] ${r.output.slice(0, 4000)}`)
 				.join("\n\n---\n\n");
 
@@ -355,6 +391,7 @@ export class LoopController {
 		settings?: Settings,
 		signal?: AbortSignal,
 		errors: string[] = [],
+		extraContext?: string,
 	): Promise<SingleResult[]> {
 		const feedbackBlock = previousFeedback.length > 0
 			? `\n## Previous Review Feedback\n\n${previousFeedback.map((f, i) => `(Iteration ${i + 1}) ${f}`).join("\n")}\n`
@@ -377,6 +414,7 @@ export class LoopController {
 						`Work in the workspace: ${workspace}.`,
 						planContent ? `\n## Plan\n\n${planContent}` : "",
 						feedbackBlock,
+						extraContext ?? "",
 						`\nProduce your output in the workspace directory.`,
 					].join("\n"),
 					index: i,

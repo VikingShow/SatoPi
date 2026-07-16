@@ -67,6 +67,18 @@ export interface LoopSwarmConfig {
 		min: number;
 		/** Maximum workers allowed during dynamic scaling. */
 		max: number;
+		/**
+		 * Number of deliberation rounds within one iteration.
+		 * Workers in each round see prior rounds' outputs and refine.
+		 * Default: 1 (single round, backward-compatible).
+		 */
+		maxRounds: number;
+		/**
+		 * Prompt excerpt injected into workers after round 1,
+		 * instructing them to cross-examine prior outputs. Handlebars template:
+		 * `{{priorOutputs}}` contains the prior rounds' outputs.
+		 */
+		roundtablePrompt?: string;
 	};
 	/** Cloner configuration. */
 	cloners: {
@@ -96,17 +108,19 @@ export interface LoopSwarmConfig {
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
-	const workersRaw = (raw.workers as Record<string, number>) ?? {};
+	const workersRaw = (raw.workers as Record<string, unknown>) ?? {};
 	const clonersRaw = (raw.cloners as Record<string, number>) ?? {};
-	const workerInitial = workersRaw.initial ?? 3;
+	const workerInitial = (workersRaw.initial as number) ?? 3;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,
 		autoRetry: (raw.auto_retry as boolean) ?? true,
 		humanEscalation: (raw.human_escalation as boolean) ?? true,
 		workers: {
 			initial: workerInitial,
-			min: workersRaw.min ?? 1,
-			max: workersRaw.max ?? 6,
+			min: (workersRaw.min as number) ?? 1,
+			max: (workersRaw.max as number) ?? 6,
+			maxRounds: (workersRaw.max_rounds as number) ?? 1,
+			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
 		},
 		cloners: {
 			count: clonersRaw.count ?? workerInitial,
@@ -229,6 +243,14 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 
 	if (def.targetCount < 1) {
 		errors.push("target_count must be at least 1");
+	}
+	if (def.loopConfig) {
+		if (def.loopConfig.workers.maxRounds < 1) {
+			errors.push("workers.max_rounds must be at least 1");
+		}
+		if (def.loopConfig.workers.maxRounds > def.loopConfig.workers.initial) {
+			errors.push(`workers.max_rounds (${def.loopConfig.workers.maxRounds}) cannot exceed workers.initial (${def.loopConfig.workers.initial})`);
+		}
 	}
 	if (def.mode !== "pipeline" && def.mode !== "loop" && def.targetCount !== 1) {
 		errors.push("target_count is only supported in pipeline and loop mode");

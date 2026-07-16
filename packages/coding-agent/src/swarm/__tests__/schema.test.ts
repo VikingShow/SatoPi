@@ -67,7 +67,23 @@ swarm:
 		expect(config.workers.initial).toBe(3);
 		expect(config.workers.min).toBe(1);
 		expect(config.workers.max).toBe(6);
+		expect(config.workers.maxRounds).toBe(1);
+		expect(config.workers.roundtablePrompt).toBeUndefined();
 		expect(config.cloners.count).toBe(3);
+	});
+
+	it("resolves loop config with multi-round workers", () => {
+		const raw: Record<string, unknown> = {
+			workers: {
+				initial: 4,
+				max_rounds: 3,
+				roundtable_prompt: "Critique the prior round's work and improve.",
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		expect(config.workers.initial).toBe(4);
+		expect(config.workers.maxRounds).toBe(3);
+		expect(config.workers.roundtablePrompt).toBe("Critique the prior round's work and improve.");
 	});
 
 	it("resolves loop config with custom values", () => {
@@ -163,5 +179,41 @@ swarm:
       task: cast spell
 `;
 		expect(() => parseSwarmYaml(yaml)).toThrow("Invalid mode");
+	});
+});
+
+describe("schema - loop validation", () => {
+	it("rejects maxRounds < 1", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  max_iterations: 3
+  workers:
+    initial: 3
+    max_rounds: 0
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		const errors = validateSwarmDefinition(def);
+		expect(errors).toContain("workers.max_rounds must be at least 1");
+	});
+
+	it("rejects maxRounds > worker initial count", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  max_iterations: 3
+  workers:
+    initial: 3
+    max_rounds: 5
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		const errors = validateSwarmDefinition(def);
+		expect(errors).toContain("workers.max_rounds (5) cannot exceed workers.initial (3)");
 	});
 });
