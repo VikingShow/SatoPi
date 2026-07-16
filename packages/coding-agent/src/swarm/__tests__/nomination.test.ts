@@ -11,7 +11,6 @@ import { WorkerChannel } from "../worker-channel";
 // ---------------------------------------------------------------------------
 
 describe("WorkerChannel nomination protocol", () => {
-
 	function createChannel(workerCount: number): WorkerChannel {
 		const bus = new IrcBus({});
 		const workers = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
@@ -160,13 +159,7 @@ describe("extractRoundSummary", () => {
 	});
 
 	it("stops at code fence after summary", () => {
-		const output = [
-			"## Round Summary",
-			"- Did some work",
-			"```json",
-			'{"key": "value"}',
-			"```",
-		].join("\n");
+		const output = ["## Round Summary", "- Did some work", "```json", '{"key": "value"}', "```"].join("\n");
 		const summary = extract(output);
 		expect(summary).toContain("- Did some work");
 		expect(summary).not.toContain("```json");
@@ -174,12 +167,7 @@ describe("extractRoundSummary", () => {
 	});
 
 	it("stops at horizontal rule after summary", () => {
-		const output = [
-			"## Round Summary",
-			"- Task A done",
-			"---",
-			"Extra content below rule",
-		].join("\n");
+		const output = ["## Round Summary", "- Task A done", "---", "Extra content below rule"].join("\n");
 		const summary = extract(output);
 		expect(summary).toContain("- Task A done");
 		expect(summary).not.toContain("Extra content");
@@ -220,19 +208,12 @@ describe("parseNomination", () => {
 	});
 
 	it("returns null when nomination section has no nominated field", () => {
-		const output = [
-			"## Nomination",
-			"reason: someone should be reviewer",
-		].join("\n");
+		const output = ["## Nomination", "reason: someone should be reviewer"].join("\n");
 		expect(parse(output)).toBeNull();
 	});
 
 	it("handles nomination with extra whitespace around nominated", () => {
-		const output = [
-			"## Nomination",
-			"nominated:   worker-5  ",
-			"reason: good at reviews",
-		].join("\n");
+		const output = ["## Nomination", "nominated:   worker-5  ", "reason: good at reviews"].join("\n");
 		const result = parse(output);
 		expect(result).not.toBeNull();
 		expect(result!.nominee).toBe("worker-5");
@@ -251,3 +232,111 @@ describe("parseNomination", () => {
 		expect(result!.nominee).toBe("worker-2");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Debate config defaults (schema integration)
+// ---------------------------------------------------------------------------
+
+describe("resolveLoopConfig — debate defaults", () => {
+	// Import resolveLoopConfig from schema
+	const { resolveLoopConfig } = require("../schema");
+
+	it("debate is enabled by default", () => {
+		const config = resolveLoopConfig({});
+		expect(config.debate.enabled).toBe(true);
+	});
+
+	it("debate maxRounds defaults to 2", () => {
+		const config = resolveLoopConfig({});
+		expect(config.debate.maxRounds).toBe(2);
+	});
+
+	it("debate can be disabled via raw config", () => {
+		const config = resolveLoopConfig({ debate: { enabled: false } });
+		expect(config.debate.enabled).toBe(false);
+	});
+
+	it("debate maxRounds can be overridden", () => {
+		const config = resolveLoopConfig({ debate: { max_rounds: 4 } });
+		expect(config.debate.maxRounds).toBe(4);
+	});
+
+	it("reviewer defaults are present alongside debate", () => {
+		const config = resolveLoopConfig({});
+		expect(config.reviewer.enabled).toBe(true);
+		expect(config.reviewer.electionTimeoutMs).toBe(0);
+	});
+
+	it("full config produces all sections without errors", () => {
+		const config = resolveLoopConfig({
+			workers: { initial: 5 },
+			debate: { enabled: true, max_rounds: 3 },
+			reviewer: { enabled: true },
+			plan_debate: { enabled: true, cloner_count: 2, max_rounds: 3 },
+		});
+		expect(config.workers.initial).toBe(5);
+		expect(config.debate.maxRounds).toBe(3);
+		expect(config.reviewer.enabled).toBe(true);
+		expect(config.planDebate.clonerCount).toBe(2);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Deliberation hooks — write/edit/bash blocked during debate
+// ---------------------------------------------------------------------------
+
+describe("deliberation tool hooks", () => {
+	it("blocks write tool during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "write", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result).toBeDefined();
+		expect(result!.block).toBe(true);
+		expect(result!.reason).toContain("Deliberation");
+	});
+
+	it("blocks edit tool during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "edit", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result?.block).toBe(true);
+	});
+
+	it("blocks bash tool during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "bash", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result?.block).toBe(true);
+	});
+
+	it("allows read tool during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "read", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result).toBeUndefined();
+	});
+
+	it("allows grep tool during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "grep", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result).toBeUndefined();
+	});
+
+	it("allows irc send during deliberation", () => {
+		const hooks = buildDeliberationHooks();
+		const result = hooks.beforeToolCall!({ toolCall: { name: "irc", arguments: {} } } as Parameters<NonNullable<typeof hooks.beforeToolCall>>[0]);
+		expect(result).toBeUndefined();
+	});
+});
+
+/**
+ * Replicate the deliberation hooks from LoopController.#runDeliberationPhase
+ * for standalone testing.
+ */
+function buildDeliberationHooks(): { beforeToolCall: (ctx: { toolCall: { name: string; arguments: Record<string, unknown> } }) => { block: true; reason: string } | undefined } {
+	const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
+	return {
+		beforeToolCall: ctx => {
+			if (EDIT_TOOLS.has(ctx.toolCall.name)) {
+				return { block: true, reason: "Deliberation phase: write/edit/bash blocked. Use IRC to debate." };
+			}
+			return undefined;
+		},
+	};
+}

@@ -109,6 +109,20 @@ export interface LoopSwarmConfig {
 		 */
 		electionTimeoutMs: number;
 	};
+	/** Worker deliberation (debate) configuration. */
+	debate: {
+		/**
+		 * Enable structured debate between workers after each round (round 1+).
+		 * Workers challenge, rebut, and resolve each other's outputs.
+		 * Default: true.
+		 */
+		enabled: boolean;
+		/**
+		 * Maximum deliberation sub-rounds (challenge → rebuttal → resolution).
+		 * Default: 2.
+		 */
+		maxRounds: number;
+	};
 	/** Plan debate configuration (Before Loop phase). */
 	planDebate: {
 		/** Enable multi-cloner plan debate before execution. Default: true. */
@@ -180,6 +194,10 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		reviewer: {
 			enabled: ((raw.reviewer as Record<string, unknown>)?.enabled as boolean) ?? true,
 			electionTimeoutMs: ((raw.reviewer as Record<string, unknown>)?.election_timeout_ms as number) ?? 0,
+		},
+		debate: {
+			enabled: ((raw.debate as Record<string, unknown>)?.enabled as boolean) ?? true,
+			maxRounds: ((raw.debate as Record<string, unknown>)?.max_rounds as number) ?? 2,
 		},
 		cloners: {
 			count: clonersRaw.count ?? Math.min(3, workerInitial),

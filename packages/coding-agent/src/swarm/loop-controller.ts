@@ -127,7 +127,45 @@ Example:
 - Concern: worker-2's auth middleware duplicates token validation logic from login.ts — coordinate to deduplicate
 - Next: implement token refresh endpoint, then integration tests`;
 
-// ============================================================================
+const DELIBERATION_SYSTEM_PROMPT = `\
+You are a Worker in the DELIBERATION phase of the Loop Engineering system.
+The work round has produced outputs — now you debate them to find and fix issues.
+
+DELIBERATION PROTOCOL:
+This phase has up to 3 sub-rounds. In each sub-round you will receive your peers' outputs.
+
+Sub-round 1 — CHALLENGE:
+- Read EVERY peer's output carefully.
+- Identify gaps, contradictions, quality issues, or deviations from the plan.
+- For each issue found, send an IRC message to the relevant worker (use irc send):
+  Format: "CHALLENGE: <specific issue with file/line reference>"
+- Be direct — politeness hides bugs.
+
+Sub-round 2 — REBUTTAL:
+- Read challenges directed at you.
+- For each valid challenge: acknowledge, fix your output, and reply via IRC:
+  Format: "REBUTTAL: <how you addressed the issue>"
+- For challenges you disagree with: explain why via IRC:
+  Format: "DISAGREE: <reason with evidence>"
+- Update your work files accordingly.
+
+Sub-round 3 — RESOLUTION:
+- Review all rebuttals and disagreements.
+- For unresolved disagreements: the elected Reviewer issues a RULING via IRC:
+  Format: "RULING: <decision with rationale>"
+- If no Reviewer is elected, workers vote via IRC: "VOTE: worker-N on issue X"
+- After rulings, refine your output one final time.
+
+TOOLS:
+- During deliberation you may READ files and SEND IRC messages.
+- You may NOT edit, write, or execute bash — this is review-only.
+- The system will block any write/edit/bash attempts.
+
+OUTPUT:
+- End your deliberation turn with a brief summary of what you challenged, what you fixed,
+  and any unresolved disagreements that need escalation.
+`;
+
 // Similarity & Summary Utilities
 // ============================================================================
 
@@ -340,7 +378,7 @@ export class LoopController {
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
 
-					const roundResults = await this.#spawnWorkers(
+					let roundResults = await this.#spawnWorkers(
 						workerIds,
 						workspace,
 						planContent,
@@ -370,6 +408,22 @@ export class LoopController {
 					for (const id of workerIds) lockMgr.releaseAll(id);
 					allWorkerResults.push(...roundResults);
 
+					// Deliberation phase: structured debate when enabled and round > 0
+					const debateConfig = this.#loopConfig.debate ?? { enabled: true, maxRounds: 2 };
+					if (debateConfig.enabled && round > 0 && debateConfig.maxRounds > 0) {
+						await this.#stateTracker.updatePipeline({ roundtablePhase: "Debate: challenging" });
+						roundResults = await this.#runDeliberationPhase(
+							roundResults,
+							workerIds,
+							workspace,
+							planContent,
+							modelRegistry,
+							settings,
+							iterSignal,
+							errors,
+							debateConfig.maxRounds,
+						);
+					}
 					// Build prior outputs for next round
 					priorOutputs = roundResults
 						.map(r => `[${r.agent}]\n${extractRoundSummary(r.output)}`)
@@ -862,6 +916,109 @@ export class LoopController {
 
 		return { beforeToolCall, afterToolCall };
 	}
+	// -------------------------------------------------------------------
+	// Deliberation — structured debate between workers within a round
+	// -------------------------------------------------------------------
+	/**
+	 * Run a deliberation phase where workers challenge, rebut, and resolve
+	 * each other's outputs. Workers spawn with read-only tool access.
+	 * @returns refined outputs after deliberation, or original results on failure.
+	 */
+	async #runDeliberationPhase(
+		roundResults: SingleResult[],
+		workerIds: string[],
+		workspace: string,
+		planContent: string | undefined,
+		modelRegistry: ModelRegistry | undefined,
+		settings: Settings | undefined,
+		signal: AbortSignal | undefined,
+		errors: string[],
+		maxSubRounds: number,
+	): Promise<SingleResult[]> {
+		if (maxSubRounds <= 0 || roundResults.length === 0) return roundResults;
+
+		const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
+		const deliberationHooks: AgentLoopConfig = {
+			beforeToolCall: ctx => {
+				if (EDIT_TOOLS.has(ctx.toolCall.name)) {
+					return {
+						block: true as const,
+						reason: "Deliberation phase: write/edit/bash blocked. Use IRC to debate.",
+					};
+				}
+				return undefined;
+			},
+		};
+
+		// Build context: each worker sees all peers' outputs
+		const allOutputs = roundResults.map(r => `[${r.agent}]\n${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+
+		let currentOutputs = roundResults;
+		for (let sub = 0; sub < maxSubRounds; sub++) {
+			if (signal?.aborted) break;
+
+			const subLabel = ["Challenge", "Rebuttal", "Resolution"][sub] ?? `Sub-round ${sub + 1}`;
+			await this.#stateTracker.updatePipeline({
+				roundtablePhase: `Debate: ${subLabel} (${sub + 1}/${maxSubRounds})`,
+			});
+
+			const subResults = await Promise.allSettled(
+				workerIds.map((id, i) =>
+					runSubprocess({
+						cwd: workspace,
+						agent: {
+							name: id,
+							description: `Deliberation Worker ${i + 1}`,
+							systemPrompt: DELIBERATION_SYSTEM_PROMPT,
+							source: "project",
+						},
+						task: [
+							`## ${subLabel} Phase`,
+							sub === 0
+								? "Read ALL peer outputs below. For each issue found, send IRC CHALLENGE to the relevant worker."
+								: sub === 1
+									? "Read challenges directed at you. Acknowledge + fix, or explain why you disagree. Update your output."
+									: "Review all rebuttals. The Reviewer (or majority vote) issues RULINGs for unresolved disputes. Finalize your output.",
+							planContent ? `\n## Plan\n\n${planContent}` : "",
+							`\n## Peer Outputs (Round)\n\n${allOutputs}`,
+							`\n## Your Previous Output\n\n${currentOutputs.find(r => r.agent === id)?.output.slice(0, 3000) ?? "(no prior output)"}`,
+						].join("\n"),
+						index: i,
+						id: `deliberation-${id}`,
+						modelRegistry,
+						settings,
+						signal,
+						beforeToolCall: deliberationHooks.beforeToolCall,
+					}),
+				),
+			);
+
+			currentOutputs = subResults.map((r, i) => {
+				if (r.status === "fulfilled") return r.value;
+				const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+				errors.push(`Deliberation worker ${workerIds[i]} crashed: ${errMsg}`);
+				return (
+					currentOutputs[i] ?? {
+						index: i,
+						id: `deliberation-${workerIds[i]}`,
+						agent: workerIds[i],
+						agentSource: "project" as const,
+						task: "",
+						exitCode: 1,
+						output: `[CRASHED] ${errMsg}`,
+						stderr: "",
+						truncated: false,
+						durationMs: 0,
+						tokens: 0,
+						requests: 0,
+					}
+				);
+			});
+		}
+
+		return currentOutputs;
+	}
+
 	// -------------------------------------------------------------------
 	// Run cloner review via ClonerCouncil
 	// -------------------------------------------------------------------
