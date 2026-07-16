@@ -5,7 +5,7 @@
  */
 
 import path from "node:path";
-import type { AgentEvent, AgentIdentity, AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
+import type { AgentEvent, AgentIdentity, AgentLoopConfig, AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
 import { recordHandoff, resolveTelemetry } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model, ServiceTierByFamily, Usage } from "@oh-my-pi/pi-ai";
 import { logger, popLoopPhase, prompt, pushLoopPhase, untilAborted } from "@oh-my-pi/pi-utils";
@@ -406,6 +406,10 @@ export interface ExecutorOptions {
 	 * set this false so disposal unregisters them instead of leaving idle peers.
 	 */
 	keepAlive?: boolean;
+	/** Hook invoked before each tool call in the subagent's loop. */
+	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
+	/** Hook invoked after each tool call in the subagent's loop. */
+	afterToolCall?: AgentLoopConfig["afterToolCall"];
 }
 
 function parseStringifiedJson(value: unknown): unknown {
@@ -2499,6 +2503,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				throw err;
 			}
 			sessionCreatedAt = performance.now();
+			// Inject caller-supplied hooks (e.g. swarm file-locking).
+			if (options.beforeToolCall) session.agent.beforeToolCall = options.beforeToolCall;
+			if (options.afterToolCall) session.agent.afterToolCall = options.afterToolCall;
 
 			monitor.setActiveSession(session);
 			installRegistryStatusSync(session);

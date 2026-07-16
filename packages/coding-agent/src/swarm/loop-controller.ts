@@ -1,10 +1,13 @@
+import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
+import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
+import { RegionLockManager } from "./region-lock";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
@@ -41,7 +44,6 @@ export interface LoopResult {
 // ============================================================================
 // Prompts
 // ============================================================================
-
 const WORKER_SYSTEM_PROMPT = `\
 You are a Worker in the Loop Engineering system — part of a self-organizing swarm.
 You collaborate with other Workers to complete a task defined in a plan that will be provided.
@@ -54,6 +56,18 @@ MECHANISM:
 - After each round, you receive prior rounds' outputs for cross-examination.
 - The swarm runs multiple rounds per iteration — review peers' work, spot issues, refine together.
 - Workers can declare convergence via IRC when the output stabilizes.
+
+FILE EDITING PROTOCOL (critical):
+- The system enforces region-level locking on files. When you use edit, write, or bash
+  to modify a file, the system automatically acquires a lock and broadcasts your intent.
+- If another worker is already editing a file you target, your tool call is BLOCKED
+  with a message naming the holding worker. You MUST negotiate via IRC:
+  1. Send an IRC message to the holding worker: "I need to edit <file>. Can you release it?"
+  2. Wait for their reply. They may finish and release, or you may agree to edit
+     different sections.
+  3. Retry your edit after the lock is released.
+- When you are blocked, DO NOT repeatedly retry — negotiate first.
+- After your edit completes, the lock is released automatically.
 
 PEER REVIEW (critical):
 - In round 2+, you MUST cross-examine prior round outputs.
@@ -75,10 +89,6 @@ BEHAVIOR:
 - Before finishing a round, self-audit your output against the plan's acceptance criteria.
 - Record what you did and what you learned.
 - Always produce verifiable output in the workspace.`;
-
-// ============================================================================
-// Similarity helpers
-// ============================================================================
 
 /** Jaccard similarity between two arrays of tokens. Returns 0–1. */
 function jaccardSimilarity(a: string[], b: string[]): number {
@@ -108,6 +118,7 @@ export class LoopController {
 	readonly #clonerId: string;
 	readonly #stateTracker: StateTracker;
 	#channel?: WorkerChannel;
+	#fileTracker: FileTracker = new FileTracker();
 
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
@@ -130,6 +141,8 @@ export class LoopController {
 		let currentWorkerCount = this.#loopConfig.workers.initial;
 		let currentMaxRounds = this.#loopConfig.workers.maxRounds;
 		let currentConvergenceNeeded = this.#loopConfig.workers.roundsConvergenceThreshold;
+		let lastConflictReport: FileRoundSummary | null = null;
+
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
 		const { workspace, modelRegistry, settings, signal, planContent } = options;
@@ -162,6 +175,8 @@ export class LoopController {
 			workers: workerIds,
 			cloners: clonerIds,
 		});
+		// Create per-swarm RegionLockManager for file-level lock coordination.
+		const lockMgr = RegionLockManager.create();
 		await this.#channel.broadcast(
 			this.#clonerId,
 			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`,
@@ -238,13 +253,22 @@ export class LoopController {
 						agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
 					});
 
-					// Build roundtable context — inject prior outputs for rounds > 0
+					// Snapshot workspace before this round's workers execute
+					await this.#fileTracker.startRound(workspace);
+
+					// Build roundtable context — inject prior outputs AND file conflict reports for rounds > 0
 					let extraContext = "";
+					if (round > 0 && lastConflictReport) {
+						const conflictText = FileTracker.formatConflictReport(lastConflictReport);
+						if (conflictText) {
+							extraContext = `${conflictText}\n\n`;
+						}
+					}
 					if (round > 0) {
 						const prompt = this.#loopConfig.workers.roundtablePrompt
 							? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
 							: `\n## Prior Round Outputs\n\nCross-examine these outputs. Flag gaps, contradictions, and quality issues. Be direct — your peers expect honest critique. Refine and improve upon the prior work.\n`;
-						extraContext = `${prompt}\n${priorOutputs}`;
+						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
 					const roundResults = await this.#spawnWorkers(
 						workerIds,
@@ -257,6 +281,8 @@ export class LoopController {
 						errors,
 						extraContext,
 						currentRoleSuggestions,
+						lockMgr,
+						this.#channel,
 					);
 
 					if (iterSignal?.aborted) {
@@ -268,6 +294,8 @@ export class LoopController {
 						};
 					}
 
+					// Release all locks held by round workers (defensive cleanup).
+					for (const id of workerIds) lockMgr.releaseAll(id);
 					allWorkerResults.push(...roundResults);
 
 					// Build prior outputs for next round
@@ -298,6 +326,21 @@ export class LoopController {
 							.map(r => r.output.slice(0, 500))
 							.sort()
 							.join("||");
+					}
+				}
+
+				// File conflict detection: collect raw worker outputs for attribution
+				const workerOutputMap = new Map<string, string>();
+				for (const r of allWorkerResults) {
+					workerOutputMap.set(r.agent, r.output);
+				}
+				lastConflictReport = await this.#fileTracker.endRound(workerOutputMap);
+
+				// Wire stateTracker conflict count for overlap conflicts
+				const overlapConflicts = lastConflictReport.conflicts.filter(c => c.severity === "overlap");
+				for (const c of overlapConflicts) {
+					for (const writerId of c.writers) {
+						await this.#stateTracker.incrementConflict(writerId);
 					}
 				}
 
@@ -565,15 +608,21 @@ export class LoopController {
 		errors: string[] = [],
 		extraContext?: string,
 		roleSuggestions?: Record<string, string>,
+		lockMgr?: RegionLockManager,
+		channel?: WorkerChannel,
 	): Promise<SingleResult[]> {
 		const feedbackBlock =
 			previousFeedback.length > 0
 				? `\n## Previous Review Feedback\n\n${previousFeedback.map((f, i) => `(Iteration ${i + 1}) ${f}`).join("\n")}\n`
 				: "";
 
+		// Build lock hooks shared across workers when lockMgr is active.
+		const hooks = lockMgr && channel ? (id: string) => this.#buildLockHooks(id, lockMgr, channel) : undefined;
+
 		const results = await Promise.allSettled(
-			workerIds.map((id, i) =>
-				runSubprocess({
+			workerIds.map((id, i) => {
+				const workerHooks = hooks?.(id);
+				return runSubprocess({
 					cwd: workspace,
 					agent: {
 						name: id,
@@ -599,8 +648,10 @@ export class LoopController {
 					modelRegistry,
 					settings,
 					signal,
-				}),
-			),
+					beforeToolCall: workerHooks?.beforeToolCall,
+					afterToolCall: workerHooks?.afterToolCall,
+				});
+			}),
 		);
 
 		return results.map((r, i) => {
@@ -622,6 +673,80 @@ export class LoopController {
 				requests: 0,
 			};
 		});
+	}
+	// -------------------------------------------------------------------
+	// Build per-worker lock hooks for tier 1 (intent broadcast) + tier 2 (function-level lock)
+	// -------------------------------------------------------------------
+	#buildLockHooks(workerId: string, lockMgr: RegionLockManager, channel: WorkerChannel) {
+		/** Tool names that modify files — intercepted for lock coordination. */
+		const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
+
+		/** Extract the target file path from a tool call's args. */
+		const extractPath = (name: string, args: Record<string, unknown>): string | null => {
+			if (name === "write") {
+				return typeof args.path === "string" ? args.path : null;
+			}
+			if (name === "edit") {
+				const input = typeof args.input === "string" ? args.input : "";
+				const m = /^\[([^\]#]+)(?:#[^\]]+)?\]/m.exec(input);
+				return m?.[1] ?? null;
+			}
+			if (name === "bash") {
+				const cmd = typeof args.command === "string" ? args.command : "";
+				const m = />[>]?\s*(\S+)/.exec(cmd);
+				return m?.[1] ?? null;
+			}
+			return null;
+		};
+
+		const beforeToolCall: AgentLoopConfig["beforeToolCall"] = ctx => {
+			const name = ctx.toolCall.name;
+			if (!EDIT_TOOLS.has(name)) return undefined;
+
+			const file = extractPath(name, ctx.args);
+			if (!file) return undefined;
+
+			// Tier 2: check if another worker holds a lock on this file
+			const check = lockMgr.checkLock(file, workerId);
+			if (check.locked && check.entry) {
+				void channel.broadcast(
+					workerId,
+					`[BLOCKED] ${workerId} wants ${file} but ${RegionLockManager.describeLock(check.entry)}.`,
+				);
+				return {
+					block: true as const,
+					reason: `File locked: ${RegionLockManager.describeLock(check.entry)}. Use IRC to negotiate.`,
+				};
+			}
+
+			// Tier 2: acquire lock before tool executes
+			if (!lockMgr.tryLock(workerId, file)) {
+				return {
+					block: true as const,
+					reason: `Cannot acquire lock on ${file} — concurrent edit conflict. Retry or negotiate via IRC.`,
+				};
+			}
+
+			// Tier 1: broadcast editing intent
+			void channel.broadcast(workerId, `[EDITING] ${workerId} started editing ${file}.`);
+
+			return undefined;
+		};
+
+		const afterToolCall: AgentLoopConfig["afterToolCall"] = ctx => {
+			const name = ctx.toolCall.name;
+			if (!EDIT_TOOLS.has(name)) return undefined;
+
+			const file = extractPath(name, ctx.args);
+			if (!file) return undefined;
+
+			lockMgr.release(workerId, file);
+			void channel.broadcast(workerId, `[DONE] ${workerId} finished editing ${file}.`);
+
+			return undefined;
+		};
+
+		return { beforeToolCall, afterToolCall };
 	}
 	// -------------------------------------------------------------------
 	// Run cloner review via ClonerCouncil
