@@ -10,7 +10,6 @@
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { WorkerChannel } from "./worker-channel";
 
 // ============================================================================
 // Types
@@ -55,10 +54,6 @@ export interface ClonerReviewConfig {
 // ============================================================================
 
 export class ClonerCouncil {
-	constructor(_channel: WorkerChannel) {
-		// WorkerChannel reference retained for future use (broadcast, IRC).
-	}
-
 	/**
 	 * Run a full review cycle:
 	 * 1. Spawn cloner subprocesses in parallel

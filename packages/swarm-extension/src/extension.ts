@@ -14,7 +14,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
-import { generatePlanningPrompt, planExists, stampAndArchivePlanMd } from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
+import {
+	generatePlanningPrompt,
+	planExists,
+	runPlanDebate,
+	stampAndArchivePlanMd,
+} from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
@@ -270,6 +275,25 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 				});
 			} catch (err) {
 				pi.logger.warn("TaskComplexityAnalyzer failed, using YAML defaults", { error: String(err) });
+			}
+		}
+		// Run cloner plan debate on the draft plan before execution
+		if (planContent && def.loopConfig.planDebate.enabled) {
+			try {
+				const debateResult = await runPlanDebate(
+					planContent,
+					workspace,
+					def.loopConfig,
+					ctx.modelRegistry,
+					pi.pi.settings,
+				);
+				planContent = debateResult.planContent;
+				pi.logger.info("Plan debate completed", {
+					refined: debateResult.refined,
+					converged: debateResult.converged,
+				});
+			} catch (err) {
+				pi.logger.warn("Plan debate failed, using draft plan", { error: String(err) });
 			}
 		}
 		// 9. Run loop with human escalation loop

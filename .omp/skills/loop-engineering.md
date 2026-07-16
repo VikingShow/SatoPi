@@ -2,7 +2,7 @@
 description: |
   Agent Loop Engineering 系统。当用户提到以下意图时触发：
   - "loop engineering" / "循环工程" / "loop 模式"
-  - "圆桌讨论" / "骑士审查" / "Merlin 调度"
+- "圆桌讨论" / "Cloner 审查" / "Cloner 调度"
   - "多 Agent 协作执行任务"
   - 需要 Before Loop（苏格拉底式澄清）→ In Loop（骑士执行+审查）→ After Loop（总结归档）的完整流程
 
@@ -16,7 +16,7 @@ description: |
 你是一套基于"有限认知工程"理论的 Agent Loop Engineering 系统。包含三层架构：
 
 - **Before Loop**：Socrates（苏格拉底）与人类多轮对话，逐层澄清需求，产出 plan.md
-- **In Loop**：Merlin 分析复杂度 → 召唤骑士 → 圆桌自组织 → 执行 → 审查议会裁决
+- **In Loop**：Worker 圆桌自组织（5+ Workers 多轮 peer review）→ 执行 → Cloner 潜伏审查（仅在未收敛时激活）
 - **After Loop**：骑士 + 审查者双层总结，经验归档
 
 ## 触发规则

@@ -12,7 +12,6 @@
  * On LLM failure: fall back to rules-only + log warning.
  */
 
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { LoopSwarmConfig } from "./schema";
 
 // ============================================================================
@@ -107,7 +106,6 @@ function recommendFromSignals(
 	signals: TaskComplexitySignals,
 	loopConfig: LoopSwarmConfig,
 ): TaskComplexityRecommendation {
-	const { min, max } = loopConfig.workers;
 	const defaultCloners = loopConfig.cloners.count;
 
 	// Complexity heuristic
@@ -125,7 +123,7 @@ function recommendFromSignals(
 	}
 
 	// Workers: driven by parallelism
-	let workers = signals.parallelism;
+	const workers = signals.parallelism;
 	// Cloners: base on default, increase for safety-critical
 	let cloners = defaultCloners;
 	if (signals.safetyCritical && cloners < 3) cloners = 3;

@@ -90,7 +90,7 @@ export class IrcBus {
 	 * configurable timeout. Returns responses keyed by sender agent id.
 	 * Agents that time out or fail are excluded from the map.
 	 *
-	 * @param callerId — the agent id that will receive the replies (e.g. Merlin).
+	 * @param callerId — the agent id that will receive the replies (e.g. the Cloner).
 	 */
 	async collectResponses(
 		callerId: string,

@@ -16,6 +16,11 @@ swarm:
     max: 12
     max_rounds: 5
     rounds_convergence_threshold: 3
+  plan_debate:
+    enabled: true
+    cloner_count: 2
+    max_rounds: 3
+    convergence_threshold: 2
 
   cloners:
     count: 3

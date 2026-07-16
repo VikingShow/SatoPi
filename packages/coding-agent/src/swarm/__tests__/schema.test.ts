@@ -87,6 +87,31 @@ swarm:
 		expect(config.workers.roundtablePrompt).toBe("Critique the prior round's work and improve.");
 	});
 
+	it("resolves plan_debate config with defaults", () => {
+		const raw = {};
+		const config = resolveLoopConfig(raw);
+		expect(config.planDebate.enabled).toBe(true);
+		expect(config.planDebate.clonerCount).toBe(2);
+		expect(config.planDebate.maxRounds).toBe(3);
+		expect(config.planDebate.convergenceThreshold).toBe(2);
+	});
+
+	it("resolves plan_debate config with custom values", () => {
+		const raw: Record<string, unknown> = {
+			plan_debate: {
+				enabled: false,
+				cloner_count: 4,
+				max_rounds: 5,
+				convergence_threshold: 3,
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		expect(config.planDebate.enabled).toBe(false);
+		expect(config.planDebate.clonerCount).toBe(4);
+		expect(config.planDebate.maxRounds).toBe(5);
+		expect(config.planDebate.convergenceThreshold).toBe(3);
+	});
+
 	it("resolves loop config with custom values", () => {
 		const raw = {
 			max_iterations: 10,

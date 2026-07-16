@@ -94,6 +94,20 @@ export interface LoopSwarmConfig {
 		 */
 		roundtablePrompt?: string;
 	};
+	/** Plan debate configuration (Before Loop phase). */
+	planDebate: {
+		/** Enable multi-cloner plan debate before execution. Default: true. */
+		enabled: boolean;
+		/** Number of cloner instances in the debate. Default: 2. */
+		clonerCount: number;
+		/** Maximum debate rounds. Default: 3. */
+		maxRounds: number;
+		/**
+		 * Consecutive rounds with plan similarity >= 85% trigger early
+		 * convergence and end the debate. Default: 2.
+		 */
+		convergenceThreshold: number;
+	};
 	/** Cloner configuration. */
 	cloners: {
 		/**
@@ -131,6 +145,12 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 	const workerInitial = (workersRaw.initial as number) ?? 5;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,
+		planDebate: {
+			enabled: ((raw.plan_debate as Record<string, unknown>)?.enabled as boolean) ?? true,
+			clonerCount: ((raw.plan_debate as Record<string, unknown>)?.cloner_count as number) ?? 2,
+			maxRounds: ((raw.plan_debate as Record<string, unknown>)?.max_rounds as number) ?? 3,
+			convergenceThreshold: ((raw.plan_debate as Record<string, unknown>)?.convergence_threshold as number) ?? 2,
+		},
 		autoRetry: (raw.auto_retry as boolean) ?? true,
 		humanEscalation: (raw.human_escalation as boolean) ?? true,
 		workers: {

@@ -1,16 +1,17 @@
 /**
- * BeforeLoop — Loop 启动前的规划对话。
+ * BeforeLoop — Loop 启动前的规划与辩论。
  *
  * 流程:
- *   1. /loopeng 触发 → Cloner 分析任务
- *   2. Cloner ↔ Human 多轮对话 (Socratic 引导)
- *   3. Cloner 产出 plan.md (无固定模板) + worker/cloner 数量提案
- *   4. Human 确认 → Loop 启动
+ *   1. /loopeng 触发 → Socrates 苏格拉底式对话
+ *   2. Socrates ↔ Human 多轮对话 (Socratic 引导)
+ *   3. Socrates 产出 draft plan.md
+ *   4. (NEW) Cloner Roundtable 多轮辩论草案 → refined plan.md
+ *   5. Human 确认 → Loop 启动
  *
  * 集成方式:
  *   扩展命令 handler 调用 generatePlanningPrompt() 获得提示文本，
- *   注入 agent 对话流中。Human 回复后，Cloner 自然引导至 plan.md 产出。
- *   当 plan.md 就绪 + human 确认 → handler 执行实际循环。
+ *   注入 agent 对话流中。Human 回复后，Socrates 自然引导至 plan.md 产出。
+ *   当 plan.md 就绪 → runPlanDebate() → human 确认 → handler 执行实际循环。
  */
 
 import * as fs from "node:fs/promises";
@@ -225,4 +226,78 @@ export async function listArchivedPlans(workspace: string): Promise<string[]> {
 	} catch {
 		return [];
 	}
+}
+
+// ============================================================================
+// Plan Debate (Cloner Roundtable)
+// ============================================================================
+
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import { logger } from "@oh-my-pi/pi-utils";
+import { ClonerRoundtable } from "./cloner-roundtable";
+
+export interface PlanDebateResult {
+	/** Whether the debate produced a refined plan. */
+	refined: boolean;
+	/** The final plan text (may be unchanged if debate was skipped). */
+	planContent: string;
+	/** Whether convergence was achieved. */
+	converged: boolean;
+}
+
+/**
+ * Run the plan debate phase: 2-3 cloner instances debate the draft plan.md
+ * over multiple rounds to produce a stronger plan before execution.
+ *
+ * Called after Socrates produces a draft plan.md but BEFORE human confirmation.
+ * If plan_debate.enabled is false, returns the draft plan unchanged.
+ *
+ * @param draftPlan — the current plan.md content
+ * @param workspace — absolute workspace path
+ * @param loopConfig — the loop configuration
+ */
+export async function runPlanDebate(
+	draftPlan: string,
+	workspace: string,
+	loopConfig: LoopSwarmConfig,
+	modelRegistry?: ModelRegistry,
+	settings?: Settings,
+	signal?: AbortSignal,
+): Promise<PlanDebateResult> {
+	const debateConfig = loopConfig.planDebate;
+	if (!debateConfig.enabled) {
+		logger.debug("Plan debate disabled, using draft plan as-is");
+		return { refined: false, planContent: draftPlan, converged: false };
+	}
+
+	const table = new ClonerRoundtable({
+		clonerCount: debateConfig.clonerCount,
+		maxRounds: debateConfig.maxRounds,
+		convergenceThreshold: debateConfig.convergenceThreshold,
+	});
+
+	logger.info("Starting plan debate", {
+		clonerCount: debateConfig.clonerCount,
+		maxRounds: debateConfig.maxRounds,
+		convergenceThreshold: debateConfig.convergenceThreshold,
+	});
+
+	const result = await table.debate(draftPlan, workspace, modelRegistry, settings, signal);
+
+	// Write the refined plan back to disk
+	const planPath = path.join(workspace, ".omp", "plan.md");
+	await Bun.write(planPath, result.refinedPlan);
+
+	logger.info("Plan debate completed", {
+		converged: result.converged,
+		rounds: result.rounds.length,
+		originalLength: draftPlan.length,
+		refinedLength: result.refinedPlan.length,
+	});
+
+	return {
+		refined: true,
+		planContent: result.refinedPlan,
+		converged: result.converged,
+	};
 }

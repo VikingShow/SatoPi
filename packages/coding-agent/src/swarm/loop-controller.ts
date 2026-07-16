@@ -1,14 +1,14 @@
-import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import { logger } from "@oh-my-pi/pi-utils";
 import type { PipelineOptions } from "./pipeline";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
-import { TaskComplexityAnalyzer } from "./task-analyzer";
 import type { StateTracker } from "./state";
+import { TaskComplexityAnalyzer } from "./task-analyzer";
 import { WorkerChannel } from "./worker-channel";
 
 // ============================================================================
@@ -222,9 +222,10 @@ export class LoopController {
 				for (let round = 0; round < hardLimit; round++) {
 					if (iterSignal?.aborted) break;
 
-					const roundLabel = maxRounds === 0
-						? `Workers round ${round + 1} (convergence-driven)`
-						: `Workers round ${round + 1}/${hardLimit}`;
+					const roundLabel =
+						maxRounds === 0
+							? `Workers round ${round + 1} (convergence-driven)`
+							: `Workers round ${round + 1}/${hardLimit}`;
 					await this.#stateTracker.updatePipeline({ roundtablePhase: roundLabel });
 					for (const id of workerIds) {
 						await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
@@ -274,7 +275,10 @@ export class LoopController {
 
 					// Convergence detection on worker outputs (not cloner findings)
 					if (round > 0 && convergenceNeeded > 0) {
-						const currKey = roundResults.map(r => r.output.slice(0, 500)).sort().join("||");
+						const currKey = roundResults
+							.map(r => r.output.slice(0, 500))
+							.sort()
+							.join("||");
 						const similarity = lastRoundOutputsKey
 							? findingsSimilarity(lastRoundOutputsKey.split("||"), currKey.split("||"))
 							: 0;
@@ -290,7 +294,10 @@ export class LoopController {
 							convergenceStreak = 0;
 						}
 					} else {
-						lastRoundOutputsKey = roundResults.map(r => r.output.slice(0, 500)).sort().join("||");
+						lastRoundOutputsKey = roundResults
+							.map(r => r.output.slice(0, 500))
+							.sort()
+							.join("||");
 					}
 				}
 
