@@ -1,3 +1,4 @@
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
@@ -6,6 +7,7 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { PipelineOptions } from "./pipeline";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
+import { TaskComplexityAnalyzer } from "./task-analyzer";
 import type { StateTracker } from "./state";
 import { WorkerChannel } from "./worker-channel";
 
@@ -41,16 +43,25 @@ export interface LoopResult {
 // ============================================================================
 
 const WORKER_SYSTEM_PROMPT = `\
-You are a Worker in the Loop Engineering system. You collaborate with other Workers
-to complete a task defined in a plan that will be provided.
+You are a Worker in the Loop Engineering system — part of a self-organizing swarm.
+You collaborate with other Workers to complete a task defined in a plan that will be provided.
 
 MECHANISM:
-- A Cloner has broadcast a plan.md containing the goal, constraints, and acceptance criteria.
-- You and other Workers negotiate via group chat (the WorkerChannel) how to divide the work.
+- A plan.md containing the goal, constraints, and acceptance criteria is broadcast.
+- You and other Workers negotiate via group chat (WorkerChannel) how to divide the work.
   No one assigns tasks to you — you self-organize through open discussion.
-- You can broadcast to all Workers, or create sub-groups for focused collaboration.
-- During execution, if you need more or fewer Workers, you can request changes.
-- After each round, Cloners review the output and provide feedback.
+- You can broadcast to all Workers, create sub-groups, and elect roles (reviewer, integrator, etc.).
+- After each round, you receive prior rounds' outputs for cross-examination.
+- The swarm runs multiple rounds per iteration — review peers' work, spot issues, refine together.
+- Workers can declare convergence via IRC when the output stabilizes.
+
+PEER REVIEW (critical):
+- In round 2+, you MUST cross-examine prior round outputs.
+- Flag gaps, contradictions, and quality issues you find in your peers' work.
+- If you see duplicated effort, coordinate to merge.
+- If a peer's output is wrong or substandard, say so — be direct, not polite.
+- This internal review is your primary quality mechanism. Cloners are latent guardians
+  who only intervene when the swarm cannot resolve its own disagreements.
 
 YOUR CAPABILITIES:
 - Full tool access: read, write, edit, bash, grep, glob, web_search, browser
@@ -61,6 +72,7 @@ BEHAVIOR:
 - Proactively negotiate — don't wait to be told what to do.
 - If another Worker is duplicating your work, coordinate with them.
 - If you're blocked, broadcast for help.
+- Before finishing a round, self-audit your output against the plan's acceptance criteria.
 - Record what you did and what you learned.
 - Always produce verifiable output in the workspace.`;
 
@@ -116,11 +128,30 @@ export class LoopController {
 		// Per-iteration role suggestions from cloner review (Round 2+).
 		let currentRoleSuggestions: Record<string, string> = {};
 		let currentWorkerCount = this.#loopConfig.workers.initial;
+		let currentMaxRounds = this.#loopConfig.workers.maxRounds;
+		let currentConvergenceNeeded = this.#loopConfig.workers.roundsConvergenceThreshold;
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
 		const { workspace, modelRegistry, settings, signal, planContent } = options;
 
-		const initialWorkerCount = this.#loopConfig.workers.initial;
+		// TaskComplexityAnalyzer: override worker count, maxRounds, and convergence
+		// based on plan.md content when workers.auto is enabled.
+		if (this.#loopConfig.workers.auto && planContent) {
+			const analyzer = new TaskComplexityAnalyzer(modelRegistry!, settings!);
+			const rec = await analyzer.analyze(planContent, this.#loopConfig);
+			currentWorkerCount = rec.workers;
+			currentMaxRounds = rec.maxRounds;
+			currentConvergenceNeeded = rec.roundsConvergenceThreshold;
+			logger.info("TaskComplexityAnalyzer override", {
+				workers: rec.workers,
+				maxRounds: rec.maxRounds,
+				convergenceNeeded: rec.roundsConvergenceThreshold,
+				rationale: rec.rationale,
+				complexity: rec.complexity,
+			});
+		}
+
+		const initialWorkerCount = currentWorkerCount;
 		const clonerCount = this.#loopConfig.cloners.count;
 
 		// Initialize worker and cloner IDs
@@ -135,16 +166,6 @@ export class LoopController {
 			this.#clonerId,
 			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`,
 		);
-
-		// Register all workers and cloners in the state tracker so that
-		// updateAgent / incrementPraise / etc. work correctly. In loop mode,
-		// the YAML's agents map is empty — agents are created dynamically here.
-		for (const id of workerIds) {
-			await this.#stateTracker.registerAgent(id);
-		}
-		for (const id of clonerIds) {
-			await this.#stateTracker.registerAgent(id);
-		}
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
 			if (signal?.aborted) {
@@ -185,22 +206,29 @@ export class LoopController {
 				agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
 			});
 
-			let verdict: ReviewVerdict;
+			let verdict: ReviewVerdict | null = null;
 			let lastWorkerOutput = "";
+			let workersConverged = false;
 			try {
-				// 1. Spawn workers in rounds (roundtable deliberation)
-				const maxRounds = this.#loopConfig.workers.maxRounds;
+				const maxRounds = currentMaxRounds;
+				const convergenceNeeded = currentConvergenceNeeded;
+				// 0 = unlimited; safety cap at 10 rounds
+				const hardLimit = maxRounds === 0 ? 10 : maxRounds;
 				const allWorkerResults: SingleResult[] = [];
 				let priorOutputs = "";
+				let convergenceStreak = 0;
+				let lastRoundOutputsKey = "";
 
-				for (let round = 0; round < maxRounds; round++) {
+				for (let round = 0; round < hardLimit; round++) {
 					if (iterSignal?.aborted) break;
 
-					// Progress: workers round N/M
+					const roundLabel = maxRounds === 0
+						? `Workers round ${round + 1} (convergence-driven)`
+						: `Workers round ${round + 1}/${hardLimit}`;
+					await this.#stateTracker.updatePipeline({ roundtablePhase: roundLabel });
 					for (const id of workerIds) {
 						await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 					}
-					await this.#stateTracker.updatePipeline({ roundtablePhase: `Workers round ${round + 1}/${maxRounds}` });
 					options.onProgress?.({
 						iteration: iter,
 						targetCount: this.#loopConfig.maxIterations,
@@ -214,7 +242,7 @@ export class LoopController {
 					if (round > 0) {
 						const prompt = this.#loopConfig.workers.roundtablePrompt
 							? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
-							: `\n## Prior Round Outputs\n\nReview the outputs below and refine or improve upon them.\n`;
+							: `\n## Prior Round Outputs\n\nCross-examine these outputs. Flag gaps, contradictions, and quality issues. Be direct — your peers expect honest critique. Refine and improve upon the prior work.\n`;
 						extraContext = `${prompt}\n${priorOutputs}`;
 					}
 					const roundResults = await this.#spawnWorkers(
@@ -239,37 +267,71 @@ export class LoopController {
 						};
 					}
 
-					// Progress: workers round completed
-					for (const r of roundResults) {
-						const status = r.exitCode === 0 ? "completed" : "failed";
-						await this.#stateTracker.updateAgent(r.agent, { status, iteration: iter, completedAt: Date.now() });
+					allWorkerResults.push(...roundResults);
+
+					// Build prior outputs for next round
+					priorOutputs = roundResults.map(r => `[${r.agent}] ${r.output.slice(0, 2000)}`).join("\n\n---\n\n");
+
+					// Convergence detection on worker outputs (not cloner findings)
+					if (round > 0 && convergenceNeeded > 0) {
+						const currKey = roundResults.map(r => r.output.slice(0, 500)).sort().join("||");
+						const similarity = lastRoundOutputsKey
+							? findingsSimilarity(lastRoundOutputsKey.split("||"), currKey.split("||"))
+							: 0;
+						lastRoundOutputsKey = currKey;
+
+						if (similarity >= 0.85) {
+							convergenceStreak++;
+							if (convergenceStreak >= convergenceNeeded) {
+								workersConverged = true;
+								break;
+							}
+						} else {
+							convergenceStreak = 0;
+						}
+					} else {
+						lastRoundOutputsKey = roundResults.map(r => r.output.slice(0, 500)).sort().join("||");
 					}
+				}
+
+				// 3. Collect worker output for review context (all rounds)
+				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+
+				// 4. Latent cloner gate: only review when workers failed to converge internally
+				if (workersConverged) {
+					// Workers converged — internal peer review sufficed. Skip cloner review.
+					await this.#stateTracker.updatePipeline({
+						roundtablePhase: "Workers converged internally",
+						reviewVerdict: "swarm consensus",
+					});
 					options.onProgress?.({
 						iteration: iter,
 						targetCount: this.#loopConfig.maxIterations,
 						currentWave: 0,
 						totalWaves: 1,
 						agents: Object.fromEntries(
-							roundResults.map(r => [
-								r.agent,
-								{ status: r.exitCode === 0 ? "completed" : "failed", iteration: iter },
-							]),
+							workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 						),
 					});
-
-					allWorkerResults.push(...roundResults);
-
-					// Build prior outputs for next round
-					priorOutputs = roundResults.map(r => `[${r.agent}] ${r.output.slice(0, 2000)}`).join("\n\n---\n\n");
+					return {
+						status: "completed",
+						iterations: iter + 1,
+						reviewVerdicts: verdicts,
+						errors,
+					};
 				}
 
-				// 3. Collect worker output for review context (all rounds)
-				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+				// Workers did not converge — escalate to latent cloner review
+				await this.#channel.broadcast(
+					this.#clonerId,
+					`Swarm did not converge internally. Escalating to Cloner review (iteration ${iter + 1}).`,
+				);
 
 				// Progress: cloners reviewing
 				for (const id of clonerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
+				await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
 				options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
@@ -277,7 +339,8 @@ export class LoopController {
 					totalWaves: 1,
 					agents: Object.fromEntries(clonerIds.map(id => [id, { status: "running", iteration: iter }])),
 				});
-				// 4. Spawn cloners to review (parallel)
+
+				// Spawn cloners to review (parallel)
 				verdict = await this.#runClonerReview(
 					clonerIds,
 					iter,
@@ -352,6 +415,8 @@ export class LoopController {
 				// Timeout → skip to next iteration
 				continue;
 			}
+			// No verdict (timed out before cloner review) — skip to next iteration
+			if (!verdict) continue;
 
 			// Convergence detection: Jaccard similarity on cloner findings
 			if (convergenceThreshold > 0) {

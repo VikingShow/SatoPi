@@ -61,11 +61,11 @@ export interface LoopSwarmConfig {
 	humanEscalation: boolean;
 	/** Worker configuration. */
 	workers: {
-		/** Initial worker count (proposed by Cloner, confirmed by human). */
+		/** Initial worker count (proposed by Cloner, confirmed by human). Default: 5. */
 		initial: number;
-		/** Minimum workers allowed during dynamic scaling. */
+		/** Minimum workers allowed during dynamic scaling. Default: 1. */
 		min: number;
-		/** Maximum workers allowed during dynamic scaling. */
+		/** Maximum workers allowed during dynamic scaling. Default: 12. */
 		max: number;
 		/**
 		 * When true, the TaskComplexityAnalyzer evaluates plan.md before
@@ -76,9 +76,17 @@ export interface LoopSwarmConfig {
 		/**
 		 * Number of deliberation rounds within one iteration.
 		 * Workers in each round see prior rounds' outputs and refine.
-		 * Default: 1 (single round, backward-compatible).
+		 * 0 = unlimited — driven by roundsConvergenceThreshold + hard safety cap (10).
+		 * Default: 5.
 		 */
 		maxRounds: number;
+		/**
+		 * Consecutive rounds with Jaccard similarity at or above this
+		 * threshold trigger early convergence and end the worker rounds.
+		 * Only meaningful when maxRounds > 1 or maxRounds = 0.
+		 * Default: 3.
+		 */
+		roundsConvergenceThreshold: number;
 		/**
 		 * Prompt excerpt injected into workers after round 1,
 		 * instructing them to cross-examine prior outputs. Handlebars template:
@@ -88,7 +96,11 @@ export interface LoopSwarmConfig {
 	};
 	/** Cloner configuration. */
 	cloners: {
-		/** Cloner count (default = workers.initial, may be fewer). */
+		/**
+		 * Cloner count. Cloners are latent guardians — they only review
+		 * when the worker swarm fails to converge internally.
+		 * Default: min(3, workers.initial).
+		 */
 		count: number;
 	};
 	/**
@@ -116,7 +128,7 @@ export interface LoopSwarmConfig {
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
 	const workersRaw = (raw.workers as Record<string, unknown>) ?? {};
 	const clonersRaw = (raw.cloners as Record<string, number>) ?? {};
-	const workerInitial = (workersRaw.initial as number) ?? 3;
+	const workerInitial = (workersRaw.initial as number) ?? 5;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,
 		autoRetry: (raw.auto_retry as boolean) ?? true,
@@ -124,13 +136,14 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		workers: {
 			initial: workerInitial,
 			min: (workersRaw.min as number) ?? 1,
-			max: (workersRaw.max as number) ?? 6,
+			max: (workersRaw.max as number) ?? 12,
 			auto: (workersRaw.auto as boolean) ?? false,
-			maxRounds: (workersRaw.max_rounds as number) ?? 1,
+			maxRounds: (workersRaw.max_rounds as number) ?? 5,
+			roundsConvergenceThreshold: (workersRaw.rounds_convergence_threshold as number) ?? 3,
 			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
 		},
 		cloners: {
-			count: clonersRaw.count ?? workerInitial,
+			count: clonersRaw.count ?? Math.min(3, workerInitial),
 		},
 		convergenceThreshold: (raw.convergence_threshold as number) ?? 2,
 		iterationTimeoutMs: (raw.iteration_timeout_ms as number) ?? 300_000,
@@ -242,22 +255,14 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 				errors.push(`Agent '${name}' cannot report to itself`);
 			}
 		}
-		if (agent.model !== undefined && agent.model.length === 0) {
-			errors.push(`Agent '${name}' model must not be empty when provided`);
-		}
 	}
 
 	if (def.targetCount < 1) {
 		errors.push("target_count must be at least 1");
 	}
 	if (def.loopConfig) {
-		if (def.loopConfig.workers.maxRounds < 1) {
-			errors.push("workers.max_rounds must be at least 1");
-		}
-		if (def.loopConfig.workers.maxRounds > def.loopConfig.workers.initial) {
-			errors.push(
-				`workers.max_rounds (${def.loopConfig.workers.maxRounds}) cannot exceed workers.initial (${def.loopConfig.workers.initial})`,
-			);
+		if (def.loopConfig.workers.maxRounds < 0) {
+			errors.push("workers.max_rounds must be >= 0 (0 = unlimited, convergence-driven)");
 		}
 	}
 	if (def.mode !== "pipeline" && def.mode !== "loop" && def.targetCount !== 1) {

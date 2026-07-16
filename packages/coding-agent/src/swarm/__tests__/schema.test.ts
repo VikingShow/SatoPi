@@ -64,10 +64,11 @@ swarm:
 		expect(config.maxIterations).toBe(5);
 		expect(config.autoRetry).toBe(true);
 		expect(config.humanEscalation).toBe(true);
-		expect(config.workers.initial).toBe(3);
+		expect(config.workers.initial).toBe(5);
 		expect(config.workers.min).toBe(1);
-		expect(config.workers.max).toBe(6);
-		expect(config.workers.maxRounds).toBe(1);
+		expect(config.workers.max).toBe(12);
+		expect(config.workers.maxRounds).toBe(5);
+		expect(config.workers.roundsConvergenceThreshold).toBe(3);
 		expect(config.workers.roundtablePrompt).toBeUndefined();
 		expect(config.cloners.count).toBe(3);
 	});
@@ -183,7 +184,7 @@ swarm:
 });
 
 describe("schema - loop validation", () => {
-	it("rejects maxRounds < 1", () => {
+	it("rejects maxRounds < 0", () => {
 		const yaml = `
 swarm:
   name: test-loop
@@ -192,28 +193,28 @@ swarm:
   max_iterations: 3
   workers:
     initial: 3
+    max_rounds: -1
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		const errors = validateSwarmDefinition(def);
+		expect(errors).toContain("workers.max_rounds must be >= 0 (0 = unlimited, convergence-driven)");
+	});
+
+	it("accepts maxRounds = 0 (unlimited, convergence-driven)", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  max_iterations: 3
+  workers:
+    initial: 5
     max_rounds: 0
   agents: {}
 `;
 		const def = parseSwarmYaml(yaml);
 		const errors = validateSwarmDefinition(def);
-		expect(errors).toContain("workers.max_rounds must be at least 1");
-	});
-
-	it("rejects maxRounds > worker initial count", () => {
-		const yaml = `
-swarm:
-  name: test-loop
-  workspace: /tmp/test
-  mode: loop
-  max_iterations: 3
-  workers:
-    initial: 3
-    max_rounds: 5
-  agents: {}
-`;
-		const def = parseSwarmYaml(yaml);
-		const errors = validateSwarmDefinition(def);
-		expect(errors).toContain("workers.max_rounds (5) cannot exceed workers.initial (3)");
+		expect(errors).toEqual([]);
 	});
 });

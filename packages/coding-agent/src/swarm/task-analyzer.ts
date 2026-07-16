@@ -35,6 +35,10 @@ export interface TaskComplexitySignals {
 export interface TaskComplexityRecommendation {
 	workers: number;
 	cloners: number;
+	/** Recommended max rounds per iteration for peer review. 0 = unlimited. */
+	maxRounds: number;
+	/** How many consecutive converged rounds to end early. */
+	roundsConvergenceThreshold: number;
 	complexity: "low" | "medium" | "high";
 	parallelism: number;
 	safetyCritical: boolean;
@@ -122,26 +126,43 @@ function recommendFromSignals(
 
 	// Workers: driven by parallelism
 	let workers = signals.parallelism;
-	if (signals.codeSurface > 8) workers += 1;
-	if (signals.crossLanguage) workers += 1;
-	workers = Math.max(min, Math.min(max, workers));
-
 	// Cloners: base on default, increase for safety-critical
 	let cloners = defaultCloners;
 	if (signals.safetyCritical && cloners < 3) cloners = 3;
 	if (complexity === "low" && cloners > 1) cloners -= 1;
 
-	const parts: string[] = [];
-	parts.push(`parallelism=${signals.parallelism}`);
-	parts.push(`codeSurface=${signals.codeSurface}`);
-	parts.push(`complexity=${complexity}`);
-	if (signals.safetyCritical) parts.push("safety-critical");
-	if (signals.crossLanguage) parts.push("cross-language");
-	if (signals.crossPackage) parts.push("cross-package");
+	// maxRounds: complexity-driven, capped by config (0 = unlimited, honored)
+	let maxRounds: number;
+	let roundsConvergenceThreshold: number;
+	switch (complexity) {
+		case "low":
+			maxRounds = 2;
+			roundsConvergenceThreshold = 2;
+			break;
+		case "medium":
+			maxRounds = 4;
+			roundsConvergenceThreshold = 3;
+			break;
+		case "high":
+			maxRounds = 7;
+			roundsConvergenceThreshold = 4;
+			break;
+	}
+	if (signals.safetyCritical) {
+		maxRounds += 1;
+		roundsConvergenceThreshold += 1;
+	}
+	if (signals.crossPackage) maxRounds += 1;
+	// Clamp to config bounds (0 = unlimited from config stays 0)
+	const configMaxRounds = loopConfig.workers.maxRounds;
+	if (configMaxRounds > 0) maxRounds = Math.min(maxRounds, configMaxRounds);
+	roundsConvergenceThreshold = Math.max(1, Math.min(roundsConvergenceThreshold, maxRounds > 0 ? maxRounds : 10));
 
 	return {
 		workers,
 		cloners,
+		maxRounds,
+		roundsConvergenceThreshold,
 		complexity,
 		parallelism: signals.parallelism,
 		safetyCritical: signals.safetyCritical,
@@ -155,26 +176,18 @@ function recommendFromSignals(
 // ============================================================================
 
 export class TaskComplexityAnalyzer {
-	readonly #modelRegistry: ModelRegistry;
-	readonly #settings: Settings;
-
-	constructor(modelRegistry: ModelRegistry, settings: Settings) {
-		this.#modelRegistry = modelRegistry;
-		this.#settings = settings;
-	}
-
-	/**
-	 * Analyze plan.md content and return recommended worker/cloner counts.
-	 *
-	 * If an LLM is available via modelRegistry, uses it as baseline and
-	 * adjusts with rule-extracted signals. Otherwise falls back to pure
-	 * rule-based recommendation.
-	 */
-	async analyze(planContent: string, loopConfig: LoopSwarmConfig): Promise<{ workers: number; cloners: number }> {
+	async analyze(planContent: string, loopConfig: LoopSwarmConfig): Promise<TaskComplexityRecommendation> {
 		if (!planContent || planContent.trim().length === 0) {
 			return {
 				workers: loopConfig.workers.initial,
 				cloners: loopConfig.cloners.count,
+				maxRounds: loopConfig.workers.maxRounds,
+				roundsConvergenceThreshold: loopConfig.workers.roundsConvergenceThreshold,
+				complexity: "medium",
+				parallelism: 1,
+				safetyCritical: false,
+				rationale: "empty plan — using config defaults",
+				source: "fallback",
 			};
 		}
 
@@ -182,11 +195,6 @@ export class TaskComplexityAnalyzer {
 
 		// Try LLM refinement if a cheap model is available
 		// (currently rules-only; LLM layer is a future enhancement)
-		const recommendation = recommendFromSignals(signals, loopConfig);
-
-		return {
-			workers: recommendation.workers,
-			cloners: recommendation.cloners,
-		};
+		return recommendFromSignals(signals, loopConfig);
 	}
 }

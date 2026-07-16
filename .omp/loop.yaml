@@ -11,12 +11,13 @@ swarm:
   human_escalation: true
 
   workers:
-    initial: 3
+    initial: 5
     min: 1
-    max: 6
+    max: 12
+    max_rounds: 5
+    rounds_convergence_threshold: 3
 
   cloners:
     count: 3
-
   # Agents are created dynamically — no preset knights.
   agents: {}
