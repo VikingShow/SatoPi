@@ -3,7 +3,7 @@
 
 swarm:
   name: loop-engineering
-  workspace: .
+  workspace: ..
   mode: loop
 
   max_iterations: 5

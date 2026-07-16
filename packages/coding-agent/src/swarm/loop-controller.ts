@@ -1,22 +1,13 @@
-/**
- * LoopController — In Loop 循环编排引擎。
- *
- * 编排流程:
- *   Cloner 对话→plan.md → 创建 workers（空白 agent）+ cloners（Cloner 克隆体）
- *   → Workers 群聊自组织分工 → 并行执行
- *   → Cloners 秘密监视 → 圆桌审查 → PASS 或继续迭代
- */
-
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { PipelineOptions } from "./pipeline";
+import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { WorkerChannel } from "./worker-channel";
-import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 
 // ============================================================================
 // Types
@@ -32,9 +23,8 @@ export interface LoopOptions extends PipelineOptions {
 	stateTracker: StateTracker;
 }
 
-
 export interface LoopResult {
-	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed";
+	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
 	iterations: number;
 	reviewVerdicts: ReviewVerdict[];
 	errors: string[];
@@ -74,6 +64,29 @@ BEHAVIOR:
 - Record what you did and what you learned.
 - Always produce verifiable output in the workspace.`;
 
+// ============================================================================
+// Similarity helpers
+// ============================================================================
+
+/** Jaccard similarity between two arrays of tokens. Returns 0–1. */
+function jaccardSimilarity(a: string[], b: string[]): number {
+	const setA = new Set(a);
+	const setB = new Set(b);
+	if (setA.size === 0 && setB.size === 0) return 1;
+	let intersection = 0;
+	for (const item of setA) {
+		if (setB.has(item)) intersection++;
+	}
+	const union = new Set([...setA, ...setB]).size;
+	return union === 0 ? 0 : intersection / union;
+}
+
+/** Compute Jaccard similarity between two sets of findings. */
+function findingsSimilarity(prev: string[], curr: string[]): number {
+	const prevTokens = prev.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
+	const currTokens = curr.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
+	return jaccardSimilarity(prevTokens, currTokens);
+}
 
 // ============================================================================
 // Controller
@@ -100,6 +113,8 @@ export class LoopController {
 		let stagnationCount = 0;
 		let lastFindingsKey = "";
 		// Dynamic worker tracking
+		// Per-iteration role suggestions from cloner review (Round 2+).
+		let currentRoleSuggestions: Record<string, string> = {};
 		let currentWorkerCount = this.#loopConfig.workers.initial;
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
@@ -116,7 +131,20 @@ export class LoopController {
 			workers: workerIds,
 			cloners: clonerIds,
 		});
-		await this.#channel.broadcast(this.#clonerId, `Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`);
+		await this.#channel.broadcast(
+			this.#clonerId,
+			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`,
+		);
+
+		// Register all workers and cloners in the state tracker so that
+		// updateAgent / incrementPraise / etc. work correctly. In loop mode,
+		// the YAML's agents map is empty — agents are created dynamically here.
+		for (const id of workerIds) {
+			await this.#stateTracker.registerAgent(id);
+		}
+		for (const id of clonerIds) {
+			await this.#stateTracker.registerAgent(id);
+		}
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
 			if (signal?.aborted) {
@@ -133,10 +161,11 @@ export class LoopController {
 			let iterSignal = signal;
 			if (iterationTimeout > 0) {
 				const timeoutController = new AbortController();
-				const timer = setTimeout(() => timeoutController.abort(new DOMException("iteration timeout", "TimeoutError")), iterationTimeout);
-				iterSignal = signal
-					? AbortSignal.any([signal, timeoutController.signal])
-					: timeoutController.signal;
+				const timer = setTimeout(
+					() => timeoutController.abort(new DOMException("iteration timeout", "TimeoutError")),
+					iterationTimeout,
+				);
+				iterSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal;
 				// Clean up timer after iteration completes or times out
 				const cleanup = () => clearTimeout(timer);
 				if (signal) signal.addEventListener("abort", cleanup, { once: true });
@@ -153,135 +182,159 @@ export class LoopController {
 				targetCount: this.#loopConfig.maxIterations,
 				currentWave: 0,
 				totalWaves: 1,
-				agents: Object.fromEntries(workerIds.map((id) => [id, { status: "running", iteration: iter }])),
+				agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
 			});
 
 			let verdict: ReviewVerdict;
 			let lastWorkerOutput = "";
 			try {
-			// 1. Spawn workers in rounds (roundtable deliberation)
-			const maxRounds = this.#loopConfig.workers.maxRounds;
-			const allWorkerResults: SingleResult[] = [];
-			let priorOutputs = "";
+				// 1. Spawn workers in rounds (roundtable deliberation)
+				const maxRounds = this.#loopConfig.workers.maxRounds;
+				const allWorkerResults: SingleResult[] = [];
+				let priorOutputs = "";
 
-			for (let round = 0; round < maxRounds; round++) {
-				if (iterSignal?.aborted) break;
+				for (let round = 0; round < maxRounds; round++) {
+					if (iterSignal?.aborted) break;
 
-				// Progress: workers round N/M
-				for (const id of workerIds) {
+					// Progress: workers round N/M
+					for (const id of workerIds) {
+						await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
+					}
+					await this.#stateTracker.updatePipeline({ roundtablePhase: `Workers round ${round + 1}/${maxRounds}` });
+					options.onProgress?.({
+						iteration: iter,
+						targetCount: this.#loopConfig.maxIterations,
+						currentWave: 0,
+						totalWaves: 1,
+						agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
+					});
+
+					// Build roundtable context — inject prior outputs for rounds > 0
+					let extraContext = "";
+					if (round > 0) {
+						const prompt = this.#loopConfig.workers.roundtablePrompt
+							? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
+							: `\n## Prior Round Outputs\n\nReview the outputs below and refine or improve upon them.\n`;
+						extraContext = `${prompt}\n${priorOutputs}`;
+					}
+					const roundResults = await this.#spawnWorkers(
+						workerIds,
+						workspace,
+						planContent,
+						clonerFeedbackHistory,
+						modelRegistry,
+						settings,
+						iterSignal,
+						errors,
+						extraContext,
+						currentRoleSuggestions,
+					);
+
+					if (iterSignal?.aborted) {
+						return {
+							status: "aborted",
+							iterations: iter + 1,
+							reviewVerdicts: verdicts,
+							errors,
+						};
+					}
+
+					// Progress: workers round completed
+					for (const r of roundResults) {
+						const status = r.exitCode === 0 ? "completed" : "failed";
+						await this.#stateTracker.updateAgent(r.agent, { status, iteration: iter, completedAt: Date.now() });
+					}
+					options.onProgress?.({
+						iteration: iter,
+						targetCount: this.#loopConfig.maxIterations,
+						currentWave: 0,
+						totalWaves: 1,
+						agents: Object.fromEntries(
+							roundResults.map(r => [
+								r.agent,
+								{ status: r.exitCode === 0 ? "completed" : "failed", iteration: iter },
+							]),
+						),
+					});
+
+					allWorkerResults.push(...roundResults);
+
+					// Build prior outputs for next round
+					priorOutputs = roundResults.map(r => `[${r.agent}] ${r.output.slice(0, 2000)}`).join("\n\n---\n\n");
+				}
+
+				// 3. Collect worker output for review context (all rounds)
+				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+
+				// Progress: cloners reviewing
+				for (const id of clonerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
-				await this.#stateTracker.updatePipeline({ roundtablePhase: `Workers round ${round + 1}/${maxRounds}` });
 				options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
 					totalWaves: 1,
-					agents: Object.fromEntries(workerIds.map((id) => [id, { status: "running", iteration: iter }])),
+					agents: Object.fromEntries(clonerIds.map(id => [id, { status: "running", iteration: iter }])),
 				});
-
-				// Build roundtable context — inject prior outputs for rounds > 0
-				let extraContext = "";
-				if (round > 0) {
-					const prompt = this.#loopConfig.workers.roundtablePrompt
-						? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
-						: `\n## Prior Round Outputs\n\nReview the outputs below and refine or improve upon them.\n`;
-					extraContext = `${prompt}\n${priorOutputs}`;
-				}
-
-				const roundResults = await this.#spawnWorkers(
-					workerIds, workspace, planContent, clonerFeedbackHistory,
-					modelRegistry, settings, iterSignal, errors, extraContext,
+				// 4. Spawn cloners to review (parallel)
+				verdict = await this.#runClonerReview(
+					clonerIds,
+					iter,
+					lastWorkerOutput,
+					workspace,
+					planContent,
+					clonerFeedbackHistory,
+					modelRegistry,
+					settings,
+					iterSignal,
 				);
 
-				if (iterSignal?.aborted) {
+				verdicts.push(verdict);
+
+				// Save role suggestions for next iteration's workers (GAP 1)
+				if (Object.keys(verdict.roleSuggestions).length > 0) {
+					currentRoleSuggestions = verdict.roleSuggestions;
+				}
+
+				// Track worker quality from cloner verdict (GAP 3)
+				if (verdict.praisedWorkers.length > 0) {
+					await this.#stateTracker.incrementPraise(verdict.praisedWorkers);
+				}
+				if (verdict.criticizedWorkers.length > 0) {
+					await this.#stateTracker.incrementCriticism(verdict.criticizedWorkers);
+				}
+
+				// Progress: cloners completed
+				for (const id of clonerIds) {
+					await this.#stateTracker.updateAgent(id, {
+						status: "completed",
+						iteration: iter,
+						completedAt: Date.now(),
+					});
+				}
+				await this.#stateTracker.updatePipeline({
+					roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
+					reviewVerdict: verdict.findings.slice(0, 3).join("; "),
+				});
+				options.onProgress?.({
+					iteration: iter,
+					targetCount: this.#loopConfig.maxIterations,
+					currentWave: 0,
+					totalWaves: 1,
+					agents: Object.fromEntries([
+						...workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
+						...clonerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
+					]),
+				});
+				if (verdict.passed) {
 					return {
-						status: "aborted",
+						status: "completed",
 						iterations: iter + 1,
 						reviewVerdicts: verdicts,
 						errors,
 					};
 				}
-
-				// Progress: workers round completed
-				for (const r of roundResults) {
-					const status = r.exitCode === 0 ? "completed" : "failed";
-					await this.#stateTracker.updateAgent(r.agent, { status, iteration: iter, completedAt: Date.now() });
-				}
-				options.onProgress?.({
-					iteration: iter,
-					targetCount: this.#loopConfig.maxIterations,
-					currentWave: 0,
-					totalWaves: 1,
-					agents: Object.fromEntries(roundResults.map((r) => [r.agent, { status: r.exitCode === 0 ? "completed" : "failed", iteration: iter }])),
-				});
-
-				allWorkerResults.push(...roundResults);
-
-				// Build prior outputs for next round
-				priorOutputs = roundResults
-					.map((r) => `[${r.agent}] ${r.output.slice(0, 2000)}`)
-					.join("\n\n---\n\n");
-			}
-
-			// 3. Collect worker output for review context (all rounds)
-			lastWorkerOutput = allWorkerResults
-				.map((r) => `[${r.agent}] ${r.output.slice(0, 4000)}`)
-				.join("\n\n---\n\n");
-
-
-			// Progress: cloners reviewing
-			for (const id of clonerIds) {
-				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
-			}
-			options.onProgress?.({
-				iteration: iter,
-				targetCount: this.#loopConfig.maxIterations,
-				currentWave: 0,
-				totalWaves: 1,
-				agents: Object.fromEntries(clonerIds.map((id) => [id, { status: "running", iteration: iter }])),
-			});
-			// 4. Spawn cloners to review (parallel)
-			verdict = await this.#runClonerReview(
-				clonerIds,
-				iter,
-				lastWorkerOutput,
-				workspace,
-				planContent,
-				clonerFeedbackHistory,
-				modelRegistry,
-				settings,
-				iterSignal,
-			);
-
-			verdicts.push(verdict);
-
-			// Progress: cloners completed
-			for (const id of clonerIds) {
-				await this.#stateTracker.updateAgent(id, { status: "completed", iteration: iter, completedAt: Date.now() });
-			}
-			await this.#stateTracker.updatePipeline({
-				roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
-				reviewVerdict: verdict.findings.slice(0, 3).join("; "),
-			});
-			options.onProgress?.({
-				iteration: iter,
-				targetCount: this.#loopConfig.maxIterations,
-				currentWave: 0,
-				totalWaves: 1,
-				agents: Object.fromEntries([
-					...workerIds.map((id) => [id, { status: "completed" as const, iteration: iter }]),
-					...clonerIds.map((id) => [id, { status: "completed" as const, iteration: iter }]),
-				]),
-			});
-			if (verdict.passed) {
-				return {
-					status: "completed",
-					iterations: iter + 1,
-					reviewVerdicts: verdicts,
-					errors,
-				};
-			}
 			} catch (err) {
 				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
 				const message = isTimeout
@@ -300,51 +353,98 @@ export class LoopController {
 				continue;
 			}
 
-			// Convergence detection: compare findings with previous iteration
+			// Convergence detection: Jaccard similarity on cloner findings
 			if (convergenceThreshold > 0) {
-				const findingsKey = [...verdict.findings].sort().join("||");
-				if (findingsKey === lastFindingsKey) {
+				const prevFindings = lastFindingsKey ? lastFindingsKey.split("||") : [];
+				const currFindings = verdict.findings;
+				const similarity = prevFindings.length > 0 ? findingsSimilarity(prevFindings, currFindings) : 0;
+
+				if (similarity >= 0.8) {
 					stagnationCount++;
 					if (stagnationCount >= convergenceThreshold) {
-						const result: LoopResult = {
-							status: "converged_failed",
+						// Exact match → full convergence failure
+						if (similarity >= 1.0 || (similarity >= 0.95 && stagnationCount >= convergenceThreshold + 1)) {
+							const result: LoopResult = {
+								status: "converged_failed",
+								iterations: iter + 1,
+								reviewVerdicts: verdicts,
+								errors: [
+									...errors,
+									`Converged after ${stagnationCount} near-identical review rounds (similarity: ${similarity.toFixed(2)})`,
+								],
+							};
+							if (this.#loopConfig.humanEscalation) {
+								result.escalationContext = {
+									lastWorkerOutput,
+									lastFindings: verdict.findings,
+									approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
+								};
+							}
+							return result;
+						}
+						// High similarity but not identical → converged_partial
+						return {
+							status: "converged_partial",
 							iterations: iter + 1,
 							reviewVerdicts: verdicts,
-							errors: [...errors, `Converged after ${stagnationCount} identical review rounds with no progress`],
+							errors: [
+								...errors,
+								`Partially converged after ${stagnationCount} rounds (Jaccard: ${similarity.toFixed(2)})`,
+							],
 						};
-						if (this.#loopConfig.humanEscalation) {
-							result.escalationContext = {
-								lastWorkerOutput,
-								lastFindings: verdict.findings,
-								approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
-							};
-						}
-						return result;
 					}
 				} else {
 					stagnationCount = 0;
 				}
-				lastFindingsKey = findingsKey;
+				lastFindingsKey = currFindings.sort().join("||");
 			}
-			// 5. Dynamic worker scaling: adjust worker count based on cloner suggestions
+			// 5. Dynamic worker scaling with delta-based acceleration (GAP 2)
+			//    When ≥2/3 cloners agree on direction and |delta| ≥ 2, jump by delta.
+			//    Otherwise fall back to conservative ±1.
 			const { min, max } = this.#loopConfig.workers;
 			const suggestions = verdict.workerCountSuggestions;
 			if (suggestions.length >= Math.ceil(clonerIds.length / 2)) {
+				const upVotes = suggestions.filter(d => d > 0).length;
+				const downVotes = suggestions.filter(d => d < 0).length;
+				const superMajority = Math.ceil((clonerIds.length * 2) / 3);
+				const majority = Math.ceil(clonerIds.length / 2);
+
 				suggestions.sort((a, b) => a - b);
-				const median = suggestions[Math.floor(suggestions.length / 2)];
-				const clamped = Math.max(min, Math.min(max, median));
-				const diff = clamped - currentWorkerCount;
-				if (diff > 0) {
-					// Scale up: add one worker per iteration
-					const newId = `worker-${workerIds.length + 1}`;
-					this.#channel.addWorker(newId);
-					workerIds.push(newId);
-					currentWorkerCount++;
-				} else if (diff < 0 && currentWorkerCount > min) {
-					// Scale down: remove last worker
-					const removed = workerIds.pop()!;
-					this.#channel.removeWorker(removed);
-					currentWorkerCount--;
+				const medianDelta = suggestions[Math.floor(suggestions.length / 2)];
+
+				// Fast scaling: super-majority + ≥2 delta → jump
+				// Conservative: simple majority → ±1
+				let delta: number;
+				if ((upVotes >= superMajority || downVotes >= superMajority) && Math.abs(medianDelta) >= 2) {
+					delta = medianDelta;
+				} else if (upVotes >= majority) {
+					delta = 1;
+				} else if (downVotes >= majority && currentWorkerCount > min) {
+					delta = -1;
+				} else {
+					delta = 0;
+				}
+
+				if (delta > 0) {
+					const addCount = Math.min(delta, max - currentWorkerCount);
+					for (let i = 0; i < addCount; i++) {
+						const newId = `worker-${workerIds.length + 1}`;
+						this.#channel.addWorker(newId);
+						await this.#stateTracker.registerAgent(newId);
+						workerIds.push(newId);
+						currentWorkerCount++;
+					}
+				} else if (delta < 0 && currentWorkerCount > min) {
+					const removeCount = Math.min(-delta, currentWorkerCount - min);
+					for (let i = 0; i < removeCount; i++) {
+						// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
+						const worst = this.#stateTracker.getWorstWorker(workerIds);
+						const removed = worst ?? workerIds[workerIds.length - 1];
+						const idx = workerIds.indexOf(removed);
+						if (idx >= 0) workerIds.splice(idx, 1);
+						this.#channel.removeWorker(removed);
+						currentWorkerCount--;
+					}
 				}
 			}
 
@@ -392,10 +492,12 @@ export class LoopController {
 		signal?: AbortSignal,
 		errors: string[] = [],
 		extraContext?: string,
+		roleSuggestions?: Record<string, string>,
 	): Promise<SingleResult[]> {
-		const feedbackBlock = previousFeedback.length > 0
-			? `\n## Previous Review Feedback\n\n${previousFeedback.map((f, i) => `(Iteration ${i + 1}) ${f}`).join("\n")}\n`
-			: "";
+		const feedbackBlock =
+			previousFeedback.length > 0
+				? `\n## Previous Review Feedback\n\n${previousFeedback.map((f, i) => `(Iteration ${i + 1}) ${f}`).join("\n")}\n`
+				: "";
 
 		const results = await Promise.allSettled(
 			workerIds.map((id, i) =>
@@ -409,11 +511,14 @@ export class LoopController {
 					},
 					task: [
 						`You are Worker ${i + 1} of ${workerIds.length}.`,
-						`Your peers are: ${workerIds.filter((w) => w !== id).join(", ")}.`,
+						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
 						`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
 						`Work in the workspace: ${workspace}.`,
 						planContent ? `\n## Plan\n\n${planContent}` : "",
 						feedbackBlock,
+						roleSuggestions?.[id]
+							? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
+							: "",
 						extraContext ?? "",
 						`\nProduce your output in the workspace directory.`,
 					].join("\n"),
@@ -461,15 +566,20 @@ export class LoopController {
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
 		const council = new ClonerCouncil(this.#channel!);
-		return council.review({
-			clonerIds,
-			workspace,
-			iteration,
-			workerOutput,
-			planContent,
-			previousFindings,
-			deliberation: this.#loopConfig.enableDeliberation,
-		}, modelRegistry, settings, signal);
+		return council.review(
+			{
+				clonerIds,
+				workspace,
+				iteration,
+				workerOutput,
+				planContent,
+				previousFindings,
+				deliberation: this.#loopConfig.enableDeliberation,
+			},
+			modelRegistry,
+			settings,
+			signal,
+		);
 	}
 }
 
@@ -482,10 +592,7 @@ export interface CreateLoopOptions {
 	workspace: string;
 }
 
-export function createLoopController(
-	stateTracker: StateTracker,
-	options: CreateLoopOptions,
-): LoopController {
+export function createLoopController(stateTracker: StateTracker, options: CreateLoopOptions): LoopController {
 	const ircBus = IrcBus.global();
 	const clonerAgentId = MAIN_AGENT_ID;
 
@@ -497,4 +604,3 @@ export function createLoopController(
 		stateTracker,
 	});
 }
-

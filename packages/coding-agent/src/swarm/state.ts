@@ -22,6 +22,14 @@ export interface AgentState {
 	startedAt?: number;
 	completedAt?: number;
 	error?: string;
+	/** Quality tracking: cumulative praise count across loop runs. */
+	praiseCount: number;
+	/** Quality tracking: cumulative criticism count across loop runs. */
+	criticismCount: number;
+	/** Quality tracking: number of file conflicts this worker was involved in. */
+	conflictCount: number;
+	/** Mentor worker ID, set on scale-up for new workers. */
+	mentorId?: string;
 }
 
 export interface SwarmState {
@@ -84,9 +92,31 @@ export class StateTracker {
 				status: "pending",
 				iteration: 0,
 				wave: 0,
+				praiseCount: 0,
+				criticismCount: 0,
+				conflictCount: 0,
 			};
 		}
 
+		await this.#persist();
+	}
+
+	/**
+	 * Register a single agent at runtime (for loop mode where agents are
+	 * created dynamically by LoopController, not from YAML).
+	 * Idempotent — does nothing if the agent is already registered.
+	 */
+	async registerAgent(name: string): Promise<void> {
+		if (this.#state.agents[name]) return;
+		this.#state.agents[name] = {
+			name,
+			status: "pending",
+			iteration: 0,
+			wave: 0,
+			praiseCount: 0,
+			criticismCount: 0,
+			conflictCount: 0,
+		};
 		await this.#persist();
 	}
 
@@ -95,6 +125,70 @@ export class StateTracker {
 		if (!agent) return;
 		Object.assign(agent, update);
 		await this.#persist();
+	}
+
+	/** Increment praise count for a set of workers. */
+	async incrementPraise(workerIds: string[]): Promise<void> {
+		for (const id of workerIds) {
+			const agent = this.#state.agents[id];
+			if (agent) agent.praiseCount++;
+		}
+		await this.#persist();
+	}
+
+	/** Increment criticism count for a set of workers. */
+	async incrementCriticism(workerIds: string[]): Promise<void> {
+		for (const id of workerIds) {
+			const agent = this.#state.agents[id];
+			if (agent) agent.criticismCount++;
+		}
+		await this.#persist();
+	}
+
+	/** Increment conflict count for a worker. */
+	async incrementConflict(workerId: string): Promise<void> {
+		const agent = this.#state.agents[workerId];
+		if (agent) agent.conflictCount++;
+		await this.#persist();
+	}
+
+	/** Get a quality score for a worker (praise - criticism - conflictCount). */
+	getWorkerScore(workerId: string): number {
+		const agent = this.#state.agents[workerId];
+		if (!agent) return 0;
+		return agent.praiseCount - agent.criticismCount - agent.conflictCount;
+	}
+
+	/** Find the best-scoring worker (highest score), excluding given IDs. */
+	getBestWorker(excludeIds?: string[]): string | null {
+		let bestId: string | null = null;
+		let bestScore = -Infinity;
+		const exclude = new Set(excludeIds ?? []);
+		for (const [id, agent] of Object.entries(this.#state.agents)) {
+			if (exclude.has(id)) continue;
+			const score = agent.praiseCount - agent.criticismCount - agent.conflictCount;
+			if (score > bestScore) {
+				bestScore = score;
+				bestId = id;
+			}
+		}
+		return bestId;
+	}
+
+	/** Find the worst-scoring worker. */
+	getWorstWorker(excludeIds?: string[]): string | null {
+		let worstId: string | null = null;
+		let worstScore = Infinity;
+		const exclude = new Set(excludeIds ?? []);
+		for (const [id, agent] of Object.entries(this.#state.agents)) {
+			if (exclude.has(id)) continue;
+			const score = agent.praiseCount - agent.criticismCount - agent.conflictCount;
+			if (score < worstScore) {
+				worstScore = score;
+				worstId = id;
+			}
+		}
+		return worstId;
 	}
 
 	async updatePipeline(update: Partial<SwarmState>): Promise<void> {

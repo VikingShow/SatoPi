@@ -13,9 +13,10 @@
  *   当 plan.md 就绪 + human 确认 → handler 执行实际循环。
  */
 
-import type { LoopSwarmConfig } from "./schema";
-import { ExperienceStore } from "./after-loop/experience";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { ExperienceStore } from "./after-loop/experience";
+import type { LoopSwarmConfig } from "./schema";
 
 // ============================================================================
 // Types
@@ -98,6 +99,7 @@ export async function generatePlanningPrompt(
 		"  - Clear acceptance criteria",
 		"  - Any constraints (e.g. 'use Bun APIs, not Node')",
 		"  - Scope boundaries (what NOT to touch)",
+		"- Past plans are archived at `.omp/plans/`. Review them to understand iteration history.",
 		"- If the human gives insufficient information, ASK. Don't guess critical details.",
 		"",
 		"## When Ready",
@@ -117,6 +119,9 @@ export async function generatePlanningPrompt(
 	if (experienceStore && taskDescription) {
 		const lessons = experienceStore.search(taskDescription, 5);
 		if (lessons.length > 0) {
+			// Mark referenced lessons to boost their weight (experience decay feedback)
+			experienceStore.markReferenced(lessons.map(l => l.runId));
+
 			sections.push("");
 			sections.push("## Relevant Past Experience");
 			sections.push("");
@@ -138,15 +143,86 @@ export async function planExists(workspace: string): Promise<boolean> {
 }
 
 /**
- * Stamp plan.md with a generation timestamp if not already stamped.
- * Returns the content with the timestamp prepended, or unchanged if already stamped.
+ * Stamp plan.md with a generation timestamp and return the stamped content.
+ *
+ * If the plan is already stamped (from a previous run), archives it first.
+ * If unstamped (fresh Cloner output), stamps it.
+ *
+ * NOTE: Archive of old content only works when called BEFORE the Cloner
+ * overwrites plan.md. In the current flow (called at loop start, after
+ * Cloner has already written), the archive path only fires if the Cloner
+ * did NOT overwrite — i.e., a re-run of an already-stamped plan.
+ * Fresh plans from the Cloner are always unstamped, so archiving old content
+ * happens via archivePlanForHistory() called at the END of each run instead.
  */
-export async function stampPlanMd(workspace: string): Promise<string> {
+export async function stampAndArchivePlanMd(workspace: string): Promise<string> {
 	const planPath = path.join(workspace, ".omp", "plan.md");
 	const content = await Bun.file(planPath).text();
-	if (content.startsWith("<!-- plan-generated:")) return content;
+
+	if (content.startsWith("<!-- plan-generated:")) {
+		// Plan is already stamped (re-run without Cloner overwrite).
+		// Archive it before returning — the caller may allow a Cloner to rewrite it.
+		const archiveDir = path.join(workspace, ".omp", "plans");
+		const ts = new Date().toISOString().replace(/:/g, "").slice(0, 19);
+		const archivePath = path.join(archiveDir, `plan-${ts}.md`);
+		await Bun.write(archivePath, content);
+		return content;
+	}
+
+	// New unstamped plan → stamp it.
 	const stamp = `<!-- plan-generated: ${new Date().toISOString()} -->\n`;
 	const stamped = stamp + content;
 	await Bun.write(planPath, stamped);
 	return stamped;
+}
+
+/**
+ * Archive the current plan.md to .omp/plans/ for historical reference.
+ *
+ * Called at the END of a loop run, this saves the plan that was just
+ * executed. The stamp comment is stripped so archived plans contain
+ * only the original plan content (without generation timestamp).
+ *
+ * This MUST be called before the next Cloner run overwrites plan.md.
+ */
+export async function archivePlanForHistory(workspace: string): Promise<void> {
+	const planPath = path.join(workspace, ".omp", "plan.md");
+
+	let content: string;
+	try {
+		content = await Bun.file(planPath).text();
+	} catch {
+		return; // No plan to archive
+	}
+
+	if (content.trim().length === 0) return;
+
+	// Strip stamp comment if present — archived plans are raw plan content.
+	if (content.startsWith("<!-- plan-generated:")) {
+		const nl = content.indexOf("\n");
+		content = nl >= 0 ? content.slice(nl + 1) : "";
+	}
+
+	const archiveDir = path.join(workspace, ".omp", "plans");
+	const ts = new Date().toISOString().replace(/:/g, "").slice(0, 19);
+	const archivePath = path.join(archiveDir, `plan-${ts}.md`);
+	await Bun.write(archivePath, content);
+}
+
+/**
+ * List archived plans in reverse chronological order (newest first).
+ * Returns absolute paths to each archived plan file.
+ */
+export async function listArchivedPlans(workspace: string): Promise<string[]> {
+	const archiveDir = path.join(workspace, ".omp", "plans");
+	try {
+		const entries = await fs.readdir(archiveDir);
+		return entries
+			.filter(e => e.startsWith("plan-") && e.endsWith(".md"))
+			.sort()
+			.reverse()
+			.map(e => path.join(archiveDir, e));
+	} catch {
+		return [];
+	}
 }
