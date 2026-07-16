@@ -88,6 +88,7 @@ if (def.mode === "loop" && def.loopConfig) {
 	const loopCtrl = new LoopController({
 		loopConfig: def.loopConfig,
 		workspace,
+		stateTracker,
 	});
 
 	const loopResult = await loopCtrl.runLoop({

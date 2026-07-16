@@ -28,6 +28,8 @@ export interface LoopOptions extends PipelineOptions {
 	clonerAgentId?: string;
 	/** plan.md content from the Before Loop phase. Injected into worker + cloner prompts. */
 	planContent?: string;
+	/** Tracks agent status for TUI progress widget. */
+	stateTracker: StateTracker;
 }
 
 
@@ -75,18 +77,18 @@ BEHAVIOR:
 
 // ============================================================================
 // Controller
-// ============================================================================
-
 export class LoopController {
 	readonly #loopConfig: LoopSwarmConfig;
 	readonly #ircBus: IrcBus;
 	readonly #clonerId: string;
+	readonly #stateTracker: StateTracker;
 	#channel?: WorkerChannel;
 
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
+		this.#stateTracker = options.stateTracker;
 	}
 
 	async runLoop(options: PipelineOptions & { planContent?: string }): Promise<LoopResult> {
@@ -141,6 +143,11 @@ export class LoopController {
 				timeoutController.signal.addEventListener("abort", cleanup, { once: true });
 			}
 
+			// Progress: workers running
+			for (const id of workerIds) {
+				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
+			}
+			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
 			options.onProgress?.({
 				iteration: iter,
 				targetCount: this.#loopConfig.maxIterations,
@@ -163,11 +170,41 @@ export class LoopController {
 				};
 			}
 
+			// Progress: workers completed
+			for (const r of workerResults) {
+				const status = r.exitCode === 0 ? "completed" : "failed";
+				await this.#stateTracker.updateAgent(r.agent, {
+					status,
+					iteration: iter,
+					completedAt: Date.now(),
+				});
+			}
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing" });
+			options.onProgress?.({
+				iteration: iter,
+				targetCount: this.#loopConfig.maxIterations,
+				currentWave: 0,
+				totalWaves: 1,
+				agents: Object.fromEntries(workerResults.map((r) => [r.agent, { status: r.exitCode === 0 ? "completed" : "failed", iteration: iter }])),
+			});
+
 			// 3. Collect worker output for review context
 			lastWorkerOutput = workerResults
 				.map((r) => `[${r.agent}] ${r.output.slice(0, 4000)}`)
 				.join("\n\n---\n\n");
 
+
+			// Progress: cloners reviewing
+			for (const id of clonerIds) {
+				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
+			}
+			options.onProgress?.({
+				iteration: iter,
+				targetCount: this.#loopConfig.maxIterations,
+				currentWave: 0,
+				totalWaves: 1,
+				agents: Object.fromEntries(clonerIds.map((id) => [id, { status: "running", iteration: iter }])),
+			});
 			// 4. Spawn cloners to review (parallel)
 			verdict = await this.#runClonerReview(
 				clonerIds,
@@ -182,6 +219,25 @@ export class LoopController {
 			);
 
 			verdicts.push(verdict);
+
+			// Progress: cloners completed
+			for (const id of clonerIds) {
+				await this.#stateTracker.updateAgent(id, { status: "completed", iteration: iter, completedAt: Date.now() });
+			}
+			await this.#stateTracker.updatePipeline({
+				roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
+				reviewVerdict: verdict.findings.slice(0, 3).join("; "),
+			});
+			options.onProgress?.({
+				iteration: iter,
+				targetCount: this.#loopConfig.maxIterations,
+				currentWave: 0,
+				totalWaves: 1,
+				agents: Object.fromEntries([
+					...workerIds.map((id) => [id, { status: "completed" as const, iteration: iter }]),
+					...clonerIds.map((id) => [id, { status: "completed" as const, iteration: iter }]),
+				]),
+			});
 			if (verdict.passed) {
 				return {
 					status: "completed",
@@ -400,6 +456,7 @@ export function createLoopController(
 		workspace: options.workspace,
 		ircBus,
 		clonerAgentId,
+		stateTracker,
 	});
 }
 
