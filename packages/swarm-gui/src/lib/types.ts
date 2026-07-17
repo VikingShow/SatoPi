@@ -94,3 +94,51 @@ export interface ModelOption {
   name: string;
   tier: string;
 }
+
+// ── After Loop types ──
+
+export interface ExperienceLesson {
+  type: "error" | "success" | "insight" | "pattern" | "warning" | "reflection";
+  summary: string;
+  detail: string;
+  tags: string[];
+  confidence: number;
+  source: string;
+}
+
+export interface AfterLoopResult {
+  runId: string;
+  status: string;
+  iterations: number;
+  summaryMarkdown: string;
+  lessons: ExperienceLesson[];
+  reflection: {
+    rootCauses: string[];
+    effectivePatterns: string[];
+    structuralIssues: string[];
+    recommendations: string[];
+    confidence: number;
+  } | null;
+  stats: {
+    totalIterations: number;
+    finalStatus: string;
+    clonerApprovalRatio: number;
+    workerCount: number;
+    clonerCount: number;
+  };
+}
+
+export interface ExperienceSearchResult {
+  runId: string;
+  timestamp: string;
+  lesson: ExperienceLesson;
+  rank: number;
+}
+
+export interface ExperienceStats {
+  totalRuns: number;
+  avgIterations: number;
+  completionRate: number;
+  escalationRate: number;
+  avgApprovalRatio: number;
+}

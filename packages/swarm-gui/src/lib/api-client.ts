@@ -2,7 +2,7 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson } from "./types";
 
 const BASE = "";
 
@@ -34,4 +34,38 @@ export const api = {
 
   getModels: () =>
     fetchJson<{ models: ModelOption[] }>("/api/models"),
+
+  getPlan: () =>
+    fetchJson<{ content: string; path?: string; error?: string }>("/api/plan"),
+
+  savePlan: (content: string) =>
+    fetchJson<{ success?: boolean; path?: string; error?: string }>("/api/plan", {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+
+  startRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/start", {
+      method: "POST",
+    }),
+
+  stopRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/stop", {
+      method: "POST",
+    }),
+
+  getRunStatus: () =>
+    fetchJson<{ running: boolean }>("/api/run/status"),
+
+  getAfterLoopSummary: () =>
+    fetchJson<AfterLoopResult>("/api/after-loop/summary"),
+
+  searchExperience: (q: string, limit = 10) =>
+    fetchJson<{ results: ExperienceSearchResult[] }>(`/api/experience?q=${encodeURIComponent(q)}&limit=${limit}`),
+
+  getExperienceStats: () =>
+    fetchJson<ExperienceStats>("/api/experience/stats"),
+
+  getRecentLessons: (limit = 20) =>
+    fetchJson<{ lessons: Array<{ runId: string; timestamp: string; lesson: ExperienceLesson; stats: unknown }> }>(`/api/experience/recent?limit=${limit}`),
 };

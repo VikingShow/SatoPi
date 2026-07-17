@@ -7,7 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage } from "../lib/types";
+import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult } from "../lib/types";
 import { api } from "../lib/api-client";
 import { sseClient } from "../lib/sse-client";
 
@@ -20,12 +20,17 @@ interface SwarmStore {
   messages: Map<string, ChatMessage[]>;
   activeChannelId: string | null;
   isConnected: boolean;
+  isRunning: boolean;
+  afterLoopResult: AfterLoopResult | null;
   error: string | null;
 
   init: () => Promise<void>;
   setActiveChannel: (id: string) => void;
   addActivity: (entry: ActivityEntry) => void;
   refreshState: () => Promise<void>;
+  startRun: () => Promise<void>;
+  stopRun: () => Promise<void>;
+  fetchAfterLoopResult: () => Promise<void>;
 }
 
 function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel; message: ChatMessage } | null {
@@ -67,18 +72,39 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   messages: new Map(),
   activeChannelId: "roundtable",
   isConnected: false,
+  isRunning: false,
+  afterLoopResult: null,
   error: null,
 
   init: async () => {
     try {
-      const state = await api.getState();
-      set({ swarmState: state, error: null });
+      const [state, runStatus] = await Promise.all([
+        api.getState(),
+        api.getRunStatus(),
+      ]);
+      set({ swarmState: state, isRunning: runStatus.running, error: null });
+
+      // Fetch any existing after-loop result from a previous run
+      try {
+        const afterLoop = await api.getAfterLoopSummary();
+        set({ afterLoopResult: afterLoop });
+      } catch {
+        // 404 is expected when no run has completed yet
+      }
 
       sseClient.connect();
       sseClient.on((entry) => {
         get().addActivity(entry);
         set({ isConnected: sseClient.isConnected });
+
+        // When after-loop-done phase event arrives, fetch the result
+        if (entry.type === "phase" && entry.phase === "after-loop-done") {
+          setTimeout(() => get().fetchAfterLoopResult(), 500);
+        }
       });
+
+      // Poll state + run status every 5s
+      setInterval(() => get().refreshState(), 5000);
     } catch (err) {
       set({ error: String(err) });
     }
@@ -113,10 +139,56 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
   refreshState: async () => {
     try {
-      const state = await api.getState();
-      set({ swarmState: state, error: null });
+      const [state, runStatus] = await Promise.all([
+        api.getState(),
+        api.getRunStatus(),
+      ]);
+      const wasRunning = get().isRunning;
+      const nowRunning = runStatus.running;
+      set({ swarmState: state, isRunning: nowRunning, error: null });
+
+      // When a run transitions from running → stopped, fetch after-loop result
+      if (wasRunning && !nowRunning) {
+        // Small delay to let the after-loop pipeline finish writing
+        setTimeout(() => get().fetchAfterLoopResult(), 1000);
+      }
     } catch (err) {
       set({ error: String(err) });
+    }
+  },
+
+  startRun: async () => {
+    try {
+      const result = await api.startRun();
+      if (result.success) {
+        set({ isRunning: true, afterLoopResult: null, error: null });
+      } else {
+        set({ error: result.error ?? "Failed to start" });
+      }
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  stopRun: async () => {
+    try {
+      const result = await api.stopRun();
+      if (result.success) {
+        set({ isRunning: false, error: null });
+      } else {
+        set({ error: result.error ?? "Failed to stop" });
+      }
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  fetchAfterLoopResult: async () => {
+    try {
+      const result = await api.getAfterLoopSummary();
+      set({ afterLoopResult: result });
+    } catch {
+      // 404 is expected when no after-loop result is available
     }
   },
 }));

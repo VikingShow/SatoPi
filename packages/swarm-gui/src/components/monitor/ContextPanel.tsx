@@ -1,5 +1,7 @@
 import { Crown, FileWarning } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
+import PlanViewer from "./PlanViewer";
+import AfterLoopPanel from "./AfterLoopPanel";
 
 function WorkerCard({ name, praise, criticism, conflict, status, role }: {
   name: string; praise: number; criticism: number; conflict: number;
@@ -43,6 +45,9 @@ export default function ContextPanel() {
 
   return (
     <div className="w-64 flex flex-col border-l border-background-border bg-background-card overflow-y-auto">
+      {/* Plan (plan.md) */}
+      <PlanViewer />
+
       {/* Workers */}
       <div className="px-3 py-2 border-b border-background-border">
         <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Workers ({workers.length})</span>
@@ -109,6 +114,9 @@ export default function ContextPanel() {
           </div>
         </div>
       )}
+
+      {/* After Loop results */}
+      <AfterLoopPanel />
     </div>
   );
 }

@@ -1,10 +1,14 @@
 import { useEffect } from "react";
-import { Save, Play, FileText } from "lucide-react";
+import { Save, Play, Square, FileText } from "lucide-react";
 import { useConfigStore } from "../../stores/config-store";
+import { useSwarmStore } from "../../stores/swarm-store";
 
 export default function ConfigPage() {
   const config = useConfigStore();
   const { workers, cloners, convergence, scaling, loop, yamlPreview, isDirty, isLoading } = config;
+  const isRunning = useSwarmStore((s) => s.isRunning);
+  const startRun = useSwarmStore((s) => s.startRun);
+  const stopRun = useSwarmStore((s) => s.stopRun);
 
   useEffect(() => {
     config.loadConfig();
@@ -136,9 +140,21 @@ export default function ConfigPage() {
           >
             <Save size={13} /> Save
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors cursor-pointer ml-auto">
-            <Play size={13} /> Start Run
-          </button>
+          {isRunning ? (
+            <button
+              onClick={() => stopRun()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors cursor-pointer ml-auto"
+            >
+              <Square size={13} fill="currentColor" /> Stop
+            </button>
+          ) : (
+            <button
+              onClick={() => { config.saveConfig(); startRun(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors cursor-pointer ml-auto"
+            >
+              <Play size={13} fill="currentColor" /> Start Run
+            </button>
+          )}
         </div>
       </div>
     </div>

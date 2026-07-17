@@ -1,6 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 
-const PHASES = ["Plan", "Workers", "Debate", "Review", "Verdict"];
+const PHASES = ["Plan", "Workers", "Debate", "Review", "Verdict", "After Loop"];
 
 export default function PhasePipeline() {
   const swarmState = useSwarmStore((s) => s.swarmState);
@@ -9,7 +9,16 @@ export default function PhasePipeline() {
   const maxIter = swarmState?.targetCount ?? 0;
 
   function getPhaseStatus(p: string): "done" | "active" | "pending" {
-    if (phase.includes("Passed") || phase === "Completed") return "done";
+    // After Loop completed → everything is done
+    if (phase.includes("After Loop completed")) return "done";
+    // After Loop in progress
+    if (phase.includes("After Loop") && p === "After Loop") return "active";
+    // After Loop started → all in-loop phases are done
+    if (phase.includes("After Loop") && p !== "After Loop") return "done";
+    // Normal in-loop phase tracking
+    if (phase.includes("Passed") || phase === "Completed") {
+      return p === "After Loop" ? "pending" : "done";
+    }
     if (phase.includes("Workers") && p === "Workers") return "active";
     if (phase.includes("Cloners") && (p === "Review" || p === "Debate")) return "active";
     if (phase === p) return "active";

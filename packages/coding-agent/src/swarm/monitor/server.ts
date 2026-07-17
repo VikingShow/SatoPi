@@ -17,20 +17,29 @@
 import * as path from "node:path";
 import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
 import type { StateTracker } from "../state";
+import type { ExperienceStore } from "../after-loop/experience";
 import { EventBus } from "./event-bus";
-import { apiRoutes, type ApiRouteContext } from "./api-routes";
+import { apiRoutes, type ApiRouteContext, type RunManager } from "./api-routes";
 
 export class MonitorServer implements ActivityBroadcaster {
 	#server: ReturnType<typeof Bun.serve> | null = null;
 	readonly #bus = new EventBus();
 	#ctx: ApiRouteContext;
 
-	constructor(stateTracker: StateTracker, workspaceDir: string, yamlPath: string) {
+	constructor(
+		stateTracker: StateTracker,
+		workspaceDir: string,
+		yamlPath: string,
+		runManager?: RunManager,
+		experienceStore?: ExperienceStore,
+	) {
 		this.#ctx = {
 			stateTracker,
 			swarmDir: stateTracker.swarmDir,
 			yamlPath,
 			workspaceDir,
+			runManager,
+			experienceStore,
 		};
 	}
 
