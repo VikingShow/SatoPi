@@ -75,6 +75,91 @@ eval "$(omp completions bash)"
 omp completions fish > ~/.config/fish/completions/omp.fish
 ```
 
+## SatoPi Swarm — Development Guide
+
+SatoPi extends omp with a multi-agent swarm architecture featuring before-loop planning (Socratic dialogue), Cloner Roundtable debate, and auto-scaling worker agents.
+
+### Development Setup
+
+```sh
+# Clone and install dependencies
+git clone https://github.com/VikingShow/SatoPi.git
+cd SatoPi
+bun install
+
+# Start backend (Bun runtime, port 7878)
+cd packages/coding-agent
+bun run src/swarm/monitor/standalone.ts
+
+# Start frontend dev server (Vite HMR, port 80)
+cd packages/swarm-gui
+npx vite --host 0.0.0.0 --port 80
+```
+
+### Architecture
+
+| Component | Port | Description |
+|-----------|------|-------------|
+| **Swarm Backend** | `7878` | MonitorServer — REST API + SSE events |
+| **Swarm Frontend** | `80` | Vite dev — React GUI with HMR |
+| **SSE Events** | `7878/events` | Real-time agent output streaming |
+
+### Configuration
+
+Edit `.swarm-workspace/loop.yaml` to configure the swarm:
+
+```yaml
+swarm:
+  name: demo-swarm
+  model: deepseek-v4-pro       # Default model for all agents
+  agents: {}                    # Required key (empty for loop mode)
+  max_iterations: 5
+  workers:
+    initial: 3
+    max_rounds: 5
+  cloners:
+    count: 2
+  agent_restrictions:
+    socrates:
+      allowed: [read, write_file, grep, find]
+    cloner:
+      blocked: [bash, write_file, edit]
+```
+
+### Before Loop Flow
+
+1. **Start planning** — type task in chat input, Socrates begins Socratic dialogue
+2. **Plan emerges** — Socrates writes `.omp/plan.md` when sufficient clarity
+3. **Run Debate** — Cloner Roundtable refines the plan through multi-round debate
+4. **Confirm & Start** — launches the swarm loop with workers + cloners
+5. **Cancel** — abort at any time (button always enabled)
+
+### Model Configuration
+
+The model is read from `loop.yaml` → `swarm.model`. It applies to all agents (Socrates, workers, cloners). Change it at any time:
+
+```sh
+sed -i 's/model: .*/model: YOUR-MODEL/' .swarm-workspace/loop.yaml
+# Then restart: kill & re-run standalone.ts
+```
+
+The frontend does NOT hardcode any model — it always reads from the backend's loop.yaml.
+
+### Hot Reload
+
+- **Frontend**: Vite HMR auto-reloads on code changes
+- **Backend**: Manual restart required (`kill & re-run`)
+- **loop.yaml**: Backend reads it on each `start()` — no restart needed for config changes
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `packages/coding-agent/src/swarm/` | Backend swarm logic (38 .ts files) |
+| `packages/swarm-gui/src/` | React frontend (Zustand + Tailwind) |
+| `.swarm-workspace/loop.yaml` | Swarm configuration |
+| `.omp/plan.md` | Generated plan from before-loop |
+
 ## Every tool, _benchmaxxed_.
 
 Edits that land on the first attempt. Reads that summarize files instead of dumping their content. Searches that return instantly. Pick any model — omp will get it right.
