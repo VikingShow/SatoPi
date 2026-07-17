@@ -72,8 +72,7 @@ export default function MonitorPage() {
           {(loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && (
             <button
               onClick={() => cancelBeforeLoop()}
-              disabled={isBusy}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-300 bg-neutral-700 hover:bg-neutral-600 rounded-md transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-300 bg-neutral-700 hover:bg-neutral-600 rounded-md transition-colors"
             >
               <X size={14} />
               Cancel

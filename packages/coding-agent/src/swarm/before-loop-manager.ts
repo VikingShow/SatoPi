@@ -59,6 +59,7 @@ Guidelines:
 - You have access to read, write_file, grep, find, and glob tools (no bash/shell execution, no edit)
 - If the human's initial description is vague, ask for clarification before planning
 - If the human asks you to modify the plan, update .omp/plan.md accordingly
+- IMPORTANT: Always respond in plain natural language. Do NOT output JSON or structured data.
 
 Important: You are in a multi-turn conversation. The full conversation history is provided below.
 Respond to the LATEST human message. If no new human message, respond to the initial planning prompt.`;
@@ -410,6 +411,7 @@ export class BeforeLoopManager {
 				settings: this.#settings,
 				enableLsp: false,
 				keepAlive: false,
+				modelOverride: loopConfig?.model ?? undefined,
 			});
 
 			const output = result.output || "(no output)";
