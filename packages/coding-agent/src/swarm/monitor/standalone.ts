@@ -250,6 +250,44 @@ class SwarmRunManager implements RunManager {
 		}
 	}
 
+	async pause(): Promise<{ success: boolean; error?: string }> {
+		if (!this.#loopController) {
+			return { success: false, error: "No loop controller available" };
+		}
+		try {
+			this.#loopController.pause();
+			return { success: true };
+		} catch (err) {
+			return { success: false, error: String(err) };
+		}
+	}
+
+	async resume(): Promise<{ success: boolean; error?: string }> {
+		if (!this.#loopController) {
+			return { success: false, error: "No loop controller available" };
+		}
+		try {
+			this.#loopController.resume();
+			return { success: true };
+		} catch (err) {
+			return { success: false, error: String(err) };
+		}
+	}
+
+	async updatePlanAndContinue(newPlan: string): Promise<{ success: boolean; error?: string }> {
+		if (!this.#loopController) {
+			return { success: false, error: "No loop controller available" };
+		}
+		try {
+			await this.#loopController.updatePlan(newPlan, this.#workspace);
+			// If the loop is paused, resume it so the new plan takes effect.
+			this.#loopController.resume();
+			return { success: true };
+		} catch (err) {
+			return { success: false, error: String(err) };
+		}
+	}
+
 	// ────────────────────────────────────────────────────────────────────────
 	// After Loop pipeline: extract lessons → deep reflection → save → summarize → archive
 	// ────────────────────────────────────────────────────────────────────────
