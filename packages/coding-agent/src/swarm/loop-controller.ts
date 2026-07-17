@@ -352,7 +352,7 @@ export class LoopController {
 				let lastRoundOutputsKey = "";
 				let lastConflictReport: FileRoundSummary | null = null;
 				let reviewerId: string | undefined;
-
+				let nominationPrompt: string | undefined;
 				for (let round = 0; round < hardLimit; round++) {
 					if (iterSignal?.aborted) break;
 
