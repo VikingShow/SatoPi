@@ -509,6 +509,8 @@ export interface CreateAgentSessionOptions {
 	skipPythonPreflight?: boolean;
 	/** Tool names explicitly requested (enables disabled-by-default tools) */
 	toolNames?: string[];
+	/** Tool names to block — removed from the available set (config-as-constraint). */
+	blockedTools?: string[];
 
 	/** Output schema for structured completion (subagents) */
 	outputSchema?: unknown;
@@ -1700,7 +1702,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		);
 
 		// Create built-in tools (already wrapped with meta notice formatting)
-		const builtinTools = await logger.time("createAllTools", createTools, toolSession, options.toolNames);
+		const builtinTools = await logger.time("createAllTools", createTools, toolSession, options.toolNames, options.blockedTools);
 
 		// Discover MCP tools from .mcp.json files
 		let mcpManager: MCPManager | undefined = options.mcpManager;
@@ -2560,6 +2562,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (toolRegistry.has(name) && !initialToolNames.includes(name)) {
 				initialToolNames.push(name);
 			}
+		}
+
+		// Apply blockedTools (config-as-constraint) — remove blocked tools from the active set.
+		if (options.blockedTools && options.blockedTools.length > 0) {
+			const blockedSet = new Set(normalizeToolNames(options.blockedTools));
+			initialToolNames = initialToolNames.filter(name => !blockedSet.has(name));
 		}
 
 		// When tools.discoveryMode === "all", hide non-essential built-in discoverable tools

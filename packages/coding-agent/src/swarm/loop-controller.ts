@@ -3,6 +3,7 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
@@ -10,7 +11,7 @@ import type { PipelineOptions } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
 import type { ActivityLogger } from "./activity-logger";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
-import type { LoopSwarmConfig } from "./schema";
+import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
 import { type Nomination, WorkerChannel } from "./worker-channel";
@@ -18,6 +19,37 @@ import { type Nomination, WorkerChannel } from "./worker-channel";
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * Resolve tool restrictions for a given agent role from the loop config.
+ * Checks the specific name first, then falls back to the wildcard "*".
+ * Returns undefined when no restrictions are configured.
+ */
+function resolveToolRestrictions(
+	loopConfig: LoopSwarmConfig,
+	agentName: string,
+): AgentToolRestriction | undefined {
+	const restrictions = loopConfig.agentRestrictions;
+	if (!restrictions) return undefined;
+	return restrictions[agentName] ?? restrictions["*"] ?? undefined;
+}
+
+/**
+ * Apply tool restrictions to an agent definition, mutating the tools/blockedTools fields.
+ * If a restriction has `allowed`, it sets the whitelist. If it has `blocked`, it sets the blacklist.
+ */
+function applyToolRestrictions(
+	agent: AgentDefinition,
+	restriction: AgentToolRestriction | undefined,
+): void {
+	if (!restriction) return;
+	if (restriction.allowed && restriction.allowed.length > 0) {
+		agent.tools = restriction.allowed;
+	}
+	if (restriction.blocked && restriction.blocked.length > 0) {
+		agent.blockedTools = restriction.blocked;
+	}
+}
 
 export interface LoopOptions extends PipelineOptions {
 	loopConfig: LoopSwarmConfig;
@@ -824,14 +856,18 @@ export class LoopController {
 					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
 					: WORKER_SYSTEM_PROMPT;
 
-				return runSubprocess({
-					cwd: workspace,
-					agent: {
+			return runSubprocess({
+				cwd: workspace,
+				agent: (() => {
+					const def: AgentDefinition = {
 						name: id,
 						description: `Loop Engineering Worker ${i + 1}`,
 						systemPrompt,
-						source: "project",
-					},
+						source: "project" as const,
+					};
+					applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
+					return def;
+				})(),
 					task: [
 						`You are Worker ${i + 1} of ${workerIds.length}.`,
 						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
@@ -1009,12 +1045,16 @@ export class LoopController {
 				workerIds.map((id, i) =>
 					runSubprocess({
 						cwd: workspace,
-						agent: {
-							name: id,
-							description: `Deliberation Worker ${i + 1}`,
-							systemPrompt: DELIBERATION_SYSTEM_PROMPT,
-							source: "project",
-						},
+						agent: (() => {
+							const def: AgentDefinition = {
+								name: id,
+								description: `Deliberation Worker ${i + 1}`,
+								systemPrompt: DELIBERATION_SYSTEM_PROMPT,
+								source: "project" as const,
+							};
+							applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
+							return def;
+						})(),
 						task: [
 							`## ${subLabel} Phase`,
 							sub === 0
@@ -1086,6 +1126,7 @@ export class LoopController {
 				planContent,
 				previousFindings,
 				deliberation: this.#loopConfig.enableDeliberation,
+				toolRestriction: resolveToolRestrictions(this.#loopConfig, "cloner"),
 			},
 			modelRegistry,
 			settings,
