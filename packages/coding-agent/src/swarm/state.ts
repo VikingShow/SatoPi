@@ -24,7 +24,21 @@ export type LoopPhase =
 	| "before-loop-debate"
 	| "before-loop-confirm"
 	| "running"
+	| "paused"
+	| "blocked"
 	| "after-loop";
+
+/**
+ * To-Do item — a structured task parsed from plan.md.
+ * Tracks real-time completion status during loop execution.
+ */
+export interface TodoItem {
+	id: string;
+	title: string;
+	status: "pending" | "in_progress" | "completed";
+	files?: string[];
+	completedAt?: number;
+}
 
 export interface AgentState {
 	name: string;
@@ -61,6 +75,8 @@ export interface SwarmState {
 	reviewVerdict?: string;
 	/** High-level workflow phase — drives frontend UI state machine. */
 	loopPhase?: LoopPhase;
+	/** To-Do items parsed from plan.md — tracked during loop execution. */
+	todos?: TodoItem[];
 }
 
 // ============================================================================
