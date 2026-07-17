@@ -177,13 +177,17 @@ export class StateTracker {
 		return bestId;
 	}
 
-	/** Find the worst-scoring worker. */
-	getWorstWorker(excludeIds?: string[]): string | null {
+	/**
+	 * Find the worst-scoring worker.
+	 * @param candidates — if provided, only search among these agent IDs.
+	 *   If omitted, search all registered agents.
+	 */
+	getWorstWorker(candidates?: string[]): string | null {
 		let worstId: string | null = null;
 		let worstScore = Infinity;
-		const exclude = new Set(excludeIds ?? []);
+		const candidateSet = candidates ? new Set(candidates) : null;
 		for (const [id, agent] of Object.entries(this.#state.agents)) {
-			if (exclude.has(id)) continue;
+			if (candidateSet && !candidateSet.has(id)) continue;
 			const score = agent.praiseCount - agent.criticismCount - agent.conflictCount;
 			if (score < worstScore) {
 				worstScore = score;
@@ -191,6 +195,40 @@ export class StateTracker {
 			}
 		}
 		return worstId;
+	}
+
+	/**
+	 * Remove an agent from the state tracker (for loop mode scale-down).
+	 * Prevents ID reuse from inheriting stale quality counters.
+	 */
+	async unregisterAgent(name: string): Promise<void> {
+		delete this.#state.agents[name];
+		await this.#persist();
+	}
+
+	/**
+	 * Reset all agents to a clean state for retry.
+	 * Clears status, iteration, timestamps, and quality counters so a
+	 * fresh loop run starts from a clean slate.
+	 */
+	async resetAgentStatuses(): Promise<void> {
+		for (const agent of Object.values(this.#state.agents)) {
+			agent.status = "pending";
+			agent.iteration = 0;
+			agent.wave = 0;
+			agent.startedAt = undefined;
+			agent.completedAt = undefined;
+			agent.error = undefined;
+			agent.praiseCount = 0;
+			agent.criticismCount = 0;
+			agent.conflictCount = 0;
+			agent.mentorId = undefined;
+			agent.role = undefined;
+		}
+		this.#state.status = "running";
+		this.#state.iteration = 0;
+		this.#state.completedAt = undefined;
+		await this.#persist();
 	}
 
 	async updatePipeline(update: Partial<SwarmState>): Promise<void> {

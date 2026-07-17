@@ -23,6 +23,7 @@ import {
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
+import { RegionLockManager } from "@oh-my-pi/pi-coding-agent/swarm/region-lock";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import {
 	parseSwarmYaml,
@@ -222,7 +223,10 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 6. Initialize state tracker
 	const stateTracker = new StateTracker(workspace, def.name);
-	await stateTracker.init([...def.agents.keys()], def.targetCount, def.mode);
+	const initTargetCount = def.mode === "loop" && def.loopConfig
+		? def.loopConfig.maxIterations
+		: def.targetCount;
+	await stateTracker.init([...def.agents.keys()], initTargetCount, def.mode);
 
 	// 7. Log start
 	const agentList = [...def.agents.keys()].join(", ");
@@ -235,10 +239,18 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		workspace,
 	});
 
-	ctx.ui.notify(
-		`Starting swarm '${def.name}': ${def.agents.size} agents, ${waves.length} waves, ${def.targetCount} iteration(s)`,
-		"info",
-	);
+	// Loop mode shows workers/cloners/iterations; other modes show agents/waves/targetCount
+	if (def.mode === "loop" && def.loopConfig) {
+		ctx.ui.notify(
+			`Starting swarm '${def.name}': ${def.loopConfig.workers.initial} workers, ${def.loopConfig.cloners.count} cloners, up to ${def.loopConfig.maxIterations} iterations`,
+			"info",
+		);
+	} else {
+		ctx.ui.notify(
+			`Starting swarm '${def.name}': ${def.agents.size} agents, ${waves.length} waves, ${def.targetCount} iteration(s)`,
+			"info",
+		);
+	}
 
 	// 8. Set up progress widget
 	const widgetKey = `swarm-${def.name}`;
@@ -279,6 +291,9 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		}
 		// Run cloner plan debate on the draft plan before execution
 		if (planContent && def.loopConfig.planDebate.enabled) {
+			// Update widget so the user knows the system is debating, not frozen
+			await stateTracker.updatePipeline({ roundtablePhase: "Plan debate in progress" });
+			updateWidget();
 			try {
 				const debateResult = await runPlanDebate(
 					planContent,
@@ -372,6 +387,9 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
+					// Reset agent states and locks for a clean retry
+					await stateTracker.resetAgentStatuses();
+					RegionLockManager.reset();
 					continue;
 				}
 
@@ -451,6 +469,9 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
+					// Reset agent states and locks for a clean retry
+					await stateTracker.resetAgentStatuses();
+					RegionLockManager.reset();
 					continue;
 				default:
 					break;
@@ -458,9 +479,20 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			break;
 		}
 
-		const loopStatus =
-			loopResult.status === "completed" ? "completed" : loopResult.status === "aborted" ? "aborted" : "failed";
-		const result = {
+	const loopStatus =
+		loopResult.status === "completed" ? "completed" : loopResult.status === "aborted" ? "aborted" : "failed";
+	// Clean up global lock state after loop exits (normal, crash, or escalation)
+	RegionLockManager.reset();
+
+	// Finalize pipeline state — set status + completedAt so the widget and
+	// summary show the correct final state and elapsed time (mirrors what
+	// PipelineController does at the end of its run() method).
+	await stateTracker.updatePipeline({
+		status: loopStatus as "completed" | "aborted" | "failed",
+		completedAt: Date.now(),
+	});
+	updateWidget();
+	const result = {
 			status: loopStatus,
 			iterations: loopResult.iterations,
 			errors: loopResult.errors,
@@ -661,7 +693,10 @@ function buildSummaryMessage(
 	lines.push("");
 	lines.push(`- **Status**: ${result.status}`);
 	lines.push(`- **Mode**: ${def.mode}`);
-	lines.push(`- **Iterations**: ${result.iterations}/${def.targetCount}`);
+	const displayTargetCount = def.mode === "loop" && def.loopConfig
+		? def.loopConfig.maxIterations
+		: def.targetCount;
+	lines.push(`- **Iterations**: ${result.iterations}/${displayTargetCount}`);
 	lines.push(`- **Workspace**: ${workspace}`);
 	lines.push(`- **State dir**: ${stateTracker.swarmDir}`);
 	lines.push("");

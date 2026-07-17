@@ -88,7 +88,7 @@ export class ClonerCouncil {
 			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 		].join("\n");
 
-		const results = await Promise.all(
+		const settled = await Promise.allSettled(
 			clonerIds.map((id, i) =>
 				runSubprocess({
 					cwd: workspace,
@@ -107,6 +107,24 @@ export class ClonerCouncil {
 				}),
 			),
 		);
+		const results: SingleResult[] = settled.map((s, i) => {
+			if (s.status === "fulfilled") return s.value;
+			const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+			return {
+				index: i,
+				id: `cloner-review-${clonerIds[i]}-${iteration}`,
+				agent: clonerIds[i],
+				agentSource: "project" as const,
+				task: "",
+				exitCode: 1,
+				output: `[CRASHED] ${errMsg}`,
+				stderr: "",
+				truncated: false,
+				durationMs: 0,
+				tokens: 0,
+				requests: 0,
+			};
+		});
 
 		const firstVerdict = tallyVerdicts(results);
 
@@ -130,7 +148,7 @@ export class ClonerCouncil {
 				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 			].join("\n");
 
-			const deliberationResults = await Promise.all(
+			const deliberationSettled = await Promise.allSettled(
 				clonerIds.map((id, i) =>
 					runSubprocess({
 						cwd: workspace,
@@ -149,6 +167,24 @@ export class ClonerCouncil {
 					}),
 				),
 			);
+			const deliberationResults: SingleResult[] = deliberationSettled.map((s, i) => {
+				if (s.status === "fulfilled") return s.value;
+				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+				return {
+					index: i,
+					id: `cloner-deliberation-${clonerIds[i]}-${iteration}`,
+					agent: clonerIds[i],
+					agentSource: "project" as const,
+					task: "",
+					exitCode: 1,
+					output: `[CRASHED] ${errMsg}`,
+					stderr: "",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+				};
+			});
 
 			return tallyVerdicts(deliberationResults);
 		}
@@ -188,21 +224,60 @@ interface ParsedVerdict {
 	/** Worker IDs the cloner criticized. */
 	criticizedWorkers?: string[];
 }
+/**
+ * Extract the first balanced JSON object containing a "verdict" key.
+ * Uses bracket-depth tracking to handle nested objects and braces
+ * inside string values — more robust than a flat regex.
+ */
+function extractVerdictJson(text: string): Record<string, unknown> | null {
+	let pos = 0;
+	while (true) {
+		const start = text.indexOf("{", pos);
+		if (start === -1) return null;
+		let depth = 0;
+		let inString = false;
+		let escape = false;
+		for (let i = start; i < text.length; i++) {
+			const ch = text[i];
+			if (escape) { escape = false; continue; }
+			if (ch === "\\") { escape = true; continue; }
+			if (ch === '"') { inString = !inString; continue; }
+			if (inString) continue;
+			if (ch === "{") depth++;
+			else if (ch === "}") {
+				depth--;
+				if (depth === 0) {
+					const candidate = text.slice(start, i + 1);
+					try {
+						const parsed = JSON.parse(candidate);
+						if (parsed && typeof parsed === "object" && "verdict" in parsed) {
+							return parsed as Record<string, unknown>;
+						}
+					} catch {
+						// Not valid JSON or no verdict key — keep searching
+					}
+					break; // move to next `{`
+				}
+			}
+		}
+		pos = start + 1;
+	}
+}
+
 export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict | null {
-	// Try JSON first
-	const jsonMatch = text.match(/\{[^}]*"verdict"[^}]*\}/);
-	if (jsonMatch) {
+	// Try JSON first — use balanced bracket extraction for robustness
+	const parsed = extractVerdictJson(text) as {
+		verdict: string;
+		confidence: number;
+		findings: string | string[];
+		worker_count?: number;
+		worker_count_delta?: number;
+		role_suggestions?: Record<string, string>;
+		praised_workers?: string[];
+		criticized_workers?: string[];
+	} | null;
+	if (parsed) {
 		try {
-			const parsed = JSON.parse(jsonMatch[0]) as {
-				verdict: string;
-				confidence: number;
-				findings: string | string[];
-				worker_count?: number;
-				worker_count_delta?: number;
-				role_suggestions?: Record<string, string>;
-				praised_workers?: string[];
-				criticized_workers?: string[];
-			};
 			const findingsArr = Array.isArray(parsed.findings) ? parsed.findings : [parsed.findings ?? ""];
 			// worker_count_delta takes precedence; fall back to legacy worker_count
 			const delta =
@@ -258,6 +333,8 @@ export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 	const criticizedWorkers = new Set<string>();
 
 	for (const result of results) {
+		// Skip crashed cloners — they should not count as "fail" votes
+		if (result.output.startsWith("[CRASHED]")) continue;
 		totalCount++;
 		const verdict = extractVerdict(result.agent, result.output);
 		if (verdict) {

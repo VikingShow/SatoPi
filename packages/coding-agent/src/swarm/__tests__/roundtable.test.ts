@@ -74,6 +74,48 @@ describe("extractVerdict", () => {
 		const result = extractVerdict("cloner-8", text);
 		expect(result).toBeNull(); // heuristic: PASS present = not a FAIL match
 	});
+
+	// ----------------------------------------------------------------
+	// Robustness: nested JSON and braces inside string values
+	// ----------------------------------------------------------------
+
+	it("parses JSON with nested objects", () => {
+		const text = `{"verdict":"FAIL","confidence":0.3,"findings":["error"],"role_suggestions":{"worker-1":"reviewer"}}`;
+		const result = extractVerdict("cloner-nested", text);
+		expect(result).not.toBeNull();
+		expect(result!.passed).toBe(false);
+		expect(result!.roleSuggestions).toEqual({ "worker-1": "reviewer" });
+	});
+
+	it("parses JSON with brace characters inside string values", () => {
+		const text = `Some analysis.\n{"verdict":"PASS","confidence":0.9,"findings":["function() { return true; }"]}\nDone.`;
+		const result = extractVerdict("cloner-brace", text);
+		expect(result).not.toBeNull();
+		expect(result!.passed).toBe(true);
+		expect(result!.findings).toEqual(["function() { return true; }"]);
+	});
+
+	it("parses JSON with escaped quotes inside strings", () => {
+		const text = `{"verdict":"FAIL","confidence":0.5,"findings":["expected \\"hello\\" but got \\"world\\""]}`;
+		const result = extractVerdict("cloner-escape", text);
+		expect(result).not.toBeNull();
+		expect(result!.passed).toBe(false);
+		expect(result!.findings).toEqual(['expected "hello" but got "world"']);
+	});
+
+	it("skips non-verdict JSON objects and finds the verdict one", () => {
+		const text = `Here is some info: {"meta": "data"}\n{"verdict":"PASS","confidence":0.8,"findings":["ok"]}`;
+		const result = extractVerdict("cloner-multi-json", text);
+		expect(result).not.toBeNull();
+		expect(result!.passed).toBe(true);
+	});
+
+	it("handles JSON with worker_count_delta field", () => {
+		const text = `{"verdict":"FAIL","confidence":0.4,"findings":["slow"],"worker_count_delta":-1}`;
+		const result = extractVerdict("cloner-delta", text);
+		expect(result).not.toBeNull();
+		expect(result!.workerCountDelta).toBe(-1);
+	});
 });
 
 // ============================================================================
@@ -158,5 +200,46 @@ describe("tallyVerdicts", () => {
 		expect(verdict.findings[0]).toContain("[cloner-1]");
 		expect(verdict.findings[1]).toContain("[cloner-2]");
 		expect(verdict.findings[2]).toContain("[cloner-2]");
+	});
+
+	// ----------------------------------------------------------------
+	// Robustness: CRASHED cloners should not count as votes
+	// ----------------------------------------------------------------
+
+	it("skips CRASHED cloners in vote tally", () => {
+		const results = [
+			makeResult("cloner-1", `{"verdict":"PASS","confidence":0.9,"findings":["good"]}`),
+			makeResult("cloner-2", `[CRASHED] subprocess exited with code 1`),
+			makeResult("cloner-3", `{"verdict":"PASS","confidence":0.8,"findings":["ok"]}`),
+		];
+		const verdict = tallyVerdicts(results);
+		// Only 2 valid cloners, both PASS → 2/2 = PASS
+		expect(verdict.totalCount).toBe(2);
+		expect(verdict.approvalCount).toBe(2);
+		expect(verdict.passed).toBe(true);
+	});
+
+	it("all CRASHED → FAIL with zero valid votes", () => {
+		const results = [
+			makeResult("cloner-1", `[CRASHED] error 1`),
+			makeResult("cloner-2", `[CRASHED] error 2`),
+		];
+		const verdict = tallyVerdicts(results);
+		expect(verdict.totalCount).toBe(0);
+		expect(verdict.approvalCount).toBe(0);
+		expect(verdict.passed).toBe(false);
+	});
+
+	it("1 PASS + 1 CRASHED + 1 FAIL → PASS (majority of valid votes)", () => {
+		const results = [
+			makeResult("cloner-1", `{"verdict":"PASS","confidence":0.9,"findings":["good"]}`),
+			makeResult("cloner-2", `[CRASHED] timeout`),
+			makeResult("cloner-3", `{"verdict":"FAIL","confidence":0.2,"findings":["bad"]}`),
+		];
+		const verdict = tallyVerdicts(results);
+		// 2 valid votes: 1 PASS + 1 FAIL → ceil(2/2)=1, approvalCount=1 ≥ 1 → PASS
+		expect(verdict.totalCount).toBe(2);
+		expect(verdict.approvalCount).toBe(1);
+		expect(verdict.passed).toBe(true);
 	});
 });

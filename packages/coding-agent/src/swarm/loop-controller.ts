@@ -288,6 +288,16 @@ export class LoopController {
 		for (let i = 0; i < initialWorkerCount; i++) workerIds.push(`worker-${i + 1}`);
 		clonerIds = Array.from({ length: clonerCount }, (_, i) => `cloner-${i + 1}`);
 
+		// Register initial workers and cloners to StateTracker so that
+		// subsequent updateAgent / incrementPraise / etc. calls don't
+		// silently no-op (state.ts:127 `if (!agent) return`).
+		for (const id of workerIds) {
+			await this.#stateTracker.registerAgent(id);
+		}
+		for (const id of clonerIds) {
+			await this.#stateTracker.registerAgent(id);
+		}
+
 		this.#channel = new WorkerChannel(this.#ircBus, {
 			workers: workerIds,
 			cloners: clonerIds,
@@ -424,10 +434,12 @@ export class LoopController {
 							debateConfig.maxRounds,
 						);
 					}
-					// Build prior outputs for next round
-					priorOutputs = roundResults
-						.map(r => `[${r.agent}]\n${extractRoundSummary(r.output)}`)
-						.join("\n\n---\n\n");
+				// Build prior outputs for next round — filter out crashed workers
+				// so error messages don't pollute the next round's context.
+				priorOutputs = roundResults
+					.filter(r => !r.output.startsWith("[CRASHED]"))
+					.map(r => `[${r.agent}]\n${extractRoundSummary(r.output)}`)
+					.join("\n\n---\n\n");
 
 					// Convergence detection: Round 1+ uses Reviewer's RoundSummary JSON;
 					// Round 0 falls back to Jaccard text similarity.
@@ -488,6 +500,16 @@ export class LoopController {
 							role: id === reviewerId ? "reviewer" : undefined,
 						});
 					}
+				}
+
+				// All worker rounds complete — mark workers as completed in
+				// StateTracker so the widget reflects their finished state.
+				for (const id of workerIds) {
+					await this.#stateTracker.updateAgent(id, {
+						status: "completed",
+						iteration: iter,
+						completedAt: Date.now(),
+					});
 				}
 
 				// File conflict detection: collect raw worker outputs for attribution
@@ -719,6 +741,7 @@ export class LoopController {
 						const idx = workerIds.indexOf(removed);
 						if (idx >= 0) workerIds.splice(idx, 1);
 						this.#channel.removeWorker(removed);
+						await this.#stateTracker.unregisterAgent(removed);
 						currentWorkerCount--;
 					}
 				}
@@ -818,7 +841,15 @@ export class LoopController {
 					signal,
 					beforeToolCall: workerHooks?.beforeToolCall,
 					afterToolCall: workerHooks?.afterToolCall,
-				});
+				}).then(
+					result => result,
+					(err) => {
+						// Release locks immediately on crash so other still-running
+						// workers are not blocked on stale file locks.
+						if (lockMgr) lockMgr.releaseAll(id);
+						throw err;
+					},
+				);
 			}),
 		);
 

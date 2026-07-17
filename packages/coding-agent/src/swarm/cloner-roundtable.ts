@@ -116,7 +116,7 @@ export class ClonerRoundtable {
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
 			// Spawn cloners in parallel for this round
-			const results = await Promise.all(
+			const settled = await Promise.allSettled(
 				Array.from({ length: clonerCount }, (_, i) =>
 					runSubprocess({
 						cwd: workspace,
@@ -135,6 +135,24 @@ export class ClonerRoundtable {
 					}),
 				),
 			);
+			const results: SingleResult[] = settled.map((s, i) => {
+				if (s.status === "fulfilled") return s.value;
+				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+				return {
+					index: i,
+					id: `plan-debate-r${round}-c${i + 1}`,
+					agent: `debate-cloner-${i + 1}`,
+					agentSource: "project" as const,
+					task: "",
+					exitCode: 1,
+					output: `[CRASHED] ${errMsg}`,
+					stderr: "",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+				};
+			});
 
 			const outputs = results.map(r => this.#extractPlanContent(r));
 			const similarity =
@@ -258,6 +276,8 @@ export class ClonerRoundtable {
 	#extractPlanContent(result: SingleResult): string {
 		// The cloner should output markdown directly — strip any JSON/chat framing
 		const output = result.output.trim();
+		// Skip crashed cloners — return empty so they don't pollute the debate
+		if (output.startsWith("[CRASHED]")) return "";
 		// Try to strip a leading JSON verdict line
 		const jsonLineEnd = output.indexOf("\n");
 		if (jsonLineEnd > 0 && output.startsWith("{")) {
@@ -293,11 +313,12 @@ export class ClonerRoundtable {
 	 * preferring longer output as a signal of thorough refinement.
 	 */
 	#synthesizeFinalPlan(outputs: string[]): string {
-		if (outputs.length === 0) return "";
+		const valid = outputs.filter(o => o.length > 0);
+		if (valid.length === 0) return "";
 		// Pick the longest output as the most thorough
-		let best = outputs[0];
-		for (let i = 1; i < outputs.length; i++) {
-			if (outputs[i].length > best.length) best = outputs[i];
+		let best = valid[0];
+		for (let i = 1; i < valid.length; i++) {
+			if (valid[i].length > best.length) best = valid[i];
 		}
 		return best;
 	}
