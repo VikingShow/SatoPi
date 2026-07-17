@@ -938,7 +938,7 @@ export class LoopController {
 		if (maxSubRounds <= 0 || roundResults.length === 0) return roundResults;
 
 		const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
-		const deliberationHooks: AgentLoopConfig = {
+		const deliberationHooks: { beforeToolCall: AgentLoopConfig["beforeToolCall"] } = {
 			beforeToolCall: ctx => {
 				if (EDIT_TOOLS.has(ctx.toolCall.name)) {
 					return {
