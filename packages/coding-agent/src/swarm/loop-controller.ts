@@ -1,3 +1,5 @@
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
 import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
@@ -274,12 +276,80 @@ export class LoopController {
 	#fileTracker: FileTracker = new FileTracker();
 	readonly #activityLogger?: ActivityLogger;
 
+	// ── Pause / Resume / Replan support ────────────────────────────────────
+	/** Set by pause(); when non-null the loop is paused and awaiting resume. */
+	#pauseSignal: AbortController | null = null;
+	/** Resolver for the pause promise — called by resume() to unblock the loop. */
+	#pauseResolver: (() => void) | null = null;
+	/** Mutable plan content — updated by updatePlan() for subsequent iterations. */
+	#planContent: string | undefined;
+
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
 		this.#activityLogger = options.activityLogger;
+	}
+
+	// ── Pause / Resume / Replan API ────────────────────────────────────────
+
+	/**
+	 * Pause the loop. The next iteration boundary will block until resume() is called.
+	 * If the loop is already paused or not running, this is a no-op.
+	 */
+	pause(): void {
+		if (this.#pauseSignal) return; // already paused
+		this.#pauseSignal = new AbortController();
+		void this.#stateTracker.updatePipeline({ loopPhase: "paused" });
+		this.#activityLogger?.logPhase("paused");
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop paused. Awaiting plan update or resume.");
+		logger.info("LoopController paused");
+	}
+
+	/**
+	 * Resume the loop after a pause. Resolves the pause promise so the
+	 * blocked iteration can proceed.
+	 */
+	resume(): void {
+		if (!this.#pauseSignal) return; // not paused
+		void this.#stateTracker.updatePipeline({ loopPhase: "running" });
+		this.#activityLogger?.logPhase("running");
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop resumed.");
+		const resolver = this.#pauseResolver;
+		this.#pauseSignal = null;
+		this.#pauseResolver = null;
+		resolver?.();
+		logger.info("LoopController resumed");
+	}
+
+	/**
+	 * Update the plan content. Writes the new plan to .omp/plan.md and
+	 * updates the in-memory planContent so subsequent iterations use it.
+	 * Should be called while the loop is paused.
+	 */
+	async updatePlan(newPlanContent: string, workspace: string): Promise<void> {
+		this.#planContent = newPlanContent;
+		const planPath = path.join(workspace, ".omp", "plan.md");
+		try {
+			await fs.mkdir(path.dirname(planPath), { recursive: true });
+			await fs.writeFile(planPath, newPlanContent, "utf-8");
+		} catch (err) {
+			logger.warn("Failed to write updated plan.md", { error: String(err) });
+		}
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Plan updated. New plan will be used in the next iteration.");
+		logger.info("LoopController plan updated", { length: newPlanContent.length });
+	}
+
+	/**
+	 * If the loop is currently paused, block until resume() is called.
+	 * Called at the start of each iteration boundary.
+	 */
+	async #checkPause(): Promise<void> {
+		if (!this.#pauseSignal) return;
+		await new Promise<void>((resolve) => {
+			this.#pauseResolver = resolve;
+		});
 	}
 
 	async runLoop(options: PipelineOptions & { planContent?: string }): Promise<LoopResult> {
@@ -299,13 +369,16 @@ export class LoopController {
 
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
-		const { workspace, modelRegistry, settings, signal, planContent } = options;
+		const { workspace, modelRegistry, settings, signal } = options;
+		// Store plan content in the mutable instance field so updatePlan() can
+		// replace it for subsequent iterations.
+		this.#planContent = options.planContent;
 
 		// TaskComplexityAnalyzer: override worker count, maxRounds, and convergence
 		// based on plan.md content when workers.auto is enabled.
-		if (this.#loopConfig.workers.auto && planContent) {
+		if (this.#loopConfig.workers.auto && this.#planContent) {
 			const analyzer = new TaskComplexityAnalyzer();
-			const rec = await analyzer.analyze(planContent, this.#loopConfig);
+			const rec = await analyzer.analyze(this.#planContent, this.#loopConfig);
 			currentWorkerCount = rec.workers;
 			currentMaxRounds = rec.maxRounds;
 			currentConvergenceNeeded = rec.roundsConvergenceThreshold;
@@ -347,6 +420,10 @@ export class LoopController {
 		);
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
+			// Pause/resume gate: if pause() was called, block here until resume().
+			// This allows the operator to update the plan between iterations.
+			await this.#checkPause();
+
 			if (signal?.aborted) {
 				return {
 					status: "aborted",
@@ -426,11 +503,11 @@ export class LoopController {
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
 
-					let roundResults = await this.#spawnWorkers(
-						workerIds,
-						workspace,
-						planContent,
-						clonerFeedbackHistory,
+				let roundResults = await this.#spawnWorkers(
+					workerIds,
+					workspace,
+					this.#planContent,
+					clonerFeedbackHistory,
 						modelRegistry,
 						settings,
 						iterSignal,
@@ -460,12 +537,12 @@ export class LoopController {
 					const debateConfig = this.#loopConfig.debate ?? { enabled: true, maxRounds: 2 };
 					if (debateConfig.enabled && round > 0 && debateConfig.maxRounds > 0) {
 						await this.#stateTracker.updatePipeline({ roundtablePhase: "Debate: challenging" });
-						roundResults = await this.#runDeliberationPhase(
-							roundResults,
-							workerIds,
-							workspace,
-							planContent,
-							modelRegistry,
+					roundResults = await this.#runDeliberationPhase(
+						roundResults,
+						workerIds,
+						workspace,
+						this.#planContent,
+						modelRegistry,
 							settings,
 							iterSignal,
 							errors,
@@ -614,13 +691,13 @@ export class LoopController {
 				});
 
 				// Spawn cloners to review (parallel)
-				verdict = await this.#runClonerReview(
-					clonerIds,
-					iter,
-					lastWorkerOutput,
-					workspace,
-					planContent,
-					clonerFeedbackHistory,
+			verdict = await this.#runClonerReview(
+				clonerIds,
+				iter,
+				lastWorkerOutput,
+				workspace,
+				this.#planContent,
+				clonerFeedbackHistory,
 					modelRegistry,
 					settings,
 					iterSignal,

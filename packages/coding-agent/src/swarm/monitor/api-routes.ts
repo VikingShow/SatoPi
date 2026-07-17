@@ -49,6 +49,9 @@ export interface AfterLoopResult {
 export interface RunManager {
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
+	pause(): Promise<{ success: boolean; error?: string }>;
+	resume(): Promise<{ success: boolean; error?: string }>;
+	updatePlanAndContinue(content: string): Promise<{ success: boolean; error?: string }>;
 	readonly isRunning: boolean;
 	getLastAfterLoopResult?: () => AfterLoopResult | null;
 }
@@ -239,6 +242,34 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: "Run manager not available" }, 503);
 		}
 		const result = await ctx.runManager.stop();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/run/pause": async (_req, ctx) => {
+		if (!ctx.runManager) {
+			return json({ error: "Run manager not available" }, 503);
+		}
+		const result = await ctx.runManager.pause();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/run/resume": async (_req, ctx) => {
+		if (!ctx.runManager) {
+			return json({ error: "Run manager not available" }, 503);
+		}
+		const result = await ctx.runManager.resume();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/plan/update-and-continue": async (req, ctx) => {
+		if (!ctx.runManager) {
+			return json({ error: "Run manager not available" }, 503);
+		}
+		const body = (await req.json().catch(() => ({}))) as { content?: string };
+		if (!body.content || body.content.trim().length === 0) {
+			return json({ error: "Plan content is required" }, 400);
+		}
+		const result = await ctx.runManager.updatePlanAndContinue(body.content);
 		return json(result, result.success ? 200 : 500);
 	},
 
