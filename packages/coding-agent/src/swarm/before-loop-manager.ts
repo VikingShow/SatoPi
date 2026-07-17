@@ -360,6 +360,7 @@ export class BeforeLoopManager {
 		this.#conversation = [];
 		this.#taskDescription = "";
 		this.#planReady = false;
+		this.#busy = false;
 		this.#phase = "idle";
 		await this.#setPhase("idle");
 		this.#activityLogger.logPhase("before-loop-cancelled");
