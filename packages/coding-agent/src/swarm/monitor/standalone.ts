@@ -29,6 +29,8 @@ import {
 } from "../after-loop";
 import type { ExtractedLesson } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
+import { VerificationHook } from "../verification-hook";
+import type { LoopSwarmConfig } from "../schema";
 
 // ============================================================================
 // Shared types — used by both backend API and frontend
@@ -115,6 +117,7 @@ class SwarmRunManager implements RunManager {
 	#experienceStore: ExperienceStore;
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
+	#loopConfig: LoopSwarmConfig | null = null;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -151,9 +154,12 @@ class SwarmRunManager implements RunManager {
 				return { success: false, error: errors.join("; ") };
 			}
 
-			if (!def.loopConfig) {
-				return { success: false, error: "Swarm is not in loop mode" };
-			}
+		if (!def.loopConfig) {
+			return { success: false, error: "Swarm is not in loop mode" };
+		}
+
+		// Cache loop config for verification hook in After Loop pipeline
+		this.#loopConfig = def.loopConfig;
 
 			// ── Update loopPhase → running ──
 			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
@@ -300,6 +306,41 @@ class SwarmRunManager implements RunManager {
 	async #runAfterLoopPipeline(result: LoopResult): Promise<void> {
 		const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 		console.log(`[RunManager] After Loop pipeline starting (runId=${runId})...`);
+
+		// ── Verification hook (before After Loop) ──
+		// If verification is configured and the LoopResult doesn't already carry
+		// verification results (e.g. loop ended via abort/failure), run it here.
+		// On blocking failure, return to running instead of entering After Loop.
+		if (this.#loopConfig?.verification?.commands?.length) {
+			let vResult = result.verificationResults;
+			if (!vResult) {
+				const hook = new VerificationHook(this.#workspace, this.#activityLogger);
+				vResult = await hook.run(this.#loopConfig.verification.commands);
+				result.verificationResults = vResult;
+			}
+			if (!vResult.passed && this.#loopConfig.verification.blocking) {
+				console.log("[RunManager] Verification failed (blocking) — returning to running");
+				this.#activityLogger.logBroadcast(
+					"system",
+					"[verification] Blocking failure — returning to running for another iteration",
+				);
+				// Restart the loop instead of entering After Loop
+				await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running", roundtablePhase: "Verification failed — re-running" });
+				this.#activityLogger.logPhase("loop-start");
+				try {
+					const restartResult = await this.#loopController!.runLoop({
+						workspace: this.#workspace,
+						modelRegistry: this.#modelRegistry,
+						settings: this.#settings,
+						signal: this.#abortController?.signal,
+					});
+					await this.#runAfterLoopPipeline(restartResult);
+				} catch (err) {
+					console.error("[RunManager] Verification restart loop failed:", err);
+				}
+				return;
+			}
+		}
 
 		try {
 			// 1. Update pipeline state → after-loop phase

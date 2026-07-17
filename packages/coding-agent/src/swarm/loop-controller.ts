@@ -17,6 +17,7 @@ import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
 import { type Nomination, WorkerChannel } from "./worker-channel";
+import { type VerificationResult, VerificationHook } from "./verification-hook";
 
 // ============================================================================
 // Types
@@ -93,6 +94,8 @@ export interface LoopResult {
 		lastFindings: string[];
 		approvalRatio: number;
 	};
+	/** Results of post-loop verification commands (if configured). */
+	verificationResults?: VerificationResult;
 }
 
 // ============================================================================
@@ -275,6 +278,7 @@ export class LoopController {
 	#channel?: WorkerChannel;
 	#fileTracker: FileTracker = new FileTracker();
 	readonly #activityLogger?: ActivityLogger;
+	#verificationHook: VerificationHook | null = null;
 
 	// ── Pause / Resume / Replan support ────────────────────────────────────
 	/** Set by pause(); when non-null the loop is paused and awaiting resume. */
@@ -290,6 +294,10 @@ export class LoopController {
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
 		this.#activityLogger = options.activityLogger;
+		// Instantiate verification hook when verification commands are configured.
+		if (this.#loopConfig.verification?.commands?.length) {
+			this.#verificationHook = new VerificationHook(options.workspace, this.#activityLogger);
+		}
 	}
 
 	// ── Pause / Resume / Replan API ────────────────────────────────────────
@@ -662,13 +670,29 @@ export class LoopController {
 							workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 						),
 					});
+				// ── Verification hook ──
+				if (this.#verificationHook && this.#loopConfig.verification) {
+					const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+					if (!vResult.passed && this.#loopConfig.verification.blocking) {
+						// Blocking failure → continue to next iteration instead of completing
+						errors.push(`Verification failed (blocking) at iteration ${iter + 1}`);
+						continue;
+					}
 					return {
 						status: "completed",
 						iterations: iter + 1,
 						reviewVerdicts: verdicts,
 						errors,
+						verificationResults: vResult,
 					};
 				}
+				return {
+					status: "completed",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors,
+				};
+			}
 
 				// Workers did not converge — escalate to latent cloner review
 				await this.#channel.broadcast(
@@ -741,14 +765,30 @@ export class LoopController {
 						...clonerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 					]),
 				});
-				if (verdict.passed) {
+			if (verdict.passed) {
+				// ── Verification hook ──
+				if (this.#verificationHook && this.#loopConfig.verification) {
+					const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+					if (!vResult.passed && this.#loopConfig.verification.blocking) {
+						// Blocking failure → continue to next iteration instead of completing
+						errors.push(`Verification failed (blocking) at iteration ${iter + 1}`);
+						continue;
+					}
 					return {
 						status: "completed",
 						iterations: iter + 1,
 						reviewVerdicts: verdicts,
 						errors,
+						verificationResults: vResult,
 					};
 				}
+				return {
+					status: "completed",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors,
+				};
+			}
 			} catch (err) {
 				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
 				const message = isTimeout
@@ -890,12 +930,29 @@ export class LoopController {
 			}
 		}
 
+	// ── Verification hook (bottom fallthrough: all iterations exhausted) ──
+	// At this point the loop ran all iterations without an explicit completion.
+	// Run verification if configured; a blocking failure can't continue (no more
+	// iterations), so we just record the result and return "completed" or "failed".
+	if (this.#verificationHook && this.#loopConfig.verification) {
+		const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+		const status: LoopResult["status"] = (!vResult.passed && this.#loopConfig.verification.blocking)
+			? "failed"
+			: "completed";
 		return {
-			status: "completed",
+			status,
 			iterations: this.#loopConfig.maxIterations,
 			reviewVerdicts: verdicts,
 			errors,
+			verificationResults: vResult,
 		};
+	}
+	return {
+		status: "completed",
+		iterations: this.#loopConfig.maxIterations,
+		reviewVerdicts: verdicts,
+		errors,
+	};
 	}
 
 	// -------------------------------------------------------------------
