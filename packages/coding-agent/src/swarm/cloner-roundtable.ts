@@ -13,8 +13,10 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentToolRestriction } from "./schema";
 
 // ============================================================================
 // Types
@@ -39,6 +41,8 @@ export interface ClonerRoundtableConfig {
 	 * convergence. Default: 2.
 	 */
 	convergenceThreshold: number;
+	/** Tool restriction to apply to cloner agents (config-as-constraint). */
+	toolRestriction?: AgentToolRestriction;
 }
 
 export interface ClonerRoundtableResult {
@@ -78,7 +82,8 @@ function textSimilarity(a: string, b: string): number {
 // ============================================================================
 
 export class ClonerRoundtable {
-	readonly #config: Required<ClonerRoundtableConfig>;
+	readonly #config: Required<Omit<ClonerRoundtableConfig, "toolRestriction">>;
+	readonly #toolRestriction?: AgentToolRestriction;
 
 	constructor(config: ClonerRoundtableConfig) {
 		this.#config = {
@@ -86,6 +91,7 @@ export class ClonerRoundtable {
 			maxRounds: config.maxRounds,
 			convergenceThreshold: config.convergenceThreshold,
 		};
+		this.#toolRestriction = config.toolRestriction;
 	}
 
 	/**
@@ -115,26 +121,37 @@ export class ClonerRoundtable {
 				? this.#buildRound1Prompt(draftPlan)
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
-			// Spawn cloners in parallel for this round
-			const settled = await Promise.allSettled(
-				Array.from({ length: clonerCount }, (_, i) =>
-					runSubprocess({
-						cwd: workspace,
-						agent: {
+		// Spawn cloners in parallel for this round
+		const settled = await Promise.allSettled(
+			Array.from({ length: clonerCount }, (_, i) =>
+				runSubprocess({
+					cwd: workspace,
+					agent: (() => {
+						const def: AgentDefinition = {
 							name: `debate-cloner-${i + 1}`,
 							description: `Plan debate cloner ${i + 1}`,
 							systemPrompt: this.#debateClonerSystemPrompt(),
-							source: "project",
-						},
-						task: roundPrompt,
-						index: i,
-						id: `plan-debate-r${round}-c${i + 1}`,
-						modelRegistry,
-						settings,
-						signal,
-					}),
-				),
-			);
+							source: "project" as const,
+						};
+						if (this.#toolRestriction) {
+							if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
+								def.tools = this.#toolRestriction.allowed;
+							}
+							if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
+								def.blockedTools = this.#toolRestriction.blocked;
+							}
+						}
+						return def;
+					})(),
+					task: roundPrompt,
+					index: i,
+					id: `plan-debate-r${round}-c${i + 1}`,
+					modelRegistry,
+					settings,
+					signal,
+				}),
+			),
+		);
 			const results: SingleResult[] = settled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);

@@ -274,6 +274,7 @@ export async function runPlanDebate(
 		clonerCount: debateConfig.clonerCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
+		toolRestriction: loopConfig.agentRestrictions?.cloner ?? loopConfig.agentRestrictions?.["*"],
 	});
 
 	logger.info("Starting plan debate", {

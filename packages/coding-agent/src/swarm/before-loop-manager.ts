@@ -21,7 +21,7 @@ import type { ActivityLogger } from "./activity-logger";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
-import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "./schema";
+import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
 
 // ============================================================================
 // Types
@@ -56,12 +56,20 @@ Guidelines:
 - When you have enough information, write the plan using the write_file tool to .omp/plan.md
 - The plan should include: what to build/achieve, constraints, non-goals, acceptance criteria, suggested approach
 - After writing the plan, briefly summarize it in your response and tell the human the plan is ready
-- You have access to all standard tools (bash, read, write, edit, grep, find, etc.)
+- You have access to read, write_file, grep, find, and glob tools (no bash/shell execution, no edit)
 - If the human's initial description is vague, ask for clarification before planning
 - If the human asks you to modify the plan, update .omp/plan.md accordingly
 
 Important: You are in a multi-turn conversation. The full conversation history is provided below.
 Respond to the LATEST human message. If no new human message, respond to the initial planning prompt.`;
+
+/**
+ * Default tool restriction for Socrates — read + write_file (for plan.md) + grep + find.
+ * No bash/shell execution, no edit. Can be overridden via agent_restrictions.socrates in YAML.
+ */
+const SOCRATES_DEFAULT_RESTRICTION: AgentToolRestriction = {
+	allowed: ["read", "write_file", "grep", "find", "glob"],
+};
 
 // ============================================================================
 // BeforeLoopManager
@@ -322,12 +330,25 @@ export class BeforeLoopManager {
 			// Build task text from full conversation history
 			const taskText = this.#buildTaskFromHistory();
 
+			// Resolve tool restrictions: use agent_restrictions.socrates from YAML if present,
+			// otherwise fall back to the default read-only planning restriction.
+			const loopConfig = await this.#readLoopConfig();
+			const socratesRestriction = loopConfig?.agentRestrictions?.socrates
+				?? loopConfig?.agentRestrictions?.["*"]
+				?? SOCRATES_DEFAULT_RESTRICTION;
+
 			const agentDef: AgentDefinition = {
 				name: "socrates",
 				description: "Before Loop planning agent (Socratic dialogue)",
 				systemPrompt: SOCRATES_SYSTEM_PROMPT,
 				source: "project" as AgentSource,
 			};
+			if (socratesRestriction.allowed && socratesRestriction.allowed.length > 0) {
+				agentDef.tools = socratesRestriction.allowed;
+			}
+			if (socratesRestriction.blocked && socratesRestriction.blocked.length > 0) {
+				agentDef.blockedTools = socratesRestriction.blocked;
+			}
 
 			const result = await runSubprocess({
 				cwd: this.#workspace,

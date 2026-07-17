@@ -495,10 +495,11 @@ export type ToolName = BuiltinToolName;
 /**
  * Create tools from BUILTIN_TOOLS registry.
  */
-export async function createTools(session: ToolSession, toolNames?: string[]): Promise<Tool[]> {
+export async function createTools(session: ToolSession, toolNames?: string[], blockedTools?: string[]): Promise<Tool[]> {
 	const includeYield = session.requireYieldTool === true;
 	const enableLsp = session.enableLsp ?? true;
 	let requestedTools = toolNames && toolNames.length > 0 ? normalizeToolNames(toolNames) : undefined;
+	const blockedSet = blockedTools && blockedTools.length > 0 ? new Set(normalizeToolNames(blockedTools)) : undefined;
 	const goalEnabled = session.settings.get("goal.enabled");
 	const goalModeActive = goalEnabled && session.getGoalModeState?.()?.enabled === true;
 	if (goalModeActive && requestedTools && !requestedTools.includes("goal")) {
@@ -646,13 +647,15 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		requestedTools.push("yield");
 	}
 
-	const filteredRequestedTools = requestedTools?.filter(name => name in allTools && isToolAllowed(name));
+	const isBlocked = (name: string): boolean => blockedSet?.has(name) ?? false;
+
+	const filteredRequestedTools = requestedTools?.filter(name => name in allTools && isToolAllowed(name) && !isBlocked(name));
 	const baseEntries =
 		filteredRequestedTools !== undefined
 			? filteredRequestedTools.filter(name => name !== "resolve").map(name => [name, allTools[name]] as const)
 			: [
 					...Object.entries(BUILTIN_TOOLS)
-						.filter(([name]) => isToolAllowed(name))
+						.filter(([name]) => isToolAllowed(name) && !isBlocked(name))
 						.map(([name, factory]) => [name, factory] as const),
 					...(includeYield ? ([["yield", HIDDEN_TOOLS.yield]] as const) : []),
 					...(goalModeActive ? ([["goal", HIDDEN_TOOLS.goal]] as const) : []),

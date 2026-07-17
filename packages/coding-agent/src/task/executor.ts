@@ -2192,6 +2192,15 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 	}
 
+	// Apply blockedTools (config-as-constraint) — remove blocked tools from the whitelist.
+	const blockedTools = agent.blockedTools;
+	if (blockedTools && blockedTools.length > 0) {
+		const blockedSet = new Set(blockedTools.map(t => t.toLowerCase()));
+		if (toolNames) {
+			toolNames = toolNames.filter(name => !blockedSet.has(name.toLowerCase()));
+		}
+	}
+
 	if (atMaxDepth && toolNames?.includes("task")) {
 		toolNames = toolNames.filter(name => name !== "task");
 	}
@@ -2443,6 +2452,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					model || modelOverride === undefined ? undefined : `${SUBAGENT_RETRY_FALLBACK_ROLE_PREFIX}${id}`,
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,
+				blockedTools,
 				outputSchema,
 				requireYieldTool: true,
 				contextFiles: options.contextFiles,

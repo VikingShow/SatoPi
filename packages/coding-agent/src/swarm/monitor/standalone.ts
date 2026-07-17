@@ -93,6 +93,12 @@ const DEFAULT_YAML = `swarm:
     enabled: true
     cloner_count: 2
     max_rounds: 3
+
+  agent_restrictions:
+    socrates:
+      allowed: ["read", "write_file", "grep", "find"]
+    cloner:
+      blocked: ["bash", "write_file", "edit"]
 `;
 
 // -- RunManager implementation ---------------------------------------------
