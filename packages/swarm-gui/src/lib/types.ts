@@ -9,6 +9,8 @@ export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "abor
  * Loop phase — high-level workflow stage.
  * Drives the frontend UI state machine.
  * idle → before-loop-dialog → before-loop-debate → before-loop-confirm → running → after-loop → idle
+ * running can transition to "blocked" (stagnation/deadlock) → user resolves → running
+ * running can transition to "paused" (manual pause) → user resumes → running
  */
 export type LoopPhase =
   | "idle"
@@ -16,7 +18,21 @@ export type LoopPhase =
   | "before-loop-debate"
   | "before-loop-confirm"
   | "running"
+  | "paused"
+  | "blocked"
   | "after-loop";
+
+/** Context payload broadcast when the loop is blocked awaiting user decision. */
+export interface BlockerContext {
+  iteration: number;
+  lastFindings: string[];
+  lastWorkerOutput: string;
+  stagnationCount: number;
+  workerCrashCounts: Record<string, number>;
+  reason: string;
+}
+
+export type BlockerResolution = "continue" | "skip" | "abort";
 
 export interface BeforeLoopState {
   phase: LoopPhase;

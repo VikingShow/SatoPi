@@ -99,6 +99,19 @@ export interface LoopResult {
 	verificationResults?: VerificationResult;
 }
 
+/** Context payload broadcast when the loop is blocked awaiting user decision. */
+export interface BlockerContext {
+	iteration: number;
+	lastFindings: string[];
+	lastWorkerOutput: string;
+	stagnationCount: number;
+	workerCrashCounts: Record<string, number>;
+	reason: string;
+}
+
+/** User resolution to a blockage. */
+export type BlockerResolution = "continue" | "skip" | "abort";
+
 // ============================================================================
 // Prompts
 // ============================================================================
@@ -292,6 +305,18 @@ export class LoopController {
 	// ── Todo tracking ──────────────────────────────────────────────────────
 	#todoTracker: TodoTracker = new TodoTracker();
 
+	// ── Blockage detection state ──
+	/** Consecutive cloner-review stagnation count (findings identical across iterations). */
+	#stagnationCount = 0;
+	/** Last cloner findings key for stagnation comparison. */
+	#lastFindingsKey = "";
+	/** Per-worker crash counter — used to detect repeated worker failures. */
+	#workerCrashCounts: Record<string, number> = {};
+	/** Pending blocker resolution Promise resolver — set when blocked, cleared on resolve. */
+	#blockerResolver: ((decision: BlockerResolution) => void) | null = null;
+	/** Context for the current blockage (if any). */
+	#currentBlockerContext: BlockerContext | null = null;
+
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
@@ -368,10 +393,12 @@ export class LoopController {
 		const verdicts: ReviewVerdict[] = [];
 		const errors: string[] = [];
 		const clonerFeedbackHistory: string[] = [];
-		// Convergence tracking
+		// Convergence tracking — uses instance fields (#stagnationCount, #lastFindingsKey)
 		const convergenceThreshold = this.#loopConfig.convergenceThreshold;
-		let stagnationCount = 0;
-		let lastFindingsKey = "";
+		// Reset blockage state at the start of a fresh loop
+		this.#stagnationCount = 0;
+		this.#lastFindingsKey = "";
+		this.#workerCrashCounts = {};
 		// Dynamic worker tracking
 		// Per-iteration role suggestions from cloner review (Round 2+).
 		let currentRoleSuggestions: Record<string, string> = {};
@@ -832,51 +859,73 @@ export class LoopController {
 			// No verdict (timed out before cloner review) — skip to next iteration
 			if (!verdict) continue;
 
-			// Convergence detection: Jaccard similarity on cloner findings
-			if (convergenceThreshold > 0) {
-				const prevFindings = lastFindingsKey ? lastFindingsKey.split("||") : [];
-				const currFindings = verdict.findings;
-				const similarity = prevFindings.length > 0 ? findingsSimilarity(prevFindings, currFindings) : 0;
+		// Convergence detection: Jaccard similarity on cloner findings
+		// Uses instance fields #stagnationCount and #lastFindingsKey (shared with #detectBlockage).
+		if (convergenceThreshold > 0) {
+			const prevFindings = this.#lastFindingsKey ? this.#lastFindingsKey.split("||") : [];
+			const currFindings = verdict.findings;
+			const similarity = prevFindings.length > 0 ? findingsSimilarity(prevFindings, currFindings) : 0;
 
-				if (similarity >= 0.8) {
-					stagnationCount++;
-					if (stagnationCount >= convergenceThreshold) {
-						// Exact match → full convergence failure
-						if (similarity >= 1.0 || (similarity >= 0.95 && stagnationCount >= convergenceThreshold + 1)) {
-							const result: LoopResult = {
-								status: "converged_failed",
-								iterations: iter + 1,
-								reviewVerdicts: verdicts,
-								errors: [
-									...errors,
-									`Converged after ${stagnationCount} near-identical review rounds (similarity: ${similarity.toFixed(2)})`,
-								],
-							};
-							if (this.#loopConfig.humanEscalation) {
-								result.escalationContext = {
-									lastWorkerOutput,
-									lastFindings: verdict.findings,
-									approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
-								};
-							}
-							return result;
-						}
-						// High similarity but not identical → converged_partial
-						return {
-							status: "converged_partial",
+			if (similarity >= 0.8) {
+				this.#stagnationCount++;
+				if (this.#stagnationCount >= convergenceThreshold) {
+					// Exact match → full convergence failure
+					if (similarity >= 1.0 || (similarity >= 0.95 && this.#stagnationCount >= convergenceThreshold + 1)) {
+						const result: LoopResult = {
+							status: "converged_failed",
 							iterations: iter + 1,
 							reviewVerdicts: verdicts,
 							errors: [
 								...errors,
-								`Partially converged after ${stagnationCount} rounds (Jaccard: ${similarity.toFixed(2)})`,
+								`Converged after ${this.#stagnationCount} near-identical review rounds (similarity: ${similarity.toFixed(2)})`,
 							],
 						};
+						if (this.#loopConfig.humanEscalation) {
+							result.escalationContext = {
+								lastWorkerOutput,
+								lastFindings: verdict.findings,
+								approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
+							};
+						}
+						return result;
 					}
-				} else {
-					stagnationCount = 0;
+					// High similarity but not identical → converged_partial
+					return {
+						status: "converged_partial",
+						iterations: iter + 1,
+						reviewVerdicts: verdicts,
+						errors: [
+							...errors,
+							`Partially converged after ${this.#stagnationCount} rounds (Jaccard: ${similarity.toFixed(2)})`,
+						],
+					};
 				}
-				lastFindingsKey = currFindings.sort().join("||");
+			} else {
+				this.#stagnationCount = 0;
 			}
+			this.#lastFindingsKey = currFindings.sort().join("||");
+		}
+
+		// ── Blockage detection: stagnation or worker deadlock ──
+		// Called after convergence check. If the loop is stuck, the loop pauses
+		// here awaiting user resolution (continue / skip / abort).
+		{
+			const resolution = await this.#detectBlockage(iter, verdict, lastWorkerOutput);
+			if (resolution === "abort") {
+				return {
+					status: "aborted",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors: [...errors, "Loop aborted by user via blocker resolution"],
+				};
+			}
+			if (resolution === "skip") {
+				// Skip remaining processing for this iteration
+				continue;
+			}
+			// "continue" → reset happened in resolveBlocker(), proceed normally
+		}
+
 			// 5. Dynamic worker scaling with delta-based acceleration (GAP 2)
 			//    When ≥2/3 cloners agree on direction and |delta| ≥ 2, jump by delta.
 			//    Otherwise fall back to conservative ±1.
@@ -979,6 +1028,118 @@ export class LoopController {
 	}
 
 	// -------------------------------------------------------------------
+	// Blockage detection
+	// -------------------------------------------------------------------
+
+	/**
+	 * Detect whether the loop is blocked after a cloner review.
+	 *
+	 * Conditions that trigger a blockage:
+	 * 1. Cloner findings have stagnated (stagnationCount >= 3, already tracked
+	 *    by the convergence detection block above).
+	 * 2. The same worker crashes 3+ times across iterations (deadlock).
+	 *
+	 * When a blockage is detected:
+	 * - Sets loopPhase to "blocked" via stateTracker.
+	 * - Broadcasts blocker context via ActivityLogger → SSE.
+	 * - Awaits user resolution via a Promise (continue / skip / abort).
+	 *
+	 * Note: stagnation counters (#stagnationCount, #lastFindingsKey) are
+	 * already updated by the convergence detection block. This method only
+	 * checks thresholds and triggers the blockage pause.
+	 *
+	 * @returns The user's resolution decision.
+	 */
+	async #detectBlockage(
+		iteration: number,
+		verdict: ReviewVerdict,
+		lastWorkerOutput: string,
+	): Promise<BlockerResolution> {
+		const STAGNATION_THRESHOLD = 3;
+		const CRASH_THRESHOLD = 3;
+
+		// Stagnation: already tracked by convergence detection
+		const stagnated = this.#stagnationCount >= STAGNATION_THRESHOLD;
+
+		// Worker crash deadlock: any single worker crashed CRASH_THRESHOLD+ times
+		let deadlocked = false;
+		for (const count of Object.values(this.#workerCrashCounts)) {
+			if (count >= CRASH_THRESHOLD) {
+				deadlocked = true;
+				break;
+			}
+		}
+
+		if (!stagnated && !deadlocked) {
+			return "continue";
+		}
+
+		// Build blocker context
+		const reason = stagnated
+			? `Cloner findings have stagnated for ${this.#stagnationCount} consecutive iterations`
+			: `Worker crash deadlock detected (a worker crashed ${CRASH_THRESHOLD}+ times)`;
+
+		this.#currentBlockerContext = {
+			iteration: iteration + 1,
+			lastFindings: verdict.findings,
+			lastWorkerOutput: lastWorkerOutput.slice(0, 8000),
+			stagnationCount: this.#stagnationCount,
+			workerCrashCounts: { ...this.#workerCrashCounts },
+			reason,
+		};
+
+		// Set loop phase to blocked
+		await this.#stateTracker.updatePipeline({ loopPhase: "blocked", roundtablePhase: `Blocked: ${reason}` });
+		this.#activityLogger?.logPhase("blocked", undefined, iteration + 1);
+		this.#activityLogger?.logBroadcast("system", JSON.stringify({
+			type: "blocker",
+			context: this.#currentBlockerContext,
+		}));
+
+		logger.warn(`Blockage detected at iteration ${iteration + 1}: ${reason}`);
+
+		// Await user resolution
+		const resolution = await new Promise<BlockerResolution>((resolve) => {
+			this.#blockerResolver = resolve;
+		});
+
+		this.#blockerResolver = null;
+		this.#currentBlockerContext = null;
+
+		// Restore loop phase to running (unless aborting)
+		if (resolution !== "abort") {
+			await this.#stateTracker.updatePipeline({ loopPhase: "running" });
+			this.#activityLogger?.logPhase("running", undefined, iteration + 1);
+		}
+
+		return resolution;
+	}
+
+	/**
+	 * Resolve the current blockage — called externally (via API) to unblock the loop.
+	 * - "continue": reset stagnation counters and proceed to the next iteration.
+	 * - "skip": skip the current iteration's remaining processing.
+	 * - "abort": stop the loop entirely.
+	 */
+	resolveBlocker(decision: BlockerResolution): boolean {
+		if (!this.#blockerResolver) return false;
+
+		if (decision === "continue") {
+			this.#stagnationCount = 0;
+			this.#lastFindingsKey = "";
+			this.#workerCrashCounts = {};
+		}
+
+		this.#blockerResolver(decision);
+		return true;
+	}
+
+	/** Track worker crashes for deadlock detection (called from #spawnWorkers error handler). */
+	#trackWorkerCrash(workerId: string): void {
+		this.#workerCrashCounts[workerId] = (this.#workerCrashCounts[workerId] ?? 0) + 1;
+	}
+
+	// -------------------------------------------------------------------
 	// Spawn workers in parallel
 	// -------------------------------------------------------------------
 	async #spawnWorkers(
@@ -1061,6 +1222,7 @@ export class LoopController {
 			if (r.status === "fulfilled") return r.value;
 			const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
 			errors.push(`Worker ${workerIds[i]} crashed: ${errMsg}`);
+			this.#trackWorkerCrash(workerIds[i]);
 			this.#activityLogger?.logCrash(workerIds[i], errMsg);
 			return {
 				index: i,

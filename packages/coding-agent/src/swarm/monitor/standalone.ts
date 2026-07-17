@@ -262,7 +262,7 @@ class SwarmRunManager implements RunManager {
 		}
 	}
 
-	async pause(): Promise<{ success: boolean; error?: string }> {
+async pause(): Promise<{ success: boolean; error?: string }> {
 		if (!this.#loopController) {
 			return { success: false, error: "No loop controller available" };
 		}
@@ -298,6 +298,13 @@ class SwarmRunManager implements RunManager {
 		} catch (err) {
 			return { success: false, error: String(err) };
 		}
+	}
+
+	/** Resolve the current blockage — delegates to LoopController. */
+	resolveBlocker(decision: "continue" | "skip" | "abort"): boolean {
+		if (!this.#loopController) return false;
+		return this.#loopController.resolveBlocker(decision);
+	}
 	}
 
 	// ────────────────────────────────────────────────────────────────────────

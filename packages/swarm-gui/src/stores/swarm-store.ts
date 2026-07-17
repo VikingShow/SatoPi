@@ -7,7 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem } from "../lib/types";
+import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
 import { api } from "../lib/api-client";
 import { sseClient } from "../lib/sse-client";
 
@@ -26,6 +26,7 @@ interface SwarmStore {
   planVersion: number;
   todos: TodoItem[];
   afterLoopResult: AfterLoopResult | null;
+  blockerContext: BlockerContext | null;
   error: string | null;
 
   init: () => Promise<void>;
@@ -46,6 +47,9 @@ interface SwarmStore {
 
   // Steering (during running loop)
   sendSteering: (text: string) => Promise<void>;
+
+  // Blocker resolution
+  resolveBlocker: (decision: BlockerResolution) => Promise<void>;
 }
 
 function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel; message: ChatMessage } | null {
@@ -140,6 +144,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   planVersion: 0,
   todos: [],
   afterLoopResult: null,
+  blockerContext: null,
   error: null,
 
   init: async () => {
@@ -247,6 +252,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             setTimeout(() => get().fetchAfterLoopResult(), 500);
           }
 
+          // Blockage detected → set blocked phase
+          if (p === "blocked") {
+            set({ loopPhase: "blocked" });
+          }
+
+          // Blocker resolved → back to running
+          if (p === "running" && get().loopPhase === "blocked") {
+            set({ loopPhase: "running", blockerContext: null });
+          }
+
           // Refresh before-loop state on relevant phase events
           if (p.startsWith("before-loop") || p === "debate-start" || p === "debate-done") {
             setTimeout(() => get().refreshBeforeLoopState(), 300);
@@ -257,6 +272,18 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // (to detect planReady changes)
         if (entry.type === "broadcast" && entry.from === "socrates") {
           setTimeout(() => get().refreshBeforeLoopState(), 300);
+        }
+
+        // System broadcast carrying blocker context JSON
+        if (entry.type === "broadcast" && entry.from === "system" && entry.body) {
+          try {
+            const parsed = JSON.parse(entry.body);
+            if (parsed?.type === "blocker" && parsed?.context) {
+              set({ blockerContext: parsed.context as BlockerContext });
+            }
+          } catch {
+            // Not JSON or not a blocker message — ignore
+          }
         }
       });
 
@@ -311,7 +338,15 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       ]);
       const wasRunning = get().isRunning;
       const nowRunning = runStatus.running;
-      const newPhase = state.loopPhase ?? (nowRunning ? "running" : "idle");
+      const polledPhase = state.loopPhase ?? (nowRunning ? "running" : "idle");
+
+      // Don't overwrite "blocked" phase from polling if we're still blocked
+      // (the backend sets loopPhase="blocked" and keeps it until resolved)
+      const currentPhase = get().loopPhase;
+      const newPhase = (currentPhase === "blocked" && polledPhase === "blocked")
+        ? "blocked"
+        : polledPhase;
+
       set({
         swarmState: state,
         isRunning: nowRunning,
@@ -464,6 +499,21 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         set({ error: result.error ?? "Failed to send steering message" });
       }
       // The steering message will arrive via SSE (logSteering → steering channel)
+    } catch (err) {
+      set({ error: String(err) });
+    }
+  },
+
+  // ── Blocker resolution ──
+
+  resolveBlocker: async (decision: BlockerResolution) => {
+    try {
+      const result = await api.resolveBlocker(decision);
+      if (result.success) {
+        set({ blockerContext: null, loopPhase: decision === "abort" ? "idle" : "running", error: null });
+      } else {
+        set({ error: result.error ?? "Failed to resolve blocker" });
+      }
     } catch (err) {
       set({ error: String(err) });
     }
