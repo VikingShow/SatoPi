@@ -51,6 +51,7 @@ export interface RunManager {
 	stop(): Promise<{ success: boolean; error?: string }>;
 	readonly isRunning: boolean;
 	getLastAfterLoopResult?: () => AfterLoopResult | null;
+	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
 }
 
 /**
@@ -357,6 +358,26 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: "Steering text is required" }, 400);
 		}
 		ctx.steeringSink?.steer(body.text);
+		return json({ success: true });
+	},
+
+	// ── Blocker resolution (unblock a paused loop) ──────────────────────────
+
+	"POST /api/run/resolve-blocker": async (req, ctx) => {
+		if (!ctx.runManager?.resolveBlocker) {
+			return json({ error: "Blocker resolution not available" }, 503);
+		}
+		const body = (await req.json().catch(() => ({}))) as { decision?: string };
+		const validDecisions = ["continue", "skip", "abort"];
+		if (!body.decision || !validDecisions.includes(body.decision)) {
+			return json({ error: `Invalid decision. Must be one of: ${validDecisions.join(", ")}` }, 400);
+		}
+		const resolved = ctx.runManager.resolveBlocker(
+			body.decision as "continue" | "skip" | "abort",
+		);
+		if (!resolved) {
+			return json({ error: "No active blockage to resolve" }, 409);
+		}
 		return json({ success: true });
 	},
 };

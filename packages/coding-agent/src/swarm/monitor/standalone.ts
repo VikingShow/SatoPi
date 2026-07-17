@@ -250,6 +250,12 @@ class SwarmRunManager implements RunManager {
 		}
 	}
 
+	/** Resolve the current blockage — delegates to LoopController. */
+	resolveBlocker(decision: "continue" | "skip" | "abort"): boolean {
+		if (!this.#loopController) return false;
+		return this.#loopController.resolveBlocker(decision);
+	}
+
 	// ────────────────────────────────────────────────────────────────────────
 	// After Loop pipeline: extract lessons → deep reflection → save → summarize → archive
 	// ────────────────────────────────────────────────────────────────────────

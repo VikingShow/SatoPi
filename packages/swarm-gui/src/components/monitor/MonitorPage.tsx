@@ -4,6 +4,7 @@ import ChannelList from "./ChannelList";
 import ChatView from "./ChatView";
 import ContextPanel from "./ContextPanel";
 import PhasePipeline from "./PhasePipeline";
+import BlockerDialog from "./BlockerDialog";
 
 export default function MonitorPage() {
   const swarmState = useSwarmStore((s) => s.swarmState);
@@ -22,6 +23,7 @@ export default function MonitorPage() {
       case "before-loop-debate": return "Planning (Debate)";
       case "before-loop-confirm": return "Ready to Start";
       case "running": return "Running";
+      case "blocked": return "Blocked";
       case "after-loop": return "After Loop";
       default: return isRunning ? "Running" : swarmState?.status === "idle" ? "Idle" : swarmState?.status ?? "Unknown";
     }
@@ -36,6 +38,8 @@ export default function MonitorPage() {
         return "text-blue-400";
       case "running":
         return "text-emerald-400";
+      case "blocked":
+        return "text-red-400";
       case "after-loop":
         return "text-purple-400";
       default:
@@ -114,6 +118,9 @@ export default function MonitorPage() {
         <ChatView />
         <ContextPanel />
       </div>
+
+      {/* Blocker resolution dialog — shown when loopPhase === "blocked" */}
+      <BlockerDialog />
     </div>
   );
 }

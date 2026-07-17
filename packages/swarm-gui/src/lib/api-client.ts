@@ -2,7 +2,7 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, BlockerResolution } from "./types";
 
 const BASE = "";
 
@@ -115,5 +115,13 @@ export const api = {
     fetchJson<{ success: boolean; error?: string }>("/api/run/steer", {
       method: "POST",
       body: JSON.stringify({ text }),
+    }),
+
+  // ── Blocker resolution (unblock a paused loop) ──
+
+  resolveBlocker: (decision: BlockerResolution) =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/resolve-blocker", {
+      method: "POST",
+      body: JSON.stringify({ decision }),
     }),
 };
