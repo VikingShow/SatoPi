@@ -8,6 +8,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
+import type { ActivityLogger } from "./activity-logger";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
@@ -26,6 +27,8 @@ export interface LoopOptions extends PipelineOptions {
 	planContent?: string;
 	/** Tracks agent status for TUI progress widget. */
 	stateTracker: StateTracker;
+	/** Optional activity logger for GUI/monitor integration. */
+	activityLogger?: ActivityLogger;
 }
 
 /** Structured round summary produced by the elected reviewer. */
@@ -237,12 +240,14 @@ export class LoopController {
 	readonly #stateTracker: StateTracker;
 	#channel?: WorkerChannel;
 	#fileTracker: FileTracker = new FileTracker();
+	readonly #activityLogger?: ActivityLogger;
 
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
+		this.#activityLogger = options.activityLogger;
 	}
 
 	async runLoop(options: PipelineOptions & { planContent?: string }): Promise<LoopResult> {
@@ -301,7 +306,7 @@ export class LoopController {
 		this.#channel = new WorkerChannel(this.#ircBus, {
 			workers: workerIds,
 			cloners: clonerIds,
-		});
+		}, this.#activityLogger);
 		// Create per-swarm RegionLockManager for file-level lock coordination.
 		const lockMgr = RegionLockManager.create();
 		await this.#channel.broadcast(
@@ -339,8 +344,9 @@ export class LoopController {
 			for (const id of workerIds) {
 				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 			}
-			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
-			options.onProgress?.({
+		await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
+		this.#activityLogger?.logPhase("workers", undefined, iter + 1);
+		options.onProgress?.({
 				iteration: iter,
 				targetCount: this.#loopConfig.maxIterations,
 				currentWave: 0,
@@ -522,6 +528,7 @@ export class LoopController {
 				// Wire stateTracker conflict count for overlap conflicts
 				const overlapConflicts = lastConflictReport.conflicts.filter(c => c.severity === "overlap");
 				for (const c of overlapConflicts) {
+					this.#activityLogger?.logConflict(c.file, c.writers, c.severity);
 					for (const writerId of c.writers) {
 						await this.#stateTracker.incrementConflict(writerId);
 					}
@@ -564,8 +571,9 @@ export class LoopController {
 				for (const id of clonerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
-				await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
-				options.onProgress?.({
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
+			this.#activityLogger?.logPhase("cloner-review", undefined, iter + 1);
+			options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
@@ -609,11 +617,12 @@ export class LoopController {
 						completedAt: Date.now(),
 					});
 				}
-				await this.#stateTracker.updatePipeline({
-					roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
-					reviewVerdict: verdict.findings.slice(0, 3).join("; "),
-				});
-				options.onProgress?.({
+			await this.#stateTracker.updatePipeline({
+				roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
+				reviewVerdict: verdict.findings.slice(0, 3).join("; "),
+			});
+			this.#activityLogger?.logVerdict(verdict);
+			options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
@@ -723,25 +732,27 @@ export class LoopController {
 					delta = 0;
 				}
 
-				if (delta > 0) {
-					const addCount = Math.min(delta, max - currentWorkerCount);
-					for (let i = 0; i < addCount; i++) {
-						const newId = `worker-${workerIds.length + 1}`;
-						this.#channel.addWorker(newId);
-						await this.#stateTracker.registerAgent(newId);
-						workerIds.push(newId);
-						currentWorkerCount++;
-					}
-				} else if (delta < 0 && currentWorkerCount > min) {
-					const removeCount = Math.min(-delta, currentWorkerCount - min);
-					for (let i = 0; i < removeCount; i++) {
-						// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
-						const worst = this.#stateTracker.getWorstWorker(workerIds);
-						const removed = worst ?? workerIds[workerIds.length - 1];
-						const idx = workerIds.indexOf(removed);
-						if (idx >= 0) workerIds.splice(idx, 1);
-						this.#channel.removeWorker(removed);
-						await this.#stateTracker.unregisterAgent(removed);
+			if (delta > 0) {
+				const addCount = Math.min(delta, max - currentWorkerCount);
+				for (let i = 0; i < addCount; i++) {
+					const newId = `worker-${workerIds.length + 1}`;
+					this.#channel.addWorker(newId);
+					await this.#stateTracker.registerAgent(newId);
+					workerIds.push(newId);
+					currentWorkerCount++;
+					this.#activityLogger?.logScaling("add", newId, `cloner suggestion +${delta}`);
+				}
+			} else if (delta < 0 && currentWorkerCount > min) {
+				const removeCount = Math.min(-delta, currentWorkerCount - min);
+				for (let i = 0; i < removeCount; i++) {
+					// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
+					const worst = this.#stateTracker.getWorstWorker(workerIds);
+					const removed = worst ?? workerIds[workerIds.length - 1];
+					const idx = workerIds.indexOf(removed);
+					if (idx >= 0) workerIds.splice(idx, 1);
+					this.#channel.removeWorker(removed);
+					await this.#stateTracker.unregisterAgent(removed);
+					this.#activityLogger?.logScaling("remove", removed, `cloner suggestion ${delta}`);
 						currentWorkerCount--;
 					}
 				}
@@ -857,6 +868,7 @@ export class LoopController {
 			if (r.status === "fulfilled") return r.value;
 			const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
 			errors.push(`Worker ${workerIds[i]} crashed: ${errMsg}`);
+			this.#activityLogger?.logCrash(workerIds[i], errMsg);
 			return {
 				index: i,
 				id: `worker-${workerIds[i]}`,
@@ -1089,6 +1101,7 @@ export class LoopController {
 export interface CreateLoopOptions {
 	loopConfig: LoopSwarmConfig;
 	workspace: string;
+	activityLogger?: ActivityLogger;
 }
 
 export function createLoopController(stateTracker: StateTracker, options: CreateLoopOptions): LoopController {
@@ -1101,5 +1114,6 @@ export function createLoopController(stateTracker: StateTracker, options: Create
 		ircBus,
 		clonerAgentId,
 		stateTracker,
+		activityLogger: options.activityLogger,
 	});
 }

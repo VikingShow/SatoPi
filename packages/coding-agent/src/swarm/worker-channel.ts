@@ -11,6 +11,7 @@
  */
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
+import type { ActivityLogger } from "./activity-logger";
 
 // ============================================================================
 // Types
@@ -56,9 +57,11 @@ export class WorkerChannel {
 	readonly #groups = new Map<string, Set<string>>();
 	#nominationRound = 0;
 	#nominations: Nomination[] = [];
+	readonly #activityLogger?: ActivityLogger;
 
-	constructor(ircBus: IrcBus, config: WorkerChannelConfig) {
+	constructor(ircBus: IrcBus, config: WorkerChannelConfig, activityLogger?: ActivityLogger) {
 		this.#ircBus = ircBus;
+		this.#activityLogger = activityLogger;
 		for (const w of config.workers) this.#workers.add(w);
 		for (const c of config.cloners) this.#cloners.add(c);
 	}
@@ -92,6 +95,7 @@ export class WorkerChannel {
 	 * Cloners receive a copy silently.
 	 */
 	async broadcast(from: string, body: string): Promise<void> {
+		this.#activityLogger?.logBroadcast(from, body);
 		const workerList = [...this.#workers];
 
 		// Send to all workers in parallel
@@ -117,6 +121,7 @@ export class WorkerChannel {
 	 * Send to a named sub-group. Members + all cloners receive it.
 	 */
 	async sendToSubGroup(groupName: string, from: string, body: string): Promise<void> {
+		this.#activityLogger?.logSubGroup(groupName, from, body);
 		const members = this.#groups.get(groupName);
 		if (!members || members.size === 0) return;
 
@@ -144,6 +149,7 @@ export class WorkerChannel {
 	 * Worker 收到高优先级消息，调整方向但不停止。
 	 */
 	async interrupt(clonerId: string, workerId: string, reason: string): Promise<void> {
+		this.#activityLogger?.logSteering(clonerId, workerId, reason);
 		await this.#ircBus.send({
 			from: clonerId,
 			to: workerId,
@@ -152,6 +158,7 @@ export class WorkerChannel {
 	}
 
 	async broadcastSteering(clonerId: string, body: string): Promise<void> {
+		this.#activityLogger?.logSteering(clonerId, "all", body);
 		await Promise.all(
 			[...this.#workers].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
 		);
@@ -223,11 +230,13 @@ export class WorkerChannel {
 			}
 		}
 
-		return {
+		const result = {
 			elected: bestCount > 0 ? elected : null,
 			votes,
 			round: this.#nominationRound,
 		};
+		this.#activityLogger?.logNomination(this.#nominationRound, result.elected, votes);
+		return result;
 	}
 
 	/**

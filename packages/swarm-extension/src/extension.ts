@@ -33,6 +33,8 @@ import {
 } from "@oh-my-pi/pi-coding-agent/swarm/schema";
 import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
 import { TaskComplexityAnalyzer } from "@oh-my-pi/pi-coding-agent/swarm/task-analyzer";
+import { ActivityLogger } from "@oh-my-pi/pi-coding-agent/swarm/activity-logger";
+import { MonitorServer } from "@oh-my-pi/pi-coding-agent/swarm/monitor";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
@@ -262,6 +264,23 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
+		// Set up ActivityLogger + MonitorServer for GUI integration
+		const activityLogger = new ActivityLogger(stateTracker.swarmDir);
+		let monitorServer: MonitorServer | null = null;
+		try {
+			monitorServer = new MonitorServer(stateTracker, workspace, resolvedPath);
+			const port = monitorServer.start(7878);
+			activityLogger.setBroadcaster(monitorServer);
+			pi.logger.info("MonitorServer started", { port, url: `http://127.0.0.1:${port}` });
+			// Auto-open browser
+			import("node:child_process").then(({ exec }) => {
+				const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+				exec(`${cmd} http://127.0.0.1:${port}`);
+			}).catch(() => {});
+		} catch (err) {
+			pi.logger.debug("MonitorServer failed to start", { error: String(err) });
+		}
+
 		// Read plan.md from workspace if it exists (stamp with timestamp on first read)
 		let planContent: string | undefined;
 		try {
@@ -320,6 +339,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			const loopCtrl = createLoopController(stateTracker, {
 				loopConfig: def.loopConfig,
 				workspace,
+				activityLogger,
 			});
 
 			// -- Run the loop (catch unrecoverable crashes) --
@@ -548,6 +568,10 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 		// 10. Clear widget and show summary (loop)
 		ctx.ui.setWidget(widgetKey, undefined);
+
+		// Stop MonitorServer after loop exits
+		monitorServer?.stop();
+		pi.logger.info("MonitorServer stopped");
 
 		const elapsed = stateTracker.state.completedAt
 			? formatDuration(stateTracker.state.completedAt - stateTracker.state.startedAt)
