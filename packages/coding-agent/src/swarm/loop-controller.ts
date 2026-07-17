@@ -16,6 +16,7 @@ import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
+import { TodoTracker } from "./todo-tracker";
 import { type Nomination, WorkerChannel } from "./worker-channel";
 import { type VerificationResult, VerificationHook } from "./verification-hook";
 
@@ -288,6 +289,9 @@ export class LoopController {
 	/** Mutable plan content — updated by updatePlan() for subsequent iterations. */
 	#planContent: string | undefined;
 
+	// ── Todo tracking ──────────────────────────────────────────────────────
+	#todoTracker: TodoTracker = new TodoTracker();
+
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
@@ -397,6 +401,15 @@ export class LoopController {
 				rationale: rec.rationale,
 				complexity: rec.complexity,
 			});
+		}
+
+		// Parse plan.md into structured todo items for real-time tracking
+		if (planContent) {
+			const todos = this.#todoTracker.parsePlan(planContent);
+			if (todos.length > 0) {
+				await this.#stateTracker.updatePipeline({ todos });
+				this.#activityLogger?.logPhase("todo-updated");
+			}
 		}
 
 		const initialWorkerCount = currentWorkerCount;
@@ -651,8 +664,18 @@ export class LoopController {
 					}
 				}
 
-				// 3. Collect worker output for review context (all rounds)
-				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+			// 3. Collect worker output for review context (all rounds)
+			lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+
+			// Update todo statuses from worker round summaries
+			if (planContent && this.#stateTracker.state.todos && this.#stateTracker.state.todos.length > 0) {
+				const updatedTodos = this.#todoTracker.updateFromWorkerOutput(
+					lastWorkerOutput,
+					this.#stateTracker.state.todos,
+				);
+				await this.#stateTracker.updatePipeline({ todos: updatedTodos });
+				this.#activityLogger?.logPhase("todo-updated");
+			}
 
 				// 4. Latent cloner gate: only review when workers failed to converge internally
 				if (workersConverged) {

@@ -1,6 +1,7 @@
 import { Crown, FileWarning } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import PlanViewer from "./PlanViewer";
+import TodoList from "./TodoList";
 import AfterLoopPanel from "./AfterLoopPanel";
 
 function WorkerCard({ name, praise, criticism, conflict, status, role }: {
@@ -47,6 +48,9 @@ export default function ContextPanel() {
     <div className="w-64 flex flex-col border-l border-background-border bg-background-card overflow-y-auto">
       {/* Plan (plan.md) */}
       <PlanViewer />
+
+      {/* Task tracking (parsed from plan.md) */}
+      <TodoList />
 
       {/* Workers */}
       <div className="px-3 py-2 border-b border-background-border">

@@ -7,7 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState } from "../lib/types";
+import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem } from "../lib/types";
 import { api } from "../lib/api-client";
 import { sseClient } from "../lib/sse-client";
 
@@ -24,6 +24,7 @@ interface SwarmStore {
   loopPhase: LoopPhase;
   beforeLoopState: BeforeLoopState | null;
   planVersion: number;
+  todos: TodoItem[];
   afterLoopResult: AfterLoopResult | null;
   error: string | null;
 
@@ -137,6 +138,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   loopPhase: "idle",
   beforeLoopState: null,
   planVersion: 0,
+  todos: [],
   afterLoopResult: null,
   error: null,
 
@@ -235,6 +237,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             set((s) => ({ planVersion: s.planVersion + 1 }));
           }
 
+          // Todo updated → refresh state to get latest todos
+          if (p === "todo-updated") {
+            setTimeout(() => get().refreshState(), 100);
+          }
+
           // After-loop-done → fetch result
           if (p === "after-loop-done") {
             setTimeout(() => get().fetchAfterLoopResult(), 500);
@@ -305,7 +312,13 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const wasRunning = get().isRunning;
       const nowRunning = runStatus.running;
       const newPhase = state.loopPhase ?? (nowRunning ? "running" : "idle");
-      set({ swarmState: state, isRunning: nowRunning, loopPhase: newPhase, error: null });
+      set({
+        swarmState: state,
+        isRunning: nowRunning,
+        loopPhase: newPhase,
+        todos: state.todos ?? [],
+        error: null,
+      });
 
       // When a run transitions from running → stopped, fetch after-loop result
       if (wasRunning && !nowRunning) {
