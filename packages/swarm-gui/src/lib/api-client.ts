@@ -94,6 +94,9 @@ export const api = {
   getBeforeLoopState: () =>
     fetchJson<BeforeLoopState>("/api/before-loop/state"),
 
+  getBeforeLoopHistory: () =>
+    fetchJson<{ history: Array<{ role: string; content: string }> }>("/api/before-loop/history"),
+
   runDebate: () =>
     fetchJson<{ success: boolean; error?: string }>("/api/before-loop/debate", {
       method: "POST",

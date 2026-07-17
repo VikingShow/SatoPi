@@ -78,6 +78,7 @@ export class BeforeLoopManager {
 	#runManager: RunManager;
 
 	#conversation: ConversationTurn[] = [];
+	#conversationPath: string;
 	#taskDescription = "";
 	#phase: LoopPhase = "idle";
 	#busy = false;
@@ -102,6 +103,52 @@ export class BeforeLoopManager {
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#runManager = opts.runManager;
+		this.#conversationPath = path.join(this.#stateTracker.swarmDir, "conversation.json");
+
+		// Try to restore existing conversation from disk
+		this.#loadConversation().catch(err => {
+			logger.warn("Failed to load conversation history", { error: String(err) });
+		});
+	}
+
+	/**
+	 * Load conversation history from disk (if it exists).
+	 * Called once in constructor to restore state after page refresh / restart.
+	 */
+	async #loadConversation(): Promise<void> {
+		try {
+			const content = await fs.readFile(this.#conversationPath, "utf-8");
+			const parsed = JSON.parse(content) as ConversationTurn[];
+			if (Array.isArray(parsed)) {
+				this.#conversation = parsed;
+			}
+		} catch {
+			// File doesn't exist or is invalid — start with empty conversation
+		}
+	}
+
+	/**
+	 * Persist current conversation to disk as JSON.
+	 * Called after every conversation mutation.
+	 */
+	async #saveConversation(): Promise<void> {
+		try {
+			await fs.writeFile(
+				this.#conversationPath,
+				JSON.stringify(this.#conversation, null, 2),
+				"utf-8",
+			);
+		} catch (err) {
+			logger.warn("Failed to save conversation history", { error: String(err) });
+		}
+	}
+
+	/**
+	 * Public accessor: returns a shallow copy of the conversation history.
+	 * Used by the API endpoint GET /api/before-loop/history.
+	 */
+	getHistory(): ConversationTurn[] {
+		return [...this.#conversation];
 	}
 
 	get isBusy(): boolean {
@@ -152,6 +199,7 @@ export class BeforeLoopManager {
 		);
 
 		this.#conversation.push({ role: "user", content: prompt });
+		await this.#saveConversation();
 
 		// Snapshot plan mtime before Socrates runs
 		this.#planMtime = await this.#getPlanMtime();
@@ -181,6 +229,7 @@ export class BeforeLoopManager {
 		// Log user message immediately (so it shows in chat right away)
 		this.#activityLogger.logBroadcast("operator", text);
 		this.#conversation.push({ role: "user", content: text });
+		await this.#saveConversation();
 
 		// Snapshot plan mtime
 		this.#planMtime = await this.#getPlanMtime();
@@ -345,6 +394,7 @@ export class BeforeLoopManager {
 
 			// Add to conversation history
 			this.#conversation.push({ role: "assistant", content: output });
+			await this.#saveConversation();
 
 			// Push Socrates response to frontend via SSE
 			this.#activityLogger.logBroadcast("socrates", output);

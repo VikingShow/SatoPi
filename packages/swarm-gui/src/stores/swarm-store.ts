@@ -159,6 +159,43 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         try {
           const blState = await api.getBeforeLoopState();
           set({ beforeLoopState: blState });
+
+          // Load persisted conversation history so page refresh doesn't lose dialogue
+          try {
+            const { history } = await api.getBeforeLoopHistory();
+            const messages = new Map(get().messages);
+            const channels = new Map(get().channels);
+            const msgList: ChatMessage[] = [];
+            for (let i = 0; i < history.length; i++) {
+              const turn = history[i];
+              const from = turn.role === "user" ? "operator" : "socrates";
+              msgList.push({
+                id: `history-${i}-${turn.role}`,
+                channelId: "roundtable",
+                from,
+                to: "all",
+                body: turn.content,
+                timestamp: 0,
+              });
+            }
+            if (msgList.length > 0) {
+              messages.set("roundtable", msgList);
+              if (!channels.has("roundtable")) {
+                channels.set("roundtable", {
+                  id: "roundtable",
+                  type: "roundtable",
+                  name: "Roundtable",
+                  participants: [],
+                  unreadCount: 0,
+                  lastMessage: msgList[msgList.length - 1].body,
+                  lastMessageTime: msgList[msgList.length - 1].timestamp,
+                });
+              }
+              set({ messages, channels });
+            }
+          } catch {
+            // History endpoint might not be available
+          }
         } catch {
           // might not be available
         }

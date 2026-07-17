@@ -64,6 +64,7 @@ export interface BeforeLoopManager {
 	confirm(): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
 	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
+	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
 	readonly isBusy: boolean;
 }
 
@@ -323,6 +324,13 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: "Before Loop manager not available" }, 503);
 		}
 		return json(ctx.beforeLoopManager.getState());
+	},
+
+	"GET /api/before-loop/history": (_req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		return json({ history: ctx.beforeLoopManager.getHistory() });
 	},
 
 	"POST /api/before-loop/debate": async (_req, ctx) => {
