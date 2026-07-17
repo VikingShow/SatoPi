@@ -2,7 +2,7 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase } from "./types";
 
 const BASE = "";
 
@@ -76,4 +76,44 @@ export const api = {
 
   getRecentLessons: (limit = 20) =>
     fetchJson<{ lessons: Array<{ runId: string; timestamp: string; lesson: ExperienceLesson; stats: unknown }> }>(`/api/experience/recent?limit=${limit}`),
+
+  // ── Before Loop (interactive planning) ──
+
+  startBeforeLoop: (task: string) =>
+    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/start", {
+      method: "POST",
+      body: JSON.stringify({ task }),
+    }),
+
+  sendBeforeLoopMessage: (text: string) =>
+    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/message", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  getBeforeLoopState: () =>
+    fetchJson<BeforeLoopState>("/api/before-loop/state"),
+
+  runDebate: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/debate", {
+      method: "POST",
+    }),
+
+  confirmBeforeLoop: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/confirm", {
+      method: "POST",
+    }),
+
+  cancelBeforeLoop: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/cancel", {
+      method: "POST",
+    }),
+
+  // ── Steering (operator → running loop) ──
+
+  sendSteering: (text: string) =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/steer", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
 };

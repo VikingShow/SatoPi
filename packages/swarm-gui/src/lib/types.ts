@@ -5,6 +5,27 @@
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 
+/**
+ * Loop phase — high-level workflow stage.
+ * Drives the frontend UI state machine.
+ * idle → before-loop-dialog → before-loop-debate → before-loop-confirm → running → after-loop → idle
+ */
+export type LoopPhase =
+  | "idle"
+  | "before-loop-dialog"
+  | "before-loop-debate"
+  | "before-loop-confirm"
+  | "running"
+  | "after-loop";
+
+export interface BeforeLoopState {
+  phase: LoopPhase;
+  task: string;
+  conversationLength: number;
+  planReady: boolean;
+  busy: boolean;
+}
+
 export interface AgentState {
   name: string;
   status: AgentStatus;
@@ -32,6 +53,7 @@ export interface SwarmState {
   loopIteration?: number;
   roundtablePhase?: string;
   reviewVerdict?: string;
+  loopPhase?: LoopPhase;
 }
 
 export type ActivityEventType =

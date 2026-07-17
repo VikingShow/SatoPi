@@ -12,13 +12,14 @@ import * as fs from "node:fs/promises";
 import { StateTracker } from "../state";
 import { MonitorServer } from "./server";
 import { ActivityLogger } from "../activity-logger";
-import type { RunManager } from "./api-routes";
+import type { RunManager, SteeringSink } from "./api-routes";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
 import { createLoopController } from "../loop-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
 import { stampAndArchivePlanMd, archivePlanForHistory } from "../before-loop";
+import { BeforeLoopManager } from "../before-loop-manager";
 import {
   ExperienceStore,
   extractLessons,
@@ -148,6 +149,10 @@ class SwarmRunManager implements RunManager {
 				return { success: false, error: "Swarm is not in loop mode" };
 			}
 
+			// ── Update loopPhase → running ──
+			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
+			this.#activityLogger.logPhase("loop-start");
+
 			// ── Read & stamp plan.md ──
 			// Check if plan.md exists in any of the candidate locations
 			const planCandidates = [
@@ -184,6 +189,8 @@ class SwarmRunManager implements RunManager {
 			// Re-init state tracker with parsed agents
 			const agentNames = [...def.agents.keys()];
 			await this.#stateTracker.init(agentNames, def.targetCount, def.mode);
+			// Re-set loopPhase after init (init resets some fields)
+			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
 
 			// Create loop controller with activity logger
 			this.#loopController = createLoopController(this.#stateTracker, {
@@ -251,8 +258,8 @@ class SwarmRunManager implements RunManager {
 		console.log(`[RunManager] After Loop pipeline starting (runId=${runId})...`);
 
 		try {
-			// 1. Update pipeline state
-			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop: extracting lessons" });
+			// 1. Update pipeline state → after-loop phase
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop: extracting lessons", loopPhase: "after-loop" });
 			this.#activityLogger.logPhase("after-loop", undefined, result.iterations);
 
 			// 2. Count workers and cloners from state
@@ -342,14 +349,14 @@ class SwarmRunManager implements RunManager {
 				},
 			};
 
-			// 10. Update pipeline state to completed
-			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop completed" });
+			// 10. Update pipeline state to completed → idle
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop completed", loopPhase: "idle", status: "completed" });
 			this.#activityLogger.logPhase("after-loop-done", undefined, result.iterations);
 
 			console.log("[RunManager] After Loop pipeline completed successfully");
 		} catch (afterLoopErr) {
 			console.error("[RunManager] After Loop pipeline failed:", afterLoopErr);
-			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop failed" });
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop failed", loopPhase: "idle", status: "failed" });
 		}
 	}
 }
@@ -397,8 +404,27 @@ async function main() {
 		experienceStore,
 	});
 
-	// 6. Create and start MonitorServer (with runManager + experienceStore injected)
-	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore);
+	// 5b. Create BeforeLoopManager (shares same modelRegistry, settings, stateTracker, etc.)
+	const beforeLoopManager = new BeforeLoopManager({
+		modelRegistry,
+		settings,
+		workspace: WORKSPACE_DIR,
+		yamlPath: YAML_PATH,
+		stateTracker,
+		activityLogger,
+		experienceStore,
+		runManager,
+	});
+
+	// 5c. Create SteeringSink — logs operator steering messages via ActivityLogger → SSE
+	const steeringSink: SteeringSink = {
+		steer(text: string): void {
+			activityLogger.logSteering("operator", "all", text);
+		},
+	};
+
+	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink injected)
+	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink);
 	const port = server.start(7878);
 
 	// 7. Wire ActivityLogger → SSE

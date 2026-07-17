@@ -19,7 +19,7 @@ import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
 import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
 import { EventBus } from "./event-bus";
-import { apiRoutes, type ApiRouteContext, type RunManager } from "./api-routes";
+import { apiRoutes, type ApiRouteContext, type RunManager, type BeforeLoopManager, type SteeringSink } from "./api-routes";
 
 export class MonitorServer implements ActivityBroadcaster {
 	#server: ReturnType<typeof Bun.serve> | null = null;
@@ -32,6 +32,8 @@ export class MonitorServer implements ActivityBroadcaster {
 		yamlPath: string,
 		runManager?: RunManager,
 		experienceStore?: ExperienceStore,
+		beforeLoopManager?: BeforeLoopManager,
+		steeringSink?: SteeringSink,
 	) {
 		this.#ctx = {
 			stateTracker,
@@ -40,6 +42,8 @@ export class MonitorServer implements ActivityBroadcaster {
 			workspaceDir,
 			runManager,
 			experienceStore,
+			beforeLoopManager,
+			steeringSink,
 		};
 	}
 

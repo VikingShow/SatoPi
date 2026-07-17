@@ -53,6 +53,28 @@ export interface RunManager {
 	getLastAfterLoopResult?: () => AfterLoopResult | null;
 }
 
+/**
+ * BeforeLoopManager — controls the Before Loop interactive planning phase.
+ * Implemented by before-loop-manager.ts; injected into ApiRouteContext.
+ */
+export interface BeforeLoopManager {
+	start(task: string): Promise<{ success: boolean; error?: string }>;
+	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
+	runDebate(): Promise<{ success: boolean; error?: string }>;
+	confirm(): Promise<{ success: boolean; error?: string }>;
+	cancel(): Promise<{ success: boolean; error?: string }>;
+	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
+	readonly isBusy: boolean;
+}
+
+/**
+ * SteeringSink — accepts steering messages from the operator during a running loop.
+ * The message is logged via ActivityLogger → SSE so it appears in the chat.
+ */
+export interface SteeringSink {
+	steer(text: string): void;
+}
+
 export interface ApiRouteContext {
 	stateTracker: StateTracker;
 	swarmDir: string;
@@ -60,6 +82,8 @@ export interface ApiRouteContext {
 	workspaceDir: string;
 	runManager?: RunManager;
 	experienceStore?: ExperienceStore;
+	beforeLoopManager?: BeforeLoopManager;
+	steeringSink?: SteeringSink;
 }
 
 type RouteHandler = (req: Request, ctx: ApiRouteContext) => Response | Promise<Response>;
@@ -263,5 +287,76 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const limit = parseInt(url.searchParams.get("limit") ?? "20", 10);
 		const lessons = ctx.experienceStore.getRecentLessons(limit);
 		return json({ lessons });
+	},
+
+	// ── Before Loop (interactive planning) ─────────────────────────────────
+
+	"POST /api/before-loop/start": async (req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		if (ctx.runManager?.isRunning) {
+			return json({ error: "A swarm run is already in progress" }, 409);
+		}
+		const body = (await req.json().catch(() => ({}))) as { task?: string };
+		if (!body.task || body.task.trim().length === 0) {
+			return json({ error: "Task description is required" }, 400);
+		}
+		const result = await ctx.beforeLoopManager.start(body.task);
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/before-loop/message": async (req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		const body = (await req.json().catch(() => ({}))) as { text?: string };
+		if (!body.text || body.text.trim().length === 0) {
+			return json({ error: "Message text is required" }, 400);
+		}
+		const result = await ctx.beforeLoopManager.sendMessage(body.text);
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"GET /api/before-loop/state": (_req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		return json(ctx.beforeLoopManager.getState());
+	},
+
+	"POST /api/before-loop/debate": async (_req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		const result = await ctx.beforeLoopManager.runDebate();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/before-loop/confirm": async (_req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		const result = await ctx.beforeLoopManager.confirm();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	"POST /api/before-loop/cancel": async (_req, ctx) => {
+		if (!ctx.beforeLoopManager) {
+			return json({ error: "Before Loop manager not available" }, 503);
+		}
+		const result = await ctx.beforeLoopManager.cancel();
+		return json(result, result.success ? 200 : 500);
+	},
+
+	// ── Steering (operator → running loop) ─────────────────────────────────
+
+	"POST /api/run/steer": async (req, ctx) => {
+		const body = (await req.json().catch(() => ({}))) as { text?: string };
+		if (!body.text || body.text.trim().length === 0) {
+			return json({ error: "Steering text is required" }, 400);
+		}
+		ctx.steeringSink?.steer(body.text);
+		return json({ success: true });
 	},
 };

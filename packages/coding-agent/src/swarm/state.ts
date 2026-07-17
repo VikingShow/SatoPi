@@ -14,6 +14,18 @@ import * as path from "node:path";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 
+/**
+ * Loop phase — tracks the high-level workflow stage.
+ * Drives the frontend UI state machine via SwarmState.loopPhase.
+ */
+export type LoopPhase =
+	| "idle"
+	| "before-loop-dialog"
+	| "before-loop-debate"
+	| "before-loop-confirm"
+	| "running"
+	| "after-loop";
+
 export interface AgentState {
 	name: string;
 	status: AgentStatus;
@@ -47,6 +59,8 @@ export interface SwarmState {
 	loopIteration?: number;
 	roundtablePhase?: string;
 	reviewVerdict?: string;
+	/** High-level workflow phase — drives frontend UI state machine. */
+	loopPhase?: LoopPhase;
 }
 
 // ============================================================================
@@ -67,6 +81,7 @@ export class StateTracker {
 			targetCount: 1,
 			agents: {},
 			startedAt: Date.now(),
+			loopPhase: "idle",
 		};
 	}
 

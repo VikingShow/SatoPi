@@ -1,27 +1,37 @@
-import { useRef, useEffect } from "react";
-import { Send, Shield, Megaphone } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2 } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
-import type { ChatMessage } from "../../lib/types";
+import type { ChatMessage, LoopPhase } from "../../lib/types";
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isSteering = msg.body.startsWith("[CLONER STEERING]");
   const isOperator = msg.from === "operator";
+  const isSystem = msg.from === "system";
+  const isSocrates = msg.from === "socrates";
 
   return (
     <div className={`flex flex-col gap-0.5 ${isOperator ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-1.5 px-1">
-        <span className="text-xs font-medium text-neutral-300">{msg.from}</span>
+        <span className={`text-xs font-medium ${
+          isSocrates ? "text-primary" :
+          isSystem ? "text-neutral-500" :
+          "text-neutral-300"
+        }`}>{msg.from}</span>
         <span className="text-xs text-neutral-600">
           {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
         {isSteering && <Megaphone size={11} className="text-status-accent" />}
       </div>
       <div
-        className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm ${
+        className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap ${
           isSteering
             ? "bg-status-accent/15 border border-status-accent/30 text-neutral-200"
+            : isSystem
+            ? "bg-neutral-800/50 text-neutral-400 italic text-xs"
             : isOperator
             ? "bg-primary/20 text-neutral-100"
+            : isSocrates
+            ? "bg-primary/10 border border-primary/20 text-neutral-100"
             : "bg-background-elevated text-neutral-200"
         }`}
       >
@@ -43,7 +53,15 @@ export default function ChatView() {
   const activeId = useSwarmStore((s) => s.activeChannelId);
   const messages = useSwarmStore((s) => s.messages);
   const activities = useSwarmStore((s) => s.activities);
+  const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
+  const sendBeforeLoopMessage = useSwarmStore((s) => s.sendBeforeLoopMessage);
+  const sendSteering = useSwarmStore((s) => s.sendSteering);
+  const startPlanning = useSwarmStore((s) => s.startPlanning);
+  const runDebate = useSwarmStore((s) => s.runDebate);
+  const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [inputText, setInputText] = useState("");
 
   const channelMessages = messages.get(activeId ?? "roundtable") ?? [];
 
@@ -67,6 +85,44 @@ export default function ChatView() {
     }
   }
 
+  // Determine input behavior based on loopPhase
+  const isIdle = loopPhase === "idle";
+  const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
+  const isRunning = loopPhase === "running";
+  const canSend = isIdle || isBeforeLoopDialog || isRunning;
+  const isBusy = beforeLoopState?.busy ?? false;
+  const planReady = beforeLoopState?.planReady ?? false;
+
+  const placeholder = isIdle
+    ? "描述你的任务，开始规划..."
+    : isBeforeLoopDialog
+    ? (isBusy ? "Socrates is thinking..." : "Reply to Socrates...")
+    : isRunning
+    ? "Type a steering message to the swarm..."
+    : "";
+
+  function handleSend() {
+    const text = inputText.trim();
+    if (!text || !canSend || isBusy) return;
+
+    if (isIdle) {
+      startPlanning(text);
+    } else if (isBeforeLoopDialog) {
+      sendBeforeLoopMessage(text);
+    } else if (isRunning) {
+      sendSteering(text);
+    }
+
+    setInputText("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-background">
       {/* Messages */}
@@ -79,8 +135,17 @@ export default function ChatView() {
           </div>
         )}
         {channelMessages.length === 0 && systemEvents.length === 0 && (
-          <div className="flex items-center justify-center h-full text-neutral-600 text-sm">
-            No messages yet. Waiting for swarm activity...
+          <div className="flex flex-col items-center justify-center h-full text-neutral-600 text-sm gap-2">
+            {isIdle ? (
+              <>
+                <span className="text-2xl">👋</span>
+                <span>在下方输入框描述你要完成的任务，开始 Before Loop 规划</span>
+              </>
+            ) : isBeforeLoopDialog
+              ? "Describe your task to start planning with Socrates..."
+              : isRunning
+              ? "No messages yet. Waiting for swarm activity..."
+              : ""}
           </div>
         )}
         {channelMessages.map((msg) => (
@@ -88,20 +153,75 @@ export default function ChatView() {
         ))}
       </div>
 
+      {/* Context Action Bar — appears when plan is ready or debate is done */}
+      {((loopPhase === "before-loop-dialog" && planReady) || loopPhase === "before-loop-confirm") && !isBusy && (
+        <div className="border-t border-purple-800/40 px-4 py-2 bg-gradient-to-r from-purple-950/30 to-blue-950/30">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-purple-300">
+              <CheckCircle2 size={12} />
+              {loopPhase === "before-loop-confirm" ? "Debate complete — plan refined" : "Plan draft ready"}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => runDebate()}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-500 rounded-md transition-colors cursor-pointer"
+              >
+                <Swords size={12} />
+                {loopPhase === "before-loop-confirm" ? "Run Debate Again" : "Run Debate"}
+              </button>
+              <button
+                onClick={() => confirmAndStart()}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors cursor-pointer"
+              >
+                <Check size={12} />
+                Confirm & Start
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="border-t border-background-border px-4 py-2.5 bg-background-card">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-xs text-neutral-500 px-2 py-1 rounded-md bg-background-elevated">
-            <Shield size={12} />
-            <span>Operator</span>
+            {isIdle ? (
+              <>
+                <Shield size={12} />
+                <span>New Task</span>
+              </>
+            ) : isBeforeLoopDialog ? (
+              <>
+                <Shield size={12} />
+                <span>Operator → Socrates</span>
+              </>
+            ) : isRunning ? (
+              <>
+                <Megaphone size={12} />
+                <span>Steering</span>
+              </>
+            ) : (
+              <>
+                <Shield size={12} />
+                <span>Operator</span>
+              </>
+            )}
           </div>
           <input
             type="text"
-            placeholder="Type a steering message to the swarm..."
-            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={!canSend || isBusy}
+            placeholder={placeholder}
+            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none disabled:opacity-50"
           />
-          <button className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer">
-            <Send size={16} />
+          <button
+            onClick={handleSend}
+            disabled={!canSend || isBusy || !inputText.trim()}
+            className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>
       </div>

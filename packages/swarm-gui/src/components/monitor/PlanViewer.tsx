@@ -6,8 +6,10 @@ import {
   Maximize2, X, Pencil, Eye, Save, Check,
 } from "lucide-react";
 import { api } from "../../lib/api-client";
+import { useSwarmStore } from "../../stores/swarm-store";
 
 export default function PlanViewer() {
+  const planVersion = useSwarmStore((s) => s.planVersion);
   const [content, setContent] = useState("");
   const [editContent, setEditContent] = useState("");
   const [path, setPath] = useState("");
@@ -57,6 +59,12 @@ export default function PlanViewer() {
     }
   }
 
+  // Auto-refresh plan when planVersion changes (triggered by SSE plan-updated event)
+  useEffect(() => {
+    loadPlan();
+  }, [planVersion]);
+
+  // Initial load
   useEffect(() => {
     loadPlan();
   }, []);
