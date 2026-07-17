@@ -39,12 +39,14 @@ export default function AfterLoopPanel() {
   if (!afterLoopResult) return null;
 
   const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = afterLoopResult;
+  const safeLessons = lessons ?? [];
+  const safeRunStats = runStats ?? { workerCount: 0, clonerCount: 0, clonerApprovalRatio: 0 };
   const statusIcon = status === "completed" ? CheckCircle : status === "escalated" ? AlertTriangle : AlertOctagon;
   const StatusIcon = statusIcon;
   const statusColor = status === "completed" ? "text-status-success" : status === "escalated" ? "text-status-warning" : "text-status-danger";
 
   // Group lessons by type
-  const grouped = lessons.reduce<Record<string, typeof lessons>>((acc, lesson) => {
+  const grouped = safeLessons.reduce<Record<string, typeof safeLessons>>((acc, lesson) => {
     (acc[lesson.type] ??= []).push(lesson);
     return acc;
   }, {});
@@ -71,15 +73,15 @@ export default function AfterLoopPanel() {
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-neutral-600">Workers</div>
-              <div className="text-neutral-200 font-mono">{runStats.workerCount}</div>
+              <div className="text-neutral-200 font-mono">{safeRunStats.workerCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-neutral-600">Cloners</div>
-              <div className="text-neutral-200 font-mono">{runStats.clonerCount}</div>
+              <div className="text-neutral-200 font-mono">{safeRunStats.clonerCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-neutral-600">Approval</div>
-              <div className="text-neutral-200 font-mono">{Math.round(runStats.clonerApprovalRatio * 100)}%</div>
+              <div className="text-neutral-200 font-mono">{Math.round((safeRunStats.clonerApprovalRatio ?? 0) * 100)}%</div>
             </div>
           </div>
 
@@ -108,11 +110,11 @@ export default function AfterLoopPanel() {
           )}
 
           {/* Extracted Lessons */}
-          {lessons.length > 0 && (
+          {safeLessons.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-400">
                 <BookOpen size={12} />
-                <span>Lessons ({lessons.length})</span>
+                <span>Lessons ({safeLessons.length})</span>
               </div>
               {Object.entries(grouped).map(([type, typeLessons]) => {
                 const Icon = LESSON_ICONS[type] ?? Lightbulb;
