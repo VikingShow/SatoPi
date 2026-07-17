@@ -69,7 +69,7 @@ const DEFAULT_YAML = `swarm:
   workspace: .
   mode: loop
   target_count: 1
-  model: deepseek-chat
+  model: deepseek-v4-pro
   max_iterations: 5
   auto_retry: true
   human_escalation: true

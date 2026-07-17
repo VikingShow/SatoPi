@@ -16,10 +16,17 @@ export class SSEClient {
   private maxReconnectDelay = 30000;
   private shouldReconnect = true;
 
+  private getSSEUrl(): string {
+    // Connect directly to backend on port 7878 (not through vite proxy)
+    // Derive host from the page URL so it works on any network
+    const host = window.location.hostname;
+    return `http://${host}:7878/events`;
+  }
+
   connect(): void {
     if (this.eventSource?.readyState === EventSource.OPEN) return;
 
-    this.eventSource = new EventSource("/events");
+    this.eventSource = new EventSource(this.getSSEUrl());
 
     this.eventSource.onopen = () => {
       this.reconnectDelay = 1000;

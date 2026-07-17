@@ -98,7 +98,7 @@ export class MonitorServer implements ActivityBroadcaster {
 
 		return Bun.serve({
 			port,
-			hostname: "127.0.0.1",
+			hostname: "0.0.0.0",
 			development: false,
 			async fetch(req): Promise<Response> {
 				const url = new URL(req.url);
