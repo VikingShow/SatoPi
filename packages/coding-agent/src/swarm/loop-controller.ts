@@ -431,8 +431,8 @@ export class LoopController {
 		}
 
 		// Parse plan.md into structured todo items for real-time tracking
-		if (planContent) {
-			const todos = this.#todoTracker.parsePlan(planContent);
+		if (this.#planContent) {
+			const todos = this.#todoTracker.parsePlan(this.#planContent);
 			if (todos.length > 0) {
 				await this.#stateTracker.updatePipeline({ todos });
 				this.#activityLogger?.logPhase("todo-updated");
@@ -695,7 +695,7 @@ export class LoopController {
 			lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
 
 			// Update todo statuses from worker round summaries
-			if (planContent && this.#stateTracker.state.todos && this.#stateTracker.state.todos.length > 0) {
+			if (this.#planContent && this.#stateTracker.state.todos && this.#stateTracker.state.todos.length > 0) {
 				const updatedTodos = this.#todoTracker.updateFromWorkerOutput(
 					lastWorkerOutput,
 					this.#stateTracker.state.todos,

@@ -305,7 +305,6 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 		if (!this.#loopController) return false;
 		return this.#loopController.resolveBlocker(decision);
 	}
-	}
 
 	// ────────────────────────────────────────────────────────────────────────
 	// After Loop pipeline: extract lessons → deep reflection → save → summarize → archive
