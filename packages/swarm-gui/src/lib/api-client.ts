@@ -2,7 +2,7 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem } from "./types";
 
 const BASE = "";
 
@@ -51,6 +51,9 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
+
+  getPlanTodos: () =>
+    fetchJson<{ todos: TodoItem[] }>("/api/plan/todos"),
 
   startRun: () =>
     fetchJson<{ success: boolean; error?: string }>("/api/run/start", {

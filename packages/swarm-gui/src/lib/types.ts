@@ -41,6 +41,18 @@ export interface AgentState {
   role?: "reviewer";
 }
 
+/**
+ * To-Do item — a structured task parsed from plan.md.
+ * Tracks real-time completion status during loop execution.
+ */
+export interface TodoItem {
+  id: string;
+  title: string;
+  status: "pending" | "in_progress" | "completed";
+  files?: string[];
+  completedAt?: number;
+}
+
 export interface SwarmState {
   name: string;
   status: PipelineStatus;
@@ -54,6 +66,7 @@ export interface SwarmState {
   roundtablePhase?: string;
   reviewVerdict?: string;
   loopPhase?: LoopPhase;
+  todos?: TodoItem[];
 }
 
 export type ActivityEventType =

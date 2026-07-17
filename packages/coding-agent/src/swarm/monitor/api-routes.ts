@@ -221,6 +221,11 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		}
 	},
 
+	// -- Plan Todos (parsed from plan.md, tracked during loop) --------------
+	"GET /api/plan/todos": (_req, ctx) => {
+		return json({ todos: ctx.stateTracker.state.todos ?? [] });
+	},
+
 	// -- Run control -----------------------------------------------------
 	"POST /api/run/start": async (_req, ctx) => {
 		if (!ctx.runManager) {
