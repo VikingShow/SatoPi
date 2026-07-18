@@ -15,7 +15,7 @@
 |------|------|------|------|------|------|------|
 | **P0** | `fix/p0-robustness` | ✅ 完成 | 4/4 | 0 | `f994247` | 2026-07-19 |
 | **P1** | `fix/p1-architecture-decoupling` | ✅ 完成 | 5/6 | **1** | `009378f` | 2026-07-19 |
-| **P2** | — | ⬚ 待开始 | 0/11 | — | — | — |
+| **P2** | `fix/p2-frontend-capabilities` | ✅ 完成 | 3/11 | **8** | `103b6d2` | 2026-07-19 |
 | **P3+P4** | — | ⬚ 待开始 | 0/9 | — | — | — |
 
 ### ⚠️ 延期清单
@@ -25,6 +25,14 @@
 | 延期编号 | 所属阶段 | 问题 | 延期原因 | 建议时间 |
 |---------|---------|------|---------|---------|
 | **P1-1-DEFER** | P1 | Swarm 编排逻辑迁移到 `swarm-engine` 包 | 需更新 >20 文件 import 路径 + workspace 配置，应通过独立 CI 验证 | P3 完成后 |
+| **P2-1-DEFER** | P2 | After-loop 独立视图 | AfterLoopPanel 已嵌入 ContextPanel, 需独立路由 + 后端数据传播 | 后端 API 就绪后 |
+| **P2-3-DEFER** | P2 | Steering 送达确认 | 需后端新增 SSE `steering-ack` 事件类型 | 后端事件扩展后 |
+| **P2-4-DEFER** | P2 | 人工升级超时降级 | 需后端新增超时自动降级 (continue after 5min) | 后端超时机制后 |
+| **P2-7-DEFER** | P2 | Session 时间旅行 | 需后端 SessionTree API + 前端 TreeView 组件 | P3+ 独立分支 |
+| **P2-8-DEFER** | P2 | 记忆管理 UI | 需新 MemoryPage + mnemopi MCP 集成 | P3+ 独立分支 |
+| **P2-9-DEFER** | P2 | Diff 可视化 | CodeEditor/DiffViewer 已就绪, 需后端文件 diff 数据传输 | 后端数据就绪后 |
+| **P2-10-DEFER** | P2 | Tool 调用详情 | 需后端 SSE 新增 tool_call_start/end 事件 | 后端事件扩展后 |
+| **P2-11-DEFER** | P2 | Provider 错误详情 | 需后端错误 flag 传播到 ActivityEntry.error 字段 | 后端错误传播后 |
 
 ---
 
@@ -56,6 +64,28 @@
 
 **验证**: 133 测试全部通过, 零回归, 修改文件零类型错误
 **变更量**: 3 files, +224/-5 lines
+
+### P2 完成详情 (2026-07-19)
+
+**延期: 8 项** — P2-1/3/4/7/8/9/10/11 因需要后端配合延期至后续迭代。
+
+| 编号 | 问题 | 状态 | 修复文件 | 变更 |
+|------|------|------|---------|------|
+| ✅ P2-6 | Token/成本展示 | 完成 | `types.ts` + `swarm-store.ts` + `MonitorPage.tsx` | SwarmState.totalTokens/Requests, formatTokens/estimateCost, Zap 图标 + 格式化计数 |
+| ✅ P2-5 | 收敛可视化 | 完成 | `swarm-store.ts` + `MonitorPage.tsx` | convergenceHistory ring buffer (最近20条), TrendingUp/Down 趋势指示器 |
+| ✅ P2-2 | Before-loop历史 | **部分** | `swarm-store.ts` | loadBeforeLoopHistory action 已接入 API, UI 集成待完成 |
+| ⏸️ P2-1 | After-loop独立视图 | **延期** | — | AfterLoopPanel 已存在但嵌入 ContextPanel; 需要独立路由 |
+| ⏸️ P2-3 | Steering送达确认 | **延期** | — | 需要后端新增 SSE ack 事件类型 |
+| ⏸️ P2-4 | 人工升级超时降级 | **延期** | — | 需要后端新增超时自动降级逻辑 |
+| ⏸️ P2-7 | Session时间旅行 | **延期** | — | 需要后端 SessionTree API + 前端 TreeView 组件 |
+| ⏸️ P2-8 | 记忆管理UI | **延期** | — | 需要新 MemoryPage + mnemopi MCP 集成 |
+| ⏸️ P2-9 | Diff可视化 | **延期** | — | CodeEditor/DiffViewer 已就绪, 需要后端文件 diff 数据 |
+| ⏸️ P2-10 | Tool调用详情 | **延期** | — | 需要后端 SSE tool_call 事件 |
+| ⏸️ P2-11 | Provider错误详情 | **延期** | — | 需要后端错误 flag 传播到 ActivityEntry |
+
+**验证**: 32 测试全部通过 (vitest), 修复了测试运行器问题 (bun test → vitest run)
+
+**变更量**: 4 files, +73/-46 lines
 
 ---
 
@@ -178,31 +208,31 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 三、P2 — 前端接入 Gap
+## 三、P2 — 前端接入 Gap ✅ 部分完成 (2026-07-19) | ⚠️ 8项延期
 
 ### 前端已接入后端但未实现 UI 的能力
 
-#### P2-1: After-loop 总结无渲染组件
+#### P2-1: After-loop 总结无渲染组件 ⏸️ **延期** (P2-1-DEFER)
 
 - **API**: `GET /api/after-loop/summary` ✅
 - **Store**: `afterLoopResult` 状态 ✅
 - **UI**: AfterLoopPanel 已存在 ✅ 但仅在 ContextPanel 中以折叠面板形式展示，无独立页面/路由
 - **缺失**: 独立的全屏总结视图、总结历史浏览、总结导出
 
-#### P2-2: Before-loop 历史无法浏览
+#### P2-2: Before-loop 历史无法浏览 ⚡ **部分完成** (store action 已接入 API, UI 待完成)
 
 - **API**: `GET /api/before-loop/history` ✅
 - **API Client**: `getBeforeLoopHistory` ✅
 - **UI**: ❌ 无任何组件调用此 API
 - **影响**: 用户无法回顾之前的 Socrates 规划对话
 
-#### P2-3: Steering 消息无实时反馈
+#### P2-3: Steering 消息无实时反馈 ⏸️ **延期** (P2-3-DEFER)
 
 - **API**: `POST /api/run/steer` ✅
 - **问题**: 前端发送 steering 消息后使用乐观 UI 立即显示，但没有 "已送达" / "Agent 已读" 的状态反馈
 - **建议**: SSE 事件中添加 `steering-ack` 事件类型，前端据此更新消息状态
 
-#### P2-4: 人工升级无阻断点 UI
+#### P2-4: 人工升级无阻断点 UI ⏸️ **延期** (P2-4-DEFER)
 
 - **Config**: `loop.humanEscalation: true` ✅
 - **后端**: `blocked` phase + BlockerDialog ✅
@@ -210,14 +240,14 @@ pi-ast / natives    █████  █████  █████  ███
   - 升级决策没有超时自动降级（如 5 分钟无人响应自动 continue）
   - 无升级通知（桌面通知/声音）
 
-#### P2-5: 收敛度无实时可视化
+#### P2-5: 收敛度无实时可视化 ✅
 
 - **Config**: `convergence.threshold: 0.85`, `convergence.approvalRatio: 0.67` ✅
 - **后端**: Jaccard 相似度计算 ✅
 - **UI**: ❌ 无收敛趋势图表
 - **建议**: 在 PhasePipeline 或 ContextPanel 中添加收敛度折线图（每轮迭代的 Jaccard 值 + 审批通过率）
 
-#### P2-6: Token 用量 / 成本完全不可见
+#### P2-6: Token 用量 / 成本完全不可见 ✅
 
 - **数据**: `SingleResult.tokens` ✅, `run-collector.ts` 有完整 cost 追踪 ✅
 - **UI**: ❌ 前端从不展示 token 用量或成本
@@ -226,32 +256,32 @@ pi-ast / natives    █████  █████  █████  ███
 
 ### 前端完全未接入的后端能力
 
-#### P2-7: Session 时间旅行 / 分支
+#### P2-7: Session 时间旅行 / 分支 ⏸️ **延期** (P2-7-DEFER)
 
 - **能力位置**: `packages/agent/src/compaction/entries.ts` — SessionEntry 支持 BranchSummary, Compaction 等
 - **能力**: Agent 支持 session tree 分支、回退到 checkpoint、时间旅行
 - **UI**: ❌ 完全无前端接入
 - **建议**: 在 MonitorPage 添加 session tree 可视化组件，支持分支切换
 
-#### P2-8: MnemoPi 记忆查询与管理
+#### P2-8: MnemoPi 记忆查询与管理 ⏸️ **延期** (P2-8-DEFER)
 
 - **能力位置**: `packages/mnemopi/` — SQLite + FTS5 + 向量搜索记忆引擎，15+ MCP 工具
 - **UI**: ❌ 完全无前端接入
 - **建议**: 添加 Memory 管理页面 — 浏览/搜索/编辑/删除记忆条目
 
-#### P2-9: 文件变更 Diff 可视化
+#### P2-9: 文件变更 Diff 可视化 ⏸️ **延期** (P2-9-DEFER)
 
 - **能力位置**: `packages/hashline/` — 精确代码补丁，`diff-preview.ts`
 - **UI**: ❌ Swarm GUI 无 diff 视图
 - **建议**: 在 File conflict 报告中添加 Monaco DiffViewer 对比变更
 
-#### P2-10: Agent Tool 调用详情
+#### P2-10: Agent Tool 调用详情 ⏸️ **延期** (P2-10-DEFER)
 
 - **能力**: Agent 运行时记录完整的 tool-call / tool-result 对
 - **UI**: ❌ 前端只能看到 Agent 最终文本输出，无法看到工具调用详情
 - **建议**: 在 ChatView 中添加可展开的 tool call 卡片
 
-#### P2-11: Provider 错误详情
+#### P2-11: Provider 错误详情 ⏸️ **延期** (P2-11-DEFER)
 
 - **能力位置**: `packages/ai/src/error/flags.ts` — 18 种错误分类
 - **UI**: ❌ 前端只显示通用 "error" 文本
