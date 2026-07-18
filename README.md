@@ -18,10 +18,8 @@
 </p>
 
 <p align="center">
-  Fork of <a href="https://github.com/badlogic/pi-mono">Pi</a> by <a href="https://github.com/mariozechner">@mariozechner</a> 
+  A fork of <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> — <em>the most capable agent surface that ships.</em>
 </p>
-
-The most capable agent surface that ships. Continuously tuned by real-world use — complete out of the box, open all the way down.
 
 **40+** providers · **32** built-in tools · **14** lsp ops · **28** dap ops · **~55k** lines of Rust core.
 
@@ -76,9 +74,14 @@ omp completions fish > ~/.config/fish/completions/omp.fish
 
 ## SatoPi — Satori, a Team of Pi
 
-**SatoPi**（悟り + Pi）— "A Team of Pi reaching enlightenment through roundtable debate."
+**SatoPi**（悟り + Pi）— *"A team of Pi agents reaching enlightenment through collective deliberation."*
 
-The name fuses the Zen concept of **Satori**（悟り, sudden enlightenment）with **Pi**（π, the coding agent runtime）. The logo — a circle (roundtable / Pi) enclosing a Bodhi leaf（菩提葉, wisdom）— embodies the core philosophy: a swarm of agents converging on truth through structured deliberation.
+The name captures the moment of **Satori**（悟り）— the Zen sudden awakening — emerging from a **team of Pi** agents converging on truth through structured roundtable debate. Like swarm intelligence crystallizing into insight.
+
+The logo embodies three layers:
+- **Circle** — the roundtable（圆桌会议）and the mathematical **π**, the agent runtime at the core
+- **Golden ring** — the light of emergent wisdom breaking through
+- **Bodhi leaf**（菩提葉）— enlightenment growing from collective deliberation
 
 SatoPi extends omp with a multi-agent swarm architecture featuring before-loop planning (Socratic dialogue), Cloner Roundtable debate, and auto-scaling worker agents.
 
