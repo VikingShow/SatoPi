@@ -29,6 +29,8 @@ interface SwarmStore {
   afterLoopResult: AfterLoopResult | null;
   blockerContext: BlockerContext | null;
   error: string | null;
+  /** P2-5: Latest convergence values for trend display. */
+  convergenceHistory: Array<{ ts: number; jaccard: number; converged: boolean }>;
 
   init: () => Promise<void>;
   setActiveChannel: (id: string) => void;
@@ -49,6 +51,8 @@ interface SwarmStore {
   confirmAndStart: () => Promise<void>;
   cancelBeforeLoop: () => Promise<void>;
   refreshBeforeLoopState: () => Promise<void>;
+  /** P2-2: Load before-loop conversation history. */
+  loadBeforeLoopHistory: () => Promise<Array<{ role: string; content: string }>>;
 
   // Steering (during running loop)
   sendSteering: (text: string) => Promise<void>;
@@ -154,6 +158,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   afterLoopResult: null,
   blockerContext: null,
   error: null,
+  convergenceHistory: [],
 
   init: async () => {
     try {
@@ -281,6 +286,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // (to detect planReady changes)
         if (entry.type === "broadcast" && entry.from === "socrates") {
           setTimeout(() => get().refreshBeforeLoopState(), 300);
+        }
+
+        // P2-5: Track convergence events.
+        if (entry.type === "convergence" && entry.jaccard !== undefined) {
+          set((s) => ({
+            convergenceHistory: [
+              ...s.convergenceHistory,
+              { ts: entry.ts, jaccard: entry.jaccard!, converged: entry.converged ?? false },
+            ].slice(-20),
+          }));
         }
 
         // System broadcast carrying blocker context JSON
@@ -528,6 +543,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       }
     } catch {
       // Before-loop manager might not be available
+    }
+  },
+
+  // P2-2: Load before-loop conversation history.
+  loadBeforeLoopHistory: async () => {
+    try {
+      const result = await api.getBeforeLoopHistory();
+      return result.history ?? [];
+    } catch {
+      return [];
     }
   },
 
