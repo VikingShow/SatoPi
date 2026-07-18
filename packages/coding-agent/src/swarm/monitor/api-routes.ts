@@ -10,39 +10,9 @@ import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
+import type { AfterLoopResult } from "./types";
 
-/**
- * AfterLoopResult — shape returned by RunManager.getLastAfterLoopResult()
- * Import from standalone.ts to keep single source of truth.
- */
-export interface AfterLoopResult {
-  runId: string;
-  status: string;
-  iterations: number;
-  summaryMarkdown: string;
-  lessons: Array<{
-    type: string;
-    summary: string;
-    detail: string;
-    tags: string[];
-    confidence: number;
-    source: string;
-  }>;
-  reflection: {
-    rootCauses: string[];
-    effectivePatterns: string[];
-    structuralIssues: string[];
-    recommendations: string[];
-    confidence: number;
-  } | null;
-  stats: {
-    totalIterations: number;
-    finalStatus: string;
-    clonerApprovalRatio: number;
-    workerCount: number;
-    clonerCount: number;
-  };
-}
+export type { AfterLoopResult };
 
 /**
  * RunManager — controls real swarm loop lifecycle.
