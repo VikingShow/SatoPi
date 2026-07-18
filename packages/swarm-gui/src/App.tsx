@@ -103,6 +103,14 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* P3-5: Offline/disconnected banner */}
+        {!isConnected && (
+          <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            Disconnected from monitor server — reconnecting automatically. Write operations are disabled.
+          </div>
+        )}
+
         {/* Top bar */}
         <header className="h-12 flex items-center justify-between px-4 border-b border-background-border bg-background-card">
           <div className="flex items-center gap-3">

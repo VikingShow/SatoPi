@@ -96,6 +96,15 @@ export class ActivityLogger {
 	}
 
 	/**
+	 * P4-4: Replace the current broadcaster with a new one (e.g. after
+	 * MonitorServer restart). Idempotent — does nothing if no broadcaster
+	 * was previously set.
+	 */
+	replaceBroadcaster(broadcaster: ActivityBroadcaster): void {
+		this.#broadcaster = broadcaster;
+	}
+
+	/**
 	 * Core write method — appends to activity.jsonl and pushes to SSE.
 	 * Serialized via writeQueue to preserve event ordering in the file.
 	 * Fire-and-forget: callers never await this.
