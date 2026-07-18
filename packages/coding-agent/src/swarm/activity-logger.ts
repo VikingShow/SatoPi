@@ -21,13 +21,16 @@ export type ActivityEventType =
 	| "broadcast"
 	| "subgroup"
 	| "steering"
+	| "steering_ack"
 	| "phase"
 	| "convergence"
 	| "verdict"
 	| "conflict"
 	| "scaling"
 	| "nomination"
-	| "crash";
+	| "crash"
+	| "tool_call"
+	| "error_flag";
 
 export interface ActivityEntry {
 	ts: number;
@@ -64,6 +67,19 @@ export interface ActivityEntry {
 	votes?: Record<string, string[]>;
 	/** Crash-specific fields */
 	error?: string;
+	/** Steering-ack fields (P2-3) */
+	messageId?: string;
+	acknowledgedBy?: string;
+	/** Tool-call fields (P2-10) */
+	toolName?: string;
+	toolInput?: string;
+	toolOutput?: string;
+	toolError?: string;
+	toolDurationMs?: number;
+	/** Error-flag fields (P2-11) */
+	errorFlag?: string;
+	recoverable?: boolean;
+	suggestion?: string;
 }
 
 // ============================================================================
@@ -182,5 +198,26 @@ export class ActivityLogger {
 
 	logCrash(worker: string, error: string): void {
 		this.log({ ts: Date.now(), type: "crash", worker, error });
+	}
+
+	// -- Steering Ack (P2-3) -------------------------------------------------
+
+	/** Logged when a worker agent acknowledges receipt of a steering message. */
+	logSteeringAck(agentName: string, messageId: string): void {
+		this.log({ ts: Date.now(), type: "steering_ack", from: agentName, messageId, acknowledgedBy: agentName });
+	}
+
+	// -- Tool Call (P2-10) ---------------------------------------------------
+
+	/** Logged when a swarm agent executes a tool. */
+	logToolCall(agentName: string, toolName: string, input?: string, output?: string, error?: string, durationMs?: number): void {
+		this.log({ ts: Date.now(), type: "tool_call", worker: agentName, toolName, toolInput: input, toolOutput: output, toolError: error, toolDurationMs: durationMs });
+	}
+
+	// -- Error Flag (P2-11) --------------------------------------------------
+
+	/** Logged when a provider-level error is classified with a bit flag. */
+	logProviderError(agentName: string, errorFlag: string, message: string, recoverable: boolean, suggestion?: string): void {
+		this.log({ ts: Date.now(), type: "error_flag", worker: agentName, errorFlag, body: message, recoverable, suggestion });
 	}
 }

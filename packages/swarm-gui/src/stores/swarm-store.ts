@@ -97,6 +97,17 @@ function deriveChannel(entry: ActivityEntry, seq: number): { id: string; channel
         message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
       };
     }
+    // P2-10: Tool calls appear in the roundtable as system-style messages.
+    case "tool_call": {
+      const id = "roundtable";
+      const status = entry.toolError ? "FAILED" : entry.toolDurationMs ? `OK (${(entry.toolDurationMs / 1000).toFixed(1)}s)` : "OK";
+      const body = `🔧 **${entry.toolName}** ${status}${entry.toolError ? ` — ${entry.toolError}` : ""}`;
+      return {
+        id,
+        channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
+        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.worker ?? "agent", to: "all", body, timestamp: ts },
+      };
+    }
     default:
       return null;
   }
@@ -296,6 +307,38 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               { ts: entry.ts, jaccard: entry.jaccard!, converged: entry.converged ?? false },
             ].slice(-20),
           }));
+        }
+
+        // P2-3: Steering ack — show delivery confirmation.
+        if (entry.type === "steering_ack") {
+          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "worker"}`, { duration: 2000 });
+        }
+
+        // P2-10: Tool call — show in-line tool execution indicator.
+        if (entry.type === "tool_call" && entry.toolName) {
+          // Tool calls are captured via addActivity → deriveChannel for chat display.
+          // The toast provides a transient notification for long-running tools.
+          if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
+            toast(`${entry.worker ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
+              description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
+              duration: 3000,
+            });
+          }
+        }
+
+        // P2-11: Error flag — categorized error notification.
+        if (entry.type === "error_flag" && entry.errorFlag) {
+          const suggestions: Record<string, string> = {
+            ContextOverflow: "Consider using /shake to free context space.",
+            UsageLimit: "API quota exhausted — switch credential or wait.",
+            AuthFailed: "Authentication failed — re-login required.",
+            Transient: "Temporary error — automatic retry in progress.",
+          };
+          const hint = suggestions[entry.errorFlag] ?? entry.suggestion;
+          toast.error(
+            entry.recoverable ? `Recoverable: ${entry.errorFlag}` : `${entry.errorFlag}`,
+            { description: hint ? `${entry.body ?? ""} — ${hint}` : entry.body, duration: 8000 },
+          );
         }
 
         // System broadcast carrying blocker context JSON
