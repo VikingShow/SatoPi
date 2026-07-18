@@ -9,6 +9,10 @@ interface RawSwarmAgentConfig {
 	reports_to?: string[];
 	waits_for?: string[];
 	model?: string;
+	/** P1-5: Whitelist — only these tools are available to this agent. */
+	allowed_tools?: string[];
+	/** P1-5: Blacklist — these tools are blocked for this agent. */
+	blocked_tools?: string[];
 }
 
 interface RawSwarmConfig {
@@ -34,6 +38,10 @@ export interface SwarmAgent {
 	reportsTo: string[];
 	waitsFor: string[];
 	model?: string;
+	/** P1-5: Whitelist — only these tools are available. When set, all other tools are blocked. */
+	allowedTools?: string[];
+	/** P1-5: Blacklist — these tools are blocked (config-as-constraint). */
+	blockedTools?: string[];
 }
 
 export interface SwarmDefinition {
@@ -327,6 +335,9 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 			reportsTo: Array.isArray(config.reports_to) ? config.reports_to : [],
 			model: typeof config.model === "string" ? config.model.trim() : undefined,
 			waitsFor: Array.isArray(config.waits_for) ? config.waits_for : [],
+			// P1-5: Tool restrictions per agent.
+			allowedTools: Array.isArray(config.allowed_tools) ? config.allowed_tools.map(t => t.trim()).filter(Boolean) : undefined,
+			blockedTools: Array.isArray(config.blocked_tools) ? config.blocked_tools.map(t => t.trim()).filter(Boolean) : undefined,
 		});
 	}
 

@@ -3,6 +3,12 @@
  *
  * Wraps `runSubprocess` to spawn individual swarm agents with full tool access.
  * Each agent runs in the swarm workspace with its task instructions as the user prompt.
+ *
+ * ## Extensibility
+ *
+ * The `AgentExecutor` interface allows callers to inject custom execution
+ * strategies (e.g. remote agents, HTTP-triggered agents) without modifying
+ * the pipeline controller.
  */
 import * as path from "node:path";
 import type {
@@ -19,6 +25,22 @@ import type { StateTracker } from "./state";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ============================================================================
+// P1-2: Agent Executor Interface — decouples execution strategy from pipeline
+// ============================================================================
+
+/**
+ * Injectable agent execution strategy.
+ *
+ * The default implementation (`SubprocessAgentExecutor`) spawns a local
+ * subprocess via `runSubprocess`. Callers can inject a custom executor
+ * through `SwarmExecutorOptions.executor` to support remote agents,
+ * sandboxed environments, or testing mocks.
+ */
+export interface AgentExecutor {
+	execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult>;
+}
 
 export interface SwarmExecutorOptions {
 	workspace: string;
@@ -42,22 +64,51 @@ export interface SwarmExecutorOptions {
 	 * terminate the agent externally (e.g. on pipeline abort).
 	 */
 	onStarted?: (controller: AbortController) => void;
+	/**
+	 * Custom executor override. When provided the pipeline uses this
+	 * instead of the default `SubprocessAgentExecutor`.
+	 */
+	executor?: AgentExecutor;
 }
 
+// ============================================================================
+// Default executor — spawns a local oh-my-pi subprocess
+// ============================================================================
+
 /**
- * Execute a single swarm agent as an oh-my-pi subagent.
+ * Default agent executor: spawns a local oh-my-pi subprocess.
  *
  * The agent receives:
  * - System prompt: built from role + extra_context
  * - User prompt (task): the full task instructions from the YAML
  * - Working directory: the swarm workspace
- * - Full tool access (bash, python, read, write, edit, grep, find, fetch, web_search, browser)
+ * - Tool access: configurable via SwarmAgent.allowedTools / blockedTools
+ */
+export class SubprocessAgentExecutor implements AgentExecutor {
+	async execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult> {
+		return executeSwarmAgent(agent, index, options);
+	}
+}
+
+/** Shared singleton to avoid re-allocating. */
+const defaultExecutor = new SubprocessAgentExecutor();
+
+/**
+ * Execute a single swarm agent as an oh-my-pi subagent.
+ *
+ * Kept as a free function for backward compatibility. New code should
+ * prefer `AgentExecutor.execute()` via the pipeline's executor injection.
  */
 export async function executeSwarmAgent(
 	agent: SwarmAgent,
 	index: number,
 	options: SwarmExecutorOptions,
 ): Promise<SingleResult> {
+	// Delegate to custom executor if provided.
+	if (options.executor && options.executor !== defaultExecutor) {
+		return options.executor.execute(agent, index, options);
+	}
+
 	const {
 		workspace,
 		swarmName,
@@ -74,11 +125,14 @@ export async function executeSwarmAgent(
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
 
+	// P1-5: Pass tool restrictions from SwarmAgent schema to AgentDefinition.
 	const agentDef: AgentDefinition = {
 		name: agent.name,
 		description: `Swarm agent: ${agent.role}`,
 		systemPrompt: buildSystemPrompt(agent),
 		source: "project" as AgentSource,
+		...(agent.allowedTools ? { tools: agent.allowedTools } : {}),
+		...(agent.blockedTools ? { blockedTools: agent.blockedTools } : {}),
 	};
 
 	// Build a per-agent timeout controller and combine with the caller's signal.
