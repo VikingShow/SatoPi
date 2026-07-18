@@ -9,8 +9,8 @@ import { createHighlighter, type Highlighter } from "shiki";
 let highlighter: Highlighter | null = null;
 
 const LANGS = [
-  "typescript", "javascript", "python", "bash", "json",
-  "yaml", "markdown", "sql", "html", "css", "tsx", "jsx",
+  "typescript", "javascript", "python", "bash",
+  "json", "yaml", "markdown", "sql",
 ];
 
 export async function getHighlighter(): Promise<Highlighter> {
