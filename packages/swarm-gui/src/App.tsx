@@ -1,10 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Settings, Activity, History, Radio } from "lucide-react";
 import { Toaster } from "sonner";
 import { useSwarmStore } from "./stores/swarm-store";
-import ConfigPage from "./components/config/ConfigPage";
 import MonitorPage from "./components/monitor/MonitorPage";
-import HistoryPage from "./components/history/HistoryPage";
+
+// Lazy-loaded pages — Config and History are secondary views
+const ConfigPage = lazy(() => import("./components/config/ConfigPage"));
+const HistoryPage = lazy(() => import("./components/history/HistoryPage"));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-full text-neutral-500">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-5 h-5 border-2 border-neutral-600 border-t-primary rounded-full animate-spin" />
+        <span className="text-xs">Loading...</span>
+      </div>
+    </div>
+  );
+}
 
 type Page = "config" | "monitor" | "history";
 
@@ -76,9 +89,9 @@ function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-hidden">
-          {page === "config" && <ConfigPage />}
+          {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage /></Suspense>}
           {page === "monitor" && <MonitorPage />}
-          {page === "history" && <HistoryPage />}
+          {page === "history" && <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>}
         </main>
       </div>
     </div>
