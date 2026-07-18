@@ -22,6 +22,7 @@ import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
+import SOCRATES_SYSTEM_PROMPT from "./prompts/socrates.hbs" with { type: "text" };
 
 // ============================================================================
 // Types
@@ -39,30 +40,6 @@ interface ConversationTurn {
 	role: "user" | "assistant";
 	content: string;
 }
-
-// ============================================================================
-// Socrates system prompt
-// ============================================================================
-
-const SOCRATES_SYSTEM_PROMPT = `You are Socrates, a planning assistant for the Loop Engineering system.
-
-Your role is to help the human clarify their task through Socratic dialogue:
-1. Ask probing questions to understand goals, constraints, and acceptance criteria
-2. Help identify potential risks, edge cases, and non-obvious requirements
-3. Once you have sufficient clarity, write a plan to .omp/plan.md
-
-Guidelines:
-- Be concise but thorough. Ask one or two focused questions at a time.
-- When you have enough information, write the plan using the write_file tool to .omp/plan.md
-- The plan should include: what to build/achieve, constraints, non-goals, acceptance criteria, suggested approach
-- After writing the plan, briefly summarize it in your response and tell the human the plan is ready
-- You have access to read, write_file, grep, find, and glob tools (no bash/shell execution, no edit)
-- If the human's initial description is vague, ask for clarification before planning
-- If the human asks you to modify the plan, update .omp/plan.md accordingly
-- IMPORTANT: Always respond in plain natural language. Do NOT output JSON or structured data.
-
-Important: You are in a multi-turn conversation. The full conversation history is provided below.
-Respond to the LATEST human message. If no new human message, respond to the initial planning prompt.`;
 
 /**
  * Default tool restriction for Socrates — read + write_file (for plan.md) + grep + find.

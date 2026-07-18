@@ -9,6 +9,7 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { logger } from "@oh-my-pi/pi-utils";
 import { StateTracker } from "../state";
 import { MonitorServer } from "./server";
 import { ActivityLogger } from "../activity-logger";
@@ -200,14 +201,14 @@ class SwarmRunManager implements RunManager {
 				// stampAndArchivePlanMd writes the stamped version back to .omp/plan.md
 				try {
 					planContent = await stampAndArchivePlanMd(this.#workspace);
-					console.log(`[RunManager] plan.md loaded and stamped (${planContent.length} chars)`);
+					logger.info("[RunManager] plan.md loaded and stamped", { length: planContent.length });
 				} catch (stampErr) {
 					// Fallback: read raw content without stamping
 					planContent = await fs.readFile(planPath, "utf-8");
-					console.log(`[RunManager] plan.md loaded (unstamped fallback: ${planContent.length} chars)`);
+					logger.info("[RunManager] plan.md loaded (unstamped fallback)", { length: planContent.length });
 				}
 			} else {
-				console.warn("[RunManager] WARNING: No plan.md found — workers will run without a plan");
+				logger.warn("[RunManager] No plan.md found — workers will run without a plan");
 			}
 
 			// Re-init state tracker with parsed agents
@@ -226,7 +227,7 @@ class SwarmRunManager implements RunManager {
 			this.#abortController = new AbortController();
 			this.#running = true;
 
-			console.log(`[RunManager] Starting swarm "${def.name}" with ${agentNames.length} agents...`);
+			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
 			// Run loop in background (non-blocking)
 			this.#loopController
@@ -238,15 +239,15 @@ class SwarmRunManager implements RunManager {
 					planContent,
 				})
 				.then(async (result) => {
-					console.log(`[RunManager] Loop finished: ${result.status}, iterations=${result.iterations}`);
+					logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
 					if (result.errors.length > 0) {
-						console.log(`[RunManager] Errors: ${result.errors.join(", ")}`);
+						logger.info("[RunManager] Loop errors", { errors: result.errors });
 					}
 					// ── After Loop pipeline ──
 					await this.#runAfterLoopPipeline(result);
 				})
 				.catch((err) => {
-					console.error(`[RunManager] Loop failed:`, err);
+					logger.error("[RunManager] Loop failed", { error: String(err) });
 				})
 				.finally(() => {
 					this.#running = false;
@@ -267,7 +268,7 @@ class SwarmRunManager implements RunManager {
 		try {
 			this.#abortController?.abort();
 			this.#running = false;
-			console.log("[RunManager] Stop signal sent");
+			logger.info("[RunManager] Stop signal sent");
 			return { success: true };
 		} catch (err) {
 			return { success: false, error: String(err) };
@@ -323,7 +324,7 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 	// ────────────────────────────────────────────────────────────────────────
 	async #runAfterLoopPipeline(result: LoopResult): Promise<void> {
 		const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-		console.log(`[RunManager] After Loop pipeline starting (runId=${runId})...`);
+		logger.info("[RunManager] After Loop pipeline starting", { runId });
 
 		// ── Verification hook (before After Loop) ──
 		// If verification is configured and the LoopResult doesn't already carry
@@ -337,7 +338,7 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 				result.verificationResults = vResult;
 			}
 			if (!vResult.passed && this.#loopConfig.verification.blocking) {
-				console.log("[RunManager] Verification failed (blocking) — returning to running");
+				logger.info("[RunManager] Verification failed (blocking) — returning to running");
 				this.#activityLogger.logBroadcast(
 					"system",
 					"[verification] Blocking failure — returning to running for another iteration",
@@ -354,7 +355,7 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 					});
 					await this.#runAfterLoopPipeline(restartResult);
 				} catch (err) {
-					console.error("[RunManager] Verification restart loop failed:", err);
+					logger.error("[RunManager] Verification restart loop failed", { error: String(err) });
 				}
 				return;
 			}
@@ -372,7 +373,7 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 
 			// 3. Extract lessons (rule-based)
 			const extraction = extractLessons(result, workerCount, clonerCount);
-			console.log(`[RunManager] Extracted ${extraction.lessons.length} lessons`);
+			logger.info("[RunManager] Extracted lessons", { count: extraction.lessons.length });
 
 			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop: deep reflection" });
 
@@ -384,15 +385,15 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 					settings: this.#settings,
 				});
 				if (reflection) {
-					console.log(`[RunManager] Deep reflection completed (confidence: ${reflection.confidence})`);
+					logger.info("[RunManager] Deep reflection completed", { confidence: reflection.confidence });
 					// Add reflection as a lesson
 					const reflectionLesson = reflectionToLesson(reflection, runId);
 					extraction.lessons.push(reflectionLesson);
 				} else {
-					console.log("[RunManager] Deep reflection returned null (skipped)");
+					logger.info("[RunManager] Deep reflection returned null (skipped)");
 				}
 			} catch (reflectErr) {
-				console.warn("[RunManager] Deep reflection failed:", reflectErr);
+				logger.warn("[RunManager] Deep reflection failed", { error: String(reflectErr) });
 			}
 
 			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop: saving experience" });
@@ -410,20 +411,20 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 				this.#experienceStore.saveLesson(entry);
 				referencedRunIds.push(entry.runId);
 			}
-			console.log(`[RunManager] Saved ${extraction.lessons.length} lessons to ExperienceStore`);
+			logger.info("[RunManager] Saved lessons to ExperienceStore", { count: extraction.lessons.length });
 
 			// 6. Generate run summary
 			const summary = generateRunSummary(runId, extraction);
 			await this.#experienceStore.writeSummary(runId, summary.markdown);
-			console.log(`[RunManager] Summary written to .omp/experience/summaries/${runId}.md`);
+			logger.info("[RunManager] Summary written", { path: `.omp/experience/summaries/${runId}.md` });
 
 			// 7. Archive plan.md for history
 			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop: archiving plan" });
 			try {
 				await archivePlanForHistory(this.#workspace);
-				console.log("[RunManager] plan.md archived to .omp/plans/");
+				logger.info("[RunManager] plan.md archived to .omp/plans/");
 			} catch (archiveErr) {
-				console.warn("[RunManager] Plan archival failed:", archiveErr);
+				logger.warn("[RunManager] Plan archival failed", { error: String(archiveErr) });
 			}
 
 			// 8. Decay unreferenced lessons
@@ -456,9 +457,9 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop completed", loopPhase: "idle", status: "completed" });
 			this.#activityLogger.logPhase("after-loop-done", undefined, result.iterations);
 
-			console.log("[RunManager] After Loop pipeline completed successfully");
+			logger.info("[RunManager] After Loop pipeline completed successfully");
 		} catch (afterLoopErr) {
-			console.error("[RunManager] After Loop pipeline failed:", afterLoopErr);
+			logger.error("[RunManager] After Loop pipeline failed", { error: String(afterLoopErr) });
 			await this.#stateTracker.updatePipeline({ roundtablePhase: "After Loop failed", loopPhase: "idle", status: "failed" });
 		}
 	}
@@ -483,7 +484,7 @@ async function main() {
 	await fs.mkdir(swarmDir, { recursive: true });
 
 	// 2. Bootstrap auth + model registry + settings
-	console.log("Bootstrapping auth and model registry...");
+	logger.info("Bootstrapping auth and model registry...");
 	const authStorage = await discoverAuthStorage();
 	const modelRegistry = new ModelRegistry(authStorage);
 	const settings = Settings.isolated();
@@ -495,7 +496,7 @@ async function main() {
 	const activityLogger = new ActivityLogger(stateTracker.swarmDir);
 
 	// 4b. Create and initialize ExperienceStore
-	console.log("Initializing ExperienceStore...");
+	logger.info("Initializing ExperienceStore...");
 	const experienceStore = new ExperienceStore(WORKSPACE_DIR);
 	await experienceStore.init();
 
@@ -530,12 +531,12 @@ async function main() {
 	};
 
 	// 5d. Create and initialize RoleAssetManager — seed built-in roles if empty
-	console.log("Initializing RoleAssetManager...");
+	logger.info("Initializing RoleAssetManager...");
 	const roleAssetManager = new RoleAssetManager(WORKSPACE_DIR);
 	await roleAssetManager.init();
 	const seeded = await roleAssetManager.seedIfEmpty();
 	if (seeded > 0) {
-		console.log(`Seeded ${seeded} built-in role assets`);
+		logger.info(`Seeded ${seeded} built-in role assets`);
 	}
 
 	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink + modelRegistry + roleAssetManager injected)
@@ -545,21 +546,24 @@ async function main() {
 	// 7. Wire ActivityLogger → SSE
 	activityLogger.setBroadcaster(server);
 
-	console.log(`\n┌──────────────────────────────────────────────────┐`);
-	console.log(`│  SatoPi MonitorServer (real swarm backend)       │`);
-	console.log(`│  Swarm: ${swarmName.padEnd(40)}│`);
-	console.log(`│  API:   http://127.0.0.1:${String(port).padEnd(24)}│`);
-	console.log(`│  SSE:   http://127.0.0.1:${port}/events            │`);
-	console.log(`│  YAML:  ${YAML_PATH.slice(0, 37).padEnd(37)}│`);
-	console.log(`│  POST /api/run/start  → launch swarm             │`);
-	console.log(`│  POST /api/run/stop   → abort swarm              │`);
-	console.log(`│  GET  /api/after-loop/summary → last run result  │`);
-	console.log(`│  GET  /api/experience?q=...   → search lessons    │`);
-	console.log(`└──────────────────────────────────────────────────┘\n`);
+	logger.info([
+		"",
+		"┌──────────────────────────────────────────────────┐",
+		`│  SatoPi MonitorServer (real swarm backend)       │`,
+		`│  Swarm: ${swarmName.padEnd(40)}│`,
+		`│  API:   http://127.0.0.1:${String(port).padEnd(24)}│`,
+		`│  SSE:   http://127.0.0.1:${port}/events            │`,
+		`│  YAML:  ${YAML_PATH.slice(0, 37).padEnd(37)}│`,
+		"│  POST /api/run/start  → launch swarm             │",
+		"│  POST /api/run/stop   → abort swarm              │",
+		"│  GET  /api/after-loop/summary → last run result  │",
+		"│  GET  /api/experience?q=...   → search lessons    │",
+		"└──────────────────────────────────────────────────┘",
+	].join("\n"));
 
 	// Graceful shutdown
 	const shutdown = () => {
-		console.log("\nShutting down MonitorServer...");
+		logger.info("Shutting down MonitorServer...");
 		if (runManager.isRunning) {
 			runManager.stop().catch(() => {});
 		}
@@ -572,6 +576,6 @@ async function main() {
 }
 
 main().catch((err) => {
-	console.error("Failed to start MonitorServer:", err);
+	logger.error("Failed to start MonitorServer", { error: String(err) });
 	process.exit(1);
 });
