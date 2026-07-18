@@ -2,7 +2,7 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
 
 const BASE = "";
 
@@ -144,4 +144,49 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
+
+  // ── Role Asset Library ──
+
+  getRoles: (status?: RoleStatus) => {
+    const params = status ? `?status=${encodeURIComponent(status)}` : "";
+    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles${params}`);
+  },
+
+  getRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}`),
+
+  createRole: (input: RoleCreateInput) =>
+    fetchJson<RoleAsset>("/api/roles", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateRole: (id: string, input: RoleUpdateInput) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  approveRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  deprecateRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}/deprecate`, {
+      method: "POST",
+    }),
+
+  deleteRole: (id: string) =>
+    fetchJson<{ success: boolean; error?: string }>(`/api/roles/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  searchRoles: (params: { tag?: string; status?: RoleStatus; q?: string }) => {
+    const sp = new URLSearchParams();
+    if (params.tag) sp.set("tag", params.tag);
+    if (params.status) sp.set("status", params.status);
+    if (params.q) sp.set("q", params.q);
+    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles/search?${sp.toString()}`);
+  },
 };
