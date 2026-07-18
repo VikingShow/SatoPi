@@ -85,6 +85,10 @@ export interface SwarmState {
   reviewVerdict?: string;
   loopPhase?: LoopPhase;
   todos?: TodoItem[];
+  /** P2-6: Cumulative input+output tokens across all agents. */
+  totalTokens?: number;
+  /** P2-6: Cumulative assistant request count across all agents. */
+  totalRequests?: number;
 }
 
 export type ActivityEventType =

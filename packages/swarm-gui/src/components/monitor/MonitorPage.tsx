@@ -1,7 +1,7 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play } from "lucide-react";
-import { useState } from "react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ChannelList from "./ChannelList";
 import ChatView from "./ChatView";
@@ -11,11 +11,25 @@ import BlockerDialog from "./BlockerDialog";
 import AgentTopology from "./AgentTopology";
 import RoleBrowser from "./RoleBrowser";
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function estimateCost(tokens: number): string {
+  // Rough estimate: $3/M input tokens, $15/M output tokens → average ~$5/M
+  const cost = (tokens / 1_000_000) * 5;
+  if (cost >= 0.01) return `$${cost.toFixed(2)}`;
+  return "<$0.01";
+}
+
 export default function MonitorPage() {
   const swarmState = useSwarmStore((s) => s.swarmState);
   const isRunning = useSwarmStore((s) => s.isRunning);
   const isConnected = useSwarmStore((s) => s.isConnected);
   const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const convergenceHistory = useSwarmStore((s) => s.convergenceHistory);
   const pauseRun = useSwarmStore((s) => s.pauseRun);
   const resumeRun = useSwarmStore((s) => s.resumeRun);
   const theme = useThemeStore((s) => s.theme);
@@ -24,6 +38,16 @@ export default function MonitorPage() {
   const [viewMode, setViewMode] = useState<"chat" | "topology" | "roles">("chat");
 
   const isActive = loopPhase === "running" || loopPhase === "blocked";
+
+  // P2-5: Compute convergence trend from the last 3 values.
+  const convergenceTrend = useMemo(() => {
+    const h = convergenceHistory;
+    if (h.length < 2) return null;
+    const recent = h.slice(-3);
+    const latest = recent[recent.length - 1].jaccard;
+    const prev = recent[0].jaccard;
+    return { latest, trend: latest >= prev ? "up" as const : "down" as const };
+  }, [convergenceHistory]);
 
   const statusLabel = (() => {
     switch (loopPhase) {
@@ -91,6 +115,22 @@ export default function MonitorPage() {
               </button>
             </div>
           <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
+          {/* P2-6: Token count + cost estimate */}
+          {(swarmState?.totalTokens ?? 0) > 0 && (
+            <span className="flex items-center gap-1 text-xs text-neutral-500" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>
+              <Zap size={11} />
+              {formatTokens(swarmState!.totalTokens!)}
+              <span className="text-neutral-700">·</span>
+              {estimateCost(swarmState!.totalTokens!)}
+            </span>
+          )}
+          {/* P2-5: Convergence trend indicator */}
+          {convergenceTrend && (
+            <span className={`flex items-center gap-0.5 text-xs ${convergenceTrend.trend === "up" ? "text-emerald-400" : "text-amber-400"}`} title={`Jaccard: ${convergenceTrend.latest.toFixed(3)}`}>
+              {convergenceTrend.trend === "up" ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+              {(convergenceTrend.latest * 100).toFixed(0)}%
+            </span>
+          )}
           <span className="flex items-center gap-1 text-xs text-neutral-600">
             {isConnected ? (
               <><Wifi size={12} className="text-emerald-400" /> SSE</>
