@@ -67,7 +67,7 @@ export default function PhasePipeline() {
       {phases.map((p, i) => {
         const status = getPhaseStatus(p);
         return (
-          <div key={p} className="flex items-center gap-1 flex-shrink-0">
+          <div key={p} className="flex items-center gap-1 shrink-0">
             {i > 0 && <span className="text-neutral-700 text-xs">--</span>}
             <div className="flex items-center gap-1.5">
               <span

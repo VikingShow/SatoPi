@@ -7,11 +7,11 @@ function TodoRow({ todo }: { todo: TodoItem }) {
   const icon = (() => {
     switch (todo.status) {
       case "completed":
-        return <CheckCircle2 size={14} className="text-status-success flex-shrink-0" />;
+        return <CheckCircle2 size={14} className="text-status-success shrink-0" />;
       case "in_progress":
-        return <Clock size={14} className="text-status-warning flex-shrink-0 animate-pulse" />;
+        return <Clock size={14} className="text-status-warning shrink-0 animate-pulse" />;
       default:
-        return <Circle size={14} className="text-neutral-600 flex-shrink-0" />;
+        return <Circle size={14} className="text-neutral-600 shrink-0" />;
     }
   })();
 
@@ -25,7 +25,7 @@ function TodoRow({ todo }: { todo: TodoItem }) {
     <div className="flex items-start gap-1.5 px-3 py-1.5">
       <div className="mt-0.5">{icon}</div>
       <div className="min-w-0 flex-1">
-        <div className={`text-xs ${titleColor} break-words`}>{todo.title}</div>
+        <div className={`text-xs ${titleColor} wrap-break-word`}>{todo.title}</div>
         {todo.files && todo.files.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-1">
             {todo.files.map((f, i) => (

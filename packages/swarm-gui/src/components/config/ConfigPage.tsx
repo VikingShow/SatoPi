@@ -26,7 +26,7 @@ export default function ConfigPage() {
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           min={min} max={max} step={step}
-          className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none"
+          className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
         />
       </div>
     );
@@ -64,7 +64,7 @@ export default function ConfigPage() {
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Model</label>
               <input type="text" value={workers.model} onChange={(e) => config.updateWorkers({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none" />
+                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden" />
             </div>
           </div>
           <div className="mt-3">
@@ -80,12 +80,12 @@ export default function ConfigPage() {
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Model</label>
               <input type="text" value={cloners.model} onChange={(e) => config.updateCloners({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none" />
+                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Review Strictness</label>
               <select value={cloners.reviewStrictness} onChange={(e) => config.updateCloners({ reviewStrictness: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none">
+                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden">
                 <option value="strict">Strict</option>
                 <option value="normal">Normal</option>
                 <option value="lenient">Lenient</option>

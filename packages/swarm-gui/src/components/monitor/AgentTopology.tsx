@@ -169,14 +169,14 @@ export default function AgentTopology() {
       nodesDraggable={false}
       elementsSelectable={false}
       proOptions={{ hideAttribution: true }}
-      className="bg-[#0A0A0A]"
+      className="bg-background"
     >
       <Background color="#1a1a1a" gap={20} />
-      <Controls className="!bg-neutral-800 !border-neutral-700 !rounded-lg" />
+      <Controls className="bg-neutral-800! border-neutral-700! rounded-lg!" />
       <MiniMap
         nodeColor={(n) => AGENT_COLORS[(n.data as { agentType: string }).agentType] || "#7C3AED"}
         maskColor="rgba(0,0,0,0.7)"
-        className="!bg-neutral-900 !border-neutral-700 !rounded-lg"
+        className="bg-neutral-900! border-neutral-700! rounded-lg!"
       />
     </ReactFlow>
   );

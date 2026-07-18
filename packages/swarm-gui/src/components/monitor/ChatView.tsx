@@ -50,7 +50,7 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
 
   return (
     <div
-      className="shiki-wrapper my-1 rounded-lg overflow-hidden border border-[#1a1a1a] text-xs [&_pre]:!bg-transparent [&_pre]:p-3 [&_pre]:overflow-x-auto"
+      className="shiki-wrapper my-1 rounded-lg overflow-hidden border border-[#1a1a1a] text-xs [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -224,7 +224,7 @@ export default function ChatView() {
 
       {/* Context Action Bar — appears when plan is ready or debate is done */}
       {((loopPhase === "before-loop-dialog" && planReady) || loopPhase === "before-loop-confirm") && !isBusy && (
-        <div className="border-t border-purple-800/40 px-4 py-2 bg-gradient-to-r from-purple-950/30 to-blue-950/30">
+        <div className="border-t border-purple-800/40 px-4 py-2 bg-linear-to-r from-purple-950/30 to-blue-950/30">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-xs font-medium text-purple-300">
               <CheckCircle2 size={12} />
@@ -283,7 +283,7 @@ export default function ChatView() {
             onKeyDown={handleKeyDown}
             disabled={!canSend || isBusy}
             placeholder={placeholder}
-            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none disabled:opacity-50"
+            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
           />
           <button
             onClick={handleSend}

@@ -185,7 +185,7 @@ export default function PlanViewer() {
       <textarea
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
-        className="w-full h-full bg-background-elevated text-neutral-200 text-xs font-mono p-3 rounded-lg border border-background-border focus:border-primary/50 focus:outline-none resize-none"
+        className="w-full h-full bg-background-elevated text-neutral-200 text-xs font-mono p-3 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden resize-none"
         style={{ minHeight: "200px" }}
         placeholder="# Plan title&#10;&#10;Write your plan in Markdown..."
         spellCheck={false}
@@ -220,7 +220,7 @@ export default function PlanViewer() {
       {/* ── Fullscreen modal ── */}
       {fullscreen && (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-xs"
           onClick={() => setFullscreen(false)}
         >
           <div

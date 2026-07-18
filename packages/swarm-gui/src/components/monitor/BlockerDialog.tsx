@@ -31,13 +31,13 @@ export default function BlockerDialog() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Glassmorphism backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" />
 
       {/* Dialog card */}
       <div className="relative w-full max-w-2xl mx-4 rounded-card border border-red-500/30 bg-neutral-900/80 backdrop-blur-xl shadow-2xl shadow-red-500/10">
         {/* Header — amber/red accent bar */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-red-500/20 bg-gradient-to-r from-red-950/40 to-amber-950/30 rounded-t-card">
-          <AlertTriangle size={24} className="text-amber-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-red-500/20 bg-linear-to-r from-red-950/40 to-amber-950/30 rounded-t-card">
+          <AlertTriangle size={24} className="text-amber-400 shrink-0" />
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-amber-300">Loop Blocked</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
@@ -98,7 +98,7 @@ export default function BlockerDialog() {
                   <ul className="mt-1 space-y-1">
                     {ctx.lastFindings.slice(0, 5).map((finding, i) => (
                       <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                        <span className="text-neutral-700 flex-shrink-0">{i + 1}.</span>
+                        <span className="text-neutral-700 shrink-0">{i + 1}.</span>
                         <span className="truncate">{finding}</span>
                       </li>
                     ))}
