@@ -17,6 +17,9 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "./schema";
 import type { StateTracker } from "./state";
 
+/** Default per-agent wall-clock cap (5 minutes). */
+const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+
 export interface SwarmExecutorOptions {
 	workspace: string;
 	swarmName: string;
@@ -27,6 +30,18 @@ export interface SwarmExecutorOptions {
 	modelRegistry?: ModelRegistry;
 	settings?: Settings;
 	stateTracker: StateTracker;
+	/**
+	 * Per-agent wall-clock timeout in milliseconds.
+	 * When exceeded the agent is aborted and marked as CRASHED.
+	 * Defaults to 5 minutes. Set to 0 to disable.
+	 */
+	timeoutMs?: number;
+	/**
+	 * Callback invoked after the subprocess has started.
+	 * Receives an AbortController that the caller can use to
+	 * terminate the agent externally (e.g. on pipeline abort).
+	 */
+	onStarted?: (controller: AbortController) => void;
 }
 
 /**
@@ -43,8 +58,19 @@ export async function executeSwarmAgent(
 	index: number,
 	options: SwarmExecutorOptions,
 ): Promise<SingleResult> {
-	const { workspace, swarmName, iteration, modelOverride, signal, onProgress, modelRegistry, settings, stateTracker } =
-		options;
+	const {
+		workspace,
+		swarmName,
+		iteration,
+		modelOverride,
+		signal,
+		onProgress,
+		modelRegistry,
+		settings,
+		stateTracker,
+		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
+		onStarted,
+	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
 
@@ -54,6 +80,27 @@ export async function executeSwarmAgent(
 		systemPrompt: buildSystemPrompt(agent),
 		source: "project" as AgentSource,
 	};
+
+	// Build a per-agent timeout controller and combine with the caller's signal.
+	// The caller can terminate the agent via onStarted's controller.
+	const agentController = new AbortController();
+	const effectiveSignal =
+		signal && timeoutMs > 0
+			? AbortSignal.any([signal, agentController.signal])
+			: signal ?? agentController.signal;
+
+	// Arm the timeout if enabled.
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	if (timeoutMs > 0) {
+		timeoutId = setTimeout(() => {
+			agentController.abort(
+				new DOMException(`Agent "${agent.name}" timed out after ${timeoutMs}ms`, "TimeoutError"),
+			);
+		}, timeoutMs);
+	}
+
+	// Notify the caller so they can abort us on pipeline shutdown.
+	onStarted?.(agentController);
 
 	await stateTracker.updateAgent(agent.name, {
 		status: "running",
@@ -70,7 +117,8 @@ export async function executeSwarmAgent(
 			index,
 			id: agentId,
 			modelOverride,
-			signal,
+			signal: effectiveSignal,
+			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
 			onProgress: progress => onProgress?.(agent.name, progress),
 			modelRegistry,
 			settings,
@@ -93,13 +141,37 @@ export async function executeSwarmAgent(
 		return result;
 	} catch (err) {
 		const error = err instanceof Error ? err.message : String(err);
+		// Distinguish timeout from other failures.
+		const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+		const status = isTimeout ? ("failed" as const) : ("failed" as const);
 		await stateTracker.updateAgent(agent.name, {
-			status: "failed",
+			status,
 			completedAt: Date.now(),
-			error,
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 		});
-		await stateTracker.appendLog(agent.name, `Iteration ${iteration} error: ${error}`);
-		throw err;
+		await stateTracker.appendLog(
+			agent.name,
+			`Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`,
+		);
+
+		const failResult: SingleResult = {
+			index,
+			id: agentId,
+			agent: agent.name,
+			agentSource: "project" as AgentSource,
+			task: agent.task,
+			exitCode: 1,
+			output: "",
+			stderr: error,
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
+		};
+		return failResult;
+	} finally {
+		if (timeoutId) clearTimeout(timeoutId);
 	}
 }
 
