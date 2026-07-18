@@ -12,7 +12,7 @@
 | 阶段 | 分支 | 状态 | 提交 | 日期 |
 |------|------|------|------|------|
 | **P0** | `fix/p0-robustness` | ✅ 已完成 | `f994247` | 2026-07-19 |
-| **P1** | — | ⬚ 待开始 | — | — |
+| **P1** | `fix/p1-architecture-decoupling` | ✅ 已完成 | `009378f` | 2026-07-19 |
 | **P2** | — | ⬚ 待开始 | — | — |
 | **P3+P4** | — | ⬚ 待开始 | — | — |
 
@@ -26,6 +26,22 @@
 | ✅ P0-4 | 并发安全 | `state.ts` | 序列化 `#writeChain` promise 队列, 同 tick 合并写 |
 
 **验证**: 133 测试全部通过, 零回归, 修改文件零类型错误
+
+### P1 完成详情 (2026-07-19)
+
+| 编号 | 问题 | 修复文件 | 变更 |
+|------|------|---------|------|
+| ✅ P1-2 | Executor接口抽象 | `executor.ts` | `AgentExecutor` 接口 + `SubprocessAgentExecutor` 默认实现, `PipelineOptions.executor` 注入 |
+| ✅ P1-5 | 工具权限可配置 | `schema.ts` + `executor.ts` | `SwarmAgent.allowedTools`/`blockedTools` YAML解析 → `AgentDefinition` 传递 |
+| ✅ P1-4 | Wave数据管道 | `pipeline.ts` | `WaveResult` + `PipelineContext` 类型, 每 Wave 结果累积传递给下游 |
+| ✅ P1-3 | 依赖注入 | `pipeline.ts` | `PipelineHooks` 接口替换硬编码生命周期行为 |
+| ✅ P1-6 | 条件分支 | `pipeline.ts` | 7 个生命周期 hook: `beforePipeline`, `beforeIteration`, `afterIteration`, `beforeWave`, `afterWave`, `afterPipeline`, `onHookError` |
+
+**验证**: 133 测试全部通过, 零回归, 修改文件零类型错误
+
+> **P1-1 (包迁移) 延期**: 将 swarm 编排逻辑从 `coding-agent/src/swarm/` 迁移到独立的 `swarm-engine` 包需要更新全项目 import 路径并更新 workspace 配置。此变更影响范围大 (>20 个文件), 建议在单独的分支中处理, 并先行通过 CI 验证。
+
+**变更量**: 3 files, +224/-5 lines
 
 ---
 
@@ -86,7 +102,7 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 二、P1 — 架构耦合与模块化问题
+## 二、P1 — 架构耦合与模块化问题 ✅ 已完成 (2026-07-19)
 
 ### P1-1: Swarm 编排逻辑放错包位置
 
