@@ -62,8 +62,7 @@ export default function MonitorPage() {
           <span className={`text-sm font-medium ${statusColor}`}>
             ● {statusLabel}
           </span>
-          {(isActive || loopPhase === "idle" || loopPhase === "before-loop-dialog") && (
-            <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
+          <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode("chat")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
@@ -89,7 +88,6 @@ export default function MonitorPage() {
                 <Users size={12} /> Roles
               </button>
             </div>
-          )}
           <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
           <span className="flex items-center gap-1 text-xs text-neutral-600">
             {isConnected ? (

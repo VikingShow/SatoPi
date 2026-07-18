@@ -124,7 +124,7 @@ function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-hidden">
-          {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage /></Suspense>}
+          {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage onNavigateToMonitor={() => setPage("monitor")} /></Suspense>}
           {page === "monitor" && <MonitorPage />}
           {page === "history" && <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>}
         </main>

@@ -2,112 +2,155 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ==========================================================================
+   SatoPi Design Tokens — TW4 @theme block
+   Maps Tailwind class names to SatoPi brand values.
+   Components use Tailwind classes (bg-background, text-primary, …).
+   ========================================================================== */
+
 @theme {
-  --color-background: #0a0a0a;
+  /* ── Brand accent: Gold ── */
+  --color-primary: #F59E0B;
+  --color-primary-hover: #D97706;
+  --color-primary-foreground: #0A0A0A;
+
+  /* ── Surfaces (dark neutral ramp) ── */
+  --color-background: #0A0A0A;
   --color-background-card: #141414;
-  --color-background-elevated: #1c1c1c;
-  --color-background-border: #262626;
+  --color-background-elevated: #1C1C1C;
+  --color-background-overlay: #262626;
 
-  --color-primary: hsl(var(--primary));
-  --color-primary-hover: #d97706;
-  --color-primary-foreground: hsl(var(--primary-foreground));
+  /* ── Text ── */
+  --color-foreground: #FAFAFA;
+  --color-muted: #1C1C1C;
+  --color-muted-foreground: #A3A3A3;
+  --color-secondary: #1C1C1C;
+  --color-secondary-foreground: #FAFAFA;
+  --color-accent: #1C1C1C;
+  --color-accent-foreground: #FAFAFA;
 
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  /* ── Cards & Popovers (same as card bg) ── */
+  --color-card: #141414;
+  --color-card-foreground: #FAFAFA;
+  --color-popover: #141414;
+  --color-popover-foreground: #FAFAFA;
 
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  /* ── Borders & Inputs ── */
+  --color-border: #262626;
+  --color-input: #262626;
+  --color-ring: #F59E0B;
 
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
+  /* ── Destructive ── */
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FAFAFA;
 
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  /* ── Status ── */
+  --color-status-success: #22C55E;
+  --color-status-warning: #F59E0B;
+  --color-status-danger: #EF4444;
+  --color-status-info: #3B82F6;
+  --color-status-accent: #8B5CF6;
 
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  /* ── Typography ── */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-
-  --color-foreground: hsl(var(--foreground));
-
-  --color-status-success: #22c55e;
-  --color-status-warning: #f59e0b;
-  --color-status-danger: #ef4444;
-  --color-status-info: #06b6d4;
-  --color-status-accent: #8b5cf6;
-
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: JetBrains Mono, monospace;
-
-  --radius-card: 12px;
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  /* ── Radii ── */
+  --radius: 0.5rem;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
 }
 
-/*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+/* ==========================================================================
+   CSS Custom Properties — for shadcn/ui component compatibility.
+   shadcn components reference these via var(--name) in their Tailwind
+   classes (e.g. bg-popover resolves to var(--popover)).
 
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
+   We set every var() that shadcn expects, mapped to SatoPi colors.
+   This is the ONLY source of truth for these variables.
+   ========================================================================== */
+
+:root {
+  --background: #0A0A0A;
+  --foreground: #FAFAFA;
+  --card: #141414;
+  --card-foreground: #FAFAFA;
+  --popover: #141414;
+  --popover-foreground: #FAFAFA;
+  --primary: #F59E0B;
+  --primary-foreground: #0A0A0A;
+  --secondary: #1C1C1C;
+  --secondary-foreground: #FAFAFA;
+  --muted: #1C1C1C;
+  --muted-foreground: #A3A3A3;
+  --accent: #1C1C1C;
+  --accent-foreground: #FAFAFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #262626;
+  --input: #262626;
+  --ring: #F59E0B;
+  --radius: 0.5rem;
+}
+
+/* ── Light theme override ── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --background: #FAFAFA;
+  --foreground: #0A0A0A;
+  --card: #FFFFFF;
+  --card-foreground: #0A0A0A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0A0A0A;
+  --primary: #D97706;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F5F5F5;
+  --secondary-foreground: #0A0A0A;
+  --muted: #F5F5F5;
+  --muted-foreground: #737373;
+  --accent: #F5F5F5;
+  --accent-foreground: #0A0A0A;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E5E5E5;
+  --input: #E5E5E5;
+  --ring: #D97706;
+}
+
+/* ==========================================================================
+   Base layer — global resets and utilities
+   ========================================================================== */
+
 @layer base {
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
-  }
-}
-
-@layer base {
-  :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 267 75% 55%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 13%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 13%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 85% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 267 75% 55%;
-    --radius: 0.5rem;
-  }
-}
-
-@layer utilities {
-  :root {
-    color-scheme: dark;
+    border-color: var(--border);
   }
 
   body {
     margin: 0;
-    background-color: #0a0a0a;
-    color: #fafafa;
-    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html {
+    font-family: var(--font-sans);
+  }
+}
+
+/* ==========================================================================
+   Utilities layer — scrollbars, animations, markdown, glass
+   ========================================================================== */
+
+@layer utilities {
+  /* ── Scrollbar ── */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -126,16 +169,11 @@
     background: #404040;
   }
 
+  /* ── Animations ── */
   @keyframes pulse-ring {
-    0% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.4;
-    }
-    100% {
-      opacity: 1;
-    }
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
   }
 
   .animate-pulse-ring {
@@ -143,27 +181,25 @@
   }
 
   @keyframes dash-flow {
-    to {
-      stroke-dashoffset: -20;
-    }
+    to { stroke-dashoffset: -20; }
   }
 
   .animate-dash-flow {
     animation: dash-flow 0.8s linear infinite;
   }
 
+  /* ── Glass panel (modals, overlays) ── */
   .glass-panel {
     background: rgba(20, 20, 20, 0.8);
     backdrop-filter: blur(12px);
     border: 1px solid rgba(38, 38, 38, 0.8);
   }
 
-  /* ── Markdown rendering (plan.md) ── */
-
+  /* ── Markdown rendering ── */
   .markdown-body {
     font-size: 13px;
     line-height: 1.7;
-    color: #d4d4d4;
+    color: #D4D4D4;
   }
 
   .markdown-body h1,
@@ -172,7 +208,7 @@
   .markdown-body h4,
   .markdown-body h5,
   .markdown-body h6 {
-    color: #fafafa;
+    color: #FAFAFA;
     font-weight: 600;
     margin-top: 1.2em;
     margin-bottom: 0.6em;
@@ -184,21 +220,16 @@
     border-bottom: 1px solid #262626;
     padding-bottom: 0.3em;
   }
+
   .markdown-body h2 {
     font-size: 1.15em;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid #1A1A1A;
     padding-bottom: 0.2em;
   }
-  .markdown-body h3 {
-    font-size: 1.05em;
-  }
-  .markdown-body h4 {
-    font-size: 1em;
-  }
 
-  .markdown-body p {
-    margin: 0.5em 0;
-  }
+  .markdown-body h3 { font-size: 1.05em; }
+  .markdown-body h4 { font-size: 1em; }
+  .markdown-body p { margin: 0.5em 0; }
 
   .markdown-body ul,
   .markdown-body ol {
@@ -206,27 +237,22 @@
     padding-left: 1.4em;
   }
 
-  .markdown-body li {
-    margin: 0.2em 0;
-  }
-
+  .markdown-body li { margin: 0.2em 0; }
   .markdown-body li > ul,
-  .markdown-body li > ol {
-    margin: 0.2em 0;
-  }
+  .markdown-body li > ol { margin: 0.2em 0; }
 
   .markdown-body code {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: "JetBrains Mono", monospace;
     font-size: 0.85em;
-    background: #1a1a1a;
+    background: #1A1A1A;
     padding: 0.15em 0.35em;
     border-radius: 4px;
-    color: #f59e0b;
+    color: #F59E0B;
   }
 
   .markdown-body pre {
-    background: #0d0d0d;
-    border: 1px solid #1a1a1a;
+    background: #0D0D0D;
+    border: 1px solid #1A1A1A;
     border-radius: 8px;
     padding: 0.8em 1em;
     overflow-x: auto;
@@ -236,26 +262,24 @@
   .markdown-body pre code {
     background: none;
     padding: 0;
-    color: #d4d4d4;
+    color: #D4D4D4;
     font-size: 0.85em;
   }
 
   .markdown-body blockquote {
-    border-left: 3px solid #f59e0b;
+    border-left: 3px solid #F59E0B;
     margin: 0.6em 0;
     padding: 0.2em 0.9em;
-    color: #a3a3a3;
+    color: #A3A3A3;
     background: rgba(245, 158, 11, 0.05);
   }
 
   .markdown-body a {
-    color: #60a5fa;
+    color: #60A5FA;
     text-decoration: none;
   }
 
-  .markdown-body a:hover {
-    text-decoration: underline;
-  }
+  .markdown-body a:hover { text-decoration: underline; }
 
   .markdown-body table {
     border-collapse: collapse;
@@ -274,7 +298,7 @@
   .markdown-body th {
     background: #141414;
     font-weight: 600;
-    color: #fafafa;
+    color: #FAFAFA;
   }
 
   .markdown-body tr:nth-child(even) {
@@ -288,119 +312,33 @@
   }
 
   .markdown-body strong {
-    color: #fafafa;
+    color: #FAFAFA;
     font-weight: 600;
   }
 
   .markdown-body input[type='checkbox'] {
     margin-right: 0.4em;
-    accent-color: #f59e0b;
+    accent-color: #F59E0B;
   }
-}
 
-@layer base {
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+  /* ── Responsive utilities ── */
+  @media (max-width: 1023px) {
+    .sidebar-collapsed-mobile { display: none !important; }
+    .mobile-full-width { width: 100% !important; }
   }
-  :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-  }
-  .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
-}
 
-/* ── Responsive ── */
-@media (max-width: 1023px) {
-  .sidebar-collapsed-mobile { display: none !important; }
-  .mobile-full-width { width: 100% !important; }
-}
-
-/* Mobile bottom sheet */
-@media (max-width: 1023px) {
-  .mobile-bottom-sheet {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-height: 50vh;
-    z-index: 50;
-    border-radius: 12px 12px 0 0;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-  }
-  .mobile-bottom-sheet.open {
-    transform: translateY(0);
+  @media (max-width: 1023px) {
+    .mobile-bottom-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 50vh;
+      z-index: 50;
+      border-radius: 12px 12px 0 0;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    .mobile-bottom-sheet.open { transform: translateY(0); }
   }
 }

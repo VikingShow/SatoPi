@@ -127,7 +127,7 @@ export default function AgentTopology() {
     const recent = activities.slice(-50);
 
     for (const a of recent) {
-      if (a.type !== "message") continue;
+      if (a.type !== "broadcast" && a.type !== "steering") continue;
       const src = (a as Record<string, unknown>).from as string | undefined;
       const tgt = (a as Record<string, unknown>).to as string | undefined;
       if (!src || !tgt || src === tgt) continue;

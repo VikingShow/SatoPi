@@ -1,11 +1,30 @@
 import { useSwarmStore } from "../../stores/swarm-store";
+import { Check, Loader2 } from "lucide-react";
+
 import type { LoopPhase } from "../../lib/types";
 
-// All phases including Before Loop stages
-const ALL_PHASES = ["Plan", "Dialog", "Debate", "Confirm", "Workers", "Review", "Verdict", "After Loop"];
+/**
+ * PhasePipeline — user-readable 5-step progress bar.
+ *
+ * Internal phases mapped to user-facing terminology:
+ *   Before Loop (dialog+debate+confirm) → Planning → Refining
+ *   Workers running → Working
+ *   Cloner review + verdict → Reviewing
+ *   After Loop → Summary
+ */
+interface Step {
+  key: string;
+  label: string;
+  internalPhases: LoopPhase[];
+}
 
-// In-loop phases (original)
-const IN_LOOP_PHASES = ["Plan", "Workers", "Debate", "Review", "Verdict", "After Loop"];
+const STEPS: Step[] = [
+  { key: "planning", label: "Plan", internalPhases: ["before-loop-dialog", "before-loop-debate"] },
+  { key: "refining", label: "Refine", internalPhases: ["before-loop-confirm"] },
+  { key: "working", label: "Work", internalPhases: ["running"] },
+  { key: "reviewing", label: "Review", internalPhases: [] },
+  { key: "summary", label: "Summary", internalPhases: ["after-loop"] },
+];
 
 export default function PhasePipeline() {
   const swarmState = useSwarmStore((s) => s.swarmState);
@@ -14,78 +33,80 @@ export default function PhasePipeline() {
   const iter = swarmState?.loopIteration ?? 0;
   const maxIter = swarmState?.targetCount ?? 0;
 
-  // Determine which phase set to show
-  const showBeforeLoop = loopPhase === "before-loop-dialog" || loopPhase === "before-loop-debate" || loopPhase === "before-loop-confirm";
-  const phases = showBeforeLoop ? ALL_PHASES : IN_LOOP_PHASES;
+  if (loopPhase === "idle") return null;
 
-  function getPhaseStatus(p: string): "done" | "active" | "pending" {
-    // Before-loop phase tracking
-    if (loopPhase === "before-loop-dialog") {
-      if (p === "Plan") return "done";
-      if (p === "Dialog") return "active";
-      return "pending";
-    }
-    if (loopPhase === "before-loop-debate") {
-      if (p === "Plan" || p === "Dialog") return "done";
-      if (p === "Debate") return "active";
-      return "pending";
-    }
-    if (loopPhase === "before-loop-confirm") {
-      if (p === "Plan" || p === "Dialog" || p === "Debate") return "done";
-      if (p === "Confirm") return "active";
-      return "pending";
+  function getStepStatus(index: number): "done" | "active" | "pending" {
+    const step = STEPS[index];
+    if (!step) return "pending";
+
+    // Active: current loopPhase matches
+    if (step.internalPhases.includes(loopPhase)) return "active";
+
+    // In Running phase, check roundtablePhase for Review/After Loop
+    if (loopPhase === "running") {
+      if (phase.includes("Review") && step.key === "reviewing") return "active";
+      if (phase.includes("After Loop") && step.key === "summary") return "active";
+      if (phase.includes("After Loop completed")) {
+        return step.key === "summary" ? "done" : "done";
+      }
     }
 
-    // In-loop phase tracking (original logic)
-    // After Loop completed → everything is done
-    if (phase.includes("After Loop completed")) return "done";
-    // After Loop in progress
-    if (phase.includes("After Loop") && p === "After Loop") return "active";
-    // After Loop started → all in-loop phases are done
-    if (phase.includes("After Loop") && p !== "After Loop") return "done";
-    // Normal in-loop phase tracking
-    if (phase.includes("Passed") || phase === "Completed") {
-      return p === "After Loop" ? "pending" : "done";
+    // Blocked: prior steps done
+    if (loopPhase === "blocked") {
+      return index < 3 ? "done" : "pending";
     }
-    if (phase.includes("Workers") && p === "Workers") return "active";
-    if (phase.includes("Cloners") && (p === "Review" || p === "Debate")) return "active";
-    if (phase === p) return "active";
 
-    // When running, Plan is done, Workers is active by default
-    if (loopPhase === "running" && p === "Plan") return "done";
-    if (loopPhase === "running" && p === "Workers") return "active";
-
-    // After-loop phase
-    if (loopPhase === "after-loop" && p === "After Loop") return "active";
-    if (loopPhase === "after-loop") return "done";
+    // Find active index to mark earlier steps as done
+    const activeIdx = STEPS.findIndex(
+      (s) =>
+        s.internalPhases.includes(loopPhase) ||
+        (loopPhase === "running" && phase.includes(s.key === "reviewing" ? "Review" : s.key === "summary" ? "After Loop" : "")),
+    );
+    if (activeIdx >= 0 && index < activeIdx) return "done";
 
     return "pending";
   }
 
   return (
-    <div className="flex items-center gap-1 px-4 py-2 border-b border-background-border bg-background-card overflow-x-auto">
-      {phases.map((p, i) => {
-        const status = getPhaseStatus(p);
+    <div className="flex items-center justify-center gap-0 px-4 py-2 border-b border-border bg-background-card overflow-x-auto">
+      {STEPS.map((step, i) => {
+        const status = getStepStatus(i);
+        const isLast = i === STEPS.length - 1;
+
         return (
-          <div key={p} className="flex items-center gap-1 shrink-0">
-            {i > 0 && <span className="text-neutral-700 text-xs">--</span>}
+          <div key={step.key} className="flex items-center gap-0 flex-shrink-0">
             <div className="flex items-center gap-1.5">
+              {status === "done" ? (
+                <Check size={14} className="text-success flex-shrink-0" />
+              ) : status === "active" ? (
+                <Loader2 size={14} className="text-warning animate-spin flex-shrink-0" />
+              ) : (
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-neutral-700 flex-shrink-0" />
+              )}
+
               <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  status === "done" ? "bg-status-success" :
-                  status === "active" ? "bg-status-warning animate-pulse-ring" :
-                  "bg-neutral-700"
+                className={`text-xs font-medium ${
+                  status === "done"
+                    ? "text-success"
+                    : status === "active"
+                      ? "text-warning"
+                      : "text-fg-faint"
                 }`}
-              />
-              <span className={`text-xs ${
-                status === "done" ? "text-status-success" :
-                status === "active" ? "text-status-warning" :
-                "text-neutral-600"
-              }`}>
-                {p}
-                {p === "Workers" && status === "active" && ` R${iter}/${maxIter}`}
+              >
+                {step.label}
+                {step.key === "working" && status === "active" && (
+                  <span className="text-fg-faint font-normal ml-0.5">
+                    {iter}/{maxIter}
+                  </span>
+                )}
               </span>
             </div>
+
+            {!isLast && (
+              <div
+                className={`w-8 h-px mx-1.5 ${status === "done" ? "bg-success/40" : "bg-neutral-800"}`}
+              />
+            )}
           </div>
         );
       })}
