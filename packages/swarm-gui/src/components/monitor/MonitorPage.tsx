@@ -1,10 +1,12 @@
 import { useSwarmStore } from "../../stores/swarm-store";
-import { Square, Wifi, WifiOff, X, Loader2 } from "lucide-react";
+import { Square, Wifi, WifiOff, X, Loader2, GitGraph, MessageSquare } from "lucide-react";
+import { useState } from "react";
 import ChannelList from "./ChannelList";
 import ChatView from "./ChatView";
 import ContextPanel from "./ContextPanel";
 import PhasePipeline from "./PhasePipeline";
 import BlockerDialog from "./BlockerDialog";
+import AgentTopology from "./AgentTopology";
 
 export default function MonitorPage() {
   const swarmState = useSwarmStore((s) => s.swarmState);
@@ -14,8 +16,10 @@ export default function MonitorPage() {
   const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
   const stopRun = useSwarmStore((s) => s.stopRun);
   const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
+  const [viewMode, setViewMode] = useState<"chat" | "topology">("chat");
 
   const isBusy = beforeLoopState?.busy ?? false;
+  const isActive = loopPhase === "running" || loopPhase === "blocked";
 
   const statusLabel = (() => {
     switch (loopPhase) {
@@ -55,9 +59,27 @@ export default function MonitorPage() {
           <span className={`text-sm font-medium ${statusColor}`}>
             ● {statusLabel}
           </span>
-          <span className="text-xs text-neutral-600">
-            {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers
-          </span>
+          {isActive && (
+            <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode("chat")}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  viewMode === "chat" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                <MessageSquare size={12} /> Chat
+              </button>
+              <button
+                onClick={() => setViewMode("topology")}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  viewMode === "topology" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                <GitGraph size={12} /> Topology
+              </button>
+            </div>
+          )}
+          <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
           <span className="flex items-center gap-1 text-xs text-neutral-600">
             {isConnected ? (
               <><Wifi size={12} className="text-emerald-400" /> SSE</>
@@ -113,9 +135,17 @@ export default function MonitorPage() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        <ChannelList />
-        <ChatView />
-        <ContextPanel />
+        {viewMode === "chat" ? (
+          <>
+            <ChannelList />
+            <ChatView />
+            <ContextPanel />
+          </>
+        ) : (
+          <div className="flex-1 relative">
+            <AgentTopology />
+          </div>
+        )}
       </div>
 
       {/* Blocker resolution dialog — shown when loopPhase === "blocked" */}
