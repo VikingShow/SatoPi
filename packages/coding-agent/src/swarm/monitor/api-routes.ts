@@ -229,15 +229,22 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	// -- History ---------------------------------------------------------
-	"GET /api/history": async (_req, ctx) => {
+	"GET /api/history": async (req, ctx) => {
+		// P3-3: Support ?since=<timestamp> for incremental history fetch after reconnect.
+		const url = new URL(req.url);
+		const sinceParam = url.searchParams.get("since");
+		const since = sinceParam ? Number(sinceParam) : 0;
 		const lines = await readActivityLog(ctx.swarmDir);
-		const entries = lines.map((line) => {
-			try {
-				return JSON.parse(line);
-			} catch {
-				return null;
-			}
-		}).filter(Boolean);
+		const entries = lines
+			.map((line) => {
+				try {
+					return JSON.parse(line);
+				} catch {
+					return null;
+				}
+			})
+			.filter((e): e is Record<string, unknown> => e !== null)
+			.filter((e) => !since || (typeof e.ts === "number" && e.ts > since));
 		return json({ entries });
 	},
 

@@ -1098,9 +1098,18 @@ export class LoopController {
 
 		logger.warn(`Blockage detected at iteration ${iteration + 1}: ${reason}`);
 
-		// Await user resolution
+		// Await user resolution with P2-4 timeout (5 min auto-degrade to continue).
+		const BLOCKER_TIMEOUT_MS = 5 * 60 * 1000;
 		const resolution = await new Promise<BlockerResolution>((resolve) => {
 			this.#blockerResolver = resolve;
+			// P2-4: Auto-continue after timeout to prevent indefinite blocking.
+			setTimeout(() => {
+				if (this.#blockerResolver === resolve) {
+					logger.warn(`Blocker timed out after ${BLOCKER_TIMEOUT_MS}ms — auto-continuing`);
+					this.#activityLogger?.logPhase("blocker-timeout", undefined, iteration + 1);
+					resolve("continue");
+				}
+			}, BLOCKER_TIMEOUT_MS);
 		});
 
 		this.#blockerResolver = null;
