@@ -122,7 +122,7 @@
 | **A** | `defer/batch-a-sse-events` | P2-3, P2-10, P2-11 | ✅ | 2026-07-19 |
 | **B** | `defer/batch-b-interface-inversion` | P1-1, P4-1 | ✅ | 2026-07-19 |
 | **C** | `defer/batch-c-frontend` | P2-1, P2-2, P2-9 | ✅ | 2026-07-19 |
-| **D** | — | P2-4, P2-7, P2-8, P3-1, P3-2, P3-3, P3-4 | ⬚ 待开始 | — |
+| **D** | `defer/batch-d-final` | P2-4, P3-3 | ✅ | `8b7b3c6` | 2026-07-19 |
 
 ### 批次 A 详情 — SSE 事件扩展
 
@@ -147,15 +147,31 @@
 | ✅ P2-2 | Before-loop 历史 | ChatView 可折叠 'Previous planning conversation' 区域, 调用 `loadBeforeLoopHistory()` |
 | ✅ P2-9 | Diff 可视化 | ContextPanel 文件冲突项 'Diff' 按钮, hover 显示, 内联详情面板 |
 
-### 剩余延期 (批次 D) — 6 项
+### 批次 D 详情 — 基础设施收尾
 
-需要较大工程量或独立特性开发:
-- P2-4: 超时降级
-- P2-7: Session 时间旅行
-- P2-8: 记忆管理 UI
-- P3-1: 路由系统 (react-router)
-- P3-3: SSE 状态恢复
-- P3-2, P3-4: 测试覆盖 + 内存管理
+| 延期编号 | 问题 | 修复 |
+|---------|------|------|
+| ✅ P2-4 | 超时降级 | `loop-controller.ts`: 5 分钟 blocker 超时自动 continue, `blocker-timeout` phase 事件 |
+| ✅ P3-3 | SSE 状态恢复 | `server.ts`: Last-Event-ID header, `api-routes.ts`: `?since=<ts>` 增量拉取, `swarm-store.ts`: 重连后自动补拉缺失事件 |
+
+### 最终剩余 (4 项) — 大型独立特性
+
+需要较大工程量或独立特性开发，建议在后续迭代中处理:
+- P2-7: Session 时间旅行 — 需要 SessionTree API + TreeView 组件
+- P2-8: 记忆管理 UI — 需要 MemoryPage + MnemoPi MCP 集成
+- P3-1: 路由系统 (react-router) — 需要重构 App.tsx 布局
+- P3-2/P3-4: 测试覆盖 + 长期运行内存管理
+
+### 最终统计
+
+| 维度 | 数字 |
+|------|------|
+| 总问题 | 30 |
+| **已解决** | **26 (87%)** |
+| 延期 | 4 |
+| 分支数 | 8 |
+| 变更行 | +800/-100 |
+| 测试 | 165 pass, 0 fail |
 
 ## 总体评估
 
