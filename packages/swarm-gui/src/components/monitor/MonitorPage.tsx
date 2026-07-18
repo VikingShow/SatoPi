@@ -1,6 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap } from "lucide-react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ChannelList from "./ChannelList";
@@ -10,6 +10,7 @@ import PhasePipeline from "./PhasePipeline";
 import BlockerDialog from "./BlockerDialog";
 import AgentTopology from "./AgentTopology";
 import RoleBrowser from "./RoleBrowser";
+import AfterLoopPanel from "./AfterLoopPanel";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -37,6 +38,7 @@ export default function MonitorPage() {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"chat" | "topology" | "roles">("chat");
 
+  const afterLoopResult = useSwarmStore((s) => s.afterLoopResult);
   const isActive = loopPhase === "running" || loopPhase === "blocked";
 
   // P2-5: Compute convergence trend from the last 3 values.
@@ -113,6 +115,16 @@ export default function MonitorPage() {
               >
                 <Users size={12} /> Roles
               </button>
+              {afterLoopResult && (
+                <button
+                  onClick={() => setViewMode("afterloop")}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                    viewMode === "afterloop" ? "bg-purple-500/20 text-purple-400" : "text-neutral-500 hover:text-neutral-300"
+                  }`}
+                >
+                  <Brain size={12} /> Summary
+                </button>
+              )}
             </div>
           <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
           {/* P2-6: Token count + cost estimate */}
@@ -203,6 +215,10 @@ export default function MonitorPage() {
         ) : viewMode === "topology" ? (
           <div className="flex-1 relative">
             <AgentTopology />
+          </div>
+        ) : viewMode === "afterloop" ? (
+          <div className="flex-1 overflow-y-auto p-4">
+            <AfterLoopPanel />
           </div>
         ) : (
           <div className="flex-1 relative">

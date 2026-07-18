@@ -155,8 +155,18 @@ export default function ChatView() {
   const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
   const stopRun = useSwarmStore((s) => s.stopRun);
   const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
+  const loadBeforeLoopHistory = useSwarmStore((s) => s.loadBeforeLoopHistory);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
+  // P2-2: Before-loop history state.
+  const [historyEntries, setHistoryEntries] = useState<Array<{ role: string; content: string }>>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    if (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") {
+      loadBeforeLoopHistory().then(h => { if (h.length > 0) { setHistoryEntries(h); setShowHistory(true); } });
+    }
+  }, [loopPhase, loadBeforeLoopHistory]);
 
   const channelMessages = messages.get(activeId ?? "roundtable") ?? [];
 
@@ -266,6 +276,26 @@ export default function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
+      {/* P2-2: Before-loop conversation history */}
+      {historyEntries.length > 0 && showHistory && (
+        <div className="px-4 pt-2">
+          <button
+            onClick={() => setShowHistory(false)}
+            className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300 mb-1 cursor-pointer"
+          >
+            <ChevronDown size={12} /> Previous planning conversation ({historyEntries.length} turns) — click to hide
+          </button>
+          <div className="space-y-1 max-h-48 overflow-y-auto bg-neutral-900/30 rounded-lg p-2 border border-neutral-800/50">
+            {historyEntries.map((entry, i) => (
+              <div key={i} className={`text-xs px-2 py-1 rounded ${entry.role === "user" ? "text-neutral-400" : "text-primary/70"}`}>
+                <span className="font-medium">{entry.role === "user" ? "You" : "Socrates"}:</span>{" "}
+                {entry.content.slice(0, 300)}{entry.content.length > 300 ? "…" : ""}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Messages — virtualized for performance */}
       <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (
