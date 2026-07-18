@@ -6,7 +6,8 @@ import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";  // kept for gradual migration
+import { SubprocessAgentExecutor, type AgentExecutor, type SwarmExecutorOptions } from "./executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
@@ -304,6 +305,10 @@ export class LoopController {
 	#fileTracker: FileTracker = new FileTracker();
 	readonly #activityLogger?: ActivityLogger;
 	#verificationHook: VerificationHook | null = null;
+	// P0-1: Injectable agent executor. Defaults to SubprocessAgentExecutor.
+	// Future: replace runSubprocess calls with this.#executor.execute() once the
+	// SwarmExecutorOptions interface supports all AgentDefinition fields (hooks, etc.).
+	readonly #executor: AgentExecutor;
 
 	// ── Pause / Resume / Replan support ────────────────────────────────────
 	/** Set by pause(); when non-null the loop is paused and awaiting resume. */
@@ -334,6 +339,8 @@ export class LoopController {
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
 		this.#activityLogger = options.activityLogger;
+		// P0-1: Use injected executor or default to SubprocessAgentExecutor.
+		this.#executor = options.executor ?? new SubprocessAgentExecutor();
 		// Instantiate verification hook when verification commands are configured.
 		if (this.#loopConfig.verification?.commands?.length) {
 			this.#verificationHook = new VerificationHook(options.workspace, this.#activityLogger);
@@ -1194,19 +1201,15 @@ export class LoopController {
 					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
 					: WORKER_SYSTEM_PROMPT;
 
-			return runSubprocess({
-				cwd: workspace,
-				agent: (() => {
-					const def: AgentDefinition = {
-						name: id,
-						description: `Loop Engineering Worker ${i + 1}`,
-						systemPrompt,
-						source: "project" as const,
-					};
-					applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
-					return def;
-				})(),
-					task: [
+			const agentDef: AgentDefinition = {
+				name: id,
+				description: `Loop Engineering Worker ${i + 1}`,
+				systemPrompt,
+				source: "project" as const,
+			};
+			applyToolRestrictions(agentDef, resolveToolRestrictions(this.#loopConfig, "worker"));
+
+			return runSubprocess({ cwd: workspace, agent: agentDef, task: [
 						`You are Worker ${i + 1} of ${workerIds.length}.`,
 						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
 						`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
