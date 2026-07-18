@@ -34,6 +34,7 @@ export class MonitorServer implements ActivityBroadcaster {
 		experienceStore?: ExperienceStore,
 		beforeLoopManager?: BeforeLoopManager,
 		steeringSink?: SteeringSink,
+		modelRegistry?: import("../../config/model-registry").ModelRegistry,
 	) {
 		this.#ctx = {
 			stateTracker,
@@ -44,6 +45,7 @@ export class MonitorServer implements ActivityBroadcaster {
 			experienceStore,
 			beforeLoopManager,
 			steeringSink,
+			modelRegistry,
 		};
 	}
 
@@ -146,9 +148,15 @@ export class MonitorServer implements ActivityBroadcaster {
 					return apiRoutes[routeKey](req, ctx);
 				}
 
-				// Try pattern match (e.g., /api/runs/:name)
+				// Try pattern match (e.g., /api/runs/:name/activity)
 				if (pathname.startsWith("/api/runs/") && method === "GET") {
-					return apiRoutes["GET /api/runs/:name"]?.(req, ctx) ?? new Response("Not found", { status: 404 });
+					// Parse /api/runs/:name/activity or /api/runs/:name
+					const rest = pathname.slice("/api/runs/".length);
+					const parts = rest.split("/");
+					const name = parts[0];
+					const sub = parts[1]; // "activity" or undefined
+					const routeKey = sub === "activity" ? "GET /api/runs/:name/activity" : "GET /api/runs/:name";
+					return apiRoutes[routeKey]?.(req, { ...ctx, params: { name } }) ?? new Response("Not found", { status: 404 });
 				}
 
 				// -- Static files (SPA) -----------------------------------------

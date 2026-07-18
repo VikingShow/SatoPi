@@ -186,6 +186,13 @@ export class BeforeLoopManager {
 			return { success: false, error: `Before-loop already in progress (phase: ${this.#phase})` };
 		}
 
+		// Validate prerequisites BEFORE mutating any state
+		// Read loop config for planning prompt
+		const loopConfig = await this.#readLoopConfig();
+		if (!loopConfig) {
+			return { success: false, error: "Failed to parse loop.yaml" };
+		}
+
 		this.#taskDescription = task;
 		this.#conversation = [];
 		this.#planReady = false;
@@ -194,12 +201,6 @@ export class BeforeLoopManager {
 
 		this.#activityLogger.logPhase("before-loop-start");
 		this.#activityLogger.logBroadcast("operator", task);
-
-		// Read loop config for planning prompt
-		const loopConfig = await this.#readLoopConfig();
-		if (!loopConfig) {
-			return { success: false, error: "Failed to parse loop.yaml" };
-		}
 
 		// Generate planning prompt (queries experience store for past lessons)
 		const prompt = await generatePlanningPrompt(

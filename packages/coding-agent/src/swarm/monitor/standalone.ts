@@ -61,11 +61,22 @@ export interface AfterLoopResult {
 // -- Workspace setup -------------------------------------------------------
 
 const WORKSPACE_DIR = path.resolve(process.argv[2] ?? process.cwd(), ".swarm-workspace");
-const SWARM_NAME = "demo-swarm";
+const DEFAULT_SWARM_NAME = "SatoPi";
 const YAML_PATH = path.join(WORKSPACE_DIR, "loop.yaml");
 
+/** Resolve the swarm name: prefer `swarm.name` in loop.yaml, fall back to "SatoPi". */
+async function resolveSwarmName(yamlPath: string): Promise<string> {
+	try {
+		const content = await fs.readFile(yamlPath, "utf-8");
+		const def = parseSwarmYaml(content);
+		return def.name || DEFAULT_SWARM_NAME;
+	} catch {
+		return DEFAULT_SWARM_NAME;
+	}
+}
+
 const DEFAULT_YAML = `swarm:
-  name: demo-swarm
+  name: SatoPi
   workspace: .
   mode: loop
   target_count: 1
@@ -457,8 +468,6 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 async function main() {
 	// 1. Prepare workspace
 	await fs.mkdir(WORKSPACE_DIR, { recursive: true });
-	const swarmDir = path.join(WORKSPACE_DIR, `.swarm_${SWARM_NAME}`);
-	await fs.mkdir(swarmDir, { recursive: true });
 
 	// Write default YAML if not exists
 	try {
@@ -467,6 +476,11 @@ async function main() {
 		await fs.writeFile(YAML_PATH, DEFAULT_YAML, "utf-8");
 	}
 
+	// Resolve the swarm name from YAML (e.g. "SatoPi")
+	const swarmName = await resolveSwarmName(YAML_PATH);
+	const swarmDir = path.join(WORKSPACE_DIR, `.swarm_${swarmName}`);
+	await fs.mkdir(swarmDir, { recursive: true });
+
 	// 2. Bootstrap auth + model registry + settings
 	console.log("Bootstrapping auth and model registry...");
 	const authStorage = await discoverAuthStorage();
@@ -474,7 +488,7 @@ async function main() {
 	const settings = Settings.isolated();
 
 	// 3. Create StateTracker (idle — no agents until a run starts)
-	const stateTracker = new StateTracker(WORKSPACE_DIR, SWARM_NAME);
+	const stateTracker = new StateTracker(WORKSPACE_DIR, swarmName);
 
 	// 4. Create ActivityLogger
 	const activityLogger = new ActivityLogger(stateTracker.swarmDir);
@@ -514,8 +528,8 @@ async function main() {
 		},
 	};
 
-	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink injected)
-	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink);
+	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink + modelRegistry injected)
+	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink, modelRegistry);
 	const port = server.start(7878);
 
 	// 7. Wire ActivityLogger → SSE
@@ -523,6 +537,7 @@ async function main() {
 
 	console.log(`\n┌──────────────────────────────────────────────────┐`);
 	console.log(`│  SatoPi MonitorServer (real swarm backend)       │`);
+	console.log(`│  Swarm: ${swarmName.padEnd(40)}│`);
 	console.log(`│  API:   http://127.0.0.1:${String(port).padEnd(24)}│`);
 	console.log(`│  SSE:   http://127.0.0.1:${port}/events            │`);
 	console.log(`│  YAML:  ${YAML_PATH.slice(0, 37).padEnd(37)}│`);

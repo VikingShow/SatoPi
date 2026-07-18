@@ -3,10 +3,22 @@
  *
  * Syncs with backend via REST API. Provides a structured config object
  * that maps to LoopSwarmConfig fields.
+ *
+ * The form state is the source of truth for the editor. On `loadConfig`,
+ * the YAML is parsed and the form fields are populated. On `saveConfig`,
+ * the form fields are serialized back into the `swarm:`-wrapped snake_case
+ * YAML format that `parseSwarmYaml()` expects.
  */
 
 import { create } from "zustand";
 import { api } from "../lib/api-client";
+
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  tier: string;
+}
 
 interface WorkersConfig {
   initial: number;
@@ -51,8 +63,10 @@ interface ConfigStore {
   yamlPreview: string;
   isDirty: boolean;
   isLoading: boolean;
+  availableModels: ModelOption[];
 
   loadConfig: () => Promise<void>;
+  loadModels: () => Promise<void>;
   saveConfig: () => Promise<void>;
   updateWorkers: (patch: Partial<WorkersConfig>) => void;
   updateCloners: (patch: Partial<ClonersConfig>) => void;
@@ -62,13 +76,15 @@ interface ConfigStore {
   setYamlFromForm: () => void;
 }
 
+// Defaults match the current loop.yaml so the form opens with the configured
+// values if the YAML is unreadable.
 const defaultWorkers: WorkersConfig = {
   initial: 3, min: 2, max: 8, auto: true,
-  maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-chat",
+  maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-v4-pro",
 };
 
 const defaultCloners: ClonersConfig = {
-  count: 3, model: "gpt-4o", reviewStrictness: "strict",
+  count: 3, model: "deepseek-v4-pro", reviewStrictness: "strict",
 };
 
 const defaultConvergence: ConvergenceConfig = {
@@ -83,34 +99,109 @@ const defaultLoop: LoopConfig = {
   maxIterations: 5, humanEscalation: true,
 };
 
+// ----------------------------------------------------------------------------
+// YAML <-> Form serialization
+// ----------------------------------------------------------------------------
+
+/**
+ * Parse the swarm YAML (as produced by `parseSwarmYaml()`) and extract the
+ * form fields. Falls back to current store values for any missing field so a
+ * partial YAML doesn't wipe out the form.
+ */
+function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> {
+  try {
+    const raw = Bun.YAML.parse(yaml) as { swarm?: Record<string, any> } | null;
+    if (!raw?.swarm) return {};
+    const s = raw.swarm;
+    const workers = s.workers ?? {};
+    const cloners = s.cloners ?? {};
+    return {
+      name: typeof s.name === "string" ? s.name : prev.name,
+      mode: typeof s.mode === "string" ? s.mode : prev.mode,
+      workers: {
+        ...prev.workers,
+        initial: workers.initial ?? prev.workers.initial,
+        min: workers.min ?? prev.workers.min,
+        max: workers.max ?? prev.workers.max,
+        auto: typeof workers.auto === "boolean" ? workers.auto : prev.workers.auto,
+        maxRounds: workers.max_rounds ?? workers.maxRounds ?? prev.workers.maxRounds,
+        roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.workers.roundsConvergenceThreshold,
+        model: workers.model ?? prev.workers.model,
+      },
+      cloners: {
+        ...prev.cloners,
+        count: cloners.count ?? prev.cloners.count,
+        model: cloners.model ?? prev.cloners.model,
+        reviewStrictness: cloners.review_strictness ?? cloners.reviewStrictness ?? prev.cloners.reviewStrictness,
+      },
+      loop: {
+        maxIterations: s.max_iterations ?? s.maxIterations ?? prev.loop.maxIterations,
+        humanEscalation: typeof s.human_escalation === "boolean"
+          ? s.human_escalation
+          : (typeof s.humanEscalation === "boolean" ? s.humanEscalation : prev.loop.humanEscalation),
+      },
+      convergence: {
+        threshold: s.convergence_threshold ?? s.convergenceThreshold ?? prev.convergence.threshold,
+        approvalRatio: s.approval_ratio ?? s.approvalRatio ?? prev.convergence.approvalRatio,
+        iterationTimeoutMs: s.iteration_timeout_ms ?? s.iterationTimeoutMs ?? prev.convergence.iterationTimeoutMs,
+      },
+      scaling: {
+        superMajorityThreshold: s.scaling?.super_majority_threshold ?? s.scaling?.superMajorityThreshold ?? prev.scaling.superMajorityThreshold,
+        majorityThreshold: s.scaling?.majority_threshold ?? s.scaling?.majorityThreshold ?? prev.scaling.majorityThreshold,
+      },
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Build the canonical `swarm:`-wrapped snake_case YAML that the backend
+ * `parseSwarmYaml()` expects. This is the inverse of `parseYamlToForm`.
+ */
 function buildYaml(config: ConfigStore): string {
-  return `name: ${config.name}
-mode: ${config.mode}
-workers:
-  initial: ${config.workers.initial}
-  min: ${config.workers.min}
-  max: ${config.workers.max}
-  auto: ${config.workers.auto}
-  maxRounds: ${config.workers.maxRounds}
-  roundsConvergenceThreshold: ${config.workers.roundsConvergenceThreshold}
+  return `swarm:
+  name: ${config.name}
+  workspace: .
+  mode: ${config.mode}
+  target_count: 1
   model: ${config.workers.model}
-cloners:
-  count: ${config.cloners.count}
-  model: ${config.cloners.model}
-  reviewStrictness: ${config.cloners.reviewStrictness}
-convergenceThreshold: ${config.convergence.threshold}
-approvalRatio: ${config.convergence.approvalRatio}
-iterationTimeoutMs: ${config.convergence.iterationTimeoutMs}
-scaling:
-  superMajorityThreshold: ${config.scaling.superMajorityThreshold}
-  majorityThreshold: ${config.scaling.majorityThreshold}
-maxIterations: ${config.loop.maxIterations}
-humanEscalation: ${config.loop.humanEscalation}
+  max_iterations: ${config.loop.maxIterations}
+  auto_retry: true
+  human_escalation: ${config.loop.humanEscalation}
+
+  agents: {}
+
+  workers:
+    initial: ${config.workers.initial}
+    min: ${config.workers.min}
+    max: ${config.workers.max}
+    auto: ${config.workers.auto}
+    max_rounds: ${config.workers.maxRounds}
+    rounds_convergence_threshold: ${config.workers.roundsConvergenceThreshold}
+    model: ${config.workers.model}
+
+  cloners:
+    count: ${config.cloners.count}
+    model: ${config.cloners.model}
+    review_strictness: ${config.cloners.reviewStrictness}
+
+  convergence_threshold: ${config.convergence.threshold}
+  approval_ratio: ${config.convergence.approvalRatio}
+  iteration_timeout_ms: ${config.convergence.iterationTimeoutMs}
+
+  scaling:
+    super_majority_threshold: ${config.scaling.superMajorityThreshold}
+    majority_threshold: ${config.scaling.majorityThreshold}
+
+  agent_restrictions:
+    socrates:
+      allowed: ["read", "write_file", "grep", "find", "glob"]
 `;
 }
 
 export const useConfigStore = create<ConfigStore>((set, get) => ({
-  name: "swarm-run",
+  name: "SatoPi",
   mode: "loop",
   workers: defaultWorkers,
   cloners: defaultCloners,
@@ -120,15 +211,28 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   yamlPreview: "",
   isDirty: false,
   isLoading: false,
+  availableModels: [],
 
   loadConfig: async () => {
     set({ isLoading: true });
     try {
       const { yaml } = await api.getConfig();
-      set({ yamlPreview: yaml, isLoading: false, isDirty: false });
+      // Parse YAML → form fields, AND keep yamlPreview in sync
+      const patch = parseYamlToForm(yaml, get());
+      set({ ...patch, yamlPreview: yaml, isLoading: false, isDirty: false });
     } catch {
+      // Fallback: serialize current form to YAML (so the preview is never empty)
       get().setYamlFromForm();
       set({ isLoading: false });
+    }
+  },
+
+  loadModels: async () => {
+    try {
+      const { models } = await api.getModels();
+      set({ availableModels: models ?? [] });
+    } catch {
+      // leave availableModels empty on failure
     }
   },
 

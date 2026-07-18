@@ -197,9 +197,17 @@ export default function PlanViewer() {
     <>
       {/* ── Inline panel (in ContextPanel) ── */}
       <div className="border-b border-background-border">
-        <button
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setCollapsed(!collapsed);
+            }
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-1.5">
             {collapsed ? <ChevronRight size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
@@ -207,8 +215,13 @@ export default function PlanViewer() {
             <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Plan</span>
             {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-primary" title="Unsaved changes" />}
           </div>
-          {!collapsed && <Toolbar compact />}
-        </button>
+          {!collapsed && (
+            /* Toolbar buttons — stop click propagation so they don't toggle the panel */
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+              <Toolbar compact />
+            </div>
+          )}
+        </div>
 
         {!collapsed && (
           <div className="px-3 pb-3 max-h-80 overflow-y-auto">

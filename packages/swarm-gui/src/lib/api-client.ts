@@ -38,7 +38,21 @@ export const api = {
     fetchJson<{ entries: unknown[] }>("/api/history"),
 
   getRuns: () =>
-    fetchJson<{ runs: { name: string; dir: string }[] }>("/api/runs"),
+    fetchJson<{
+      runs: Array<{
+        name: string;
+        dir: string;
+        lastActivity: string | null;
+        messageCount: number;
+        status: "idle" | "running" | "completed" | "failed";
+      }>;
+    }>("/api/runs"),
+
+  getRunActivity: (name: string) =>
+    fetchJson<{ entries: unknown[] }>(`/api/runs/${encodeURIComponent(name)}/activity`),
+
+  getRunMeta: (name: string) =>
+    fetchJson<{ name: string; dir: string; messageCount: number }>(`/api/runs/${encodeURIComponent(name)}`),
 
   getModels: () =>
     fetchJson<{ models: ModelOption[] }>("/api/models"),

@@ -8,6 +8,7 @@
 import * as path from "node:path";
 import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
+import type { ModelRegistry } from "../../config/model-registry";
 
 /**
  * AfterLoopResult — shape returned by RunManager.getLastAfterLoopResult()
@@ -89,6 +90,10 @@ export interface ApiRouteContext {
 	experienceStore?: ExperienceStore;
 	beforeLoopManager?: BeforeLoopManager;
 	steeringSink?: SteeringSink;
+	/** Model registry — used to advertise actually-available models to the UI. */
+	modelRegistry?: ModelRegistry;
+	/** URL path parameters (e.g. :name in /api/runs/:name) */
+	params?: Record<string, string>;
 }
 
 type RouteHandler = (req: Request, ctx: ApiRouteContext) => Response | Promise<Response>;
@@ -151,34 +156,102 @@ export const apiRoutes: Record<string, RouteHandler> = {
 
 	// -- Runs ------------------------------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
-		// List .swarm_* directories in workspace
+		// List .swarm_* directories in workspace with rich metadata
 		try {
 			const fs = await import("node:fs/promises");
 			const entries = await fs.readdir(ctx.workspaceDir);
-			const swarms = entries
-				.filter((e) => e.startsWith(".swarm_"))
-				.map((e) => ({ name: e.replace(".swarm_", ""), dir: e }));
-			return json({ runs: swarms });
+			const swarms = entries.filter((e) => e.startsWith(".swarm_"));
+			const runs = await Promise.all(
+				swarms.map(async (dir) => {
+					const name = dir.replace(".swarm_", "");
+					const swarmDir = path.join(ctx.workspaceDir, dir);
+					let lastActivity: string | null = null;
+					let messageCount = 0;
+					let status: "idle" | "running" | "completed" | "failed" = "idle";
+					try {
+						const statePath = path.join(swarmDir, "state", "pipeline.json");
+						const stateContent = await Bun.file(statePath).text();
+						const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number; loopPhase?: string };
+						status = (st.status as typeof status) ?? "idle";
+						if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
+						else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
+					} catch {
+						// state file might not exist
+					}
+					try {
+						const logPath = path.join(swarmDir, "activity.jsonl");
+						const logContent = await Bun.file(logPath).text();
+						messageCount = logContent.trim().split("\n").filter(Boolean).length;
+					} catch {
+						// log might not exist
+					}
+					return { name, dir, lastActivity, messageCount, status };
+				}),
+			);
+			// Sort by lastActivity desc (most recent first)
+			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
+			return json({ runs });
 		} catch {
 			return json({ runs: [] });
 		}
 	},
 
+	"GET /api/runs/:name/activity": async (_req, ctx) => {
+		// Load activity log for a specific historical run
+		const name = ctx.params?.name;
+		if (!name) {
+			return json({ error: "Missing run name" }, 400);
+		}
+		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
+		const lines = await readActivityLog(swarmDir);
+		const entries = lines.map((line) => {
+			try {
+				return JSON.parse(line);
+			} catch {
+				return null;
+			}
+		}).filter(Boolean);
+		return json({ entries });
+	},
+
 	"GET /api/runs/:name": async (_req, ctx) => {
-		const lines = await readActivityLog(ctx.swarmDir);
-		return json({ entries: lines.length, logPath: path.join(ctx.swarmDir, "activity.jsonl") });
+		// Metadata-only for a specific run (used by session switcher to confirm exists)
+		const name = ctx.params?.name;
+		if (!name) {
+			return json({ error: "Missing run name" }, 400);
+		}
+		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
+		const lines = await readActivityLog(swarmDir);
+		return json({ name, dir: `.swarm_${name}`, messageCount: lines.length });
 	},
 
 	// -- Models ----------------------------------------------------------
-	"GET /api/models": () => {
-		return json({
-			models: [
-				{ id: "deepseek-chat", name: "DeepSeek Chat", tier: "worker" },
-				{ id: "deepseek-reasoner", name: "DeepSeek Reasoner", tier: "cloner" },
-				{ id: "gpt-4o", name: "GPT-4o", tier: "cloner" },
-				{ id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", tier: "reviewer" },
-			],
-		});
+	"GET /api/models": (_req, ctx) => {
+		// Dynamically list models that have auth configured so the Settings UI
+		// can only pick models the user can actually call. Falls back to a
+		// minimal known-good list when the registry is not yet wired in.
+		if (!ctx.modelRegistry) {
+			return json({
+				models: [
+					{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek", tier: "worker" },
+				],
+				warning: "ModelRegistry not available; returning fallback list",
+			});
+		}
+		const available = ctx.modelRegistry.getAvailable();
+		// Surface every model the user can authenticate to, grouping by provider.
+		// Tier is a soft default — the UI may override per-role in the YAML.
+		const models = available.map((m) => ({
+			id: `${m.provider}/${m.id}`,
+			name: m.name ?? m.id,
+			provider: m.provider,
+			tier: m.id.toLowerCase().includes("reasoner") || m.id.toLowerCase().includes("pro")
+				? "cloner"
+				: m.id.toLowerCase().includes("sonnet") || m.id.toLowerCase().includes("opus")
+				? "reviewer"
+				: "worker",
+		}));
+		return json({ models });
 	},
 
 	// -- Plan (plan.md) ---------------------------------------------------

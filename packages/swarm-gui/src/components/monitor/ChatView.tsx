@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2 } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
@@ -133,12 +133,15 @@ export default function ChatView() {
   const messages = useSwarmStore((s) => s.messages);
   const activities = useSwarmStore((s) => s.activities);
   const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const isRunning = useSwarmStore((s) => s.isRunning);
   const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
   const sendBeforeLoopMessage = useSwarmStore((s) => s.sendBeforeLoopMessage);
   const sendSteering = useSwarmStore((s) => s.sendSteering);
   const startPlanning = useSwarmStore((s) => s.startPlanning);
   const runDebate = useSwarmStore((s) => s.runDebate);
   const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
+  const stopRun = useSwarmStore((s) => s.stopRun);
+  const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
 
@@ -154,11 +157,16 @@ export default function ChatView() {
     // Combine into a single flat list for virtualization
     const result: Array<{ type: "system"; key: string; text: string } | { type: "message"; key: string; msg: ChatMessage }> = [];
     // Show only last 20 system events for performance
-    for (const a of systemEvents.slice(-20)) {
-      result.push({ type: "system", key: `s-${a.ts}`, text: getSystemText(a) });
+    // Use a per-render counter to guarantee unique keys even when ts collides
+    // (e.g. multiple system events with the same timestamp from history replay)
+    for (let i = 0; i < systemEvents.slice(-20).length; i++) {
+      const a = systemEvents.slice(-20)[i];
+      result.push({ type: "system", key: `s-${a.ts}-${i}`, text: getSystemText(a) });
     }
-    for (const msg of channelMessages) {
-      result.push({ type: "message", key: msg.id, msg });
+    for (let i = 0; i < channelMessages.length; i++) {
+      const msg = channelMessages[i];
+      // Fallback to index-based key for messages without a stable id
+      result.push({ type: "message", key: msg.id || `m-${i}-${msg.timestamp}`, msg });
     }
     return result;
   }, [systemEvents, channelMessages]);
@@ -195,8 +203,8 @@ export default function ChatView() {
   // Determine input behavior based on loopPhase
   const isIdle = loopPhase === "idle";
   const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
-  const isRunning = loopPhase === "running";
-  const canSend = isIdle || isBeforeLoopDialog || isRunning;
+  const isLoopRunning = loopPhase === "running";
+  const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
   const isBusy = beforeLoopState?.busy ?? false;
   const planReady = beforeLoopState?.planReady ?? false;
 
@@ -204,7 +212,7 @@ export default function ChatView() {
     ? "描述你的任务，开始规划..."
     : isBeforeLoopDialog
     ? (isBusy ? "Socrates is thinking..." : "Reply to Socrates...")
-    : isRunning
+    : isLoopRunning
     ? "Type a steering message to the swarm..."
     : "";
 
@@ -216,7 +224,7 @@ export default function ChatView() {
       startPlanning(text);
     } else if (isBeforeLoopDialog) {
       sendBeforeLoopMessage(text);
-    } else if (isRunning) {
+    } else if (isLoopRunning) {
       sendSteering(text);
     }
 
@@ -243,7 +251,7 @@ export default function ChatView() {
               </>
             ) : isBeforeLoopDialog
               ? "Describe your task to start planning with Socrates..."
-              : isRunning
+              : isLoopRunning
               ? "No messages yet. Waiting for swarm activity..."
               : ""}
           </div>
@@ -304,7 +312,11 @@ export default function ChatView() {
         </div>
       )}
 
-      {/* Input bar */}
+      {/* Input bar — right-side button morphs based on loop phase:
+            - idle / before-loop-confirm (with text) → Send
+            - before-loop-dialog / before-loop-confirm (idle) → Cancel planning
+            - running → Stop Swarm (red)
+        */}
       <div className="border-t border-background-border px-4 py-2.5 bg-background-card">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-xs text-neutral-500 px-2 py-1 rounded-md bg-background-elevated">
@@ -335,17 +347,39 @@ export default function ChatView() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={!canSend || isBusy}
+            disabled={!canSend || isBusy || isRunning}
             placeholder={placeholder}
             className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
           />
-          <button
-            onClick={handleSend}
-            disabled={!canSend || isBusy || !inputText.trim()}
-            className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
+          {/* Right-side action button — morphs by phase */}
+          {loopPhase === "running" && isRunning ? (
+            <button
+              onClick={() => stopRun()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
+              title="Stop the running swarm"
+            >
+              <Square size={14} fill="currentColor" />
+              <span>Stop</span>
+            </button>
+          ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
+            <button
+              onClick={() => cancelBeforeLoop()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-200 bg-neutral-700 hover:bg-neutral-600 rounded-lg transition-colors cursor-pointer"
+              title="Cancel Before Loop planning"
+            >
+              <X size={14} />
+              <span>Cancel</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!canSend || isBusy || !inputText.trim()}
+              className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Send message"
+            >
+              {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          )}
         </div>
       </div>
     </div>

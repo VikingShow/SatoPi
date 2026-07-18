@@ -5,13 +5,14 @@ import { useSwarmStore } from "../../stores/swarm-store";
 
 export default function ConfigPage() {
   const config = useConfigStore();
-  const { workers, cloners, convergence, scaling, loop, yamlPreview, isDirty, isLoading } = config;
+  const { workers, cloners, convergence, scaling, loop, yamlPreview, isDirty, isLoading, availableModels } = config;
   const isRunning = useSwarmStore((s) => s.isRunning);
   const startRun = useSwarmStore((s) => s.startRun);
   const stopRun = useSwarmStore((s) => s.stopRun);
 
   useEffect(() => {
     config.loadConfig();
+    config.loadModels();
   }, []);
 
   function NumberField({ label, value, onChange, min, max, step }: {
@@ -63,8 +64,21 @@ export default function ConfigPage() {
             <NumberField label="Convergence Threshold" value={workers.roundsConvergenceThreshold} onChange={(v) => config.updateWorkers({ roundsConvergenceThreshold: v })} min={1} max={10} />
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Model</label>
-              <input type="text" value={workers.model} onChange={(e) => config.updateWorkers({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden" />
+              <select
+                value={workers.model}
+                onChange={(e) => config.updateWorkers({ model: e.target.value })}
+                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
+              >
+                {availableModels.length === 0 && <option value={workers.model}>{workers.model}</option>}
+                {availableModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+                {!availableModels.some((m) => m.id === workers.model) && availableModels.length > 0 && (
+                  <option value={workers.model}>{workers.model} (configured)</option>
+                )}
+              </select>
             </div>
           </div>
           <div className="mt-3">
@@ -79,8 +93,21 @@ export default function ConfigPage() {
             <NumberField label="Count" value={cloners.count} onChange={(v) => config.updateCloners({ count: v })} min={1} max={10} />
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Model</label>
-              <input type="text" value={cloners.model} onChange={(e) => config.updateCloners({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden" />
+              <select
+                value={cloners.model}
+                onChange={(e) => config.updateCloners({ model: e.target.value })}
+                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
+              >
+                {availableModels.length === 0 && <option value={cloners.model}>{cloners.model}</option>}
+                {availableModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+                {!availableModels.some((m) => m.id === cloners.model) && availableModels.length > 0 && (
+                  <option value={cloners.model}>{cloners.model} (configured)</option>
+                )}
+              </select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-neutral-500">Review Strictness</label>
