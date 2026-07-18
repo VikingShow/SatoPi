@@ -7,6 +7,7 @@
  */
 
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
 import { api } from "../lib/api-client";
 import { sseClient } from "../lib/sse-client";
@@ -255,6 +256,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           // Blockage detected → set blocked phase
           if (p === "blocked") {
             set({ loopPhase: "blocked" });
+            toast.warning("Swarm Blocked", { description: "The swarm has encountered a blocker and is waiting for your decision." });
           }
 
           // Blocker resolved → back to running
@@ -280,6 +282,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             const parsed = JSON.parse(entry.body);
             if (parsed?.type === "blocker" && parsed?.context) {
               set({ blockerContext: parsed.context as BlockerContext });
+              toast.error("Blocker Detected", { description: (parsed.context as BlockerContext)?.reason ?? "A blocker requires your attention" });
             }
           } catch {
             // Not JSON or not a blocker message — ignore

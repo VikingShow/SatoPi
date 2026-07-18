@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Settings, Activity, History, Radio } from "lucide-react";
+import { Toaster } from "sonner";
 import { useSwarmStore } from "./stores/swarm-store";
 import ConfigPage from "./components/config/ConfigPage";
 import MonitorPage from "./components/monitor/MonitorPage";
@@ -32,6 +33,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-background text-neutral-100">
+      <Toaster position="bottom-right" theme="dark" richColors />
       {/* Sidebar */}
       <aside className="w-14 flex flex-col items-center py-4 gap-2 border-r border-background-border bg-background-card">
         <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center mb-4">
