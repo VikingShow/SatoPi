@@ -2,6 +2,8 @@
  * Frontend type definitions — aligned with backend SwarmState/AgentState/ActivityEntry.
  */
 
+import type { ChatMessage as PiChatMessage, ChatChannel as PiChatChannel } from "@oh-my-pi/pi-web/types";
+
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 
@@ -119,23 +121,15 @@ export interface ActivityEntry {
   error?: string;
 }
 
-export interface ChatChannel {
-  id: string;
-  type: "roundtable" | "subgroup" | "private" | "steering";
-  name: string;
-  participants: string[];
+export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
   unreadCount: number;
   lastMessage?: string;
   lastMessageTime?: number;
-}
+};
 
-export interface ChatMessage {
-  id: string;
+export interface ChatMessage extends PiChatMessage {
   channelId: string;
-  from: string;
   to: string;
-  body: string;
-  timestamp: number;
   threadId?: string;
   threadReplies?: ChatMessage[];
 }

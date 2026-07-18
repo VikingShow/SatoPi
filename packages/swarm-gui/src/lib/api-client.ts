@@ -3,25 +3,7 @@
  */
 
 import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
-
-const BASE = "";
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const msg = `API error: ${res.status} ${res.statusText}`;
-    console.error(msg, body);
-    const err = new Error(msg) as Error & { status?: number; body?: unknown };
-    err.status = res.status;
-    err.body = body;
-    throw err;
-  }
-  return res.json() as Promise<T>;
-}
+import { fetchJson } from "@oh-my-pi/pi-web/fetch";
 
 export const api = {
   getState: () => fetchJson<SwarmState>("/api/state"),
