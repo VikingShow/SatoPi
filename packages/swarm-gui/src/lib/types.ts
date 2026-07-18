@@ -92,8 +92,9 @@ export interface SwarmState {
 }
 
 export type ActivityEventType =
-  | "broadcast" | "subgroup" | "steering" | "phase" | "convergence"
-  | "verdict" | "conflict" | "scaling" | "nomination" | "crash";
+  | "broadcast" | "subgroup" | "steering" | "steering_ack" | "phase" | "convergence"
+  | "verdict" | "conflict" | "scaling" | "nomination" | "crash"
+  | "tool_call" | "error_flag";
 
 export interface ActivityEntry {
   ts: number;
@@ -123,6 +124,19 @@ export interface ActivityEntry {
   elected?: string | null;
   votes?: Record<string, string[]>;
   error?: string;
+  // P2-3: steering ack fields
+  messageId?: string;
+  acknowledgedBy?: string;
+  // P2-10: tool call fields
+  toolName?: string;
+  toolInput?: string;
+  toolOutput?: string;
+  toolError?: string;
+  toolDurationMs?: number;
+  // P2-11: error flag fields
+  errorFlag?: string;
+  recoverable?: boolean;
+  suggestion?: string;
 }
 
 export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
