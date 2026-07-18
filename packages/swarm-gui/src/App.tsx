@@ -1,7 +1,8 @@
 import { useEffect, useState, lazy, Suspense } from "react";
-import { Settings, Activity, History, Radio } from "lucide-react";
+import { Settings, Activity, History, Radio, PlusCircle } from "lucide-react";
 import { Toaster } from "sonner";
 import { useSwarmStore } from "./stores/swarm-store";
+import { useSessionStore } from "./stores/session-store";
 import MonitorPage from "./components/monitor/MonitorPage";
 
 // Lazy-loaded pages — Config and History are secondary views
@@ -26,10 +27,15 @@ function App() {
   const init = useSwarmStore((s) => s.init);
   const swarmState = useSwarmStore((s) => s.swarmState);
   const isConnected = useSwarmStore((s) => s.isConnected);
+  const isRunning = useSwarmStore((s) => s.isRunning);
+  const newSession = useSessionStore((s) => s.newSession);
+  const loadRuns = useSessionStore((s) => s.loadRuns);
+  const [newSessionBusy, setNewSessionBusy] = useState(false);
 
   useEffect(() => {
     init();
-  }, [init]);
+    loadRuns();
+  }, [init, loadRuns]);
 
   const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
     { id: "config", label: "Config", icon: <Settings size={18} /> },
@@ -66,6 +72,22 @@ function App() {
             {item.icon}
           </button>
         ))}
+        {/* Spacer */}
+        <div className="flex-1" />
+        {/* New Session */}
+        <button
+          onClick={async () => {
+            setNewSessionBusy(true);
+            await newSession();
+            setNewSessionBusy(false);
+            setPage("monitor");
+          }}
+          disabled={newSessionBusy || isRunning}
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-neutral-500 hover:text-emerald-400 hover:bg-emerald-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+          title="New Session"
+        >
+          <PlusCircle size={20} className={newSessionBusy ? "animate-spin" : ""} />
+        </button>
       </aside>
 
       {/* Main content */}
