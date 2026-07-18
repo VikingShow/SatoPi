@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2 } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
-import { highlightCode } from "../../lib/shiki";
+import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 
 // ── Shiki code block renderer ──────────────────────────────────────────
 

@@ -272,13 +272,13 @@
       "name": "@oh-my-pi/swarm-gui",
       "version": "0.1.0",
       "dependencies": {
+        "@oh-my-pi/pi-web": "workspace:*",
         "lucide-react": "^0.400.0",
         "react": "catalog:",
         "react-dom": "catalog:",
         "react-markdown": "10.1.0",
         "recharts": "^2.12.7",
         "remark-gfm": "4.0.1",
-        "shiki": "^1.0.0",
         "zustand": "^4.5.5",
       },
       "devDependencies": {
@@ -347,6 +347,20 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
+      },
+    },
+    "packages/web": {
+      "name": "@oh-my-pi/pi-web",
+      "version": "0.1.0",
+      "dependencies": {
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "shiki": "^1.0.0",
+      },
+      "devDependencies": {
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "typescript": "catalog:",
       },
     },
     "packages/wire": {
@@ -885,6 +899,8 @@
     "@oh-my-pi/pi-tui": ["@oh-my-pi/pi-tui@workspace:packages/tui"],
 
     "@oh-my-pi/pi-utils": ["@oh-my-pi/pi-utils@workspace:packages/utils"],
+
+    "@oh-my-pi/pi-web": ["@oh-my-pi/pi-web@workspace:packages/web"],
 
     "@oh-my-pi/pi-wire": ["@oh-my-pi/pi-wire@workspace:packages/wire"],
 

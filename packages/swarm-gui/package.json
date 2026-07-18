@@ -12,13 +12,13 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@oh-my-pi/pi-web": "workspace:*",
     "lucide-react": "^0.400.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-markdown": "10.1.0",
     "recharts": "^2.12.7",
     "remark-gfm": "4.0.1",
-    "shiki": "^1.0.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
