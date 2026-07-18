@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
@@ -10,29 +12,6 @@ const codeCache = new Map<string, string>();
 function cacheKey(code: string, lang: string) { return `${lang}:${code.slice(0, 200)}`; }
 
 // ── Shiki code block renderer ──────────────────────────────────────────
-
-type BodySegment = { type: "text"; content: string } | { type: "code"; lang: string; code: string };
-
-function parseCodeBlocks(body: string): BodySegment[] {
-  const segments: BodySegment[] = [];
-  const regex = /```(\w*)\n([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(body)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: body.slice(lastIndex, match.index) });
-    }
-    segments.push({ type: "code", lang: match[1] || "text", code: match[2] });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < body.length) {
-    segments.push({ type: "text", content: body.slice(lastIndex) });
-  }
-
-  return segments;
-}
 
 function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   const [html, setHtml] = useState<string | null>(() => codeCache.get(cacheKey(code, lang)) ?? null);
@@ -63,19 +42,52 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   );
 }
 
+// ── Custom code renderer for ReactMarkdown ─────────────────────────────
+
+function CodeRenderer({ className, children }: { className?: string; children?: React.ReactNode }) {
+  const lang = className?.replace("language-", "") ?? "";
+  const code = String(children ?? "").replace(/\n$/, "");
+  return <ShikiCodeBlock code={code} lang={lang} />;
+}
+
 function MessageBody({ body }: { body: string }) {
-  const segments = parseCodeBlocks(body);
-  if (segments.length <= 1) {
-    return <>{body}</>;
-  }
   return (
-    <>
-      {segments.map((seg, i) =>
-        seg.type === "code"
-          ? <ShikiCodeBlock key={i} code={seg.code} lang={seg.lang} />
-          : <span key={i} className="whitespace-pre-wrap">{seg.content}</span>
-      )}
-    </>
+    <div className="prose prose-sm prose-invert max-w-none break-words 
+      [&_p]:my-1 [&_p]:leading-relaxed
+      [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
+      [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
+      [&_li]:my-0.5
+      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2
+      [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
+      [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
+      [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-600 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-neutral-400 [&_blockquote]:italic
+      [&_strong]:font-bold [&_strong]:text-neutral-100
+      [&_em]:italic
+      [&_del]:line-through [&_del]:text-neutral-500
+      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2
+      [&_code]:bg-[#0d0d0d] [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+      [&_table]:w-full [&_table]:my-1 [&_table]:text-xs [&_table]:border-collapse
+      [&_th]:border [&_th]:border-[#1a1a1a] [&_th]:px-2 [&_th]:py-1 [&_th]:bg-[#0d0d0d] [&_th]:font-semibold [&_th]:text-left
+      [&_td]:border [&_td]:border-[#1a1a1a] [&_td]:px-2 [&_td]:py-1
+      [&_hr]:border-neutral-700 [&_hr]:my-2
+    ">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code: ({ className, children, ...props }) => {
+            // Only use custom code renderer for block code (has className with language-)
+            if (className) {
+              return <CodeRenderer className={className}>{children}</CodeRenderer>;
+            }
+            // Inline code
+            return <code className="bg-[#0d0d0d] text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+          },
+          pre: ({ children }) => <>{children}</>,
+        }}
+      >
+        {body}
+      </ReactMarkdown>
+    </div>
   );
 }
 
