@@ -1,6 +1,8 @@
 import { useSwarmStore } from "../../stores/swarm-store";
-import { Square, Wifi, WifiOff, X, Loader2, GitGraph, MessageSquare } from "lucide-react";
+import { useThemeStore } from "../../stores/theme-store";
+import { Square, Wifi, WifiOff, X, Loader2, GitGraph, MessageSquare, Sun, Moon } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import ChannelList from "./ChannelList";
 import ChatView from "./ChatView";
 import ContextPanel from "./ContextPanel";
@@ -16,6 +18,9 @@ export default function MonitorPage() {
   const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
   const stopRun = useSwarmStore((s) => s.stopRun);
   const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"chat" | "topology">("chat");
 
   const isBusy = beforeLoopState?.busy ?? false;
@@ -23,13 +28,13 @@ export default function MonitorPage() {
 
   const statusLabel = (() => {
     switch (loopPhase) {
-      case "before-loop-dialog": return "Planning (Dialog)";
-      case "before-loop-debate": return "Planning (Debate)";
-      case "before-loop-confirm": return "Ready to Start";
-      case "running": return "Running";
-      case "blocked": return "Blocked";
-      case "after-loop": return "After Loop";
-      default: return isRunning ? "Running" : swarmState?.status === "idle" ? "Idle" : swarmState?.status ?? "Unknown";
+      case "before-loop-dialog": return t("swarm.planningDialog", "Planning (Dialog)");
+      case "before-loop-debate": return t("swarm.planningDebate", "Planning (Debate)");
+      case "before-loop-confirm": return t("swarm.readyToStart", "Ready to Start");
+      case "running": return t("swarm.running", "Running");
+      case "blocked": return t("swarm.blocked", "Blocked");
+      case "after-loop": return t("swarm.afterLoop", "After Loop");
+      default: return isRunning ? t("swarm.running", "Running") : swarmState?.status === "idle" ? t("swarm.idle", "Idle") : swarmState?.status ?? t("swarm.unknown", "Unknown");
     }
   })();
 
@@ -87,6 +92,13 @@ export default function MonitorPage() {
               <><WifiOff size={12} className="text-neutral-600" /> SSE</>
             )}
           </span>
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="p-1 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-700 transition-colors cursor-pointer"
+            title="Toggle theme"
+          >
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
