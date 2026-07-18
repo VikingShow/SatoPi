@@ -183,3 +183,27 @@ body {
   margin-right: 0.4em;
   accent-color: #F59E0B;
 }
+
+/* ── Responsive ── */
+@media (max-width: 1023px) {
+  .sidebar-collapsed-mobile { display: none !important; }
+  .mobile-full-width { width: 100% !important; }
+}
+
+/* Mobile bottom sheet */
+@media (max-width: 1023px) {
+  .mobile-bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 50vh;
+    z-index: 50;
+    border-radius: 12px 12px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+  }
+  .mobile-bottom-sheet.open {
+    transform: translateY(0);
+  }
+}
