@@ -16,7 +16,7 @@
 | **P0** | `fix/p0-robustness` | ✅ 完成 | 4/4 | 0 | `f994247` | 2026-07-19 |
 | **P1** | `fix/p1-architecture-decoupling` | ✅ 完成 | 5/6 | **1** | `009378f` | 2026-07-19 |
 | **P2** | `fix/p2-frontend-capabilities` | ✅ 完成 | 3/11 | **8** | `103b6d2` | 2026-07-19 |
-| **P3+P4** | — | ⬚ 待开始 | 0/9 | — | — | — |
+| **P3+P4** | `fix/p3-p4-infrastructure` | ✅ 完成 | 4/9 | **5** | `69e8e33` | 2026-07-19 |
 
 ### ⚠️ 延期清单
 
@@ -33,6 +33,11 @@
 | **P2-9-DEFER** | P2 | Diff 可视化 | CodeEditor/DiffViewer 已就绪, 需后端文件 diff 数据传输 | 后端数据就绪后 |
 | **P2-10-DEFER** | P2 | Tool 调用详情 | 需后端 SSE 新增 tool_call_start/end 事件 | 后端事件扩展后 |
 | **P2-11-DEFER** | P2 | Provider 错误详情 | 需后端错误 flag 传播到 ActivityEntry.error 字段 | 后端错误传播后 |
+| **P3-1-DEFER** | P3 | 路由系统 (react-router) | 需重构 App.tsx 布局, 影响所有页面 | P3+ 独立分支 |
+| **P3-2-DEFER** | P3 | 测试覆盖扩展 | 需在 P3-1 路由就绪后添加组件/集成测试 | P3-1 完成后 |
+| **P3-3-DEFER** | P3 | SSE 状态恢复 (Last-Event-ID) | 需后端断点续传 API | 后端 API 就绪后 |
+| **P3-4-DEFER** | P3 | 长期运行内存管理 | ChatView 已有虚拟滚动; 历史分页需后端配合 | 后端分页 API 就绪后 |
+| **P4-1-DEFER** | P4 | YAML 声明式 Hook 配置 | P1-6 已有代码级 PipelineHooks; YAML 声明需独立设计 | P3 完成后 |
 
 ---
 
@@ -87,7 +92,25 @@
 
 **变更量**: 4 files, +73/-46 lines
 
----
+### P3+P4 完成详情 (2026-07-19)
+
+**延期: 5 项** — P3-1/2/3/4 和 P4-1 因工程量大或依赖外部能力延期。
+
+| 编号 | 问题 | 状态 | 修复文件 | 变更 |
+|------|------|------|---------|------|
+| ✅ P4-2 | 端口硬编码 | 完成 | `server.ts` | `PI_SWARM_PORT` env var 优先级覆盖, 默认 7878 |
+| ✅ P4-4 | Broadcaster 不可替换 | 完成 | `activity-logger.ts` | `replaceBroadcaster()` 方法, MonitorServer 重启后可重新注册 |
+| ✅ P4-3 | SSE 无订阅过滤 | 完成 | `event-bus.ts` | `subscribe()` 支持可选 `ActivityEventType[]` 过滤器, per-tab 事件路由 |
+| ✅ P3-5 | 离线无 UI 反馈 | 完成 | `App.tsx` | 断开连接 amber 警告横幅 + 自动重连提示 |
+| ⏸️ P3-1 | 路由系统 | **延期** | — | react-router 集成需重构 App.tsx 布局, 影响所有页面 |
+| ⏸️ P3-2 | 测试覆盖 | **部分** | — | 已有 32 组件/Store 测试; 扩展需在 P3-1 路由就绪后进行 |
+| ⏸️ P3-3 | SSE 状态恢复 | **延期** | — | 需后端支持 Last-Event-ID header + 断点续传 API |
+| ⏸️ P3-4 | 内存膨胀 | **延期** | — | ChatView 已有 @tanstack/react-virtual; activities ring buffer 500 条上限已存在; 长期运行分页需后端配合 |
+| ⏸️ P4-1 | Plugin/Hook 系统 | **部分** | — | P1-6 已引入 PipelineHooks 接口 (7 个生命周期 hook); YAML 声明式 hook 配置需独立设计 |
+
+**验证**: 133 backend tests + 32 frontend tests 全部通过
+
+**变更量**: 4 files, +63/-13 lines
 
 ## 总体评估
 
@@ -289,35 +312,35 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 四、P3 — 前端架构改进
+## 四、P3 — 前端架构改进 ✅ 部分完成 (2026-07-19) | ⚠️ 4项延期
 
-### P3-1: 无路由系统
+### P3-1: 无路由系统 ⏸️ (P3-1-DEFER)
 
 - **问题**: 单页应用，所有功能（Monitor, Config, History）通过 `page` 状态变量切换，无 URL 路由
 - **影响**: 无法深度链接、无法浏览器前进/后退、刷新后丢失当前页面
 - **建议**: 引入 `react-router` 或 `tanstack-router`
 
-### P3-2: 测试覆盖极薄
+### P3-2: 测试覆盖极薄 ⏸️ (P3-2-DEFER)
 
 - **单元测试**: 仅 6 个（config-store, swarm-store, api-client, sse-client 各 1 个文件）
 - **E2E 测试**: 仅 5 个 Playwright 测试（页面加载、状态指示器、配置按钮、聊天输入）
 - **缺失**: 组件测试、Store 集成测试、SSE 事件处理测试、错误路径测试
 - **建议**: 至少覆盖核心 Store actions、ChatView 消息渲染、PhasePipeline 状态转换
 
-### P3-3: SSE 重连无状态恢复
+### P3-3: SSE 重连无状态恢复 ⏸️ (P3-3-DEFER)
 
 - **问题**: SSE 断开重连后，前端从空状态重新开始，丢失断开期间的事件
 - **建议**: 
   - 后端 SSE 支持 `Last-Event-ID` header 恢复
   - 或前端在重连后调用 `GET /api/history?since=&lt;last_ts&gt;` 补充丢失的事件
 
-### P3-4: 无虚拟滚动优化
+### P3-4: 无虚拟滚动优化 ⏸️ (P3-4-DEFER) — ChatView 已有 @tanstack/react-virtual
 
 - **位置**: ChatView 已使用 `@tanstack/react-virtual` ✅
 - **问题**: 但 Activities 数组（ring buffer 500 条）和 Messages Map 无上限，长时间运行可能内存膨胀
 - **建议**: 对历史消息做分页/懒加载，超过可视范围的消息卸载 DOM
 
-### P3-5: 离线状态无 UI 反馈
+### P3-5: 离线状态无 UI 反馈 ✅
 
 - **问题**: SSE 断开后仅 TopBar 显示 "Disconnected"，无其他 UI 降级
 - **建议**: 
@@ -327,9 +350,9 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 五、Swarm 后端架构改进
+## 五、Swarm 后端架构改进 ✅ 部分完成 (2026-07-19) | ⚠️ 1项延期
 
-### P4-1: 引入 Plugin/Hook 系统
+### P4-1: 引入 Plugin/Hook 系统 ⏸️ (P4-1-DEFER) — P1-6 已实现代码级 PipelineHooks
 
 - **现状**: Pipeline 生命周期（beforeIteration, afterWave, onConvergence, onBlockage 等）无扩展点
 - **建议**: 定义 `SwarmHooks` 接口，允许用户在 YAML 中声明 hook 脚本或在代码中注册回调：
@@ -343,19 +366,19 @@ pi-ast / natives    █████  █████  █████  ███
   }
   ```
 
-### P4-2: MonitorServer 端口范围可配置
+### P4-2: MonitorServer 端口范围可配置 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/monitor/server.ts`
 - **问题**: 硬编码 7878-7887，不可配置
 - **建议**: 支持 `PI_SWARM_PORT` 环境变量
 
-### P4-3: SSE 事件无订阅过滤
+### P4-3: SSE 事件无订阅过滤 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/monitor/event-bus.ts`
 - **问题**: 所有订阅者收到所有事件，前端需要自行过滤
 - **建议**: 支持按事件类型订阅，减少前端处理开销
 
-### P4-4: ActivityLogger 的 broadcaster 只能设置一次
+### P4-4: ActivityLogger 的 broadcaster 只能设置一次 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/activity-logger.ts`
 - **问题**: `setBroadcaster()` 只能调用一次，如果 MonitorServer 重启则无法重新注册
