@@ -3,10 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FileText, ChevronDown, ChevronRight, RefreshCw,
-  Maximize2, X, Pencil, Eye, Save, Check,
+  Maximize2, X, Pencil, Eye, Save, Check, Code2,
 } from "lucide-react";
 import { api } from "../../lib/api-client";
 import { useSwarmStore } from "../../stores/swarm-store";
+import { CodeEditor } from "./CodeEditor";
 
 export default function PlanViewer() {
   const planVersion = useSwarmStore((s) => s.planVersion);
@@ -20,6 +21,7 @@ export default function PlanViewer() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [useMonaco, setUseMonaco] = useState(false);
 
   async function loadPlan() {
     setLoading(true);
@@ -110,6 +112,19 @@ export default function PlanViewer() {
           </button>
         )}
 
+        {/* Monaco toggle (edit mode only) */}
+        {mode === "edit" && (
+          <button
+            onClick={() => setUseMonaco((v) => !v)}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors cursor-pointer ${
+              useMonaco ? "text-blue-400 bg-blue-500/10" : "text-neutral-500 hover:text-neutral-300"
+            }`}
+            title={useMonaco ? "Switch to textarea" : "Switch to Monaco Editor"}
+          >
+            <Code2 size={12} />
+          </button>
+        )}
+
         {/* Refresh */}
         <button
           onClick={loadPlan}
@@ -155,6 +170,17 @@ export default function PlanViewer() {
 
   // ── Editor ──
   function Editor() {
+    if (useMonaco) {
+      return (
+        <CodeEditor
+          value={editContent}
+          language="markdown"
+          path={path || "plan.md"}
+          onChange={(v) => setEditContent(v ?? "")}
+          height="350px"
+        />
+      );
+    }
     return (
       <textarea
         value={editContent}

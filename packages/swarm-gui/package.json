@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
     "lucide-react": "^0.400.0",
     "react": "catalog:",
     "react-dom": "catalog:",
