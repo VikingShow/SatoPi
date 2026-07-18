@@ -14,6 +14,32 @@ import * as path from "node:path";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 
+/**
+ * Loop phase — tracks the high-level workflow stage.
+ * Drives the frontend UI state machine via SwarmState.loopPhase.
+ */
+export type LoopPhase =
+	| "idle"
+	| "before-loop-dialog"
+	| "before-loop-debate"
+	| "before-loop-confirm"
+	| "running"
+	| "paused"
+	| "blocked"
+	| "after-loop";
+
+/**
+ * To-Do item — a structured task parsed from plan.md.
+ * Tracks real-time completion status during loop execution.
+ */
+export interface TodoItem {
+	id: string;
+	title: string;
+	status: "pending" | "in_progress" | "completed";
+	files?: string[];
+	completedAt?: number;
+}
+
 export interface AgentState {
 	name: string;
 	status: AgentStatus;
@@ -47,6 +73,10 @@ export interface SwarmState {
 	loopIteration?: number;
 	roundtablePhase?: string;
 	reviewVerdict?: string;
+	/** High-level workflow phase — drives frontend UI state machine. */
+	loopPhase?: LoopPhase;
+	/** To-Do items parsed from plan.md — tracked during loop execution. */
+	todos?: TodoItem[];
 }
 
 // ============================================================================
@@ -67,6 +97,7 @@ export class StateTracker {
 			targetCount: 1,
 			agents: {},
 			startedAt: Date.now(),
+			loopPhase: "idle",
 		};
 	}
 

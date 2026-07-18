@@ -528,9 +528,17 @@
       "types": "./src/stt/*.ts",
       "import": "./src/stt/*.ts"
     },
+    "./swarm/activity-logger": {
+      "types": "./src/swarm/activity-logger.ts",
+      "import": "./src/swarm/activity-logger.ts"
+    },
     "./swarm/after-loop": {
       "types": "./src/swarm/after-loop/index.ts",
       "import": "./src/swarm/after-loop/index.ts"
+    },
+    "./swarm/monitor": {
+      "types": "./src/swarm/monitor/index.ts",
+      "import": "./src/swarm/monitor/index.ts"
     },
     "./swarm/task-analyzer": {
       "types": "./src/swarm/task-analyzer.ts",

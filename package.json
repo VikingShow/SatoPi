@@ -193,10 +193,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@tailwindcss/postcss": "4.3.2",
+    "@tailwindcss/vite": "4.3.2",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "lint-staged": "catalog:",
     "prettier": "catalog:",
+    "tailwindcss": "^4.0.0",
     "ts-morph": "catalog:",
     "typescript": "catalog:"
   },

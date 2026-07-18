@@ -295,7 +295,10 @@ export interface AgentDefinition {
 	name: string;
 	description: string;
 	systemPrompt: string;
+	/** Whitelist — only these tools are available. */
 	tools?: string[];
+	/** Blacklist — these tools are blocked (config-as-constraint pattern). */
+	blockedTools?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	thinkingLevel?: ConfiguredThinkingLevel;

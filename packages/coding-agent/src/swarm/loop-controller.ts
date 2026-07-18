@@ -1,22 +1,59 @@
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
 import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
+import type { ActivityLogger } from "./activity-logger";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
-import type { LoopSwarmConfig } from "./schema";
+import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
 import type { StateTracker } from "./state";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
+import { TodoTracker } from "./todo-tracker";
 import { type Nomination, WorkerChannel } from "./worker-channel";
+import { type VerificationResult, VerificationHook } from "./verification-hook";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * Resolve tool restrictions for a given agent role from the loop config.
+ * Checks the specific name first, then falls back to the wildcard "*".
+ * Returns undefined when no restrictions are configured.
+ */
+function resolveToolRestrictions(
+	loopConfig: LoopSwarmConfig,
+	agentName: string,
+): AgentToolRestriction | undefined {
+	const restrictions = loopConfig.agentRestrictions;
+	if (!restrictions) return undefined;
+	return restrictions[agentName] ?? restrictions["*"] ?? undefined;
+}
+
+/**
+ * Apply tool restrictions to an agent definition, mutating the tools/blockedTools fields.
+ * If a restriction has `allowed`, it sets the whitelist. If it has `blocked`, it sets the blacklist.
+ */
+function applyToolRestrictions(
+	agent: AgentDefinition,
+	restriction: AgentToolRestriction | undefined,
+): void {
+	if (!restriction) return;
+	if (restriction.allowed && restriction.allowed.length > 0) {
+		agent.tools = restriction.allowed;
+	}
+	if (restriction.blocked && restriction.blocked.length > 0) {
+		agent.blockedTools = restriction.blocked;
+	}
+}
 
 export interface LoopOptions extends PipelineOptions {
 	loopConfig: LoopSwarmConfig;
@@ -26,6 +63,8 @@ export interface LoopOptions extends PipelineOptions {
 	planContent?: string;
 	/** Tracks agent status for TUI progress widget. */
 	stateTracker: StateTracker;
+	/** Optional activity logger for GUI/monitor integration. */
+	activityLogger?: ActivityLogger;
 }
 
 /** Structured round summary produced by the elected reviewer. */
@@ -56,7 +95,22 @@ export interface LoopResult {
 		lastFindings: string[];
 		approvalRatio: number;
 	};
+	/** Results of post-loop verification commands (if configured). */
+	verificationResults?: VerificationResult;
 }
+
+/** Context payload broadcast when the loop is blocked awaiting user decision. */
+export interface BlockerContext {
+	iteration: number;
+	lastFindings: string[];
+	lastWorkerOutput: string;
+	stagnationCount: number;
+	workerCrashCounts: Record<string, number>;
+	reason: string;
+}
+
+/** User resolution to a blockage. */
+export type BlockerResolution = "continue" | "skip" | "abort";
 
 // ============================================================================
 // Prompts
@@ -237,22 +291,114 @@ export class LoopController {
 	readonly #stateTracker: StateTracker;
 	#channel?: WorkerChannel;
 	#fileTracker: FileTracker = new FileTracker();
+	readonly #activityLogger?: ActivityLogger;
+	#verificationHook: VerificationHook | null = null;
+
+	// ── Pause / Resume / Replan support ────────────────────────────────────
+	/** Set by pause(); when non-null the loop is paused and awaiting resume. */
+	#pauseSignal: AbortController | null = null;
+	/** Resolver for the pause promise — called by resume() to unblock the loop. */
+	#pauseResolver: (() => void) | null = null;
+	/** Mutable plan content — updated by updatePlan() for subsequent iterations. */
+	#planContent: string | undefined;
+
+	// ── Todo tracking ──────────────────────────────────────────────────────
+	#todoTracker: TodoTracker = new TodoTracker();
+
+	// ── Blockage detection state ──
+	/** Consecutive cloner-review stagnation count (findings identical across iterations). */
+	#stagnationCount = 0;
+	/** Last cloner findings key for stagnation comparison. */
+	#lastFindingsKey = "";
+	/** Per-worker crash counter — used to detect repeated worker failures. */
+	#workerCrashCounts: Record<string, number> = {};
+	/** Pending blocker resolution Promise resolver — set when blocked, cleared on resolve. */
+	#blockerResolver: ((decision: BlockerResolution) => void) | null = null;
+	/** Context for the current blockage (if any). */
+	#currentBlockerContext: BlockerContext | null = null;
 
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
+		this.#activityLogger = options.activityLogger;
+		// Instantiate verification hook when verification commands are configured.
+		if (this.#loopConfig.verification?.commands?.length) {
+			this.#verificationHook = new VerificationHook(options.workspace, this.#activityLogger);
+		}
+	}
+
+	// ── Pause / Resume / Replan API ────────────────────────────────────────
+
+	/**
+	 * Pause the loop. The next iteration boundary will block until resume() is called.
+	 * If the loop is already paused or not running, this is a no-op.
+	 */
+	pause(): void {
+		if (this.#pauseSignal) return; // already paused
+		this.#pauseSignal = new AbortController();
+		void this.#stateTracker.updatePipeline({ loopPhase: "paused" });
+		this.#activityLogger?.logPhase("paused");
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop paused. Awaiting plan update or resume.");
+		logger.info("LoopController paused");
+	}
+
+	/**
+	 * Resume the loop after a pause. Resolves the pause promise so the
+	 * blocked iteration can proceed.
+	 */
+	resume(): void {
+		if (!this.#pauseSignal) return; // not paused
+		void this.#stateTracker.updatePipeline({ loopPhase: "running" });
+		this.#activityLogger?.logPhase("running");
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop resumed.");
+		const resolver = this.#pauseResolver;
+		this.#pauseSignal = null;
+		this.#pauseResolver = null;
+		resolver?.();
+		logger.info("LoopController resumed");
+	}
+
+	/**
+	 * Update the plan content. Writes the new plan to .omp/plan.md and
+	 * updates the in-memory planContent so subsequent iterations use it.
+	 * Should be called while the loop is paused.
+	 */
+	async updatePlan(newPlanContent: string, workspace: string): Promise<void> {
+		this.#planContent = newPlanContent;
+		const planPath = path.join(workspace, ".omp", "plan.md");
+		try {
+			await fs.mkdir(path.dirname(planPath), { recursive: true });
+			await fs.writeFile(planPath, newPlanContent, "utf-8");
+		} catch (err) {
+			logger.warn("Failed to write updated plan.md", { error: String(err) });
+		}
+		this.#activityLogger?.logBroadcast(this.#clonerId, "Plan updated. New plan will be used in the next iteration.");
+		logger.info("LoopController plan updated", { length: newPlanContent.length });
+	}
+
+	/**
+	 * If the loop is currently paused, block until resume() is called.
+	 * Called at the start of each iteration boundary.
+	 */
+	async #checkPause(): Promise<void> {
+		if (!this.#pauseSignal) return;
+		await new Promise<void>((resolve) => {
+			this.#pauseResolver = resolve;
+		});
 	}
 
 	async runLoop(options: PipelineOptions & { planContent?: string }): Promise<LoopResult> {
 		const verdicts: ReviewVerdict[] = [];
 		const errors: string[] = [];
 		const clonerFeedbackHistory: string[] = [];
-		// Convergence tracking
+		// Convergence tracking — uses instance fields (#stagnationCount, #lastFindingsKey)
 		const convergenceThreshold = this.#loopConfig.convergenceThreshold;
-		let stagnationCount = 0;
-		let lastFindingsKey = "";
+		// Reset blockage state at the start of a fresh loop
+		this.#stagnationCount = 0;
+		this.#lastFindingsKey = "";
+		this.#workerCrashCounts = {};
 		// Dynamic worker tracking
 		// Per-iteration role suggestions from cloner review (Round 2+).
 		let currentRoleSuggestions: Record<string, string> = {};
@@ -262,13 +408,16 @@ export class LoopController {
 
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
-		const { workspace, modelRegistry, settings, signal, planContent } = options;
+		const { workspace, modelRegistry, settings, signal } = options;
+		// Store plan content in the mutable instance field so updatePlan() can
+		// replace it for subsequent iterations.
+		this.#planContent = options.planContent;
 
 		// TaskComplexityAnalyzer: override worker count, maxRounds, and convergence
 		// based on plan.md content when workers.auto is enabled.
-		if (this.#loopConfig.workers.auto && planContent) {
+		if (this.#loopConfig.workers.auto && this.#planContent) {
 			const analyzer = new TaskComplexityAnalyzer();
-			const rec = await analyzer.analyze(planContent, this.#loopConfig);
+			const rec = await analyzer.analyze(this.#planContent, this.#loopConfig);
 			currentWorkerCount = rec.workers;
 			currentMaxRounds = rec.maxRounds;
 			currentConvergenceNeeded = rec.roundsConvergenceThreshold;
@@ -279,6 +428,15 @@ export class LoopController {
 				rationale: rec.rationale,
 				complexity: rec.complexity,
 			});
+		}
+
+		// Parse plan.md into structured todo items for real-time tracking
+		if (this.#planContent) {
+			const todos = this.#todoTracker.parsePlan(this.#planContent);
+			if (todos.length > 0) {
+				await this.#stateTracker.updatePipeline({ todos });
+				this.#activityLogger?.logPhase("todo-updated");
+			}
 		}
 
 		const initialWorkerCount = currentWorkerCount;
@@ -301,7 +459,7 @@ export class LoopController {
 		this.#channel = new WorkerChannel(this.#ircBus, {
 			workers: workerIds,
 			cloners: clonerIds,
-		});
+		}, this.#activityLogger);
 		// Create per-swarm RegionLockManager for file-level lock coordination.
 		const lockMgr = RegionLockManager.create();
 		await this.#channel.broadcast(
@@ -310,6 +468,10 @@ export class LoopController {
 		);
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
+			// Pause/resume gate: if pause() was called, block here until resume().
+			// This allows the operator to update the plan between iterations.
+			await this.#checkPause();
+
 			if (signal?.aborted) {
 				return {
 					status: "aborted",
@@ -339,8 +501,9 @@ export class LoopController {
 			for (const id of workerIds) {
 				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 			}
-			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
-			options.onProgress?.({
+		await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
+		this.#activityLogger?.logPhase("workers", undefined, iter + 1);
+		options.onProgress?.({
 				iteration: iter,
 				targetCount: this.#loopConfig.maxIterations,
 				currentWave: 0,
@@ -388,11 +551,11 @@ export class LoopController {
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
 
-					let roundResults = await this.#spawnWorkers(
-						workerIds,
-						workspace,
-						planContent,
-						clonerFeedbackHistory,
+				let roundResults = await this.#spawnWorkers(
+					workerIds,
+					workspace,
+					this.#planContent,
+					clonerFeedbackHistory,
 						modelRegistry,
 						settings,
 						iterSignal,
@@ -422,12 +585,12 @@ export class LoopController {
 					const debateConfig = this.#loopConfig.debate ?? { enabled: true, maxRounds: 2 };
 					if (debateConfig.enabled && round > 0 && debateConfig.maxRounds > 0) {
 						await this.#stateTracker.updatePipeline({ roundtablePhase: "Debate: challenging" });
-						roundResults = await this.#runDeliberationPhase(
-							roundResults,
-							workerIds,
-							workspace,
-							planContent,
-							modelRegistry,
+					roundResults = await this.#runDeliberationPhase(
+						roundResults,
+						workerIds,
+						workspace,
+						this.#planContent,
+						modelRegistry,
 							settings,
 							iterSignal,
 							errors,
@@ -522,13 +685,24 @@ export class LoopController {
 				// Wire stateTracker conflict count for overlap conflicts
 				const overlapConflicts = lastConflictReport.conflicts.filter(c => c.severity === "overlap");
 				for (const c of overlapConflicts) {
+					this.#activityLogger?.logConflict(c.file, c.writers, c.severity);
 					for (const writerId of c.writers) {
 						await this.#stateTracker.incrementConflict(writerId);
 					}
 				}
 
-				// 3. Collect worker output for review context (all rounds)
-				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+			// 3. Collect worker output for review context (all rounds)
+			lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+
+			// Update todo statuses from worker round summaries
+			if (this.#planContent && this.#stateTracker.state.todos && this.#stateTracker.state.todos.length > 0) {
+				const updatedTodos = this.#todoTracker.updateFromWorkerOutput(
+					lastWorkerOutput,
+					this.#stateTracker.state.todos,
+				);
+				await this.#stateTracker.updatePipeline({ todos: updatedTodos });
+				this.#activityLogger?.logPhase("todo-updated");
+			}
 
 				// 4. Latent cloner gate: only review when workers failed to converge internally
 				if (workersConverged) {
@@ -546,13 +720,29 @@ export class LoopController {
 							workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 						),
 					});
+				// ── Verification hook ──
+				if (this.#verificationHook && this.#loopConfig.verification) {
+					const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+					if (!vResult.passed && this.#loopConfig.verification.blocking) {
+						// Blocking failure → continue to next iteration instead of completing
+						errors.push(`Verification failed (blocking) at iteration ${iter + 1}`);
+						continue;
+					}
 					return {
 						status: "completed",
 						iterations: iter + 1,
 						reviewVerdicts: verdicts,
 						errors,
+						verificationResults: vResult,
 					};
 				}
+				return {
+					status: "completed",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors,
+				};
+			}
 
 				// Workers did not converge — escalate to latent cloner review
 				await this.#channel.broadcast(
@@ -564,8 +754,9 @@ export class LoopController {
 				for (const id of clonerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
-				await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
-				options.onProgress?.({
+			await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
+			this.#activityLogger?.logPhase("cloner-review", undefined, iter + 1);
+			options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
@@ -574,13 +765,13 @@ export class LoopController {
 				});
 
 				// Spawn cloners to review (parallel)
-				verdict = await this.#runClonerReview(
-					clonerIds,
-					iter,
-					lastWorkerOutput,
-					workspace,
-					planContent,
-					clonerFeedbackHistory,
+			verdict = await this.#runClonerReview(
+				clonerIds,
+				iter,
+				lastWorkerOutput,
+				workspace,
+				this.#planContent,
+				clonerFeedbackHistory,
 					modelRegistry,
 					settings,
 					iterSignal,
@@ -609,11 +800,12 @@ export class LoopController {
 						completedAt: Date.now(),
 					});
 				}
-				await this.#stateTracker.updatePipeline({
-					roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
-					reviewVerdict: verdict.findings.slice(0, 3).join("; "),
-				});
-				options.onProgress?.({
+			await this.#stateTracker.updatePipeline({
+				roundtablePhase: verdict.passed ? "Passed" : "Reviewing findings",
+				reviewVerdict: verdict.findings.slice(0, 3).join("; "),
+			});
+			this.#activityLogger?.logVerdict(verdict);
+			options.onProgress?.({
 					iteration: iter,
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
@@ -623,14 +815,30 @@ export class LoopController {
 						...clonerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 					]),
 				});
-				if (verdict.passed) {
+			if (verdict.passed) {
+				// ── Verification hook ──
+				if (this.#verificationHook && this.#loopConfig.verification) {
+					const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+					if (!vResult.passed && this.#loopConfig.verification.blocking) {
+						// Blocking failure → continue to next iteration instead of completing
+						errors.push(`Verification failed (blocking) at iteration ${iter + 1}`);
+						continue;
+					}
 					return {
 						status: "completed",
 						iterations: iter + 1,
 						reviewVerdicts: verdicts,
 						errors,
+						verificationResults: vResult,
 					};
 				}
+				return {
+					status: "completed",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors,
+				};
+			}
 			} catch (err) {
 				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
 				const message = isTimeout
@@ -651,51 +859,73 @@ export class LoopController {
 			// No verdict (timed out before cloner review) — skip to next iteration
 			if (!verdict) continue;
 
-			// Convergence detection: Jaccard similarity on cloner findings
-			if (convergenceThreshold > 0) {
-				const prevFindings = lastFindingsKey ? lastFindingsKey.split("||") : [];
-				const currFindings = verdict.findings;
-				const similarity = prevFindings.length > 0 ? findingsSimilarity(prevFindings, currFindings) : 0;
+		// Convergence detection: Jaccard similarity on cloner findings
+		// Uses instance fields #stagnationCount and #lastFindingsKey (shared with #detectBlockage).
+		if (convergenceThreshold > 0) {
+			const prevFindings = this.#lastFindingsKey ? this.#lastFindingsKey.split("||") : [];
+			const currFindings = verdict.findings;
+			const similarity = prevFindings.length > 0 ? findingsSimilarity(prevFindings, currFindings) : 0;
 
-				if (similarity >= 0.8) {
-					stagnationCount++;
-					if (stagnationCount >= convergenceThreshold) {
-						// Exact match → full convergence failure
-						if (similarity >= 1.0 || (similarity >= 0.95 && stagnationCount >= convergenceThreshold + 1)) {
-							const result: LoopResult = {
-								status: "converged_failed",
-								iterations: iter + 1,
-								reviewVerdicts: verdicts,
-								errors: [
-									...errors,
-									`Converged after ${stagnationCount} near-identical review rounds (similarity: ${similarity.toFixed(2)})`,
-								],
-							};
-							if (this.#loopConfig.humanEscalation) {
-								result.escalationContext = {
-									lastWorkerOutput,
-									lastFindings: verdict.findings,
-									approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
-								};
-							}
-							return result;
-						}
-						// High similarity but not identical → converged_partial
-						return {
-							status: "converged_partial",
+			if (similarity >= 0.8) {
+				this.#stagnationCount++;
+				if (this.#stagnationCount >= convergenceThreshold) {
+					// Exact match → full convergence failure
+					if (similarity >= 1.0 || (similarity >= 0.95 && this.#stagnationCount >= convergenceThreshold + 1)) {
+						const result: LoopResult = {
+							status: "converged_failed",
 							iterations: iter + 1,
 							reviewVerdicts: verdicts,
 							errors: [
 								...errors,
-								`Partially converged after ${stagnationCount} rounds (Jaccard: ${similarity.toFixed(2)})`,
+								`Converged after ${this.#stagnationCount} near-identical review rounds (similarity: ${similarity.toFixed(2)})`,
 							],
 						};
+						if (this.#loopConfig.humanEscalation) {
+							result.escalationContext = {
+								lastWorkerOutput,
+								lastFindings: verdict.findings,
+								approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
+							};
+						}
+						return result;
 					}
-				} else {
-					stagnationCount = 0;
+					// High similarity but not identical → converged_partial
+					return {
+						status: "converged_partial",
+						iterations: iter + 1,
+						reviewVerdicts: verdicts,
+						errors: [
+							...errors,
+							`Partially converged after ${this.#stagnationCount} rounds (Jaccard: ${similarity.toFixed(2)})`,
+						],
+					};
 				}
-				lastFindingsKey = currFindings.sort().join("||");
+			} else {
+				this.#stagnationCount = 0;
 			}
+			this.#lastFindingsKey = currFindings.sort().join("||");
+		}
+
+		// ── Blockage detection: stagnation or worker deadlock ──
+		// Called after convergence check. If the loop is stuck, the loop pauses
+		// here awaiting user resolution (continue / skip / abort).
+		{
+			const resolution = await this.#detectBlockage(iter, verdict, lastWorkerOutput);
+			if (resolution === "abort") {
+				return {
+					status: "aborted",
+					iterations: iter + 1,
+					reviewVerdicts: verdicts,
+					errors: [...errors, "Loop aborted by user via blocker resolution"],
+				};
+			}
+			if (resolution === "skip") {
+				// Skip remaining processing for this iteration
+				continue;
+			}
+			// "continue" → reset happened in resolveBlocker(), proceed normally
+		}
+
 			// 5. Dynamic worker scaling with delta-based acceleration (GAP 2)
 			//    When ≥2/3 cloners agree on direction and |delta| ≥ 2, jump by delta.
 			//    Otherwise fall back to conservative ±1.
@@ -723,25 +953,27 @@ export class LoopController {
 					delta = 0;
 				}
 
-				if (delta > 0) {
-					const addCount = Math.min(delta, max - currentWorkerCount);
-					for (let i = 0; i < addCount; i++) {
-						const newId = `worker-${workerIds.length + 1}`;
-						this.#channel.addWorker(newId);
-						await this.#stateTracker.registerAgent(newId);
-						workerIds.push(newId);
-						currentWorkerCount++;
-					}
-				} else if (delta < 0 && currentWorkerCount > min) {
-					const removeCount = Math.min(-delta, currentWorkerCount - min);
-					for (let i = 0; i < removeCount; i++) {
-						// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
-						const worst = this.#stateTracker.getWorstWorker(workerIds);
-						const removed = worst ?? workerIds[workerIds.length - 1];
-						const idx = workerIds.indexOf(removed);
-						if (idx >= 0) workerIds.splice(idx, 1);
-						this.#channel.removeWorker(removed);
-						await this.#stateTracker.unregisterAgent(removed);
+			if (delta > 0) {
+				const addCount = Math.min(delta, max - currentWorkerCount);
+				for (let i = 0; i < addCount; i++) {
+					const newId = `worker-${workerIds.length + 1}`;
+					this.#channel.addWorker(newId);
+					await this.#stateTracker.registerAgent(newId);
+					workerIds.push(newId);
+					currentWorkerCount++;
+					this.#activityLogger?.logScaling("add", newId, `cloner suggestion +${delta}`);
+				}
+			} else if (delta < 0 && currentWorkerCount > min) {
+				const removeCount = Math.min(-delta, currentWorkerCount - min);
+				for (let i = 0; i < removeCount; i++) {
+					// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
+					const worst = this.#stateTracker.getWorstWorker(workerIds);
+					const removed = worst ?? workerIds[workerIds.length - 1];
+					const idx = workerIds.indexOf(removed);
+					if (idx >= 0) workerIds.splice(idx, 1);
+					this.#channel.removeWorker(removed);
+					await this.#stateTracker.unregisterAgent(removed);
+					this.#activityLogger?.logScaling("remove", removed, `cloner suggestion ${delta}`);
 						currentWorkerCount--;
 					}
 				}
@@ -770,12 +1002,141 @@ export class LoopController {
 			}
 		}
 
+	// ── Verification hook (bottom fallthrough: all iterations exhausted) ──
+	// At this point the loop ran all iterations without an explicit completion.
+	// Run verification if configured; a blocking failure can't continue (no more
+	// iterations), so we just record the result and return "completed" or "failed".
+	if (this.#verificationHook && this.#loopConfig.verification) {
+		const vResult = await this.#verificationHook.run(this.#loopConfig.verification.commands);
+		const status: LoopResult["status"] = (!vResult.passed && this.#loopConfig.verification.blocking)
+			? "failed"
+			: "completed";
 		return {
-			status: "completed",
+			status,
 			iterations: this.#loopConfig.maxIterations,
 			reviewVerdicts: verdicts,
 			errors,
+			verificationResults: vResult,
 		};
+	}
+	return {
+		status: "completed",
+		iterations: this.#loopConfig.maxIterations,
+		reviewVerdicts: verdicts,
+		errors,
+	};
+	}
+
+	// -------------------------------------------------------------------
+	// Blockage detection
+	// -------------------------------------------------------------------
+
+	/**
+	 * Detect whether the loop is blocked after a cloner review.
+	 *
+	 * Conditions that trigger a blockage:
+	 * 1. Cloner findings have stagnated (stagnationCount >= 3, already tracked
+	 *    by the convergence detection block above).
+	 * 2. The same worker crashes 3+ times across iterations (deadlock).
+	 *
+	 * When a blockage is detected:
+	 * - Sets loopPhase to "blocked" via stateTracker.
+	 * - Broadcasts blocker context via ActivityLogger → SSE.
+	 * - Awaits user resolution via a Promise (continue / skip / abort).
+	 *
+	 * Note: stagnation counters (#stagnationCount, #lastFindingsKey) are
+	 * already updated by the convergence detection block. This method only
+	 * checks thresholds and triggers the blockage pause.
+	 *
+	 * @returns The user's resolution decision.
+	 */
+	async #detectBlockage(
+		iteration: number,
+		verdict: ReviewVerdict,
+		lastWorkerOutput: string,
+	): Promise<BlockerResolution> {
+		const STAGNATION_THRESHOLD = 3;
+		const CRASH_THRESHOLD = 3;
+
+		// Stagnation: already tracked by convergence detection
+		const stagnated = this.#stagnationCount >= STAGNATION_THRESHOLD;
+
+		// Worker crash deadlock: any single worker crashed CRASH_THRESHOLD+ times
+		let deadlocked = false;
+		for (const count of Object.values(this.#workerCrashCounts)) {
+			if (count >= CRASH_THRESHOLD) {
+				deadlocked = true;
+				break;
+			}
+		}
+
+		if (!stagnated && !deadlocked) {
+			return "continue";
+		}
+
+		// Build blocker context
+		const reason = stagnated
+			? `Cloner findings have stagnated for ${this.#stagnationCount} consecutive iterations`
+			: `Worker crash deadlock detected (a worker crashed ${CRASH_THRESHOLD}+ times)`;
+
+		this.#currentBlockerContext = {
+			iteration: iteration + 1,
+			lastFindings: verdict.findings,
+			lastWorkerOutput: lastWorkerOutput.slice(0, 8000),
+			stagnationCount: this.#stagnationCount,
+			workerCrashCounts: { ...this.#workerCrashCounts },
+			reason,
+		};
+
+		// Set loop phase to blocked
+		await this.#stateTracker.updatePipeline({ loopPhase: "blocked", roundtablePhase: `Blocked: ${reason}` });
+		this.#activityLogger?.logPhase("blocked", undefined, iteration + 1);
+		this.#activityLogger?.logBroadcast("system", JSON.stringify({
+			type: "blocker",
+			context: this.#currentBlockerContext,
+		}));
+
+		logger.warn(`Blockage detected at iteration ${iteration + 1}: ${reason}`);
+
+		// Await user resolution
+		const resolution = await new Promise<BlockerResolution>((resolve) => {
+			this.#blockerResolver = resolve;
+		});
+
+		this.#blockerResolver = null;
+		this.#currentBlockerContext = null;
+
+		// Restore loop phase to running (unless aborting)
+		if (resolution !== "abort") {
+			await this.#stateTracker.updatePipeline({ loopPhase: "running" });
+			this.#activityLogger?.logPhase("running", undefined, iteration + 1);
+		}
+
+		return resolution;
+	}
+
+	/**
+	 * Resolve the current blockage — called externally (via API) to unblock the loop.
+	 * - "continue": reset stagnation counters and proceed to the next iteration.
+	 * - "skip": skip the current iteration's remaining processing.
+	 * - "abort": stop the loop entirely.
+	 */
+	resolveBlocker(decision: BlockerResolution): boolean {
+		if (!this.#blockerResolver) return false;
+
+		if (decision === "continue") {
+			this.#stagnationCount = 0;
+			this.#lastFindingsKey = "";
+			this.#workerCrashCounts = {};
+		}
+
+		this.#blockerResolver(decision);
+		return true;
+	}
+
+	/** Track worker crashes for deadlock detection (called from #spawnWorkers error handler). */
+	#trackWorkerCrash(workerId: string): void {
+		this.#workerCrashCounts[workerId] = (this.#workerCrashCounts[workerId] ?? 0) + 1;
 	}
 
 	// -------------------------------------------------------------------
@@ -813,14 +1174,18 @@ export class LoopController {
 					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
 					: WORKER_SYSTEM_PROMPT;
 
-				return runSubprocess({
-					cwd: workspace,
-					agent: {
+			return runSubprocess({
+				cwd: workspace,
+				agent: (() => {
+					const def: AgentDefinition = {
 						name: id,
 						description: `Loop Engineering Worker ${i + 1}`,
 						systemPrompt,
-						source: "project",
-					},
+						source: "project" as const,
+					};
+					applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
+					return def;
+				})(),
 					task: [
 						`You are Worker ${i + 1} of ${workerIds.length}.`,
 						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
@@ -857,6 +1222,8 @@ export class LoopController {
 			if (r.status === "fulfilled") return r.value;
 			const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
 			errors.push(`Worker ${workerIds[i]} crashed: ${errMsg}`);
+			this.#trackWorkerCrash(workerIds[i]);
+			this.#activityLogger?.logCrash(workerIds[i], errMsg);
 			return {
 				index: i,
 				id: `worker-${workerIds[i]}`,
@@ -997,12 +1364,16 @@ export class LoopController {
 				workerIds.map((id, i) =>
 					runSubprocess({
 						cwd: workspace,
-						agent: {
-							name: id,
-							description: `Deliberation Worker ${i + 1}`,
-							systemPrompt: DELIBERATION_SYSTEM_PROMPT,
-							source: "project",
-						},
+						agent: (() => {
+							const def: AgentDefinition = {
+								name: id,
+								description: `Deliberation Worker ${i + 1}`,
+								systemPrompt: DELIBERATION_SYSTEM_PROMPT,
+								source: "project" as const,
+							};
+							applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
+							return def;
+						})(),
 						task: [
 							`## ${subLabel} Phase`,
 							sub === 0
@@ -1074,6 +1445,7 @@ export class LoopController {
 				planContent,
 				previousFindings,
 				deliberation: this.#loopConfig.enableDeliberation,
+				toolRestriction: resolveToolRestrictions(this.#loopConfig, "cloner"),
 			},
 			modelRegistry,
 			settings,
@@ -1089,6 +1461,7 @@ export class LoopController {
 export interface CreateLoopOptions {
 	loopConfig: LoopSwarmConfig;
 	workspace: string;
+	activityLogger?: ActivityLogger;
 }
 
 export function createLoopController(stateTracker: StateTracker, options: CreateLoopOptions): LoopController {
@@ -1101,5 +1474,6 @@ export function createLoopController(stateTracker: StateTracker, options: Create
 		ircBus,
 		clonerAgentId,
 		stateTracker,
+		activityLogger: options.activityLogger,
 	});
 }

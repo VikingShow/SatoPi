@@ -1,10 +1,9 @@
 <p align="center">
-  <img src="https://github.com/can1357/oh-my-pi/blob/main/assets/hero.png?raw=true" alt="omp">
+  <img src="assets/hero.png" alt="SatoPi — Satori, a Team of Pi" width="320">
 </p>
 
 <p align="center">
-  <strong>A coding agent with the IDE wired in.</strong>
-  <strong><a href="https://omp.sh">omp.sh</a></strong>
+  <strong>Satori, a Team of Pi</strong> — Multi-agent swarm orchestration with roundtable debate.
 </p>
 
 <p align="center">
@@ -75,9 +74,15 @@ eval "$(omp completions bash)"
 omp completions fish > ~/.config/fish/completions/omp.fish
 ```
 
-## SatoPi Swarm — Development Guide
+## SatoPi — Satori, a Team of Pi
+
+**SatoPi**（悟り + Pi）— "A Team of Pi reaching enlightenment through roundtable debate."
+
+The name fuses the Zen concept of **Satori**（悟り, sudden enlightenment）with **Pi**（π, the coding agent runtime）. The logo — a circle (roundtable / Pi) enclosing a Bodhi leaf（菩提葉, wisdom）— embodies the core philosophy: a swarm of agents converging on truth through structured deliberation.
 
 SatoPi extends omp with a multi-agent swarm architecture featuring before-loop planning (Socratic dialogue), Cloner Roundtable debate, and auto-scaling worker agents.
+
+## SatoPi Swarm — Development Guide
 
 ### Development Setup
 
@@ -159,21 +164,6 @@ The frontend does NOT hardcode any model — it always reads from the backend's 
 | `packages/swarm-gui/src/` | React frontend (Zustand + Tailwind) |
 | `.swarm-workspace/loop.yaml` | Swarm configuration |
 | `.omp/plan.md` | Generated plan from before-loop |
-
-### Frontend Optimization Progress
-
-The swarm-gui frontend is undergoing a three-phase optimization. Completed work:
-
-| Phase | Feature | Status |
-|-------|---------|--------|
-| **1.1** | React 19.2.7 + Vite 8.1.4 + TypeScript 7.0.2 | ✅ |
-| **1.2** | Shiki code syntax highlighting + SSE heartbeat/reconnect | ✅ |
-| **1.3** | Vitest test infrastructure (32 tests, 4 test files) | ✅ |
-| **2.1** | Shared `@oh-my-pi/pi-web` core (SSE, Shiki, CSS, types) | ✅ |
-| **2.2** | Agent Topology graph (React Flow + dagre, Chat/Topology toggle) | ✅ |
-| **2.3** | Monaco Editor + DiffViewer with lazy loading | ✅ |
-| **TBD** | Tailwind 4 migration + shadcn/ui, responsive, E2E | 🔜 |
-| **TBD** | Phase 3: virtual scroll, timeline, DAG, real-time collab | 📅 |
 
 ## Every tool, _benchmaxxed_.
 

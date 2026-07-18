@@ -165,6 +165,39 @@ export interface LoopSwarmConfig {
 	 * Default: true.
 	 */
 	enableDeliberation: boolean;
+	/**
+	 * Verification hook — run commands (tests, type-check, build) after loop
+	 * completes. If blocking and any command fails, the loop continues to
+	 * the next iteration instead of entering After Loop.
+	 */
+	verification?: VerificationConfig;
+	/**
+	 * Per-agent tool restrictions — config-as-constraint pattern.
+	 * Keys are agent name patterns (e.g. "worker", "cloner", "socrates").
+	 * Agents physically cannot use blocked tools.
+	 */
+	agentRestrictions?: Record<string, AgentToolRestriction>;
+}
+
+/**
+ * Verification configuration for post-loop testing.
+ */
+export interface VerificationConfig {
+	/** Shell commands to run (e.g. ["bun test", "tsc --noEmit"]). */
+	commands: string[];
+	/** If true, failure rolls back to running for another iteration. */
+	blocking: boolean;
+}
+
+/**
+ * Agent tool restriction — config-as-constraint pattern.
+ * Either whitelist (allowed) or blacklist (blocked) can be used.
+ */
+export interface AgentToolRestriction {
+	/** Whitelist — only these tools are available. */
+	allowed?: string[];
+	/** Blacklist — these tools are blocked. */
+	blocked?: string[];
 }
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
@@ -205,7 +238,38 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		convergenceThreshold: (raw.convergence_threshold as number) ?? 2,
 		iterationTimeoutMs: (raw.iteration_timeout_ms as number) ?? 300_000,
 		enableDeliberation: (raw.enable_deliberation as boolean) ?? true,
+		verification: parseVerificationConfig(raw.verification as Record<string, unknown> | undefined),
+		agentRestrictions: parseAgentRestrictions(raw.agent_restrictions as Record<string, Record<string, unknown>> | undefined),
 	};
+}
+
+function parseVerificationConfig(raw: Record<string, unknown> | undefined): VerificationConfig | undefined {
+	if (!raw) return undefined;
+	const commands = raw.commands as string[] | undefined;
+	if (!commands || !Array.isArray(commands) || commands.length === 0) return undefined;
+	return {
+		commands: commands.map(c => String(c)),
+		blocking: (raw.blocking as boolean) ?? true,
+	};
+}
+
+function parseAgentRestrictions(raw: Record<string, Record<string, unknown>> | undefined): Record<string, AgentToolRestriction> | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const result: Record<string, AgentToolRestriction> = {};
+	for (const [agentName, config] of Object.entries(raw)) {
+		if (!config || typeof config !== "object") continue;
+		const restriction: AgentToolRestriction = {};
+		if (Array.isArray(config.allowed)) {
+			restriction.allowed = (config.allowed as unknown[]).map(String);
+		}
+		if (Array.isArray(config.blocked)) {
+			restriction.blocked = (config.blocked as unknown[]).map(String);
+		}
+		if (restriction.allowed || restriction.blocked) {
+			result[agentName] = restriction;
+		}
+	}
+	return Object.keys(result).length > 0 ? result : undefined;
 }
 
 // ============================================================================

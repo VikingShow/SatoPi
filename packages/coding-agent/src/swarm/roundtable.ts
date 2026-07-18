@@ -9,6 +9,7 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
+import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 
 // ============================================================================
@@ -47,6 +48,8 @@ export interface ClonerReviewConfig {
 	previousFindings?: string[];
 	/** Enable cross-examination round when findings diverge. Default false. */
 	deliberation?: boolean;
+	/** Tool restriction to apply to cloner agents (config-as-constraint). */
+	toolRestriction?: import("./schema").AgentToolRestriction;
 }
 
 // ============================================================================
@@ -68,7 +71,26 @@ export class ClonerCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation } = config;
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction } = config;
+
+		// Build a cloner agent definition with optional tool restrictions applied.
+		const buildClonerAgent = (id: string, i: number): AgentDefinition => {
+			const def: AgentDefinition = {
+				name: id,
+				description: `Cloner reviewer ${i + 1}`,
+				systemPrompt: this.#clonerSystemPrompt(),
+				source: "project" as const,
+			};
+			if (toolRestriction) {
+				if (toolRestriction.allowed && toolRestriction.allowed.length > 0) {
+					def.tools = toolRestriction.allowed;
+				}
+				if (toolRestriction.blocked && toolRestriction.blocked.length > 0) {
+					def.blockedTools = toolRestriction.blocked;
+				}
+			}
+			return def;
+		};
 
 		const previousFindingsBlock =
 			previousFindings && previousFindings.length > 0
@@ -92,12 +114,7 @@ export class ClonerCouncil {
 			clonerIds.map((id, i) =>
 				runSubprocess({
 					cwd: workspace,
-					agent: {
-						name: id,
-						description: `Cloner reviewer ${i + 1}`,
-						systemPrompt: this.#clonerSystemPrompt(),
-						source: "project",
-					},
+					agent: buildClonerAgent(id, i),
 					task: reviewPrompt,
 					index: i,
 					id: `cloner-review-${id}-${iteration}`,
@@ -152,12 +169,7 @@ export class ClonerCouncil {
 				clonerIds.map((id, i) =>
 					runSubprocess({
 						cwd: workspace,
-						agent: {
-							name: id,
-							description: `Cloner reviewer ${i + 1}`,
-							systemPrompt: this.#clonerSystemPrompt(),
-							source: "project",
-						},
+						agent: buildClonerAgent(id, i),
 						task: deliberationPrompt,
 						index: i,
 						id: `cloner-deliberation-${id}-${iteration}`,

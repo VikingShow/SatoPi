@@ -1,0 +1,26 @@
+{
+  "name": "@oh-my-pi/pi-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared web core for SatoPi — SSE client, Shiki highlighter, design tokens, and generic types",
+  "main": "./src/core/index.ts",
+  "exports": {
+    ".": "./src/core/index.ts",
+    "./sse": "./src/core/sse-client.ts",
+    "./shiki": "./src/core/shiki.ts",
+    "./types": "./src/core/types.ts",
+    "./fetch": "./src/core/fetch-wrapper.ts",
+    "./styles": "./src/styles/globals.css"
+  },
+  "dependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shiki": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}
