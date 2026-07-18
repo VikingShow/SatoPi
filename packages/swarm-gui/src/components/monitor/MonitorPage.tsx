@@ -1,6 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon } from "lucide-react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ChannelList from "./ChannelList";
@@ -16,6 +16,8 @@ export default function MonitorPage() {
   const isRunning = useSwarmStore((s) => s.isRunning);
   const isConnected = useSwarmStore((s) => s.isConnected);
   const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const pauseRun = useSwarmStore((s) => s.pauseRun);
+  const resumeRun = useSwarmStore((s) => s.resumeRun);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const { t } = useTranslation();
@@ -105,8 +107,30 @@ export default function MonitorPage() {
           </button>
         </div>
 
-        {/* Right side now only shows read-only phase indicators (not action buttons) */}
+        {/* Right side: pause/resume controls + status indicators */}
         <div className="flex items-center gap-2">
+          {/* Pause / Resume — available when running or paused */}
+          {loopPhase === "running" && (
+            <button
+              onClick={() => pauseRun()}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer"
+              title="Pause the swarm"
+            >
+              <Pause size={12} />
+              Pause
+            </button>
+          )}
+          {loopPhase === "paused" && (
+            <button
+              onClick={() => resumeRun()}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors cursor-pointer"
+              title="Resume the swarm"
+            >
+              <Play size={12} />
+              Resume
+            </button>
+          )}
+
           {/* Debate in progress indicator */}
           {loopPhase === "before-loop-debate" && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-400">

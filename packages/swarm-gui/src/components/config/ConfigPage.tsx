@@ -76,7 +76,7 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
                 {availableModels.length === 0 && <option value={workers.model}>{workers.model}</option>}
                 {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.id}
+                    {m.name ?? m.id}{m.provider ? ` (${m.provider})` : ""}
                   </option>
                 ))}
                 {!availableModels.some((m) => m.id === workers.model) && availableModels.length > 0 && (

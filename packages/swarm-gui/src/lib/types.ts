@@ -138,6 +138,7 @@ export interface ModelOption {
   id: string;
   name: string;
   tier: string;
+  provider?: string;
 }
 
 // ── After Loop types ──

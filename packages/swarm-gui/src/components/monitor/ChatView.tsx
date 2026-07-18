@@ -226,6 +226,7 @@ export default function ChatView() {
   // Determine input behavior based on loopPhase
   const isIdle = loopPhase === "idle";
   const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
+  const isBeforeLoopConfirm = loopPhase === "before-loop-confirm";
   const isLoopRunning = loopPhase === "running";
   const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
   const isBusy = beforeLoopState?.busy ?? false;
@@ -235,6 +236,8 @@ export default function ChatView() {
     ? "Describe your task..."
     : isBeforeLoopDialog
     ? (isBusy ? "Socrates is thinking..." : "Reply...")
+    : isBeforeLoopConfirm
+    ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
     ? "Give feedback or guidance..."
     : "";
