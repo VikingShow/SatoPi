@@ -1,8 +1,13 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
+
+// ── Code block cache ──────────────────────────────────────────────────
+const codeCache = new Map<string, string>();
+function cacheKey(code: string, lang: string) { return `${lang}:${code.slice(0, 200)}`; }
 
 // ── Shiki code block renderer ──────────────────────────────────────────
 
@@ -30,12 +35,14 @@ function parseCodeBlocks(body: string): BodySegment[] {
 }
 
 function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
-  const [html, setHtml] = useState<string | null>(null);
+  const [html, setHtml] = useState<string | null>(() => codeCache.get(cacheKey(code, lang)) ?? null);
 
   useEffect(() => {
     let cancelled = false;
+    const ck = cacheKey(code, lang);
+    if (codeCache.has(ck)) { setHtml(codeCache.get(ck)!); return; }
     highlightCode(code, lang).then((h) => {
-      if (!cancelled) setHtml(h);
+      if (!cancelled) { codeCache.set(ck, h); setHtml(h); }
     });
     return () => { cancelled = true; };
   }, [code, lang]);
@@ -110,6 +117,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
+// Memoized to prevent re-render when other messages change
+const MemoMessageBubble = memo(MessageBubble);
+
 function SystemEvent({ text }: { text: string }) {
   return (
     <div className="flex items-center justify-center py-1">
@@ -139,9 +149,37 @@ export default function ChatView() {
     (a) => a.type === "verdict" || a.type === "phase" || a.type === "scaling" || a.type === "nomination" || a.type === "crash"
   );
 
+  // Build message list: system events first, then channel messages
+  const displayMessages = useMemo(() => {
+    // Combine into a single flat list for virtualization
+    const result: Array<{ type: "system"; key: string; text: string } | { type: "message"; key: string; msg: ChatMessage }> = [];
+    // Show only last 20 system events for performance
+    for (const a of systemEvents.slice(-20)) {
+      result.push({ type: "system", key: `s-${a.ts}`, text: getSystemText(a) });
+    }
+    for (const msg of channelMessages) {
+      result.push({ type: "message", key: msg.id, msg });
+    }
+    return result;
+  }, [systemEvents, channelMessages]);
+
+  // Virtual scrolling for large message lists
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: displayMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 48,
+    overscan: 5,
+  });
+
+  // Auto-scroll to bottom on new messages
+  const prevLenRef = useRef(displayMessages.length);
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [channelMessages.length, systemEvents.length]);
+    if (displayMessages.length > prevLenRef.current) {
+      virtualizer.scrollToIndex(displayMessages.length - 1, { behavior: "smooth" });
+    }
+    prevLenRef.current = displayMessages.length;
+  }, [displayMessages.length, virtualizer]);
 
   function getSystemText(a: typeof activities[0]): string {
     switch (a.type) {
@@ -194,16 +232,9 @@ export default function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {systemEvents.length > 0 && (
-          <div className="space-y-1 mb-2">
-            {systemEvents.slice(-10).map((a, i) => (
-              <SystemEvent key={`${a.ts}-${i}`} text={getSystemText(a)} />
-            ))}
-          </div>
-        )}
-        {channelMessages.length === 0 && systemEvents.length === 0 && (
+      {/* Messages — virtualized for performance */}
+      <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
+        {displayMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-neutral-600 text-sm gap-2">
             {isIdle ? (
               <>
@@ -217,9 +248,32 @@ export default function ChatView() {
               : ""}
           </div>
         )}
-        {channelMessages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
-        ))}
+        {displayMessages.length > 0 && (
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const item = displayMessages[virtualItem.index];
+              return (
+                <div
+                  key={item.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualItem.index}
+                >
+                  {item.type === "system"
+                    ? <SystemEvent text={item.text} />
+                    : <MemoMessageBubble msg={item.msg} />
+                  }
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Context Action Bar — appears when plan is ready or debate is done */}
