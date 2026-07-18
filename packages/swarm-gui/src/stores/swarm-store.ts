@@ -252,8 +252,28 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // History might not be available yet
       }
 
+      // P3-3: Track last event timestamp for reconnection recovery.
+      let lastEventTs = 0;
+      sseClient.onConnectionChange((connected) => {
+        if (connected && lastEventTs > 0) {
+          // Reconnected — fetch missed events since last seen timestamp.
+          import("../lib/api-client").then(({ api }) => {
+            fetch(`/api/history?since=${lastEventTs}`)
+              .then(r => r.json())
+              .then((data: { entries?: Array<{ ts: number }> }) => {
+                const missed = (data.entries ?? []).filter((e: { ts: number }) => e.ts > lastEventTs);
+                missed.forEach((e: unknown) => get().addActivity(e as import("../lib/types").ActivityEntry, true));
+                if (missed.length > 0) {
+                  toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
+                }
+              })
+              .catch(() => {});
+          });
+        }
+      });
       sseClient.connect();
       sseClient.on((entry) => {
+        lastEventTs = Math.max(lastEventTs, entry.ts);
         get().addActivity(entry);
         set({ isConnected: sseClient.isConnected });
 

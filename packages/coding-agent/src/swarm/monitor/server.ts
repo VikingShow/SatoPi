@@ -128,10 +128,15 @@ export class MonitorServer implements ActivityBroadcaster {
 
 				// -- SSE endpoint ------------------------------------------------
 				if (pathname === "/events") {
+					// P3-3: Read Last-Event-ID for reconnection state recovery.
+					const lastEventId = req.headers.get("Last-Event-ID") ?? undefined;
 					const stream = new ReadableStream({
 						start(controller) {
-							// Send initial connection confirmation
-							const hello = new TextEncoder().encode(": connected\n\n");
+							// Send connection confirmation with last event ID echo
+							const handshake = lastEventId
+								? `: connected\nid: ${lastEventId}\n\n`
+								: ": connected\n\n";
+							const hello = new TextEncoder().encode(handshake);
 							controller.enqueue(hello);
 
 							// Register subscriber
