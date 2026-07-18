@@ -129,6 +129,18 @@ export const api = {
       method: "POST",
     }),
 
+  // ── Run control (pause / resume) ──
+
+  pauseRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/pause", {
+      method: "POST",
+    }),
+
+  resumeRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/resume", {
+      method: "POST",
+    }),
+
   // ── Steering (operator → running loop) ──
 
   sendSteering: (text: string) =>
@@ -183,10 +195,11 @@ export const api = {
     }),
 
   searchRoles: (params: { tag?: string; status?: RoleStatus; q?: string }) => {
+    // GET /api/roles already supports ?q=&tag=&status= — no separate /search route needed
     const sp = new URLSearchParams();
     if (params.tag) sp.set("tag", params.tag);
     if (params.status) sp.set("status", params.status);
     if (params.q) sp.set("q", params.q);
-    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles/search?${sp.toString()}`);
+    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles?${sp.toString()}`);
   },
 };

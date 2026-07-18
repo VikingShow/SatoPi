@@ -81,7 +81,7 @@ export interface RoleCreateInput {
 // Constants
 // ============================================================================
 
-const DEFAULT_ROLES_DIR = ".swarm-workspace/roles";
+const DEFAULT_ROLES_DIR = "roles";
 
 // ============================================================================
 // RoleAssetManager
@@ -112,7 +112,7 @@ export class RoleAssetManager {
     const filePath = this.#rolePath(id);
     try {
       const content = await fs.readFile(filePath, "utf-8");
-      return parseRoleYaml(content);
+      return Bun.YAML.parse(content) as RoleAsset;
     } catch {
       return null;
     }
@@ -139,7 +139,7 @@ export class RoleAssetManager {
           path.join(this.#rolesDir, name),
           "utf-8",
         );
-        const role = parseRoleYaml(content);
+        const role = Bun.YAML.parse(content) as RoleAsset;
         if (statusFilter && role.status !== statusFilter) continue;
 
         roles.push({
@@ -362,105 +362,6 @@ export class RoleAssetManager {
 // ============================================================================
 // YAML serialization / deserialization
 // ============================================================================
-
-/**
- * Parse a role YAML string into a RoleAsset object.
- * Uses a simple line-based parser to avoid YAML library dependency.
- */
-function parseRoleYaml(content: string): RoleAsset {
-  const lines = content.split("\n");
-  const result: Record<string, unknown> = {};
-  let currentKey = "";
-  let currentIndent = 0;
-  let collectingMultiline = false;
-  let multilineKey = "";
-  let multilineLines: string[] = [];
-  let collectingList = false;
-  let listKey = "";
-  let listItems: string[] = [];
-
-  for (const rawLine of lines) {
-    const line = rawLine;
-    const indent = line.search(/\S|$/);
-    if (indent === -1) continue; // empty line
-
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    // Handle multiline continuation
-    if (collectingMultiline) {
-      if (trimmed.startsWith("|")) {
-        // skip the | indicator line
-        continue;
-      }
-      if (line.trimStart().startsWith("- ") || /^[\w-]+:/.test(trimmed)) {
-        // End of multiline — save it
-        result[multilineKey] = multilineLines.join("\n").trim();
-        collectingMultiline = false;
-        multilineLines = [];
-        // Fall through to process this line normally
-      } else if (indent > currentIndent) {
-        multilineLines.push(line.trimEnd());
-        continue;
-      }
-    }
-
-    // Handle list continuation
-    if (collectingList) {
-      const listMatch = trimmed.match(/^-\s+(.*)$/);
-      if (listMatch) {
-        listItems.push(listMatch[1]);
-        continue;
-      } else {
-        result[listKey] = listItems;
-        collectingList = false;
-        listItems = [];
-        // Fall through
-      }
-    }
-
-    // Parse key-value or multiline indicator
-    const kvMatch = trimmed.match(/^([\w_-]+):\s*(.*)$/);
-    if (!kvMatch) continue;
-
-    const key = kvMatch[1];
-    const value = kvMatch[2];
-
-    if (value === "|") {
-      collectingMultiline = true;
-      multilineKey = key;
-      currentIndent = indent;
-      multilineLines = [];
-      continue;
-    }
-
-    if (value === "" || value === "[]") {
-      // Start of a list block — check next lines
-      collectingList = true;
-      listKey = key;
-      listItems = [];
-      continue;
-    }
-
-    // Simple scalar values
-    if (value === "true") result[key] = true;
-    else if (value === "false") result[key] = false;
-    else if (/^\d+$/.test(value)) result[key] = parseInt(value, 10);
-    else if (/^\d+\.\d+$/.test(value)) result[key] = parseFloat(value);
-    else if (value.startsWith('"') && value.endsWith('"')) result[key] = value.slice(1, -1);
-    else result[key] = value;
-  }
-
-  // Flush any remaining collectors
-  if (collectingMultiline && multilineLines.length > 0) {
-    result[multilineKey] = multilineLines.join("\n").trim();
-  }
-  if (collectingList && listItems.length > 0) {
-    result[listKey] = listItems;
-  }
-
-  return result as unknown as RoleAsset;
-}
 
 /** Serialize a RoleAsset back to YAML string. */
 function serializeRoleYaml(role: RoleAsset): string {

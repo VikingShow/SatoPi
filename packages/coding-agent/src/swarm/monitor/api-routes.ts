@@ -141,21 +141,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return ctx.roleAssetManager.list(status ?? undefined).then((roles) => json({ roles }));
 	},
 
-	"GET /api/roles/search": (req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const url = new URL(req.url);
-		const tag = url.searchParams.get("tag") ?? undefined;
-		const status = url.searchParams.get("status") as
-			| import("../role-asset").RoleStatus
-			| undefined;
-		const q = url.searchParams.get("q") ?? undefined;
-		return ctx.roleAssetManager
-			.search({ tag, status, q })
-			.then((roles) => json({ roles }));
-	},
-
 	"GET /api/roles/:id": (req, ctx) => {
 		if (!ctx.roleAssetManager) {
 			return json({ error: "Role asset manager not available" }, 503);

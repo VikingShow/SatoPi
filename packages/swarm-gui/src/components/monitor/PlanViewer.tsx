@@ -156,10 +156,10 @@ export default function PlanViewer() {
       );
     }
     if (error) {
-      return <div className="text-xs text-neutral-600 italic py-2">{error}. Place plan.md in .omp/ directory.</div>;
+      return <div className="text-xs text-neutral-600 italic py-2">{error}</div>;
     }
     if (!content) {
-      return <div className="text-xs text-neutral-600 italic py-2">No plan content. Switch to edit mode to create one.</div>;
+      return <div className="text-xs text-neutral-600 italic py-2">No plan yet. Start a planning dialog to generate one, or switch to edit mode to create manually.</div>;
     }
     return (
       <div className="markdown-body">

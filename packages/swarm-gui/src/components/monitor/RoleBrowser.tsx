@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Users, Search, Plus, CheckCircle2, XCircle, Clock,
   AlertCircle, ChevronDown, ChevronRight, Wrench, Tag,
-  Trash2, RefreshCw, FileText, Loader2
+  Trash2, RefreshCw, FileText, Loader2, Save
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api-client";
-import type { RoleAssetSummary, RoleAsset, RoleStatus } from "../../lib/types";
+import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput } from "../../lib/types";
 
 // ── Status badge ─────────────────────────────────────────────────────────
 
@@ -26,6 +26,18 @@ function statusIcon(s: RoleStatus) {
     case "draft": return <AlertCircle size={12} />;
     case "deprecated": return <XCircle size={12} />;
   }
+}
+
+// ── Create form fields ────────────────────────────────────────────────────
+
+interface CreateForm {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  guidelines: string;
+  tools: string;
+  tags: string;
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -49,6 +61,17 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
   const [expandedRole, setExpandedRole] = useState<RoleAsset | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateForm>({
+    id: "", name: "", description: "", systemPrompt: "",
+    guidelines: "", tools: "", tags: "",
+  });
+  const [creating, setCreating] = useState(false);
+
+  const emptyForm: CreateForm = {
+    id: "", name: "", description: "", systemPrompt: "",
+    guidelines: "", tools: "", tags: "",
+  };
 
   const fetchRoles = useCallback(async () => {
     setLoading(true);
@@ -136,6 +159,45 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
     }
   };
 
+  const handleCreate = async () => {
+    if (!createForm.id.trim() || !createForm.name.trim() || !createForm.systemPrompt.trim()) {
+      toast.error("ID, name, and system prompt are required");
+      return;
+    }
+    setCreating(true);
+    try {
+      const input: RoleCreateInput = {
+        id: createForm.id.trim(),
+        name: createForm.name.trim(),
+        description: createForm.description.trim(),
+        prompts: {
+          system: createForm.systemPrompt.trim(),
+          guidelines: createForm.guidelines
+            .split("\n")
+            .map(g => g.trim())
+            .filter(Boolean),
+        },
+        tools: createForm.tools
+          .split(/[,\n]/)
+          .map(t => t.trim())
+          .filter(Boolean),
+        tags: createForm.tags
+          .split(/[,\n]/)
+          .map(t => t.trim())
+          .filter(Boolean),
+      };
+      await api.createRole(input);
+      toast.success(`Role "${input.id}" created`);
+      setShowCreate(false);
+      setCreateForm(emptyForm);
+      fetchRoles();
+    } catch (err) {
+      toast.error(`Failed to create: ${String(err)}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   // All unique tags from roles
   const allTags = [...new Set(roles.flatMap(r => r.tags))].sort();
 
@@ -150,14 +212,121 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
           <span className="text-sm font-medium">Role Library</span>
           <span className="text-xs text-neutral-600">({roles.length})</span>
         </div>
-        <button
-          onClick={fetchRoles}
-          className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
-          title="Refresh"
-        >
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { setShowCreate(!showCreate); if (showCreate) setCreateForm(emptyForm); }}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              showCreate ? "bg-primary/20 text-primary" : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700"
+            }`}
+          >
+            <Plus size={12} />
+            Create
+          </button>
+          <button
+            onClick={fetchRoles}
+            className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="px-4 py-3 border-b border-neutral-800/50 bg-neutral-800/30 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Role ID *</label>
+              <input
+                type="text"
+                value={createForm.id}
+                onChange={e => setCreateForm(f => ({ ...f, id: e.target.value }))}
+                placeholder="e.g. senior-backend-dev"
+                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Name *</label>
+              <input
+                type="text"
+                value={createForm.name}
+                onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Senior Backend Developer"
+                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Description</label>
+            <input
+              type="text"
+              value={createForm.description}
+              onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Brief description of this role"
+              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">System Prompt *</label>
+            <textarea
+              value={createForm.systemPrompt}
+              onChange={e => setCreateForm(f => ({ ...f, systemPrompt: e.target.value }))}
+              placeholder="You are a senior backend developer..."
+              rows={4}
+              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Guidelines (one per line)</label>
+              <textarea
+                value={createForm.guidelines}
+                onChange={e => setCreateForm(f => ({ ...f, guidelines: e.target.value }))}
+                placeholder="Use TypeScript&#10;Write tests&#10;Document APIs"
+                rows={3}
+                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Tools (comma separated)</label>
+              <textarea
+                value={createForm.tools}
+                onChange={e => setCreateForm(f => ({ ...f, tools: e.target.value }))}
+                placeholder="read_file, write_to_file, execute_command"
+                rows={3}
+                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Tags (comma separated)</label>
+            <input
+              type="text"
+              value={createForm.tags}
+              onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
+              placeholder="backend, typescript, api"
+              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/80 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {creating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              {creating ? "Creating..." : "Create Role"}
+            </button>
+            <button
+              onClick={() => { setShowCreate(false); setCreateForm(emptyForm); }}
+              className="px-3 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search & Filter */}
       <div className="px-4 py-2 space-y-2 border-b border-neutral-800/50">
