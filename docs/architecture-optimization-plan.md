@@ -1,8 +1,31 @@
 # SatoPi 架构优化长期规划
 
 > 生成日期: 2026-07-19
+> 最后更新: 2026-07-19
 > 基于: 全项目深度架构审计 (7 个子系统并行分析)
 > 范围: packages/agent, packages/ai, packages/coding-agent, packages/swarm-extension, packages/swarm-gui, packages/mnemopi, packages/snapcompact, packages/wire, packages/collab-web, packages/web, packages/natives, packages/hashline, packages/utils, packages/tui, crates/*
+
+---
+
+## 执行进度
+
+| 阶段 | 分支 | 状态 | 提交 | 日期 |
+|------|------|------|------|------|
+| **P0** | `fix/p0-robustness` | ✅ 已完成 | `f994247` | 2026-07-19 |
+| **P1** | — | ⬚ 待开始 | — | — |
+| **P2** | — | ⬚ 待开始 | — | — |
+| **P3+P4** | — | ⬚ 待开始 | — | — |
+
+### P0 完成详情 (2026-07-19)
+
+| 编号 | 问题 | 修复文件 | 变更 |
+|------|------|---------|------|
+| ✅ P0-1 | Agent执行超时 | `executor.ts` | 新增 `timeoutMs` 选项 (默认5分钟), per-agent `AbortController`, 超时自动 CRASHED |
+| ✅ P0-2 | Abort资源清理 | `pipeline.ts` + `executor.ts` | `onStarted` 回调注册 active controllers, `abortAll()` 方法, `finally` 清理 |
+| ✅ P0-3 | 错误吞噬结果 | `pipeline.ts` | `#completedIterations` 计数器, catch 返回已累积结果 |
+| ✅ P0-4 | 并发安全 | `state.ts` | 序列化 `#writeChain` promise 队列, 同 tick 合并写 |
+
+**验证**: 133 测试全部通过, 零回归, 修改文件零类型错误
 
 ---
 
@@ -24,16 +47,18 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 一、P0 — 鲁棒性关键缺陷
+## 一、P0 — 鲁棒性关键缺陷 ✅ 已完成 (2026-07-19)
 
-### P0-1: Swarm Agent 无执行超时机制
+> 分支: `fix/p0-robustness` → 已合并到 `dev`
+
+### P0-1: Swarm Agent 无执行超时机制 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/executor.ts:66-80`
 - **问题**: `executeSwarmAgent` 调用 `runSubprocess()` 无 timeout 参数，Agent 可永久 hang
 - **影响**: 单个 Worker/Cloner 挂死会阻塞整个 Wave，最终导致 Pipeline 彻底卡死
 - **建议**: 为 `runSubprocess` 传入 `iterationTimeoutMs` 超时信号，超时后自动 kill 并标记 CRASHED
 
-### P0-2: Abort 后无子进程资源清理
+### P0-2: Abort 后无子进程资源清理 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/pipeline.ts:123-129`, `executor.ts:94-103`
 - **问题**: Pipeline abort 或 executor catch 后，已启动的 `runSubprocess` 子进程没有清理机制。子进程可能继续运行消耗资源并持有文件锁
@@ -43,14 +68,14 @@ pi-ast / natives    █████  █████  █████  ███
   - abort 时遍历所有活跃子进程发送 SIGTERM
   - 超时后 SIGKILL
 
-### P0-3: PipelineController 致命错误吞噬已完成结果
+### P0-3: PipelineController 致命错误吞噬已完成结果 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/pipeline.ts:123-129`
 - **问题**: `catch(err)` 返回 `iterations: 0`，丢弃了故障前已成功完成的所有迭代结果
 - **影响**: 运行 5 个迭代后第 6 个失败 → 前端显示 0 个迭代，5 个成功迭代的工作成果不可见
 - **建议**: 在 catch 块中返回当前已累积的 `allResults` 和已完成的 `iterations` 计数
 
-### P0-4: StateTracker 无并发安全保护
+### P0-4: StateTracker 无并发安全保护 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/state.ts`
 - **问题**: 同一 Wave 内多个 Agent 并行执行时，同时调用 `updateAgent()` / `appendLog()` 写入同一个 JSON 文件
