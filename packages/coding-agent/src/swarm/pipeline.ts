@@ -46,6 +46,10 @@ export class PipelineController {
 	#def: SwarmDefinition;
 	#waves: string[][];
 	#stateTracker: StateTracker;
+	/** Active per-agent abort controllers keyed by agent name. */
+	#activeControllers: Map<string, AbortController> = new Map();
+	/** Accumulated iteration count across the run (survives fatal errors). */
+	#completedIterations = 0;
 
 	constructor(def: SwarmDefinition, waves: string[][], stateTracker: StateTracker) {
 		this.#def = def;
@@ -61,6 +65,21 @@ export class PipelineController {
 	/** The state tracker — accessible to subclasses like LoopController. */
 	protected get stateTracker(): StateTracker {
 		return this.#stateTracker;
+	}
+
+	/**
+	 * Abort all currently running agents.
+	 * Called on pipeline abort / fatal error / shutdown.
+	 */
+	abortAll(reason: string): void {
+		for (const [name, controller] of this.#activeControllers) {
+			try {
+				controller.abort(new DOMException(reason, "AbortError"));
+			} catch {
+				// Controller may already be aborted — ignore.
+			}
+		}
+		this.#activeControllers.clear();
 	}
 
 	async run(options: PipelineOptions): Promise<PipelineResult> {
@@ -114,6 +133,8 @@ export class PipelineController {
 						);
 					}
 				}
+
+				this.#completedIterations = iteration + 1;
 			}
 
 			const status = errors.length > 0 ? ("failed" as const) : ("completed" as const);
@@ -122,10 +143,18 @@ export class PipelineController {
 			return { status, iterations: targetCount, agentResults: allResults, errors };
 		} catch (err) {
 			const error = err instanceof Error ? err.message : String(err);
+			// P0-2: Abort all still-running agents on fatal error.
+			this.abortAll(`Pipeline fatal error: ${error}`);
 			await this.#stateTracker.updatePipeline({ status: "failed", completedAt: Date.now() });
 			await this.#stateTracker.appendOrchestratorLog(`Pipeline fatal error: ${error}`);
 			errors.push(error);
-			return { status: "failed", iterations: 0, agentResults: allResults, errors };
+			// P0-3: Preserve accumulated results from completed iterations.
+			return {
+				status: "failed",
+				iterations: this.#completedIterations,
+				agentResults: allResults,
+				errors,
+			};
 		}
 	}
 
@@ -179,6 +208,10 @@ export class PipelineController {
 							modelRegistry: options.modelRegistry,
 							settings: options.settings,
 							stateTracker: this.#stateTracker,
+							// P0-2: Register controller so the pipeline can abort this agent on shutdown.
+							onStarted: controller => {
+								this.#activeControllers.set(agentName, controller);
+							},
 						});
 						return { agentName, result };
 					} catch (err) {
@@ -199,6 +232,9 @@ export class PipelineController {
 							error,
 						};
 						return { agentName, result: failResult };
+					} finally {
+						// P0-2: Clean up controller reference after agent completes or fails.
+						this.#activeControllers.delete(agentName);
 					}
 				}),
 			);
