@@ -1,10 +1,9 @@
 <p align="center">
-  <img src="https://github.com/can1357/oh-my-pi/blob/main/assets/hero.png?raw=true" alt="omp">
+  <img src="assets/hero.png" alt="SatoPi — Satori, a Team of Pi" width="320">
 </p>
 
 <p align="center">
-  <strong>A coding agent with the IDE wired in.</strong>
-  <strong><a href="https://omp.sh">omp.sh</a></strong>
+  <strong>Satori, a Team of Pi</strong> — Multi-agent swarm orchestration with roundtable debate.
 </p>
 
 <p align="center">
@@ -75,9 +74,15 @@ eval "$(omp completions bash)"
 omp completions fish > ~/.config/fish/completions/omp.fish
 ```
 
-## SatoPi Swarm — Development Guide
+## SatoPi — Satori, a Team of Pi
+
+**SatoPi**（悟り + Pi）— "A Team of Pi reaching enlightenment through roundtable debate."
+
+The name fuses the Zen concept of **Satori**（悟り, sudden enlightenment）with **Pi**（π, the coding agent runtime）. The logo — a circle (roundtable / Pi) enclosing a Bodhi leaf（菩提葉, wisdom）— embodies the core philosophy: a swarm of agents converging on truth through structured deliberation.
 
 SatoPi extends omp with a multi-agent swarm architecture featuring before-loop planning (Socratic dialogue), Cloner Roundtable debate, and auto-scaling worker agents.
+
+## SatoPi Swarm — Development Guide
 
 ### Development Setup
 
