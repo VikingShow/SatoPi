@@ -424,4 +424,81 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		}
 		return json({ success: true });
 	},
+
+	// ── Terminal (xterm.js) ──────────────────────────────────────────────
+	"GET /api/terminal/connect": (_req, _ctx) => {
+		const shell = Bun.spawn(["bash", "--norc"], {
+			stdin: "pipe",
+			stdout: "pipe",
+			stderr: "pipe",
+			cwd: _ctx.workspaceDir ?? process.cwd(),
+			env: { ...process.env, TERM: "xterm-256color", HOME: process.env.HOME ?? "/root" },
+		});
+
+		const stream = new ReadableStream({
+			async start(controller) {
+				const encoder = new TextEncoder();
+				const write = (data: string) => controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "output", data })}\n\n`));
+
+				try {
+					const stdoutReader = shell.stdout.getReader();
+					const stderrReader = shell.stderr.getReader();
+
+					const readLoop = async (reader: ReadableStreamDefaultReader<Uint8Array>, label: string) => {
+						while (true) {
+							const { done, value } = await reader.read();
+							if (done) break;
+							const text = new TextDecoder().decode(value);
+							write(text);
+						}
+						if (label === "stdout") {
+							try { shell.kill(); } catch {}
+							controller.close();
+						}
+					};
+
+					readLoop(stdoutReader, "stdout");
+					readLoop(stderrReader, "stderr");
+				} catch {
+					controller.close();
+				}
+			},
+			cancel() {
+				try { shell.kill(); } catch {}
+			},
+		});
+
+		return new Response(stream, {
+			headers: {
+				"Content-Type": "text/event-stream",
+				"Cache-Control": "no-cache",
+				Connection: "keep-alive",
+				"Access-Control-Allow-Origin": "*",
+			},
+		});
+	},
+
+	"POST /api/terminal/input": async (req, _ctx) => {
+		const body = (await req.json().catch(() => ({}))) as { input?: string };
+		if (!body.input) {
+			return json({ error: "Missing input" }, 400);
+		}
+		// Input is handled via GET /api/terminal/connect SSE — this endpoint
+		// provides a request-response interface for sending commands.
+		// In the current architecture, the shell runs per-SSE-connection.
+		// For a simpler approach, execute the command directly and return output.
+		try {
+			const proc = Bun.spawn(["bash", "-c", body.input], {
+				stdout: "pipe",
+				stderr: "pipe",
+				cwd: _ctx.workspaceDir ?? process.cwd(),
+			});
+			const output = await new Response(proc.stdout).text();
+			const stderr = await new Response(proc.stderr).text();
+			await proc.exited;
+			return json({ output, stderr, exitCode: proc.exitCode });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
 };
