@@ -18,8 +18,8 @@ export default function ChannelList() {
   const setActive = useSwarmStore((s) => s.setActiveChannel);
 
   const channelList = Array.from(channels.values()).sort((a, b) => {
-    const order = { roundtable: 0, subgroup: 1, private: 2, steering: 3 };
-    return order[a.type] - order[b.type];
+    const order: Record<string, number> = { roundtable: 0, subgroup: 1, private: 2, steering: 3 };
+    return (order[a.type] ?? 99) - (order[b.type] ?? 99);
   });
 
   return (

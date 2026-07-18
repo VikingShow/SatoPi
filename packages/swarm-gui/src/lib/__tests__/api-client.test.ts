@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
-  globalThis.fetch = vi.fn();
+  globalThis.fetch = vi.fn() as unknown as typeof fetch;
 });
 
 afterEach(() => {
@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 function mockOk<T>(data: T) {
-  (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+  (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
     ok: true,
     status: 200,
     statusText: "OK",
@@ -23,7 +23,7 @@ function mockOk<T>(data: T) {
 }
 
 function mockError(status: number, body?: unknown) {
-  (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+  (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
     ok: false,
     status,
     statusText: status === 500 ? "Internal Server Error" : "Not Found",

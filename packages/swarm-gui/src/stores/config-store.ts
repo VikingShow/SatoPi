@@ -12,13 +12,7 @@
 
 import { create } from "zustand";
 import { api } from "../lib/api-client";
-
-interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-  tier: string;
-}
+import type { ModelOption } from "../lib/types";
 
 interface WorkersConfig {
   initial: number;

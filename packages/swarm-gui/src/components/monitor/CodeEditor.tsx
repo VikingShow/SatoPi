@@ -8,7 +8,8 @@ import { lazy, Suspense, useState } from "react";
 import type { OnMount } from "@monaco-editor/react";
 import { Loader2 } from "lucide-react";
 
-const Editor = lazy(() => import("@monaco-editor/react"));
+const Editor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.Editor })));
+const DiffEditor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.DiffEditor })));
 
 // ── CodeEditor ────────────────────────────────────────────────────
 interface CodeEditorProps {
@@ -120,11 +121,12 @@ export function DiffViewer({
           </div>
         }
       >
-        <Editor
+        <DiffEditor
           height={height}
           language={lang}
           original={original}
           modified={modified}
+          theme="vs-dark"
           options={{
             readOnly: true,
             minimap: { enabled: false },
@@ -134,8 +136,6 @@ export function DiffViewer({
             scrollBeyondLastLine: false,
             wordWrap: "on",
             padding: { top: 12, bottom: 12 },
-            theme: "vs-dark",
-            renderSideBySide: true,
           }}
         />
       </Suspense>

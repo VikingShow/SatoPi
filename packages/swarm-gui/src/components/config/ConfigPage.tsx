@@ -1,9 +1,13 @@
 import { useEffect } from "react";
-import { Save, Play, Square, FileText } from "lucide-react";
+import { Save, Play, Square, FileText, ArrowRight } from "lucide-react";
 import { useConfigStore } from "../../stores/config-store";
 import { useSwarmStore } from "../../stores/swarm-store";
 
-export default function ConfigPage() {
+interface ConfigPageProps {
+  onNavigateToMonitor?: () => void;
+}
+
+export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
   const config = useConfigStore();
   const { workers, cloners, convergence, scaling, loop, yamlPreview, isDirty, isLoading, availableModels } = config;
   const isRunning = useSwarmStore((s) => s.isRunning);
@@ -72,7 +76,7 @@ export default function ConfigPage() {
                 {availableModels.length === 0 && <option value={workers.model}>{workers.model}</option>}
                 {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.id}
+                    {m.name ?? m.id}{m.provider ? ` (${m.provider})` : ""}
                   </option>
                 ))}
                 {!availableModels.some((m) => m.id === workers.model) && availableModels.length > 0 && (
@@ -166,6 +170,13 @@ export default function ConfigPage() {
             }`}
           >
             <Save size={13} /> Save
+          </button>
+          <button
+            onClick={() => { config.saveConfig(); onNavigateToMonitor?.(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors cursor-pointer"
+            title="Save config and go to Monitor to start planning"
+          >
+            Save & Plan <ArrowRight size={12} />
           </button>
           {isRunning ? (
             <button

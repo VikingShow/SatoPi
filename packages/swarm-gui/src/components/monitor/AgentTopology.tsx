@@ -113,7 +113,7 @@ export default function AgentTopology() {
         label: name,
         agentType: agent.role === "reviewer" ? "reviewer" : name.startsWith("cloner") ? "cloner" : name === "socrates" ? "socrates" : "worker",
         status: agent.status,
-        model: (agent as Record<string, unknown>).modelName as string | undefined,
+        model: (agent as unknown as { modelName?: string }).modelName,
         iteration: agent.iteration ?? 0,
         score: agent.praiseCount !== undefined ? agent.praiseCount - (agent.criticismCount ?? 0) : undefined,
       },
@@ -127,9 +127,9 @@ export default function AgentTopology() {
     const recent = activities.slice(-50);
 
     for (const a of recent) {
-      if (a.type !== "message") continue;
-      const src = (a as Record<string, unknown>).from as string | undefined;
-      const tgt = (a as Record<string, unknown>).to as string | undefined;
+      if (a.type !== "broadcast" && a.type !== "steering") continue;
+      const src = (a as unknown as { from?: string }).from;
+      const tgt = (a as unknown as { to?: string }).to;
       if (!src || !tgt || src === tgt) continue;
 
       const key = `${src}→${tgt}`;

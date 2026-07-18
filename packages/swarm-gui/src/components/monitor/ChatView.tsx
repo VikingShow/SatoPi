@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
+import { EmptyState } from "../shared/EmptyState";
 
 // ── Code block cache ──────────────────────────────────────────────────
 const codeCache = new Map<string, string>();
@@ -188,7 +189,17 @@ export default function ChatView() {
   const virtualizer = useVirtualizer({
     count: displayMessages.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 48,
+    estimateSize: (index) => {
+      const item = displayMessages[index];
+      if (!item) return 64;
+      if (item.type === "message") {
+        const body = item.msg.body;
+        if (body.includes("```")) return 280;
+        if (body.length > 800) return 200;
+        if (body.length > 300) return 120;
+      }
+      return 64;
+    },
     overscan: 5,
   });
 
@@ -215,17 +226,20 @@ export default function ChatView() {
   // Determine input behavior based on loopPhase
   const isIdle = loopPhase === "idle";
   const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
+  const isBeforeLoopConfirm = loopPhase === "before-loop-confirm";
   const isLoopRunning = loopPhase === "running";
   const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
   const isBusy = beforeLoopState?.busy ?? false;
   const planReady = beforeLoopState?.planReady ?? false;
 
   const placeholder = isIdle
-    ? "描述你的任务，开始规划..."
+    ? "Describe your task..."
     : isBeforeLoopDialog
-    ? (isBusy ? "Socrates is thinking..." : "Reply to Socrates...")
+    ? (isBusy ? "Socrates is thinking..." : "Reply...")
+    : isBeforeLoopConfirm
+    ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
-    ? "Type a steering message to the swarm..."
+    ? "Give feedback or guidance..."
     : "";
 
   function handleSend() {
@@ -255,18 +269,27 @@ export default function ChatView() {
       {/* Messages — virtualized for performance */}
       <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-neutral-600 text-sm gap-2">
+          <>
             {isIdle ? (
-              <>
-                <span className="text-2xl">👋</span>
-                <span>在下方输入框描述你要完成的任务，开始 Before Loop 规划</span>
-              </>
-            ) : isBeforeLoopDialog
-              ? "Describe your task to start planning with Socrates..."
-              : isLoopRunning
-              ? "No messages yet. Waiting for swarm activity..."
-              : ""}
-          </div>
+              <EmptyState
+                icon={<Sparkles size={32} />}
+                title="What would you like the swarm to build?"
+                description="Describe your task below to start planning. You can also paste a GitHub issue, spec, or error message."
+              />
+            ) : isBeforeLoopDialog ? (
+              <EmptyState
+                icon={<Loader2 size={32} className="animate-spin" />}
+                title="Discussing requirements with Socrates"
+                description="Answer the questions to help refine the task. A plan will emerge from this dialogue."
+              />
+            ) : isLoopRunning ? (
+              <EmptyState
+                icon={<Bot size={32} />}
+                title="Waiting for swarm activity..."
+                description="Agents are being initialized. Messages will appear here once work begins."
+              />
+            ) : null}
+          </>
         )}
         {displayMessages.length > 0 && (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
@@ -359,7 +382,7 @@ export default function ChatView() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={!canSend || isBusy || isRunning}
+            disabled={!canSend || isBusy}
             placeholder={placeholder}
             className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
           />

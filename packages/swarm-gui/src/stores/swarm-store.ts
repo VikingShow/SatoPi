@@ -38,6 +38,10 @@ interface SwarmStore {
   stopRun: () => Promise<void>;
   fetchAfterLoopResult: () => Promise<void>;
 
+  // Pause / Resume
+  pauseRun: () => Promise<void>;
+  resumeRun: () => Promise<void>;
+
   // Before Loop actions
   startPlanning: (task: string) => Promise<void>;
   sendBeforeLoopMessage: (text: string) => Promise<void>;
@@ -409,6 +413,36 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
+  // ── Pause / Resume ──
+
+  pauseRun: async () => {
+    try {
+      const result = await api.pauseRun();
+      if (result.success) {
+        set({ loopPhase: "paused" });
+        toast.info("Swarm Paused", { description: "Workers have been paused. Click Resume to continue." });
+      } else {
+        toast.error("Failed to pause", { description: result.error ?? "Unknown error" });
+      }
+    } catch (err) {
+      toast.error("Failed to pause", { description: String(err) });
+    }
+  },
+
+  resumeRun: async () => {
+    try {
+      const result = await api.resumeRun();
+      if (result.success) {
+        set({ loopPhase: "running" });
+        toast.success("Swarm Resumed", { description: "Workers are continuing." });
+      } else {
+        toast.error("Failed to resume", { description: result.error ?? "Unknown error" });
+      }
+    } catch (err) {
+      toast.error("Failed to resume", { description: String(err) });
+    }
+  },
+
   // ── Before Loop actions ──
 
   startPlanning: async (task: string) => {
@@ -520,11 +554,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const result = await api.resolveBlocker(decision);
       if (result.success) {
         set({ blockerContext: null, loopPhase: decision === "abort" ? "idle" : "running", error: null });
+        if (decision === "abort") {
+          toast.info("Run Aborted", { description: "The swarm run has been stopped." });
+        }
       } else {
         set({ error: result.error ?? "Failed to resolve blocker" });
+        toast.error("Failed", { description: result.error ?? "Could not resolve the blocker. Try again." });
       }
     } catch (err) {
       set({ error: String(err) });
+      toast.error("Failed", { description: String(err) });
     }
   },
 }));

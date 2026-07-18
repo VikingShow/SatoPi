@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import { api } from "../lib/api-client";
+import type { ActivityEntry } from "../lib/types";
 import { useSwarmStore } from "./swarm-store";
 
 export interface RunMeta {
@@ -110,7 +111,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Load historical activity into a read-only view (without affecting live state)
     try {
       const { entries } = await api.getRunActivity(name);
-      const activities = entries as Parameters<typeof useSwarmStore.getState>["0"]["activities"];
+      const activities = entries as ActivityEntry[];
       useSwarmStore.setState({
         activities,
         channels: new Map(),
