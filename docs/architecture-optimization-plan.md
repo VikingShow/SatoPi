@@ -9,14 +9,28 @@
 
 ## 执行进度
 
-| 阶段 | 分支 | 状态 | 提交 | 日期 |
-|------|------|------|------|------|
-| **P0** | `fix/p0-robustness` | ✅ 已完成 | `f994247` | 2026-07-19 |
-| **P1** | `fix/p1-architecture-decoupling` | ✅ 已完成 | `009378f` | 2026-07-19 |
-| **P2** | — | ⬚ 待开始 | — | — |
-| **P3+P4** | — | ⬚ 待开始 | — | — |
+### 概览
+
+| 阶段 | 分支 | 状态 | 完成 | 延期 | 提交 | 日期 |
+|------|------|------|------|------|------|------|
+| **P0** | `fix/p0-robustness` | ✅ 完成 | 4/4 | 0 | `f994247` | 2026-07-19 |
+| **P1** | `fix/p1-architecture-decoupling` | ✅ 完成 | 5/6 | **1** | `009378f` | 2026-07-19 |
+| **P2** | — | ⬚ 待开始 | 0/11 | — | — | — |
+| **P3+P4** | — | ⬚ 待开始 | 0/9 | — | — | — |
+
+### ⚠️ 延期清单
+
+> 延期项目不影响当前阶段完成状态，但需要后续独立追踪处理。
+
+| 延期编号 | 所属阶段 | 问题 | 延期原因 | 建议时间 |
+|---------|---------|------|---------|---------|
+| **P1-1-DEFER** | P1 | Swarm 编排逻辑迁移到 `swarm-engine` 包 | 需更新 >20 文件 import 路径 + workspace 配置，应通过独立 CI 验证 | P3 完成后 |
+
+---
 
 ### P0 完成详情 (2026-07-19)
+
+**延期: 无** — 全部 4 项按计划完成。
 
 | 编号 | 问题 | 修复文件 | 变更 |
 |------|------|---------|------|
@@ -29,18 +43,18 @@
 
 ### P1 完成详情 (2026-07-19)
 
-| 编号 | 问题 | 修复文件 | 变更 |
-|------|------|---------|------|
-| ✅ P1-2 | Executor接口抽象 | `executor.ts` | `AgentExecutor` 接口 + `SubprocessAgentExecutor` 默认实现, `PipelineOptions.executor` 注入 |
-| ✅ P1-5 | 工具权限可配置 | `schema.ts` + `executor.ts` | `SwarmAgent.allowedTools`/`blockedTools` YAML解析 → `AgentDefinition` 传递 |
-| ✅ P1-4 | Wave数据管道 | `pipeline.ts` | `WaveResult` + `PipelineContext` 类型, 每 Wave 结果累积传递给下游 |
-| ✅ P1-3 | 依赖注入 | `pipeline.ts` | `PipelineHooks` 接口替换硬编码生命周期行为 |
-| ✅ P1-6 | 条件分支 | `pipeline.ts` | 7 个生命周期 hook: `beforePipeline`, `beforeIteration`, `afterIteration`, `beforeWave`, `afterWave`, `afterPipeline`, `onHookError` |
+**延期: 1 项** — P1-1 因影响范围过大延期至后续独立分支。
+
+| 编号 | 问题 | 状态 | 修复文件 | 变更 |
+|------|------|------|---------|------|
+| P1-1 | 编排逻辑包迁移 | ⏸️ **延期** | — | 见 [延期清单](#️-延期清单) |
+| ✅ P1-2 | Executor接口抽象 | 完成 | `executor.ts` | `AgentExecutor` 接口 + `SubprocessAgentExecutor` 默认实现, `PipelineOptions.executor` 注入 |
+| ✅ P1-5 | 工具权限可配置 | 完成 | `schema.ts` + `executor.ts` | `SwarmAgent.allowedTools`/`blockedTools` YAML解析 → `AgentDefinition` 传递 |
+| ✅ P1-4 | Wave数据管道 | 完成 | `pipeline.ts` | `WaveResult` + `PipelineContext` 类型, 每 Wave 结果累积传递给下游 |
+| ✅ P1-3 | 依赖注入 | 完成 | `pipeline.ts` | `PipelineHooks` 接口替换硬编码生命周期行为 |
+| ✅ P1-6 | 条件分支 | 完成 | `pipeline.ts` | 7 个生命周期 hook: `beforePipeline`, `beforeIteration`, `afterIteration`, `beforeWave`, `afterWave`, `afterPipeline`, `onHookError` |
 
 **验证**: 133 测试全部通过, 零回归, 修改文件零类型错误
-
-> **P1-1 (包迁移) 延期**: 将 swarm 编排逻辑从 `coding-agent/src/swarm/` 迁移到独立的 `swarm-engine` 包需要更新全项目 import 路径并更新 workspace 配置。此变更影响范围大 (>20 个文件), 建议在单独的分支中处理, 并先行通过 CI 验证。
-
 **变更量**: 3 files, +224/-5 lines
 
 ---
@@ -102,9 +116,9 @@ pi-ast / natives    █████  █████  █████  ███
 
 ---
 
-## 二、P1 — 架构耦合与模块化问题 ✅ 已完成 (2026-07-19)
+## 二、P1 — 架构耦合与模块化问题 ✅ 已完成 (2026-07-19) | ⚠️ 1项延期
 
-### P1-1: Swarm 编排逻辑放错包位置
+### P1-1: Swarm 编排逻辑放错包位置 ⏸️ **延期** (P1-1-DEFER)
 
 - **位置**: `packages/coding-agent/src/swarm/` (dag.ts, pipeline.ts, executor.ts, schema.ts, state.ts, loop-controller.ts 等 ~5000 行)
 - **问题**: 核心编排逻辑全部在 `coding-agent` 包内，而 `swarm-extension` 只是一个 500 行的 HTTP 薄包装。这违反了关注点分离原则
@@ -119,14 +133,14 @@ pi-ast / natives    █████  █████  █████  ███
   ```
   拆分后 `swarm-engine` 成为零 CLI 依赖的纯编排库，可独立测试和发布
 
-### P1-2: Executor 硬编码依赖 runSubprocess
+### P1-2: Executor 硬编码依赖 runSubprocess ✅
 
 - **位置**: `packages/coding-agent/src/swarm/executor.ts:16,66`
 - **问题**: `executeSwarmAgent` 直接 import 和调用 `runSubprocess`，无法替换为其他 Agent 执行机制（如远程 Agent、HTTP Agent、WebSocket Agent）
 - **影响**: 所有 Swarm Agent 必须在本地进程中以子进程方式运行
 - **建议**: 抽象 `AgentExecutor` 接口，`runSubprocess` 作为默认实现，支持注入自定义 executor
 
-### P1-3: 无依赖注入机制
+### P1-3: 无依赖注入机制 ✅
 
 - **位置**: 全局 — 所有 swarm 模块直接 import 依赖
 - **问题**: 无 DI 容器或工厂模式，所有依赖在模块顶层静态绑定
@@ -137,7 +151,7 @@ pi-ast / natives    █████  █████  █████  ███
   - `EventBroadcaster` — 事件广播（已有 ActivityBroadcaster，但未广泛使用）
   - `FileSystem` — 文件操作（便于测试）
 
-### P1-4: Wave 间无结构化数据传递
+### P1-4: Wave 间无结构化数据传递 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/pipeline.ts:145-213`
 - **问题**: Wave N 的产出只能通过文件系统共享给 Wave N+1，无结构化的数据管道。Agent 之间通过 IRC 广播文本通信，无法传递类型化数据
@@ -146,14 +160,14 @@ pi-ast / natives    █████  █████  █████  ███
   - 引入 `WaveContext` 类型，在 Wave 间传递结构化的中间结果
   - 支持 Agent 声明 `produces: Artifact[]` 和 `consumes: Artifact[]`
 
-### P1-5: 硬编码工具列表
+### P1-5: 硬编码工具列表 — 已修复：工具权限现在可通过 YAML allowed_tools/blocked_tools 配置 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/executor.ts:39` (注释中)
 - **问题**: Executor 注释写死工具列表 `bash, python, read, write, edit, grep, find, fetch, web_search, browser`，但实际不可配置
 - **影响**: 无法为不同 Agent 角色精细控制工具权限（虽然 schema 有 `AgentToolRestriction`，但 executor 未使用）
 - **建议**: 将 `agent.allowedTools` / `agent.blockedTools` 从 schema 传递到 `runSubprocess` 的 tool filter 参数
 
-### P1-6: 缺少条件分支和动态流程控制
+### P1-6: 缺少条件分支和动态流程控制 ✅
 
 - **位置**: `packages/coding-agent/src/swarm/dag.ts` (DAG 是静态的)
 - **问题**: Pipeline 不支持 "Agent A 成功则跳过 Agent B" 或 "Agent C 失败则重试 3 次" 等条件逻辑
