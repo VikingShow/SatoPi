@@ -193,3 +193,62 @@ export interface ExperienceStats {
   escalationRate: number;
   avgApprovalRatio: number;
 }
+
+// ── Role Asset types ──
+
+export type RoleStatus = "draft" | "proposed" | "approved" | "deprecated";
+
+export interface RoleAsset {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+  author: string;
+  status: RoleStatus;
+  prompts: {
+    system: string;
+    guidelines: string[];
+  };
+  tools: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+  success_rate: number;
+}
+
+export interface RoleAssetSummary {
+  id: string;
+  name: string;
+  description: string;
+  status: RoleStatus;
+  version: number;
+  tags: string[];
+  usage_count: number;
+  success_rate: number;
+  updated_at: string;
+}
+
+export interface RoleCreateInput {
+  id: string;
+  name: string;
+  description: string;
+  author?: string;
+  prompts: {
+    system: string;
+    guidelines: string[];
+  };
+  tools: string[];
+  tags: string[];
+}
+
+export interface RoleUpdateInput {
+  name?: string;
+  description?: string;
+  prompts?: {
+    system?: string;
+    guidelines?: string[];
+  };
+  tools?: string[];
+  tags?: string[];
+}

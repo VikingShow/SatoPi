@@ -18,6 +18,7 @@ import * as path from "node:path";
 import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
 import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
+import type { RoleAssetManager } from "../role-asset";
 import { EventBus } from "./event-bus";
 import { apiRoutes, type ApiRouteContext, type RunManager, type BeforeLoopManager, type SteeringSink } from "./api-routes";
 
@@ -35,6 +36,7 @@ export class MonitorServer implements ActivityBroadcaster {
 		beforeLoopManager?: BeforeLoopManager,
 		steeringSink?: SteeringSink,
 		modelRegistry?: import("../../config/model-registry").ModelRegistry,
+		roleAssetManager?: RoleAssetManager,
 	) {
 		this.#ctx = {
 			stateTracker,
@@ -46,6 +48,7 @@ export class MonitorServer implements ActivityBroadcaster {
 			beforeLoopManager,
 			steeringSink,
 			modelRegistry,
+			roleAssetManager,
 		};
 	}
 
@@ -148,16 +151,35 @@ export class MonitorServer implements ActivityBroadcaster {
 					return apiRoutes[routeKey](req, ctx);
 				}
 
-				// Try pattern match (e.g., /api/runs/:name/activity)
-				if (pathname.startsWith("/api/runs/") && method === "GET") {
-					// Parse /api/runs/:name/activity or /api/runs/:name
-					const rest = pathname.slice("/api/runs/".length);
-					const parts = rest.split("/");
-					const name = parts[0];
-					const sub = parts[1]; // "activity" or undefined
-					const routeKey = sub === "activity" ? "GET /api/runs/:name/activity" : "GET /api/runs/:name";
-					return apiRoutes[routeKey]?.(req, { ...ctx, params: { name } }) ?? new Response("Not found", { status: 404 });
+			// Try pattern match (e.g., /api/runs/:name/activity)
+			if (pathname.startsWith("/api/runs/") && method === "GET") {
+				// Parse /api/runs/:name/activity or /api/runs/:name
+				const rest = pathname.slice("/api/runs/".length);
+				const parts = rest.split("/");
+				const name = parts[0];
+				const sub = parts[1]; // "activity" or undefined
+				const routeKey = sub === "activity" ? "GET /api/runs/:name/activity" : "GET /api/runs/:name";
+				return apiRoutes[routeKey]?.(req, { ...ctx, params: { name } }) ?? new Response("Not found", { status: 404 });
+			}
+
+			// Try pattern match for role routes (e.g., /api/roles/:id, /api/roles/:id/approve)
+			if (pathname.startsWith("/api/roles/")) {
+				const rest = pathname.slice("/api/roles/".length);
+				const parts = rest.split("/");
+				const id = parts[0];
+				const action = parts[1]; // "approve" | "deprecate" | undefined
+				let routeKey: string;
+				if (action === "approve") {
+					routeKey = "POST /api/roles/:id/approve";
+				} else if (action === "deprecate") {
+					routeKey = "POST /api/roles/:id/deprecate";
+				} else if (!action) {
+					routeKey = `${method} /api/roles/:id`;
+				} else {
+					return new Response("Not found", { status: 404 });
 				}
+				return apiRoutes[routeKey]?.(req, { ...ctx, params: { id } }) ?? new Response("Not found", { status: 404 });
+			}
 
 				// -- Static files (SPA) -----------------------------------------
 				// In production, serve from dist/. In dev, Vite handles this.

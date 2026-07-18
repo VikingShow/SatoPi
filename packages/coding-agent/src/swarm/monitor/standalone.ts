@@ -31,6 +31,7 @@ import type { ExtractedLesson } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
 import { VerificationHook } from "../verification-hook";
 import type { LoopSwarmConfig } from "../schema";
+import { RoleAssetManager } from "../role-asset";
 
 // ============================================================================
 // Shared types — used by both backend API and frontend
@@ -528,8 +529,17 @@ async function main() {
 		},
 	};
 
-	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink + modelRegistry injected)
-	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink, modelRegistry);
+	// 5d. Create and initialize RoleAssetManager — seed built-in roles if empty
+	console.log("Initializing RoleAssetManager...");
+	const roleAssetManager = new RoleAssetManager(WORKSPACE_DIR);
+	await roleAssetManager.init();
+	const seeded = await roleAssetManager.seedIfEmpty();
+	if (seeded > 0) {
+		console.log(`Seeded ${seeded} built-in role assets`);
+	}
+
+	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink + modelRegistry + roleAssetManager injected)
+	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink, modelRegistry, roleAssetManager);
 	const port = server.start(7878);
 
 	// 7. Wire ActivityLogger → SSE

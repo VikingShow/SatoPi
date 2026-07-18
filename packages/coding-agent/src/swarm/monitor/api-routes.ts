@@ -9,6 +9,7 @@ import * as path from "node:path";
 import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
 import type { ModelRegistry } from "../../config/model-registry";
+import type { RoleAssetManager } from "../role-asset";
 
 /**
  * AfterLoopResult — shape returned by RunManager.getLastAfterLoopResult()
@@ -92,6 +93,8 @@ export interface ApiRouteContext {
 	steeringSink?: SteeringSink;
 	/** Model registry — used to advertise actually-available models to the UI. */
 	modelRegistry?: ModelRegistry;
+	/** Role asset manager — manages role YAML files. */
+	roleAssetManager?: RoleAssetManager;
 	/** URL path parameters (e.g. :name in /api/runs/:name) */
 	params?: Record<string, string>;
 }
@@ -116,6 +119,135 @@ async function readActivityLog(swarmDir: string): Promise<string[]> {
 }
 
 export const apiRoutes: Record<string, RouteHandler> = {
+	// ── Role Asset Library ──────────────────────────────────────────────────
+
+	"GET /api/roles": (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const url = new URL(req.url);
+		const status = url.searchParams.get("status") as
+			| import("../role-asset").RoleStatus
+			| null;
+		const tag = url.searchParams.get("tag") ?? undefined;
+		const q = url.searchParams.get("q") ?? undefined;
+
+		// If search params are provided, use search endpoint logic
+		if (tag || q || status) {
+			return ctx.roleAssetManager
+				.search({ tag, status: status ?? undefined, q })
+				.then((roles) => json({ roles }));
+		}
+		return ctx.roleAssetManager.list(status ?? undefined).then((roles) => json({ roles }));
+	},
+
+	"GET /api/roles/search": (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const url = new URL(req.url);
+		const tag = url.searchParams.get("tag") ?? undefined;
+		const status = url.searchParams.get("status") as
+			| import("../role-asset").RoleStatus
+			| undefined;
+		const q = url.searchParams.get("q") ?? undefined;
+		return ctx.roleAssetManager
+			.search({ tag, status, q })
+			.then((roles) => json({ roles }));
+	},
+
+	"GET /api/roles/:id": (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		return ctx.roleAssetManager.get(id).then((role) => {
+			if (!role) return json({ error: "Role not found" }, 404);
+			return json(role);
+		});
+	},
+
+	"POST /api/roles": async (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
+			if (!body.id || !body.name || !body.prompts) {
+				return json({ error: "Missing required fields: id, name, prompts" }, 400);
+			}
+			const role = await ctx.roleAssetManager.create(body);
+			return json(role, 201);
+		} catch (err) {
+			return json({ error: String(err) }, 409);
+		}
+	},
+
+	"PUT /api/roles/:id": async (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
+			const role = await ctx.roleAssetManager.update(id, body);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"POST /api/roles/:id/approve": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.roleAssetManager.approve(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 400);
+		}
+	},
+
+	"POST /api/roles/:id/deprecate": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.roleAssetManager.deprecate(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"DELETE /api/roles/:id": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const deleted = await ctx.roleAssetManager.delete(id);
+			if (!deleted) return json({ error: "Role not found" }, 404);
+			return json({ success: true });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
+
 	// -- State -----------------------------------------------------------
 	"GET /api/state": (_req, ctx) => {
 		return json(ctx.stateTracker.state);
