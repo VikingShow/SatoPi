@@ -2,6 +2,75 @@ import { useRef, useEffect, useState } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2 } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
+import { highlightCode } from "../../lib/shiki";
+
+// ── Shiki code block renderer ──────────────────────────────────────────
+
+type BodySegment = { type: "text"; content: string } | { type: "code"; lang: string; code: string };
+
+function parseCodeBlocks(body: string): BodySegment[] {
+  const segments: BodySegment[] = [];
+  const regex = /```(\w*)\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(body)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", content: body.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: "code", lang: match[1] || "text", code: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < body.length) {
+    segments.push({ type: "text", content: body.slice(lastIndex) });
+  }
+
+  return segments;
+}
+
+function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    highlightCode(code, lang).then((h) => {
+      if (!cancelled) setHtml(h);
+    });
+    return () => { cancelled = true; };
+  }, [code, lang]);
+
+  if (html === null) {
+    return (
+      <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-3 overflow-x-auto my-1 text-xs font-mono">
+        <code>{code}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      className="shiki-wrapper my-1 rounded-lg overflow-hidden border border-[#1a1a1a] text-xs [&_pre]:!bg-transparent [&_pre]:p-3 [&_pre]:overflow-x-auto"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function MessageBody({ body }: { body: string }) {
+  const segments = parseCodeBlocks(body);
+  if (segments.length <= 1) {
+    return <>{body}</>;
+  }
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.type === "code"
+          ? <ShikiCodeBlock key={i} code={seg.code} lang={seg.lang} />
+          : <span key={i} className="whitespace-pre-wrap">{seg.content}</span>
+      )}
+    </>
+  );
+}
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isSteering = msg.body.startsWith("[CLONER STEERING]");
@@ -23,7 +92,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {isSteering && <Megaphone size={11} className="text-status-accent" />}
       </div>
       <div
-        className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap ${
+        className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm ${
           isSteering
             ? "bg-status-accent/15 border border-status-accent/30 text-neutral-200"
             : isSystem
@@ -35,7 +104,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : "bg-background-elevated text-neutral-200"
         }`}
       >
-        {isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body}
+        <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
       </div>
     </div>
   );
