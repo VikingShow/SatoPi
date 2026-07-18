@@ -111,6 +111,51 @@
 **验证**: 133 backend tests + 32 frontend tests 全部通过
 
 **变更量**: 4 files, +63/-13 lines
+**总变更量 (P0-P3+P4)**: 16 files, +650/-100 lines across 7 branches
+
+---
+
+## 延期项执行进度 (批次 A-C)
+
+| 批次 | 分支 | 延期项 | 提交 | 日期 |
+|------|------|--------|------|------|
+| **A** | `defer/batch-a-sse-events` | P2-3, P2-10, P2-11 | ✅ | 2026-07-19 |
+| **B** | `defer/batch-b-interface-inversion` | P1-1, P4-1 | ✅ | 2026-07-19 |
+| **C** | `defer/batch-c-frontend` | P2-1, P2-2, P2-9 | ✅ | 2026-07-19 |
+| **D** | — | P2-4, P2-7, P2-8, P3-1, P3-2, P3-3, P3-4 | ⬚ 待开始 | — |
+
+### 批次 A 详情 — SSE 事件扩展
+
+| 延期编号 | 问题 | 修复 |
+|---------|------|------|
+| ✅ P2-3 | Steering 送达确认 | `activity-logger.ts` + `swarm-store.ts`: `steering_ack` 事件 + toast 通知 |
+| ✅ P2-10 | Tool 调用详情 | `activity-logger.ts` + `swarm-store.ts`: `tool_call` 事件 + 聊天中显示 + 慢工具 (>3s) toast |
+| ✅ P2-11 | Provider 错误详情 | `activity-logger.ts` + `swarm-store.ts`: `error_flag` 事件 + 分类提示 (ContextOverflow→shake, UsageLimit→换key 等) |
+
+### 批次 B 详情 — 接口反转 + YAML Hooks
+
+| 延期编号 | 问题 | 修复 |
+|---------|------|------|
+| ✅ P1-1 | 包迁移 (接口反转) | `services.ts`: `SwarmAgentRunner` + `SwarmMessageBus` 接口, 通过 `PipelineOptions.services` 注入 |
+| ✅ P4-1 | YAML Hook 配置 | `schema.ts`: `HookConfig` 类型, `parseHooksConfig()` 解析器, 集成到 `resolveLoopConfig()` |
+
+### 批次 C 详情 — 前端补全
+
+| 延期编号 | 问题 | 修复 |
+|---------|------|------|
+| ✅ P2-1 | After-loop 独立视图 | MonitorPage 'Summary' tab, AfterLoopPanel 全高度渲染, afterLoopResult 存在时显示 Tab |
+| ✅ P2-2 | Before-loop 历史 | ChatView 可折叠 'Previous planning conversation' 区域, 调用 `loadBeforeLoopHistory()` |
+| ✅ P2-9 | Diff 可视化 | ContextPanel 文件冲突项 'Diff' 按钮, hover 显示, 内联详情面板 |
+
+### 剩余延期 (批次 D) — 6 项
+
+需要较大工程量或独立特性开发:
+- P2-4: 超时降级
+- P2-7: Session 时间旅行
+- P2-8: 记忆管理 UI
+- P3-1: 路由系统 (react-router)
+- P3-3: SSE 状态恢复
+- P3-2, P3-4: 测试覆盖 + 内存管理
 
 ## 总体评估
 
