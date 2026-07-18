@@ -259,7 +259,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const candidates = [
 			path.join(ctx.workspaceDir, ".omp", "plan.md"),
 			path.join(ctx.workspaceDir, "plan.md"),
-			path.join(ctx.workspaceDir, ".swarm-workspace", ".omp", "plan.md"),
 		];
 		for (const p of candidates) {
 			try {
@@ -269,7 +268,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				// try next
 			}
 		}
-		return json({ content: "", error: "plan.md not found" }, 404);
+		// Return 200 with error in body so fetchJson doesn't throw.
+		// The PlanViewer frontend checks res.error to display a friendly message.
+		return json({ content: "", path: "", error: "plan.md not found" });
 	},
 
 	"PUT /api/plan": async (req, ctx) => {
@@ -281,7 +282,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			for (const p of [
 				path.join(ctx.workspaceDir, ".omp", "plan.md"),
 				path.join(ctx.workspaceDir, "plan.md"),
-				path.join(ctx.workspaceDir, ".swarm-workspace", ".omp", "plan.md"),
 			]) {
 				try {
 					await fs.access(p);
