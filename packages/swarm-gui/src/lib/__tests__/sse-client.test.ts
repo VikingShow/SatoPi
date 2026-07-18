@@ -27,10 +27,10 @@ class MockEventSource {
 vi.stubGlobal("EventSource", MockEventSource);
 vi.useFakeTimers();
 
-const { SSEClient } = await import("../sse-client");
+const { SseClient } = await import("@oh-my-pi/pi-web/sse");
 
 function createClient() {
-  return new SSEClient();
+  return new SseClient("http://localhost:7878/events");
 }
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ afterEach(() => {
   vi.clearAllTimers();
 });
 
-describe("SSEClient", () => {
+describe("SseClient", () => {
   it("connect creates EventSource", () => {
     const client = createClient();
     client.connect();

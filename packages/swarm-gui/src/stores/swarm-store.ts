@@ -53,7 +53,7 @@ interface SwarmStore {
   resolveBlocker: (decision: BlockerResolution) => Promise<void>;
 }
 
-function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel; message: ChatMessage } | null {
+function deriveChannel(entry: ActivityEntry, seq: number): { id: string; channel: ChatChannel; message: ChatMessage } | null {
   const ts = entry.ts;
   switch (entry.type) {
     case "broadcast": {
@@ -61,7 +61,7 @@ function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel
       return {
         id,
         channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}`, channelId: id, from: entry.from ?? "", to: "all", body: entry.body ?? "", timestamp: ts },
+        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body: entry.body ?? "", timestamp: ts },
       };
     }
     case "subgroup": {
@@ -69,7 +69,7 @@ function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel
       return {
         id,
         channel: { id, type: "subgroup", name: `#${entry.to}`, participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
+        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
       };
     }
     case "steering": {
@@ -79,14 +79,14 @@ function deriveChannel(entry: ActivityEntry): { id: string; channel: ChatChannel
         return {
           id,
           channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-          message: { id: `${ts}-${entry.from}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
+          message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
         };
       }
       const id = `steering-${entry.from}-${entry.to}`;
       return {
         id,
         channel: { id, type: "steering", name: `${entry.from} -> ${entry.to}`, participants: [entry.from ?? "", entry.to ?? ""], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
+        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
       };
     }
     default:
@@ -101,12 +101,15 @@ function pushUserMessage(
   body: string,
 ) {
   const ts = Date.now();
+  // Add a high-resolution counter suffix to ensure uniqueness even if the user
+  // sends multiple messages in the same millisecond
+  const id = `local-${ts}-operator-${Math.random().toString(36).slice(2, 8)}`;
   setFn((state) => {
     const messages = new Map(state.messages);
     const channels = new Map(state.channels);
     const msgList = messages.get("roundtable") ?? [];
     msgList.push({
-      id: `local-${ts}-operator`,
+      id,
       channelId: "roundtable",
       from: "operator",
       to: "all",
@@ -305,7 +308,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const channels = new Map(state.channels);
       const messages = new Map(state.messages);
 
-      const derived = deriveChannel(entry);
+      // Use a per-addActivity invocation counter to guarantee unique IDs even
+      // when multiple activities arrive in the same millisecond from the same sender
+      const seq = state.activities.length;
+      const derived = deriveChannel(entry, seq);
       if (derived) {
         // In live mode, skip operator echo messages — we add them optimistically
         // In history mode, include all messages (loading from scratch)

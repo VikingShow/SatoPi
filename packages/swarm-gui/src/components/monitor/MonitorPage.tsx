@@ -1,6 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Square, Wifi, WifiOff, X, Loader2, GitGraph, MessageSquare, Sun, Moon } from "lucide-react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ChannelList from "./ChannelList";
@@ -9,21 +9,18 @@ import ContextPanel from "./ContextPanel";
 import PhasePipeline from "./PhasePipeline";
 import BlockerDialog from "./BlockerDialog";
 import AgentTopology from "./AgentTopology";
+import RoleBrowser from "./RoleBrowser";
 
 export default function MonitorPage() {
   const swarmState = useSwarmStore((s) => s.swarmState);
   const isRunning = useSwarmStore((s) => s.isRunning);
   const isConnected = useSwarmStore((s) => s.isConnected);
   const loopPhase = useSwarmStore((s) => s.loopPhase);
-  const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
-  const stopRun = useSwarmStore((s) => s.stopRun);
-  const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState<"chat" | "topology">("chat");
+  const [viewMode, setViewMode] = useState<"chat" | "topology" | "roles">("chat");
 
-  const isBusy = beforeLoopState?.busy ?? false;
   const isActive = loopPhase === "running" || loopPhase === "blocked";
 
   const statusLabel = (() => {
@@ -58,13 +55,14 @@ export default function MonitorPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar: status + safety controls only */}
+      {/* Top bar: status + view mode only.
+          Cancel/Stop controls live in the ChatView input bar (state-changing position). */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 bg-neutral-900/50">
         <div className="flex items-center gap-3">
           <span className={`text-sm font-medium ${statusColor}`}>
             ● {statusLabel}
           </span>
-          {isActive && (
+          {(isActive || loopPhase === "idle" || loopPhase === "before-loop-dialog") && (
             <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode("chat")}
@@ -81,6 +79,14 @@ export default function MonitorPage() {
                 }`}
               >
                 <GitGraph size={12} /> Topology
+              </button>
+              <button
+                onClick={() => setViewMode("roles")}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  viewMode === "roles" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                <Users size={12} /> Roles
               </button>
             </div>
           )}
@@ -101,35 +107,14 @@ export default function MonitorPage() {
           </button>
         </div>
 
+        {/* Right side now only shows read-only phase indicators (not action buttons) */}
         <div className="flex items-center gap-2">
-          {/* Cancel — abort Before Loop planning */}
-          {(loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && (
-            <button
-              onClick={() => cancelBeforeLoop()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-300 bg-neutral-700 hover:bg-neutral-600 rounded-md transition-colors"
-            >
-              <X size={14} />
-              Cancel
-            </button>
-          )}
-
           {/* Debate in progress indicator */}
           {loopPhase === "before-loop-debate" && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-400">
               <Loader2 size={14} className="animate-spin" />
               Debating...
             </div>
-          )}
-
-          {/* Stop Swarm — safety control during running */}
-          {loopPhase === "running" && isRunning && (
-            <button
-              onClick={() => stopRun()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-md transition-colors"
-            >
-              <Square size={14} fill="currentColor" />
-              Stop Swarm
-            </button>
           )}
 
           {/* After-loop processing indicator */}
@@ -153,9 +138,13 @@ export default function MonitorPage() {
             <ChatView />
             <ContextPanel />
           </>
-        ) : (
+        ) : viewMode === "topology" ? (
           <div className="flex-1 relative">
             <AgentTopology />
+          </div>
+        ) : (
+          <div className="flex-1 relative">
+            <RoleBrowser />
           </div>
         )}
       </div>

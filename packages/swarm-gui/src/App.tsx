@@ -1,8 +1,10 @@
 import { useEffect, useState, lazy, Suspense } from "react";
-import { Settings, Activity, History, Radio } from "lucide-react";
+import { Settings, Activity, History, PlusCircle, Sparkles } from "lucide-react";
 import { Toaster } from "sonner";
 import { useSwarmStore } from "./stores/swarm-store";
+import { useSessionStore } from "./stores/session-store";
 import MonitorPage from "./components/monitor/MonitorPage";
+import SessionSwitcher from "./components/monitor/SessionSwitcher";
 
 // Lazy-loaded pages — Config and History are secondary views
 const ConfigPage = lazy(() => import("./components/config/ConfigPage"));
@@ -26,10 +28,15 @@ function App() {
   const init = useSwarmStore((s) => s.init);
   const swarmState = useSwarmStore((s) => s.swarmState);
   const isConnected = useSwarmStore((s) => s.isConnected);
+  const isRunning = useSwarmStore((s) => s.isRunning);
+  const newSession = useSessionStore((s) => s.newSession);
+  const loadRuns = useSessionStore((s) => s.loadRuns);
+  const [newSessionBusy, setNewSessionBusy] = useState(false);
 
   useEffect(() => {
     init();
-  }, [init]);
+    loadRuns();
+  }, [init, loadRuns]);
 
   const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
     { id: "config", label: "Config", icon: <Settings size={18} /> },
@@ -44,13 +51,23 @@ function App() {
     status === "failed" ? "text-status-danger" :
     "text-neutral-500";
 
+  // Brand-first header: always show "SatoPi" as the product, with the swarm
+  // name (from the backend StateTracker) as a secondary identifier
+  const brandName = "SatoPi";
+  const swarmLabel = swarmState?.name && swarmState.name !== "SatoPi"
+    ? `· ${swarmState.name}`
+    : "";
+
   return (
     <div className="flex h-screen bg-background text-neutral-100">
       <Toaster position="bottom-right" theme="dark" richColors />
       {/* Sidebar */}
       <aside className="w-14 flex flex-col items-center py-4 gap-2 border-r border-background-border bg-background-card">
-        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center mb-4">
-          <Radio size={18} className="text-primary" />
+        <div
+          className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center mb-4"
+          title="SatoPi — Satori, a team of Pi"
+        >
+          <Sparkles size={18} className="text-primary" />
         </div>
         {navItems.map((item) => (
           <button
@@ -66,6 +83,22 @@ function App() {
             {item.icon}
           </button>
         ))}
+        {/* Spacer */}
+        <div className="flex-1" />
+        {/* New Session */}
+        <button
+          onClick={async () => {
+            setNewSessionBusy(true);
+            await newSession();
+            setNewSessionBusy(false);
+            setPage("monitor");
+          }}
+          disabled={newSessionBusy || isRunning}
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-neutral-500 hover:text-emerald-400 hover:bg-emerald-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+          title="New Session"
+        >
+          <PlusCircle size={20} className={newSessionBusy ? "animate-spin" : ""} />
+        </button>
       </aside>
 
       {/* Main content */}
@@ -73,7 +106,9 @@ function App() {
         {/* Top bar */}
         <header className="h-12 flex items-center justify-between px-4 border-b border-background-border bg-background-card">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">{swarmState?.name ?? "SatoPi Swarm"}</span>
+            <span className="text-sm font-medium tracking-tight">{brandName}</span>
+            <span className="text-neutral-700">/</span>
+            <SessionSwitcher />
             <span className={`text-xs font-mono ${statusColor}`}>
               {status === "running" && <span className="inline-block w-2 h-2 rounded-full bg-status-warning mr-1.5 animate-pulse-ring" />}
               {status.toUpperCase()}

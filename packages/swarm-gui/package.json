@@ -19,9 +19,7 @@
     "@monaco-editor/react": "^4.6.0",
     "@oh-my-pi/pi-web": "workspace:*",
     "@tanstack/react-virtual": "^3.10.0",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-web-links": "^0.11.0",
-    "@xterm/xterm": "^5.5.0",
+
     "@xyflow/react": "^12.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -31,7 +29,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-markdown": "10.1.0",
-    "recharts": "^2.12.7",
+
     "remark-gfm": "4.0.1",
     "i18next": "^23.12.0",
     "react-i18next": "^15.0.0",

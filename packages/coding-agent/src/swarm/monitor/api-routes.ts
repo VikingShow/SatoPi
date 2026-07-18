@@ -8,39 +8,11 @@
 import * as path from "node:path";
 import type { StateTracker } from "../state";
 import type { ExperienceStore } from "../after-loop/experience";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { RoleAssetManager } from "../role-asset";
+import type { AfterLoopResult } from "./types";
 
-/**
- * AfterLoopResult — shape returned by RunManager.getLastAfterLoopResult()
- * Import from standalone.ts to keep single source of truth.
- */
-export interface AfterLoopResult {
-  runId: string;
-  status: string;
-  iterations: number;
-  summaryMarkdown: string;
-  lessons: Array<{
-    type: string;
-    summary: string;
-    detail: string;
-    tags: string[];
-    confidence: number;
-    source: string;
-  }>;
-  reflection: {
-    rootCauses: string[];
-    effectivePatterns: string[];
-    structuralIssues: string[];
-    recommendations: string[];
-    confidence: number;
-  } | null;
-  stats: {
-    totalIterations: number;
-    finalStatus: string;
-    clonerApprovalRatio: number;
-    workerCount: number;
-    clonerCount: number;
-  };
-}
+export type { AfterLoopResult };
 
 /**
  * RunManager — controls real swarm loop lifecycle.
@@ -89,6 +61,12 @@ export interface ApiRouteContext {
 	experienceStore?: ExperienceStore;
 	beforeLoopManager?: BeforeLoopManager;
 	steeringSink?: SteeringSink;
+	/** Model registry — used to advertise actually-available models to the UI. */
+	modelRegistry?: ModelRegistry;
+	/** Role asset manager — manages role YAML files. */
+	roleAssetManager?: RoleAssetManager;
+	/** URL path parameters (e.g. :name in /api/runs/:name) */
+	params?: Record<string, string>;
 }
 
 type RouteHandler = (req: Request, ctx: ApiRouteContext) => Response | Promise<Response>;
@@ -111,6 +89,120 @@ async function readActivityLog(swarmDir: string): Promise<string[]> {
 }
 
 export const apiRoutes: Record<string, RouteHandler> = {
+	// ── Role Asset Library ──────────────────────────────────────────────────
+
+	"GET /api/roles": (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const url = new URL(req.url);
+		const status = url.searchParams.get("status") as
+			| import("../role-asset").RoleStatus
+			| null;
+		const tag = url.searchParams.get("tag") ?? undefined;
+		const q = url.searchParams.get("q") ?? undefined;
+
+		// If search params are provided, use search endpoint logic
+		if (tag || q || status) {
+			return ctx.roleAssetManager
+				.search({ tag, status: status ?? undefined, q })
+				.then((roles) => json({ roles }));
+		}
+		return ctx.roleAssetManager.list(status ?? undefined).then((roles) => json({ roles }));
+	},
+
+	"GET /api/roles/:id": (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		return ctx.roleAssetManager.get(id).then((role) => {
+			if (!role) return json({ error: "Role not found" }, 404);
+			return json(role);
+		});
+	},
+
+	"POST /api/roles": async (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
+			if (!body.id || !body.name || !body.prompts) {
+				return json({ error: "Missing required fields: id, name, prompts" }, 400);
+			}
+			const role = await ctx.roleAssetManager.create(body);
+			return json(role, 201);
+		} catch (err) {
+			return json({ error: String(err) }, 409);
+		}
+	},
+
+	"PUT /api/roles/:id": async (req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
+			const role = await ctx.roleAssetManager.update(id, body);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"POST /api/roles/:id/approve": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.roleAssetManager.approve(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 400);
+		}
+	},
+
+	"POST /api/roles/:id/deprecate": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.roleAssetManager.deprecate(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"DELETE /api/roles/:id": async (_req, ctx) => {
+		if (!ctx.roleAssetManager) {
+			return json({ error: "Role asset manager not available" }, 503);
+		}
+		const id = ctx.params?.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const deleted = await ctx.roleAssetManager.delete(id);
+			if (!deleted) return json({ error: "Role not found" }, 404);
+			return json({ success: true });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
+
 	// -- State -----------------------------------------------------------
 	"GET /api/state": (_req, ctx) => {
 		return json(ctx.stateTracker.state);
@@ -151,34 +243,102 @@ export const apiRoutes: Record<string, RouteHandler> = {
 
 	// -- Runs ------------------------------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
-		// List .swarm_* directories in workspace
+		// List .swarm_* directories in workspace with rich metadata
 		try {
 			const fs = await import("node:fs/promises");
 			const entries = await fs.readdir(ctx.workspaceDir);
-			const swarms = entries
-				.filter((e) => e.startsWith(".swarm_"))
-				.map((e) => ({ name: e.replace(".swarm_", ""), dir: e }));
-			return json({ runs: swarms });
+			const swarms = entries.filter((e) => e.startsWith(".swarm_"));
+			const runs = await Promise.all(
+				swarms.map(async (dir) => {
+					const name = dir.replace(".swarm_", "");
+					const swarmDir = path.join(ctx.workspaceDir, dir);
+					let lastActivity: string | null = null;
+					let messageCount = 0;
+					let status: "idle" | "running" | "completed" | "failed" = "idle";
+					try {
+						const statePath = path.join(swarmDir, "state", "pipeline.json");
+						const stateContent = await Bun.file(statePath).text();
+						const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number; loopPhase?: string };
+						status = (st.status as typeof status) ?? "idle";
+						if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
+						else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
+					} catch {
+						// state file might not exist
+					}
+					try {
+						const logPath = path.join(swarmDir, "activity.jsonl");
+						const logContent = await Bun.file(logPath).text();
+						messageCount = logContent.trim().split("\n").filter(Boolean).length;
+					} catch {
+						// log might not exist
+					}
+					return { name, dir, lastActivity, messageCount, status };
+				}),
+			);
+			// Sort by lastActivity desc (most recent first)
+			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
+			return json({ runs });
 		} catch {
 			return json({ runs: [] });
 		}
 	},
 
+	"GET /api/runs/:name/activity": async (_req, ctx) => {
+		// Load activity log for a specific historical run
+		const name = ctx.params?.name;
+		if (!name) {
+			return json({ error: "Missing run name" }, 400);
+		}
+		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
+		const lines = await readActivityLog(swarmDir);
+		const entries = lines.map((line) => {
+			try {
+				return JSON.parse(line);
+			} catch {
+				return null;
+			}
+		}).filter(Boolean);
+		return json({ entries });
+	},
+
 	"GET /api/runs/:name": async (_req, ctx) => {
-		const lines = await readActivityLog(ctx.swarmDir);
-		return json({ entries: lines.length, logPath: path.join(ctx.swarmDir, "activity.jsonl") });
+		// Metadata-only for a specific run (used by session switcher to confirm exists)
+		const name = ctx.params?.name;
+		if (!name) {
+			return json({ error: "Missing run name" }, 400);
+		}
+		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
+		const lines = await readActivityLog(swarmDir);
+		return json({ name, dir: `.swarm_${name}`, messageCount: lines.length });
 	},
 
 	// -- Models ----------------------------------------------------------
-	"GET /api/models": () => {
-		return json({
-			models: [
-				{ id: "deepseek-chat", name: "DeepSeek Chat", tier: "worker" },
-				{ id: "deepseek-reasoner", name: "DeepSeek Reasoner", tier: "cloner" },
-				{ id: "gpt-4o", name: "GPT-4o", tier: "cloner" },
-				{ id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", tier: "reviewer" },
-			],
-		});
+	"GET /api/models": (_req, ctx) => {
+		// Dynamically list models that have auth configured so the Settings UI
+		// can only pick models the user can actually call. Falls back to a
+		// minimal known-good list when the registry is not yet wired in.
+		if (!ctx.modelRegistry) {
+			return json({
+				models: [
+					{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek", tier: "worker" },
+				],
+				warning: "ModelRegistry not available; returning fallback list",
+			});
+		}
+		const available = ctx.modelRegistry.getAvailable();
+		// Surface every model the user can authenticate to, grouping by provider.
+		// Tier is a soft default — the UI may override per-role in the YAML.
+		const models = available.map((m) => ({
+			id: `${m.provider}/${m.id}`,
+			name: m.name ?? m.id,
+			provider: m.provider,
+			tier: m.id.toLowerCase().includes("reasoner") || m.id.toLowerCase().includes("pro")
+				? "cloner"
+				: m.id.toLowerCase().includes("sonnet") || m.id.toLowerCase().includes("opus")
+				? "reviewer"
+				: "worker",
+		}));
+		return json({ models });
 	},
 
 	// -- Plan (plan.md) ---------------------------------------------------
@@ -186,7 +346,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const candidates = [
 			path.join(ctx.workspaceDir, ".omp", "plan.md"),
 			path.join(ctx.workspaceDir, "plan.md"),
-			path.join(ctx.workspaceDir, ".swarm-workspace", ".omp", "plan.md"),
 		];
 		for (const p of candidates) {
 			try {
@@ -196,7 +355,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				// try next
 			}
 		}
-		return json({ content: "", error: "plan.md not found" }, 404);
+		// Return 200 with error in body so fetchJson doesn't throw.
+		// The PlanViewer frontend checks res.error to display a friendly message.
+		return json({ content: "", path: "", error: "plan.md not found" });
 	},
 
 	"PUT /api/plan": async (req, ctx) => {
@@ -208,7 +369,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			for (const p of [
 				path.join(ctx.workspaceDir, ".omp", "plan.md"),
 				path.join(ctx.workspaceDir, "plan.md"),
-				path.join(ctx.workspaceDir, ".swarm-workspace", ".omp", "plan.md"),
 			]) {
 				try {
 					await fs.access(p);

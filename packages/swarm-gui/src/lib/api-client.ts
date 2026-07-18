@@ -2,26 +2,8 @@
  * REST API client — fetch wrapper for MonitorServer endpoints.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution } from "./types";
-
-const BASE = "";
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const msg = `API error: ${res.status} ${res.statusText}`;
-    console.error(msg, body);
-    const err = new Error(msg) as Error & { status?: number; body?: unknown };
-    err.status = res.status;
-    err.body = body;
-    throw err;
-  }
-  return res.json() as Promise<T>;
-}
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
+import { fetchJson } from "@oh-my-pi/pi-web/fetch";
 
 export const api = {
   getState: () => fetchJson<SwarmState>("/api/state"),
@@ -38,7 +20,21 @@ export const api = {
     fetchJson<{ entries: unknown[] }>("/api/history"),
 
   getRuns: () =>
-    fetchJson<{ runs: { name: string; dir: string }[] }>("/api/runs"),
+    fetchJson<{
+      runs: Array<{
+        name: string;
+        dir: string;
+        lastActivity: string | null;
+        messageCount: number;
+        status: "idle" | "running" | "completed" | "failed";
+      }>;
+    }>("/api/runs"),
+
+  getRunActivity: (name: string) =>
+    fetchJson<{ entries: unknown[] }>(`/api/runs/${encodeURIComponent(name)}/activity`),
+
+  getRunMeta: (name: string) =>
+    fetchJson<{ name: string; dir: string; messageCount: number }>(`/api/runs/${encodeURIComponent(name)}`),
 
   getModels: () =>
     fetchJson<{ models: ModelOption[] }>("/api/models"),
@@ -115,6 +111,18 @@ export const api = {
       method: "POST",
     }),
 
+  // ── Run control (pause / resume) ──
+
+  pauseRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/pause", {
+      method: "POST",
+    }),
+
+  resumeRun: () =>
+    fetchJson<{ success: boolean; error?: string }>("/api/run/resume", {
+      method: "POST",
+    }),
+
   // ── Steering (operator → running loop) ──
 
   sendSteering: (text: string) =>
@@ -130,4 +138,50 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
+
+  // ── Role Asset Library ──
+
+  getRoles: (status?: RoleStatus) => {
+    const params = status ? `?status=${encodeURIComponent(status)}` : "";
+    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles${params}`);
+  },
+
+  getRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}`),
+
+  createRole: (input: RoleCreateInput) =>
+    fetchJson<RoleAsset>("/api/roles", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateRole: (id: string, input: RoleUpdateInput) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  approveRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  deprecateRole: (id: string) =>
+    fetchJson<RoleAsset>(`/api/roles/${encodeURIComponent(id)}/deprecate`, {
+      method: "POST",
+    }),
+
+  deleteRole: (id: string) =>
+    fetchJson<{ success: boolean; error?: string }>(`/api/roles/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  searchRoles: (params: { tag?: string; status?: RoleStatus; q?: string }) => {
+    // GET /api/roles already supports ?q=&tag=&status= — no separate /search route needed
+    const sp = new URLSearchParams();
+    if (params.tag) sp.set("tag", params.tag);
+    if (params.status) sp.set("status", params.status);
+    if (params.q) sp.set("q", params.q);
+    return fetchJson<{ roles: RoleAssetSummary[] }>(`/api/roles?${sp.toString()}`);
+  },
 };

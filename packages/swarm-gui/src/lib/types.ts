@@ -2,6 +2,8 @@
  * Frontend type definitions — aligned with backend SwarmState/AgentState/ActivityEntry.
  */
 
+import type { ChatMessage as PiChatMessage, ChatChannel as PiChatChannel } from "@oh-my-pi/pi-web/types";
+
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 
@@ -119,23 +121,15 @@ export interface ActivityEntry {
   error?: string;
 }
 
-export interface ChatChannel {
-  id: string;
-  type: "roundtable" | "subgroup" | "private" | "steering";
-  name: string;
-  participants: string[];
+export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
   unreadCount: number;
   lastMessage?: string;
   lastMessageTime?: number;
-}
+};
 
-export interface ChatMessage {
-  id: string;
+export interface ChatMessage extends PiChatMessage {
   channelId: string;
-  from: string;
   to: string;
-  body: string;
-  timestamp: number;
   threadId?: string;
   threadReplies?: ChatMessage[];
 }
@@ -192,4 +186,63 @@ export interface ExperienceStats {
   completionRate: number;
   escalationRate: number;
   avgApprovalRatio: number;
+}
+
+// ── Role Asset types ──
+
+export type RoleStatus = "draft" | "proposed" | "approved" | "deprecated";
+
+export interface RoleAsset {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+  author: string;
+  status: RoleStatus;
+  prompts: {
+    system: string;
+    guidelines: string[];
+  };
+  tools: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+  success_rate: number;
+}
+
+export interface RoleAssetSummary {
+  id: string;
+  name: string;
+  description: string;
+  status: RoleStatus;
+  version: number;
+  tags: string[];
+  usage_count: number;
+  success_rate: number;
+  updated_at: string;
+}
+
+export interface RoleCreateInput {
+  id: string;
+  name: string;
+  description: string;
+  author?: string;
+  prompts: {
+    system: string;
+    guidelines: string[];
+  };
+  tools: string[];
+  tags: string[];
+}
+
+export interface RoleUpdateInput {
+  name?: string;
+  description?: string;
+  prompts?: {
+    system?: string;
+    guidelines?: string[];
+  };
+  tools?: string[];
+  tags?: string[];
 }
