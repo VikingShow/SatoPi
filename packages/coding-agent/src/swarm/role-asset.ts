@@ -23,6 +23,8 @@ export interface RoleAsset {
   version: number;
   author: string;
   status: RoleStatus;
+  /** P0-C: Role pool — "workers" for execution roles, "cloners" for review roles. */
+  pool: "workers" | "cloners";
   prompts: {
     system: string;
     guidelines: string[];
@@ -33,6 +35,9 @@ export interface RoleAsset {
   updated_at: string;
   usage_count: number;
   success_rate: number;
+  /** P0-C: Cloner-specific fields. */
+  veto?: boolean;
+  weight?: number;
 }
 
 export interface RoleAssetSummary {
@@ -40,6 +45,7 @@ export interface RoleAssetSummary {
   name: string;
   description: string;
   status: RoleStatus;
+  pool: "workers" | "cloners";
   version: number;
   tags: string[];
   usage_count: number;
@@ -69,12 +75,15 @@ export interface RoleCreateInput {
   name: string;
   description: string;
   author?: string;
+  pool?: "workers" | "cloners";
   prompts: {
     system: string;
     guidelines: string[];
   };
   tools: string[];
   tags: string[];
+  veto?: boolean;
+  weight?: number;
 }
 
 // ============================================================================
@@ -147,6 +156,7 @@ export class RoleAssetManager {
           name: role.name,
           description: role.description,
           status: role.status,
+          pool: role.pool ?? "workers",
           version: role.version,
           tags: role.tags,
           usage_count: role.usage_count,
@@ -159,6 +169,12 @@ export class RoleAssetManager {
     }
 
     return roles;
+  }
+
+  /** P0-C: List roles filtered by pool ("workers" | "cloners"). */
+  async listByPool(pool: "workers" | "cloners"): Promise<RoleAssetSummary[]> {
+    const all = await this.list();
+    return all.filter(r => r.pool === pool);
   }
 
   /** Search roles by tag, status, and/or text query. */
@@ -205,6 +221,7 @@ export class RoleAssetManager {
       version: 1,
       author: input.author ?? "operator",
       status: "draft",
+      pool: input.pool ?? "workers",
       prompts: {
         system: input.prompts.system,
         guidelines: input.prompts.guidelines,
@@ -215,6 +232,8 @@ export class RoleAssetManager {
       updated_at: now,
       usage_count: 0,
       success_rate: 1.0,
+      veto: input.veto,
+      weight: input.weight,
     };
 
     const yaml = serializeRoleYaml(role);
@@ -428,6 +447,7 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["architecture", "design", "system", "planning"],
+      pool: "workers",
     },
     {
       id: "backend-dev",
@@ -462,6 +482,7 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["backend", "typescript", "api", "database", "nodejs"],
+      pool: "workers",
     },
     {
       id: "frontend-dev",
@@ -495,6 +516,7 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["frontend", "react", "typescript", "ui", "css"],
+      pool: "workers",
     },
     {
       id: "code-reviewer",
@@ -527,6 +549,7 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["review", "quality", "security", "code-review"],
+      pool: "workers",
     },
     {
       id: "devops-engineer",
@@ -560,7 +583,165 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "search_file",
         "list_dir",
       ],
+      pool: "workers",
       tags: ["devops", "ci-cd", "docker", "infrastructure", "deployment"],
+      pool: "workers",
+    },
+
+    // ── P0-C: Cloner review roles ──────────────────────────────────────
+
+    {
+      id: "cloner-guardian",
+      name: "Guardian Reviewer",
+      description: "Reviews worker output against the plan for alignment, quality, safety, and completeness.",
+      author: "swarm",
+      pool: "cloners",
+      prompts: {
+        system:
+          "You are a Guardian Reviewer in the SatoPi swarm system.\n" +
+          "Your role is to review worker output against the plan's goals, constraints, and acceptance criteria.\n\n" +
+          "REVIEW DIMENSIONS:\n" +
+          "- Alignment: Does the output match what the plan asked for?\n" +
+          "- Quality: Is the code well-structured, tested, and maintainable?\n" +
+          "- Safety: Are there obvious security risks or data loss concerns?\n" +
+          "- Completeness: Are all plan requirements addressed?\n\n" +
+          "Inspect the actual workspace files — do not rely solely on worker summaries.\n" +
+          "Output ONLY a JSON verdict line.",
+        guidelines: [
+          "Check output against plan acceptance criteria",
+          "Verify files exist and match claims",
+          "Assess code quality and structure",
+          "Flag incomplete or incorrect work",
+          "Review README and documentation changes",
+        ],
+      },
+      tools: ["read", "grep", "glob"],
+      tags: ["cloner", "guardian", "review"],
+      weight: 1.0,
+    },
+    {
+      id: "cloner-adversarial",
+      name: "Adversarial Reviewer",
+      description: "Actively tries to find bugs, edge cases, and security vulnerabilities in worker output.",
+      author: "swarm",
+      pool: "cloners",
+      veto: true,
+      prompts: {
+        system:
+          "You are an Adversarial Reviewer in the SatoPi swarm system.\n" +
+          "Your job is to find ways the worker output FAILS — even if it looks correct on the surface.\n\n" +
+          "CRITICAL APPROACH:\n" +
+          "- Assume every claim in the output could be wrong until verified in the actual files\n" +
+          "- Look for: silent data loss, race conditions, missing error handling,\n" +
+          "  security vulnerabilities (OWASP Top 10), broken edge cases, API contract violations\n" +
+          "- If a worker claims 'completed X' but the file does not exist or is incomplete → FAIL\n" +
+          "- Be suspicious of: hand-wavy descriptions, untested code paths,\n" +
+          "  hardcoded credentials, missing input validation\n" +
+          "- Prefer FALSE NEGATIVES over FALSE POSITIVES\n\n" +
+          "Output ONLY a JSON verdict line.",
+        guidelines: [
+          "Try to BREAK the output — hunt for bugs and edge cases",
+          "Check for OWASP Top 10 vulnerabilities",
+          "Look for missing error handling and input validation",
+          "Verify that claimed features actually work",
+          "Challenge every assumption in the worker output",
+        ],
+      },
+      tools: ["read", "grep", "glob", "bash"],
+      tags: ["cloner", "adversarial", "security", "bug-hunting"],
+      weight: 1.5,
+    },
+    {
+      id: "cloner-security",
+      name: "Security Reviewer",
+      description: "Focused security audit: OWASP, injection, authentication, data leaks, cryptography.",
+      author: "swarm",
+      pool: "cloners",
+      veto: true,
+      prompts: {
+        system:
+          "You are a Security Reviewer in the SatoPi swarm system.\n" +
+          "Your sole focus is security — you audit worker output for vulnerabilities.\n\n" +
+          "CHECKLIST:\n" +
+          "- OWASP Top 10: injection, broken auth, sensitive data exposure, XXE,\n" +
+          "  broken access control, security misconfiguration, XSS, insecure deserialization,\n" +
+          "  using components with known vulnerabilities, insufficient logging\n" +
+          "- Authentication: password hashing, session management, JWT safety\n" +
+          "- Authorization: access control, RBAC, privilege boundaries\n" +
+          "- Data: encryption at rest/in transit, PII handling, SQL injection\n" +
+          "- Secrets: no hardcoded keys, proper .env usage, gitignore for secrets\n\n" +
+          "Any security vulnerability → automatic FAIL with veto power.\n" +
+          "Output ONLY a JSON verdict line.",
+        guidelines: [
+          "Audit for OWASP Top 10 vulnerabilities",
+          "Check authentication and authorization logic",
+          "Inspect data handling and encryption",
+          "Look for hardcoded secrets or keys",
+          "Review dependency security",
+        ],
+      },
+      tools: ["read", "grep", "glob"],
+      tags: ["cloner", "security", "owasp", "audit"],
+      weight: 2.0,
+    },
+    {
+      id: "cloner-performance",
+      name: "Performance Reviewer",
+      description: "Reviews output for performance issues: algorithmic complexity, N+1 queries, resource usage.",
+      author: "swarm",
+      pool: "cloners",
+      prompts: {
+        system:
+          "You are a Performance Reviewer in the SatoPi swarm system.\n" +
+          "You review worker output for efficiency, scalability, and resource usage.\n\n" +
+          "CHECKLIST:\n" +
+          "- Algorithmic complexity: any O(n²) or worse when O(n) or O(n log n) exists?\n" +
+          "- Database: N+1 queries, missing indexes, inefficient joins\n" +
+          "- Memory: potential leaks, large allocations, unbounded collections\n" +
+          "- I/O: unnecessary file reads, blocking operations in async contexts\n" +
+          "- Network: excessive API calls, missing caching, large payloads\n\n" +
+          "Output ONLY a JSON verdict line.",
+        guidelines: [
+          "Check algorithmic complexity",
+          "Look for N+1 database queries",
+          "Identify memory leaks or excessive allocation",
+          "Review I/O patterns and caching",
+          "Flag inefficient API call patterns",
+        ],
+      },
+      tools: ["read", "grep", "glob", "bash"],
+      tags: ["cloner", "performance", "optimization"],
+      weight: 0.8,
+    },
+    {
+      id: "cloner-architecture",
+      name: "Architecture Reviewer",
+      description: "Reviews output for structural integrity: API contracts, module boundaries, dependency direction.",
+      author: "swarm",
+      pool: "cloners",
+      prompts: {
+        system:
+          "You are an Architecture Reviewer in the SatoPi swarm system.\n" +
+          "You review worker output for structural integrity and design consistency.\n\n" +
+          "CHECKLIST:\n" +
+          "- API contracts: are interfaces consistent? Breaking changes?\n" +
+          "- Module boundaries: proper separation of concerns?\n" +
+          "- Dependency direction: does it follow the dependency inversion principle?\n" +
+          "- Data flow: is data flowing in the right direction? No circular deps?\n" +
+          "- Error handling strategy: consistent across modules?\n" +
+          "- Test architecture: are tests at the right level (unit/integration/e2e)?\n\n" +
+          "Output ONLY a JSON verdict line.",
+        guidelines: [
+          "Check API contract consistency",
+          "Verify module boundary integrity",
+          "Review dependency direction",
+          "Assess error handling strategy",
+          "Evaluate test architecture",
+        ],
+      },
+      tools: ["read", "grep", "glob"],
+      tags: ["cloner", "architecture", "design", "structure"],
+      weight: 1.0,
     },
   ];
 }
