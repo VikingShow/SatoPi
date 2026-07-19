@@ -11,6 +11,7 @@ import { SubprocessAgentExecutor, type AgentExecutor, type SwarmExecutorOptions 
 import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
+import { invokeHook, type PipelineHooks, type PipelineContext } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
 import type { ActivityLogger } from "./activity-logger";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
@@ -66,6 +67,8 @@ export interface LoopOptions extends PipelineOptions {
 	stateTracker: StateTracker;
 	/** Optional activity logger for GUI/monitor integration. */
 	activityLogger?: ActivityLogger;
+	/** P0-F: Pipeline lifecycle hooks. */
+	hooks?: PipelineHooks;
 }
 
 /** Structured round summary produced by the elected reviewer. */
@@ -438,6 +441,11 @@ export class LoopController {
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
 		const { workspace, modelRegistry, settings, signal } = options;
+
+	// P0-F: Pipeline hooks.
+	const hooks = options.hooks;
+	const pipelineCtx: PipelineContext = { waves: [], totalTokens: 0, totalRequests: 0 };
+	await invokeHook(hooks, "beforePipeline", () => hooks?.beforePipeline?.(pipelineCtx));
 		// Store plan content in the mutable instance field so updatePlan() can
 		// replace it for subsequent iterations.
 		this.#planContent = options.planContent;
@@ -1032,6 +1040,11 @@ export class LoopController {
 		}
 
 	// ── Verification hook (bottom fallthrough: all iterations exhausted) ──
+
+	// P0-F: afterPipeline hook.
+	const finalStatus = verdicts.length > 0 ? "completed" : "failed";
+	await invokeHook(hooks, "afterPipeline", () => hooks?.afterPipeline?.(finalStatus, pipelineCtx));
+
 	// At this point the loop ran all iterations without an explicit completion.
 	// Run verification if configured; a blocking failure can't continue (no more
 	// iterations), so we just record the result and return "completed" or "failed".
@@ -1496,6 +1509,8 @@ export interface CreateLoopOptions {
 	loopConfig: LoopSwarmConfig;
 	workspace: string;
 	activityLogger?: ActivityLogger;
+	/** P0-F: Pipeline lifecycle hooks. */
+	hooks?: PipelineHooks;
 }
 
 export function createLoopController(stateTracker: StateTracker, options: CreateLoopOptions): LoopController {
