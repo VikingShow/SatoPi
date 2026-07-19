@@ -29,6 +29,8 @@ interface SwarmStore {
   afterLoopResult: AfterLoopResult | null;
   blockerContext: BlockerContext | null;
   error: string | null;
+  /** P2-5: Latest convergence values for trend display. */
+  convergenceHistory: Array<{ ts: number; jaccard: number; converged: boolean }>;
 
   init: () => Promise<void>;
   setActiveChannel: (id: string) => void;
@@ -49,6 +51,8 @@ interface SwarmStore {
   confirmAndStart: () => Promise<void>;
   cancelBeforeLoop: () => Promise<void>;
   refreshBeforeLoopState: () => Promise<void>;
+  /** P2-2: Load before-loop conversation history. */
+  loadBeforeLoopHistory: () => Promise<Array<{ role: string; content: string }>>;
 
   // Steering (during running loop)
   sendSteering: (text: string) => Promise<void>;
@@ -91,6 +95,17 @@ function deriveChannel(entry: ActivityEntry, seq: number): { id: string; channel
         id,
         channel: { id, type: "steering", name: `${entry.from} -> ${entry.to}`, participants: [entry.from ?? "", entry.to ?? ""], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
         message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
+      };
+    }
+    // P2-10: Tool calls appear in the roundtable as system-style messages.
+    case "tool_call": {
+      const id = "roundtable";
+      const status = entry.toolError ? "FAILED" : entry.toolDurationMs ? `OK (${(entry.toolDurationMs / 1000).toFixed(1)}s)` : "OK";
+      const body = `🔧 **${entry.toolName}** ${status}${entry.toolError ? ` — ${entry.toolError}` : ""}`;
+      return {
+        id,
+        channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
+        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.worker ?? "agent", to: "all", body, timestamp: ts },
       };
     }
     default:
@@ -154,6 +169,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   afterLoopResult: null,
   blockerContext: null,
   error: null,
+  convergenceHistory: [],
 
   init: async () => {
     try {
@@ -236,8 +252,28 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // History might not be available yet
       }
 
+      // P3-3: Track last event timestamp for reconnection recovery.
+      let lastEventTs = 0;
+      sseClient.onConnectionChange((connected) => {
+        if (connected && lastEventTs > 0) {
+          // Reconnected — fetch missed events since last seen timestamp.
+          import("../lib/api-client").then(({ api }) => {
+            fetch(`/api/history?since=${lastEventTs}`)
+              .then(r => r.json())
+              .then((data: { entries?: Array<{ ts: number }> }) => {
+                const missed = (data.entries ?? []).filter((e: { ts: number }) => e.ts > lastEventTs);
+                missed.forEach((e: unknown) => get().addActivity(e as import("../lib/types").ActivityEntry, true));
+                if (missed.length > 0) {
+                  toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
+                }
+              })
+              .catch(() => {});
+          });
+        }
+      });
       sseClient.connect();
       sseClient.on((entry) => {
+        lastEventTs = Math.max(lastEventTs, entry.ts);
         get().addActivity(entry);
         set({ isConnected: sseClient.isConnected });
 
@@ -281,6 +317,48 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // (to detect planReady changes)
         if (entry.type === "broadcast" && entry.from === "socrates") {
           setTimeout(() => get().refreshBeforeLoopState(), 300);
+        }
+
+        // P2-5: Track convergence events.
+        if (entry.type === "convergence" && entry.jaccard !== undefined) {
+          set((s) => ({
+            convergenceHistory: [
+              ...s.convergenceHistory,
+              { ts: entry.ts, jaccard: entry.jaccard!, converged: entry.converged ?? false },
+            ].slice(-20),
+          }));
+        }
+
+        // P2-3: Steering ack — show delivery confirmation.
+        if (entry.type === "steering_ack") {
+          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "worker"}`, { duration: 2000 });
+        }
+
+        // P2-10: Tool call — show in-line tool execution indicator.
+        if (entry.type === "tool_call" && entry.toolName) {
+          // Tool calls are captured via addActivity → deriveChannel for chat display.
+          // The toast provides a transient notification for long-running tools.
+          if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
+            toast(`${entry.worker ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
+              description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
+              duration: 3000,
+            });
+          }
+        }
+
+        // P2-11: Error flag — categorized error notification.
+        if (entry.type === "error_flag" && entry.errorFlag) {
+          const suggestions: Record<string, string> = {
+            ContextOverflow: "Consider using /shake to free context space.",
+            UsageLimit: "API quota exhausted — switch credential or wait.",
+            AuthFailed: "Authentication failed — re-login required.",
+            Transient: "Temporary error — automatic retry in progress.",
+          };
+          const hint = suggestions[entry.errorFlag] ?? entry.suggestion;
+          toast.error(
+            entry.recoverable ? `Recoverable: ${entry.errorFlag}` : `${entry.errorFlag}`,
+            { description: hint ? `${entry.body ?? ""} — ${hint}` : entry.body, duration: 8000 },
+          );
         }
 
         // System broadcast carrying blocker context JSON
@@ -528,6 +606,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       }
     } catch {
       // Before-loop manager might not be available
+    }
+  },
+
+  // P2-2: Load before-loop conversation history.
+  loadBeforeLoopHistory: async () => {
+    try {
+      const result = await api.getBeforeLoopHistory();
+      return result.history ?? [];
+    } catch {
+      return [];
     }
   },
 

@@ -6,7 +6,8 @@ import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";  // kept for gradual migration
+import { SubprocessAgentExecutor, type AgentExecutor, type SwarmExecutorOptions } from "./executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
@@ -161,11 +162,22 @@ BEHAVIOR:
 - Record what you did and what you learned.
 - Always produce verifiable output in the workspace.
 
+SELF-VERIFICATION (P0-5 — critical):
+- After making changes, RUN THE TESTS before declaring your work complete.
+- Use \`bash\` to run: \`bun test\`, \`cargo test\`, \`pytest\`, or the project's test runner.
+- If tests fail, fix the issues BEFORE moving on. Do not leave broken tests.
+- If a test was already failing before your changes, note it in your Round Summary.
+- In your ## Round Summary, report:
+  - Which tests you ran (command line)
+  - Whether they passed (N passed, M failed)
+  - Any failures and how you resolved them, or if pre-existing
+
 OUTPUT FORMAT (critical):
 At the end of every round's output, you MUST include a **## Round Summary** section.
 This is the ONLY part of your output that other workers will read in the next round.
 Make it self-contained — a peer who reads only this summary must understand:
 - What files you created or modified (with exact paths)
+- What tests you ran and their results (P0-5: e.g. "bun test auth/: 12 passed, 0 failed")
 - What decisions you made and why
 - What's incomplete and needs follow-up
 - Any conflicts or quality concerns you noticed about other workers' work
@@ -293,6 +305,10 @@ export class LoopController {
 	#fileTracker: FileTracker = new FileTracker();
 	readonly #activityLogger?: ActivityLogger;
 	#verificationHook: VerificationHook | null = null;
+	// P0-1: Injectable agent executor. Defaults to SubprocessAgentExecutor.
+	// Future: replace runSubprocess calls with this.#executor.execute() once the
+	// SwarmExecutorOptions interface supports all AgentDefinition fields (hooks, etc.).
+	readonly #executor: AgentExecutor;
 
 	// ── Pause / Resume / Replan support ────────────────────────────────────
 	/** Set by pause(); when non-null the loop is paused and awaiting resume. */
@@ -323,6 +339,8 @@ export class LoopController {
 		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
 		this.#activityLogger = options.activityLogger;
+		// P0-1: Use injected executor or default to SubprocessAgentExecutor.
+		this.#executor = options.executor ?? new SubprocessAgentExecutor();
 		// Instantiate verification hook when verification commands are configured.
 		if (this.#loopConfig.verification?.commands?.length) {
 			this.#verificationHook = new VerificationHook(options.workspace, this.#activityLogger);
@@ -1098,9 +1116,18 @@ export class LoopController {
 
 		logger.warn(`Blockage detected at iteration ${iteration + 1}: ${reason}`);
 
-		// Await user resolution
+		// Await user resolution with P2-4 timeout (5 min auto-degrade to continue).
+		const BLOCKER_TIMEOUT_MS = 5 * 60 * 1000;
 		const resolution = await new Promise<BlockerResolution>((resolve) => {
 			this.#blockerResolver = resolve;
+			// P2-4: Auto-continue after timeout to prevent indefinite blocking.
+			setTimeout(() => {
+				if (this.#blockerResolver === resolve) {
+					logger.warn(`Blocker timed out after ${BLOCKER_TIMEOUT_MS}ms — auto-continuing`);
+					this.#activityLogger?.logPhase("blocker-timeout", undefined, iteration + 1);
+					resolve("continue");
+				}
+			}, BLOCKER_TIMEOUT_MS);
 		});
 
 		this.#blockerResolver = null;
@@ -1174,19 +1201,15 @@ export class LoopController {
 					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
 					: WORKER_SYSTEM_PROMPT;
 
-			return runSubprocess({
-				cwd: workspace,
-				agent: (() => {
-					const def: AgentDefinition = {
-						name: id,
-						description: `Loop Engineering Worker ${i + 1}`,
-						systemPrompt,
-						source: "project" as const,
-					};
-					applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
-					return def;
-				})(),
-					task: [
+			const agentDef: AgentDefinition = {
+				name: id,
+				description: `Loop Engineering Worker ${i + 1}`,
+				systemPrompt,
+				source: "project" as const,
+			};
+			applyToolRestrictions(agentDef, resolveToolRestrictions(this.#loopConfig, "worker"));
+
+			return runSubprocess({ cwd: workspace, agent: agentDef, task: [
 						`You are Worker ${i + 1} of ${workerIds.length}.`,
 						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
 						`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,

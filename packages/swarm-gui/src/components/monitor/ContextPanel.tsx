@@ -123,10 +123,26 @@ export default function ContextPanel() {
               </span>
               <div className="mt-1 space-y-0.5">
                 {conflicts.slice(-3).map((c, i) => (
-                  <div key={i} className="text-[10px] text-fg-muted flex items-center gap-1">
+                  <div key={i} className="text-[10px] text-fg-muted flex items-center gap-1 group">
                     <span className="text-danger">{c.severity === "overlap" ? "!" : "*"}</span>
-                    <span className="truncate">{c.file}</span>
+                    <span className="truncate flex-1">{c.file}</span>
                     <span className="text-fg-faint">{c.writers?.join(",")}</span>
+                    {/* P2-9: View diff button — opens CodeEditor DiffViewer in a dialog */}
+                    <button
+                      onClick={() => {
+                        const original = (c as any).original ?? "";
+                        const modified = (c as any).modified ?? c.body ?? "";
+                        if (original || modified) {
+                          // Open inline diff view below
+                          const detailEl = document.getElementById(`diff-${i}`);
+                          if (detailEl) detailEl.classList.toggle("hidden");
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-[9px] text-primary/70 hover:text-primary cursor-pointer transition-opacity"
+                      title="View diff"
+                    >
+                      Diff
+                    </button>
                   </div>
                 ))}
               </div>

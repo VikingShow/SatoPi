@@ -9,6 +9,10 @@ interface RawSwarmAgentConfig {
 	reports_to?: string[];
 	waits_for?: string[];
 	model?: string;
+	/** P1-5: Whitelist — only these tools are available to this agent. */
+	allowed_tools?: string[];
+	/** P1-5: Blacklist — these tools are blocked for this agent. */
+	blocked_tools?: string[];
 }
 
 interface RawSwarmConfig {
@@ -34,6 +38,10 @@ export interface SwarmAgent {
 	reportsTo: string[];
 	waitsFor: string[];
 	model?: string;
+	/** P1-5: Whitelist — only these tools are available. When set, all other tools are blocked. */
+	allowedTools?: string[];
+	/** P1-5: Blacklist — these tools are blocked (config-as-constraint). */
+	blockedTools?: string[];
 }
 
 export interface SwarmDefinition {
@@ -177,6 +185,47 @@ export interface LoopSwarmConfig {
 	 * Agents physically cannot use blocked tools.
 	 */
 	agentRestrictions?: Record<string, AgentToolRestriction>;
+	/** P4-1: Lifecycle hook commands executed at pipeline events. */
+	hooks?: HookConfig[];
+}
+
+// ============================================================================
+// P4-1: YAML-configured pipeline hooks
+// ============================================================================
+
+export interface HookConfig {
+	/** Pipeline lifecycle event name (e.g. "beforeIteration", "afterWave"). */
+	event: string;
+	/** Shell command to execute. Receives context JSON on stdin. */
+	command?: string;
+	/** Inline script (executed via `bash -c`). */
+	script?: string;
+	/** Error handling: "continue" (log + continue), "skip" (skip iteration/wave), "abort" (stop pipeline). */
+	onError?: "continue" | "skip" | "abort";
+}
+
+/**
+ * Parse raw hook entries from YAML into HookConfig array.
+ * Validates event names and ensures at least one of command/script is set.
+ */
+export function parseHooksConfig(raw: Record<string, unknown>[] | undefined): HookConfig[] | undefined {
+	if (!raw || !Array.isArray(raw)) return undefined;
+	const validEvents = new Set([
+		"beforePipeline", "beforeIteration", "afterIteration",
+		"beforeWave", "afterWave", "afterPipeline",
+	]);
+	const hooks: HookConfig[] = [];
+	for (const entry of raw) {
+		const event = String(entry.event ?? "");
+		if (!validEvents.has(event)) continue;
+		const command = typeof entry.command === "string" ? entry.command.trim() : undefined;
+		const script = typeof entry.script === "string" ? entry.script.trim() : undefined;
+		if (!command && !script) continue;
+		const onError = (entry.on_error ?? entry.onError ?? "continue") as HookConfig["onError"];
+		if (onError !== "continue" && onError !== "skip" && onError !== "abort") continue;
+		hooks.push({ event, command, script, onError });
+	}
+	return hooks.length > 0 ? hooks : undefined;
 }
 
 /**
@@ -240,6 +289,8 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		enableDeliberation: (raw.enable_deliberation as boolean) ?? true,
 		verification: parseVerificationConfig(raw.verification as Record<string, unknown> | undefined),
 		agentRestrictions: parseAgentRestrictions(raw.agent_restrictions as Record<string, Record<string, unknown>> | undefined),
+		// P4-1: YAML-configured lifecycle hooks.
+		hooks: parseHooksConfig(raw.hooks as Record<string, unknown>[] | undefined),
 	};
 }
 
@@ -327,6 +378,9 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 			reportsTo: Array.isArray(config.reports_to) ? config.reports_to : [],
 			model: typeof config.model === "string" ? config.model.trim() : undefined,
 			waitsFor: Array.isArray(config.waits_for) ? config.waits_for : [],
+			// P1-5: Tool restrictions per agent.
+			allowedTools: Array.isArray(config.allowed_tools) ? config.allowed_tools.map(t => t.trim()).filter(Boolean) : undefined,
+			blockedTools: Array.isArray(config.blocked_tools) ? config.blocked_tools.map(t => t.trim()).filter(Boolean) : undefined,
 		});
 	}
 

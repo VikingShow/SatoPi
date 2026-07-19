@@ -22,6 +22,17 @@ import type { RoleAssetManager } from "../role-asset";
 import { EventBus } from "./event-bus";
 import { apiRoutes, type ApiRouteContext, type RunManager, type BeforeLoopManager, type SteeringSink } from "./api-routes";
 
+/** P4-2: Default swarm monitor port. Override with PI_SWARM_PORT env var. */
+const DEFAULT_SWARM_PORT = 7878;
+
+function resolveSwarmPort(preferredPort: number): number {
+	if (Bun.env.PI_SWARM_PORT) {
+		const envPort = Number(Bun.env.PI_SWARM_PORT);
+		if (Number.isFinite(envPort) && envPort > 0 && envPort <= 65535) return envPort;
+	}
+	return preferredPort;
+}
+
 export class MonitorServer implements ActivityBroadcaster {
 	#server: ReturnType<typeof Bun.serve> | null = null;
 	readonly #bus = new EventBus();
@@ -53,12 +64,18 @@ export class MonitorServer implements ActivityBroadcaster {
 	}
 
 	/**
-	 * Start the HTTP server on the given port.
-	 * If port is taken, tries port+1, port+2, etc. up to 10 attempts.
+	 * Start the HTTP server.
+	 *
+	 * P4-2: Port resolution order:
+	 *   1. PI_SWARM_PORT env var (if set and valid)
+	 *   2. preferredPort caller argument
+	 *   3. Falls back to DEFAULT_SWARM_PORT (7878)
+	 *
+	 * If the resolved port is taken, tries port+1, port+2, etc. up to 10 attempts.
 	 * Returns the actual port used.
 	 */
-	start(preferredPort: number): number {
-		let port = preferredPort;
+	start(preferredPort: number = DEFAULT_SWARM_PORT): number {
+		let port = resolveSwarmPort(preferredPort);
 		for (let attempt = 0; attempt < 10; attempt++) {
 			try {
 				this.#server = this.#createServer(port);
@@ -111,10 +128,15 @@ export class MonitorServer implements ActivityBroadcaster {
 
 				// -- SSE endpoint ------------------------------------------------
 				if (pathname === "/events") {
+					// P3-3: Read Last-Event-ID for reconnection state recovery.
+					const lastEventId = req.headers.get("Last-Event-ID") ?? undefined;
 					const stream = new ReadableStream({
 						start(controller) {
-							// Send initial connection confirmation
-							const hello = new TextEncoder().encode(": connected\n\n");
+							// Send connection confirmation with last event ID echo
+							const handshake = lastEventId
+								? `: connected\nid: ${lastEventId}\n\n`
+								: ": connected\n\n";
+							const hello = new TextEncoder().encode(handshake);
 							controller.enqueue(hello);
 
 							// Register subscriber

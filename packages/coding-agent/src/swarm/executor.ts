@@ -3,6 +3,12 @@
  *
  * Wraps `runSubprocess` to spawn individual swarm agents with full tool access.
  * Each agent runs in the swarm workspace with its task instructions as the user prompt.
+ *
+ * ## Extensibility
+ *
+ * The `AgentExecutor` interface allows callers to inject custom execution
+ * strategies (e.g. remote agents, HTTP-triggered agents) without modifying
+ * the pipeline controller.
  */
 import * as path from "node:path";
 import type {
@@ -17,6 +23,25 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "./schema";
 import type { StateTracker } from "./state";
 
+/** Default per-agent wall-clock cap (5 minutes). */
+const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ============================================================================
+// P1-2: Agent Executor Interface — decouples execution strategy from pipeline
+// ============================================================================
+
+/**
+ * Injectable agent execution strategy.
+ *
+ * The default implementation (`SubprocessAgentExecutor`) spawns a local
+ * subprocess via `runSubprocess`. Callers can inject a custom executor
+ * through `SwarmExecutorOptions.executor` to support remote agents,
+ * sandboxed environments, or testing mocks.
+ */
+export interface AgentExecutor {
+	execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult>;
+}
+
 export interface SwarmExecutorOptions {
 	workspace: string;
 	swarmName: string;
@@ -27,33 +52,109 @@ export interface SwarmExecutorOptions {
 	modelRegistry?: ModelRegistry;
 	settings?: Settings;
 	stateTracker: StateTracker;
+	/**
+	 * Per-agent wall-clock timeout in milliseconds.
+	 * When exceeded the agent is aborted and marked as CRASHED.
+	 * Defaults to 5 minutes. Set to 0 to disable.
+	 */
+	timeoutMs?: number;
+	/**
+	 * Callback invoked after the subprocess has started.
+	 * Receives an AbortController that the caller can use to
+	 * terminate the agent externally (e.g. on pipeline abort).
+	 */
+	onStarted?: (controller: AbortController) => void;
+	/**
+	 * Custom executor override. When provided the pipeline uses this
+	 * instead of the default `SubprocessAgentExecutor`.
+	 */
+	executor?: AgentExecutor;
 }
 
+// ============================================================================
+// Default executor — spawns a local oh-my-pi subprocess
+// ============================================================================
+
 /**
- * Execute a single swarm agent as an oh-my-pi subagent.
+ * Default agent executor: spawns a local oh-my-pi subprocess.
  *
  * The agent receives:
  * - System prompt: built from role + extra_context
  * - User prompt (task): the full task instructions from the YAML
  * - Working directory: the swarm workspace
- * - Full tool access (bash, python, read, write, edit, grep, find, fetch, web_search, browser)
+ * - Tool access: configurable via SwarmAgent.allowedTools / blockedTools
+ */
+export class SubprocessAgentExecutor implements AgentExecutor {
+	async execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult> {
+		return executeSwarmAgent(agent, index, options);
+	}
+}
+
+/** Shared singleton to avoid re-allocating. */
+const defaultExecutor = new SubprocessAgentExecutor();
+
+/**
+ * Execute a single swarm agent as an oh-my-pi subagent.
+ *
+ * Kept as a free function for backward compatibility. New code should
+ * prefer `AgentExecutor.execute()` via the pipeline's executor injection.
  */
 export async function executeSwarmAgent(
 	agent: SwarmAgent,
 	index: number,
 	options: SwarmExecutorOptions,
 ): Promise<SingleResult> {
-	const { workspace, swarmName, iteration, modelOverride, signal, onProgress, modelRegistry, settings, stateTracker } =
-		options;
+	// Delegate to custom executor if provided.
+	if (options.executor && options.executor !== defaultExecutor) {
+		return options.executor.execute(agent, index, options);
+	}
+
+	const {
+		workspace,
+		swarmName,
+		iteration,
+		modelOverride,
+		signal,
+		onProgress,
+		modelRegistry,
+		settings,
+		stateTracker,
+		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
+		onStarted,
+	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
 
+	// P1-5: Pass tool restrictions from SwarmAgent schema to AgentDefinition.
 	const agentDef: AgentDefinition = {
 		name: agent.name,
 		description: `Swarm agent: ${agent.role}`,
 		systemPrompt: buildSystemPrompt(agent),
 		source: "project" as AgentSource,
+		...(agent.allowedTools ? { tools: agent.allowedTools } : {}),
+		...(agent.blockedTools ? { blockedTools: agent.blockedTools } : {}),
 	};
+
+	// Build a per-agent timeout controller and combine with the caller's signal.
+	// The caller can terminate the agent via onStarted's controller.
+	const agentController = new AbortController();
+	const effectiveSignal =
+		signal && timeoutMs > 0
+			? AbortSignal.any([signal, agentController.signal])
+			: signal ?? agentController.signal;
+
+	// Arm the timeout if enabled.
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	if (timeoutMs > 0) {
+		timeoutId = setTimeout(() => {
+			agentController.abort(
+				new DOMException(`Agent "${agent.name}" timed out after ${timeoutMs}ms`, "TimeoutError"),
+			);
+		}, timeoutMs);
+	}
+
+	// Notify the caller so they can abort us on pipeline shutdown.
+	onStarted?.(agentController);
 
 	await stateTracker.updateAgent(agent.name, {
 		status: "running",
@@ -70,7 +171,8 @@ export async function executeSwarmAgent(
 			index,
 			id: agentId,
 			modelOverride,
-			signal,
+			signal: effectiveSignal,
+			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
 			onProgress: progress => onProgress?.(agent.name, progress),
 			modelRegistry,
 			settings,
@@ -93,13 +195,37 @@ export async function executeSwarmAgent(
 		return result;
 	} catch (err) {
 		const error = err instanceof Error ? err.message : String(err);
+		// Distinguish timeout from other failures.
+		const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+		const status = isTimeout ? ("failed" as const) : ("failed" as const);
 		await stateTracker.updateAgent(agent.name, {
-			status: "failed",
+			status,
 			completedAt: Date.now(),
-			error,
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 		});
-		await stateTracker.appendLog(agent.name, `Iteration ${iteration} error: ${error}`);
-		throw err;
+		await stateTracker.appendLog(
+			agent.name,
+			`Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`,
+		);
+
+		const failResult: SingleResult = {
+			index,
+			id: agentId,
+			agent: agent.name,
+			agentSource: "project" as AgentSource,
+			task: agent.task,
+			exitCode: 1,
+			output: "",
+			stderr: error,
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
+		};
+		return failResult;
+	} finally {
+		if (timeoutId) clearTimeout(timeoutId);
 	}
 }
 

@@ -86,6 +86,14 @@ export interface SwarmState {
 export class StateTracker {
 	#swarmDir: string;
 	#state: SwarmState;
+	/**
+	 * Serialized write queue for pipeline.json persistence.
+	 * All `#persist()` calls are chained on this promise so concurrent
+	 * updates from parallel agent waves never interleave JSON writes.
+	 */
+	#writeChain: Promise<void> = Promise.resolve();
+	/** Tracks whether a persist is already scheduled on the microtask queue. */
+	#persistScheduled = false;
 
 	constructor(workspaceDir: string, name: string) {
 		this.#swarmDir = path.join(workspaceDir, `.swarm_${name}`);
@@ -290,7 +298,33 @@ export class StateTracker {
 		}
 	}
 
+	/**
+	 * Persist the current in-memory state to pipeline.json.
+	 *
+	 * Uses a serialized write chain so concurrent updates from parallel
+	 * agent waves never interleave or corrupt the JSON file. Rapid
+	 * successive calls within the same microtask tick are coalesced into
+	 * a single write.
+	 */
 	async #persist(): Promise<void> {
-		await Bun.write(path.join(this.#swarmDir, "state", "pipeline.json"), JSON.stringify(this.#state, null, 2));
+		if (this.#persistScheduled) return;
+		this.#persistScheduled = true;
+
+		this.#writeChain = this.#writeChain.then(async () => {
+			this.#persistScheduled = false;
+			// Snapshot the state under the write chain so later mutations
+			// queued behind us see fresh data.
+			const snapshot = this.#state;
+			try {
+				await Bun.write(
+					path.join(this.#swarmDir, "state", "pipeline.json"),
+					JSON.stringify(snapshot, null, 2),
+				);
+			} catch {
+				// Swallow persist errors — we don't want state tracking
+				// failures to crash the pipeline. The in-memory state is
+				// still accurate for the current run.
+			}
+		});
 	}
 }
