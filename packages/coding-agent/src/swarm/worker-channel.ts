@@ -257,6 +257,8 @@ export class WorkerChannel {
 			`- P0-5: CHECK whether each worker ran tests. If a worker claims completion`,
 			`  but no test results are in their Round Summary, flag it as a "major" issue.`,
 			`  If tests were run but some failed, flag as "blocker" (must be fixed before PASS).`,
+`- P0-E: CHECK each worker "MISSING" field. If empty, "N/A", or vague (less than one specific gap), flag as "major". Finding no gaps on a complex task is superficial review.`,
+`- P0-E: If a worker identified a REAL gap the plan missed, note as praise-worthy proactive discovery.`,
 			`- Produce a structured Round Summary (format below)`,
 			``,
 			`WHAT YOU DO NOT DO:`,

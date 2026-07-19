@@ -394,7 +394,7 @@ export class PipelineController {
  * Safely invoke a lifecycle hook.
  * Hook errors are forwarded to `onHookError` and never propagate.
  */
-async function invokeHook<T>(
+export async function invokeHook<T>(
 	hooks: PipelineHooks | undefined,
 	name: string,
 	fn: () => Promise<T> | T | undefined,
