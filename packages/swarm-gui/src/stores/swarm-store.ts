@@ -32,6 +32,11 @@ interface SwarmStore {
   /** P2-5: Latest convergence values for trend display. */
   convergenceHistory: Array<{ ts: number; jaccard: number; converged: boolean }>;
 
+  /** P2-10: Tool-call log for AgentTimeline visualization. */
+  toolCalls: Map<string, Array<{ ts: number; tool: string; file?: string; duration?: number; tokens?: number; exitCode?: number }>>;
+  /** File changes tracked for FileChangesPanel. */
+  fileChanges: Array<{ ts: number; agent: string; file: string; action: string; linesChanged?: number }>;
+
   init: () => Promise<void>;
   setActiveChannel: (id: string) => void;
   addActivity: (entry: ActivityEntry, fromHistory?: boolean) => void;
@@ -170,6 +175,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   blockerContext: null,
   error: null,
   convergenceHistory: [],
+  toolCalls: new Map(),
+  fileChanges: [],
 
   init: async () => {
     try {
