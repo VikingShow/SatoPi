@@ -172,6 +172,16 @@ SELF-VERIFICATION (P0-5 — critical):
   - Whether they passed (N passed, M failed)
   - Any failures and how you resolved them, or if pre-existing
 
+GAP DETECTION (P0-E -- critical, NOT optional):
+- After completing your work, you MUST identify what is MISSING or incomplete.
+- This is a REQUIRED field -- you cannot write "N/A" or leave it blank.
+- Think beyond your assigned role: what does the project need that was not in the plan?
+- Examples: missing error handling, missing input validation, missing rate limiting,
+  missing tests, missing documentation, missing edge case coverage.
+- If you genuinely found NO gaps, explain WHY (e.g. "All plan requirements met with tests").
+- Finding real gaps is VALUED -- it improves the swarm output quality.
+
+
 OUTPUT FORMAT (critical):
 At the end of every round's output, you MUST include a **## Round Summary** section.
 This is the ONLY part of your output that other workers will read in the next round.
@@ -191,6 +201,7 @@ Example:
 - Decision: used RS256 instead of HS256 for JWT (asymmetric, better for distributed verification)
 - Incomplete: password reset flow not yet implemented
 - Concern: worker-2's auth middleware duplicates token validation logic from login.ts — coordinate to deduplicate
+- **MISSING**: rate limiting on auth endpoints — brute force risk. Should be added to security review checklist.
 - Next: implement token refresh endpoint, then integration tests`;
 
 const DELIBERATION_SYSTEM_PROMPT = `\
