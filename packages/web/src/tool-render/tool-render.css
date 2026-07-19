@@ -1,0 +1,82 @@
+/**
+ * Token shop styling for Swarm tool calling visualization.
+ * Paste to `packages/web/src/styles/globals.css` or import directly.
+ */
+.tv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+  background: #1c1c1c;
+  color: #a3a3a3;
+  border: 1px solid #262626;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.tv-badge--ok { background: rgba(34, 197, 94, 0.12); color: #22c55e; border-color: rgba(34, 197, 94, 0.25); }
+.tv-badge--err { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.25); }
+.tv-badge--warn { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.25); }
+.tv-badge--accent { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.25); }
+
+.tv-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+.tv-path { font-size: 11px; font-family: var(--font-mono, monospace); color: #60a5fa; }
+.tv-lines { color: #737373; font-size: 10px; margin-left: 1px; }
+
+.tv-out { margin: 2px 0; }
+.tv-out--err .tv-code { border-color: rgba(239, 68, 68, 0.25); }
+.tv-out-title { display: block; font-size: 10px; color: #737373; margin-bottom: 2px; font-weight: 500; }
+
+.tv-code {
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: #d4d4d4;
+  line-height: 1.5;
+}
+
+.tv-diff { font-size: 11px; font-family: var(--font-mono, monospace); line-height: 1.55; overflow-x: auto; }
+.tv-diff-row { padding: 0 8px; white-space: pre; }
+.tv-diff-row--add { background: rgba(34, 197, 94, 0.08); color: #bbf7d0; }
+.tv-diff-row--del { background: rgba(239, 68, 68, 0.08); color: #fecaca; }
+.tv-diff-row--hunk { color: #60a5fa; font-size: 10px; }
+.tv-diff-row--gap { color: #525252; }
+
+.tv-note { padding: 6px 10px; border-radius: 6px; font-size: 11px; background: #1c1c1c; color: #a3a3a3; margin: 4px 0; }
+.tv-note--err { background: rgba(239, 68, 68, 0.08); color: #fca5a5; }
+.tv-note--warn { background: rgba(245, 158, 11, 0.08); color: #fcd34d; }
+.tv-note--ok { background: rgba(34, 197, 94, 0.08); color: #86efac; }
+
+.tv-row { display: flex; gap: 8px; font-size: 11px; padding: 1px 0; }
+.tv-row-k { color: #737373; min-width: 0; flex-shrink: 0; }
+.tv-row-val { color: #d4d4d4; }
+
+.tv-invalid { color: #ef4444; font-style: italic; font-size: 11px; }
+
+.tv-expand {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 10px;
+  color: #525252;
+  padding: 2px 0;
+  cursor: pointer;
+  background: none;
+  border: none;
+  transition: color 0.15s;
+}
+.tv-expand:hover { color: #a3a3a3; }
+
+/* ── ToolCard ── */
+.tv-card { background: #0d0d0d; }
+.tv-head { min-height: 32px; }
+.tv-body { border-top: 1px solid #1a1a1a; }
