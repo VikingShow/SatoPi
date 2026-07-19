@@ -351,6 +351,38 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               duration: 3000,
             });
           }
+
+          // Populate toolCalls for AgentTimeline
+          set((s) => {
+            const toolCalls = new Map(s.toolCalls);
+            const agent = entry.worker ?? entry.from ?? "unknown";
+            const agentCalls = [...(toolCalls.get(agent) ?? [])];
+            const call = {
+              ts: entry.ts,
+              tool: entry.toolName,
+              duration: entry.toolDurationMs ?? undefined,
+              exitCode: (entry.toolError ? 1 : 0) as number | undefined,
+            } as { ts: number; tool: string; file?: string; duration?: number; tokens?: number; exitCode?: number };
+            if (entry.file) {
+              call.file = entry.file;
+            }
+            agentCalls.push(call);
+            toolCalls.set(agent, agentCalls);
+            return { toolCalls };
+          });
+        }
+
+        // Track file_change events for FileChangesPanel
+        if (entry.type === "file_change" && entry.file) {
+          set((s) => ({
+            fileChanges: [...s.fileChanges, {
+              ts: entry.ts,
+              agent: entry.worker ?? entry.from ?? "unknown",
+              file: entry.file!,
+              action: entry.action ?? "modified",
+              linesChanged: entry.linesChanged,
+            }],
+          }));
         }
 
         // P2-11: Error flag — categorized error notification.

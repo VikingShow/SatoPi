@@ -728,6 +728,30 @@ export class LoopController {
 					}
 				}
 
+				// Emit tool_call events for AgentTimeline visualization
+				for (const r of allWorkerResults) {
+					this.#activityLogger?.logToolCall(
+						r.agent,
+						"round_complete",
+						undefined,
+						r.output.slice(0, 200),
+						r.exitCode !== 0 ? `exit ${r.exitCode}` : undefined,
+						r.durationMs ?? undefined,
+					);
+				}
+
+				// Emit file_change events for FileChangesPanel
+				for (const f of lastConflictReport.changedFiles) {
+					const writers = lastConflictReport.conflicts
+						.filter(c => c.file === f)
+						.flatMap(c => c.writers);
+					this.#activityLogger?.logFileChange(
+						writers[0] ?? "unknown",
+						f,
+						"modified",
+					);
+				}
+
 			// 3. Collect worker output for review context (all rounds)
 			lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
 
