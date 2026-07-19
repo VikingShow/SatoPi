@@ -1,16 +1,16 @@
 /**
- * ClonerCouncil — Cloner 圆桌审查。
+ * ClonerCouncil — Cloner 圆桌审查（P0-D: 加权投票 + 否决权）。
  *
- * 每位 Cloner 独立审查 worker 产出，按多维度评估后投票。
- * 多数通过 → PASS；否则 FAIL（附带全部 findings 反馈给 workers）。
- *
- * 无 atropos_veto 特殊角色 —— 所有 Cloner 平等，一人一票。
+ * 每位 Cloner 可分配审查角色（guardian/adversarial/security/performance/architecture）。
+ * adversarial 和 security 拥有否决权（单个 FAIL 可推翻全部 PASS）。
+ * 投票按角色权重计算，不再是简单多数。
  */
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import type { RoleAsset } from "./role-asset";
 
 // ============================================================================
 // Types
@@ -48,6 +48,8 @@ export interface ClonerReviewConfig {
 	previousFindings?: string[];
 	/** Enable cross-examination round when findings diverge. Default false. */
 	deliberation?: boolean;
+	/** P0-D: Per-cloner role assignments (clonerId → RoleAsset). When provided, each cloner gets a role-specific system prompt, weight, and veto flag. */
+	clonerRoles?: Record<string, RoleAsset>;
 	/** Tool restriction to apply to cloner agents (config-as-constraint). */
 	toolRestriction?: import("./schema").AgentToolRestriction;
 }
@@ -71,23 +73,24 @@ export class ClonerCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction } = config;
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles } = config;
 
 		// Build a cloner agent definition with optional tool restrictions applied.
 		const buildClonerAgent = (id: string, i: number): AgentDefinition => {
+			// P0-D: Use role-specific system prompt and tools when available.
+			const role = clonerRoles?.[id];
 			const def: AgentDefinition = {
 				name: id,
-				description: `Cloner reviewer ${i + 1}`,
-				systemPrompt: this.#clonerSystemPrompt(),
+				description: role ? `${role.name} (${role.id})` : `Cloner reviewer ${i + 1}`,
+				systemPrompt: role?.prompts?.system ?? this.#clonerSystemPrompt(),
 				source: "project" as const,
 			};
-			if (toolRestriction) {
-				if (toolRestriction.allowed && toolRestriction.allowed.length > 0) {
-					def.tools = toolRestriction.allowed;
-				}
-				if (toolRestriction.blocked && toolRestriction.blocked.length > 0) {
-					def.blockedTools = toolRestriction.blocked;
-				}
+			// P0-D: Role-specific tools take priority over config-level restrictions.
+			if (role?.tools && role.tools.length > 0) {
+				def.tools = role.tools;
+			} else if (toolRestriction) {
+				if (toolRestriction.allowed && toolRestriction.allowed.length > 0) def.tools = toolRestriction.allowed;
+				if (toolRestriction.blocked && toolRestriction.blocked.length > 0) def.blockedTools = toolRestriction.blocked;
 			}
 			return def;
 		};
@@ -143,7 +146,7 @@ export class ClonerCouncil {
 			};
 		});
 
-		const firstVerdict = tallyVerdicts(results);
+		const firstVerdict = tallyVerdicts(results, clonerRoles);
 
 		// Deliberation: if FAIL + findings diverge + deliberation enabled, run cross-examination
 		if (!firstVerdict.passed && firstVerdict.disagreed && deliberation) {
@@ -198,7 +201,7 @@ export class ClonerCouncil {
 				};
 			});
 
-			return tallyVerdicts(deliberationResults);
+			return tallyVerdicts(deliberationResults, clonerRoles);
 		}
 
 		return firstVerdict;
@@ -335,23 +338,39 @@ export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict
 	return null;
 }
 
-export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
+export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<string, RoleAsset>): ReviewVerdict {
 	const findings: string[] = [];
 	const workerCounts: number[] = [];
 	let approvalCount = 0;
 	let totalCount = 0;
+	let weightedPass = 0;
+	let weightedTotal = 0;
 	const allRoleSuggestions: Record<string, string> = {};
 	const praisedWorkers = new Set<string>();
 	const criticizedWorkers = new Set<string>();
+	// P0-D: Veto tracking.
+	let vetoFail = false;
+	const vetoCloners: string[] = [];
 
 	for (const result of results) {
-		// Skip crashed cloners — they should not count as "fail" votes
 		if (result.output.startsWith("[CRASHED]")) continue;
 		totalCount++;
 		const verdict = extractVerdict(result.agent, result.output);
 		if (verdict) {
 			findings.push(...verdict.findings.map(f => `[${result.agent}] ${f}`));
 			if (verdict.passed) approvalCount++;
+
+			// P0-D: Weighted voting when roles are assigned.
+			const role = clonerRoles?.[result.agent];
+			const weight = role?.weight ?? 1.0;
+			weightedTotal += weight;
+			if (verdict.passed) weightedPass += weight;
+			// Veto: adversarial or security FAIL → override.
+			if (!verdict.passed && role?.veto) {
+				vetoFail = true;
+				vetoCloners.push(`${result.agent}(${role.id})`);
+			}
+
 			if (verdict.workerCountDelta !== undefined) workerCounts.push(verdict.workerCountDelta);
 			if (verdict.roleSuggestions) Object.assign(allRoleSuggestions, verdict.roleSuggestions);
 			if (verdict.praisedWorkers) for (const w of verdict.praisedWorkers) praisedWorkers.add(w);
@@ -359,8 +378,11 @@ export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 		}
 	}
 
-	const passed = totalCount > 0 && approvalCount >= Math.ceil(totalCount / 2);
-	// Findings diverge when each cloner reports different findings
+	// P0-D: Veto overrides weighted majority.
+	const simplePassed = totalCount > 0 && approvalCount >= Math.ceil(totalCount / 2);
+	const weightedPassed = weightedTotal > 0 && weightedPass / weightedTotal > 0.5;
+	const passed = vetoFail ? false : (clonerRoles ? weightedPassed : simplePassed);
+
 	const disagreed =
 		!passed &&
 		findings.length > 1 &&
@@ -370,9 +392,11 @@ export function tallyVerdicts(results: SingleResult[]): ReviewVerdict {
 		passed,
 		approvalCount,
 		totalCount,
-		findings,
+		findings: vetoFail
+			? [...findings, `[VETO] FAIL forced by: ${vetoCloners.join(", ")} — verdict overridden to FAIL`]
+			: findings,
 		workerCountSuggestions: workerCounts,
-		disagreed,
+		disagreed: vetoFail || disagreed,
 		roleSuggestions: allRoleSuggestions,
 		praisedWorkers: [...praisedWorkers],
 		criticizedWorkers: [...criticizedWorkers],
