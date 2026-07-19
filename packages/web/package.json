@@ -11,9 +11,11 @@
     "./shiki": "./src/core/shiki.ts",
     "./types": "./src/core/types.ts",
     "./fetch": "./src/core/fetch-wrapper.ts",
-    "./styles": "./src/styles/globals.css"
+    "./styles": "./src/styles/globals.css",
+    "./tool-render": "./src/tool-render/index.ts"
   },
   "dependencies": {
+    "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "^1.0.0"
