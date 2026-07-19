@@ -30,7 +30,8 @@ export type ActivityEventType =
 	| "nomination"
 	| "crash"
 	| "tool_call"
-	| "error_flag";
+	| "error_flag"
+	| "file_change";
 
 export interface ActivityEntry {
 	ts: number;
@@ -219,5 +220,12 @@ export class ActivityLogger {
 	/** Logged when a provider-level error is classified with a bit flag. */
 	logProviderError(agentName: string, errorFlag: string, message: string, recoverable: boolean, suggestion?: string): void {
 		this.log({ ts: Date.now(), type: "error_flag", worker: agentName, errorFlag, body: message, recoverable, suggestion });
+	}
+
+	// -- File Change ---------------------------------------------------------
+
+	/** Logged when a worker agent creates, modifies, or deletes a file. */
+	logFileChange(agentName: string, file: string, action: "created" | "modified" | "deleted", linesChanged?: number): void {
+		this.log({ ts: Date.now(), type: "file_change", worker: agentName, file, action, linesChanged });
 	}
 }

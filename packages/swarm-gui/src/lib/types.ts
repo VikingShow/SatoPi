@@ -94,7 +94,7 @@ export interface SwarmState {
 export type ActivityEventType =
   | "broadcast" | "subgroup" | "steering" | "steering_ack" | "phase" | "convergence"
   | "verdict" | "conflict" | "scaling" | "nomination" | "crash"
-  | "tool_call" | "error_flag";
+  | "tool_call" | "error_flag" | "file_change";
 
 export interface ActivityEntry {
   ts: number;
@@ -137,6 +137,7 @@ export interface ActivityEntry {
   errorFlag?: string;
   recoverable?: boolean;
   suggestion?: string;
+  linesChanged?: number;
 }
 
 export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
