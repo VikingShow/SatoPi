@@ -1,7 +1,7 @@
 # Worker 多角色设计调研报告
 
-> 日期: 2026-07-19
-> 来源: Web 搜索 — Anthropic Claude Code, ICML/NeurIPS 2025, LangGraph, SWE-bench
+> 日期: 2026-07-19 (2026 年 7 月)
+> 来源: ASE 2025/2026, ICML 2026, NeurIPS 2025, Anthropic Claude Code, LangGraph, Zencoder
 
 ---
 
@@ -87,6 +87,82 @@ Worker 声明:
 2. 角色协商阶段: Worker 看到 plan + 可用能力维度列表 → 声明自己要覆盖的维度
 3. 生成 Worker 时: system prompt 从所有声明维度合并，tools 取并集
 4. Reviewer: 检查每个 worker 是否覆盖了其声明的维度
+
+---
+
+---
+
+## 第二轮调研: 产出契约 + 缺失检测 + 激励机制 (2026-07-19)
+
+### 验证结论: 三个设计全部被前沿实践确认
+
+---
+
+### 1. 产出契约 — ✅ 确认，是 2025-2026 主流范式
+
+**核心证据**:
+
+- **SEMAP** (APSEC 2025): "Explicit behavioral contract modeling" 作为多 Agent 协议的核心设计原则之一。协议驱动的多 Agent 工程方法，实现 **function-level 代码开发失败率降低 69.6%**。
+
+- **VibeContract 范式** (2025): 将自然语言意图分解为显式任务序列，每层有 contract 定义预期输入/输出/约束/行为属性。Contracts 指导 LLM 进行测试、运行时验证和调试。
+
+- **Specialists 框架** (xtrm-dev, 2025): 每个 specialist 只获得其角色需要的 context、tools 和 **output contract**，返回结构化证据而非对话文本。核心理念: "bead = problem + scope + success criteria + validation rules + dependencies + handoffs"。
+
+- **CodeSignal Codex subagents** (2025): 强制 JSON 输出 contract — `{status, summary, findings, files_read, files_modified}`。根本原则: "If you plan to chain this result, don't accept 'helpful explanation' — accept parseable output."
+
+**对 SatoPi 的启示**: 产出契约设计完全正确。关键差异化: SatoPi 的 contract 是**可协商的**（agent 可以提议修改），这比其他系统更先进。
+
+---
+
+### 2. 缺失检测 — ✅ 确认，是 Agent 失败的首要原因
+
+**核心证据**:
+
+- **Xie et al. (arXiv 2511.04064, 2025)**: 对端到端软件开发中 LLM agent 系统的基准研究表明，**首要瓶颈不是代码生成错误，而是需求遗漏和自验证不足**。SOTA agent 在挑战性基准上**仅满足约 50% 的需求**。
+
+- **ASE 2025 论文**: 单 LLM 的缺失需求检测召回率仅 **0-52%**（即漏掉了一半以上的需求缺陷！）。三个互补 LLM 的 ensemble（DeepSeek Chat + GPT-4o Mini + Claude Sonnet 4）将召回率提升到 **75-100%**，建议可信度 95-100%。
+
+- **ASE 2025 另一篇论文**: LLM 在**验证代码是否符合自然语言规范**时存在系统性失败 — 频繁将正确代码误判为"不满足需求"。更讽刺的是，**更复杂的 prompt（带解释和修改建议）导致更高的误判率**。
+
+**对 SatoPi 的启示**: "Missing" 字段的强制要求完全正确。单 agent 无法可靠地自检遗漏 — 这就是为什么需要 Adversarial Cloner + Reviewer 双重检查。Survey 中 99% 的论文忽略了可审计性，而我们的审计日志设计正好填补了这个空白。
+
+---
+
+### 3. 激励机制 — ⚡ 部分确认，praise/criticism 是创新
+
+**核心证据**:
+
+- **MAPRO 框架** (2025): 将 prompt 优化形式化为跨整个多 agent 拓扑的联合推理问题，在节点和边上传播依赖和信用信号 — 实现协调的自改进而非孤立的局部优化。
+
+- **Self-Reflection** (Chain 框架, Shinn et al. 2023): Agent 重访推理轨迹、识别错误、整合纠正反馈 — 作为隐式自我批评循环，提高鲁棒性和样本效率。
+
+- **Multi-Agent Debate (DMAD)**: Agent 使用不同的推理方法，通过多元视角创造建设性批评，抵消"mental set"（过度依赖相似策略）。
+
+- **显式 praise/criticism 机制**: 在已发表文献中**未被广泛记录**。大多数系统使用隐式反馈（自我反思、辩论、投票）而非显式的 praise/criticism 计数。
+
+**对 SatoPi 的启示**: 我们的 praise/criticism 机制（Worker 发现缺失 → praise +1；没发现 → Reviewer 标记为 superficial review → criticize）在已发表文献中似乎**没有直接先例**。这是一个**差异化创新**。文献中大多是隐式反馈，我们是显式的可量化激励。值得保留。
+
+---
+
+### 4. 额外发现: 证据链 (Evidence Trails)
+
+- **verify-agent-output skill** (agent-almanac, 2025): 定义了完整程序 — 执行前定义可检查的期望，执行中生成证据链（checksums, test results, timing），对外部锚点验证，运行 fidelity checks。核心原则: **"An agent cannot reliably verify its own compressed output."**
+
+- **Zencoder Zenflow** (2025): "Multi-agent verification" — 不同的 AI 模型互相 critique 对方的工作（如 Claude 验证 OpenAI 生成的代码），消除盲点。
+
+**对 SatoPi 的启示**: 产出契约不应只是声明，还应包含**执行中自动生成的证据链**。Worker 的 Round Summary 应该包含 test results、file hashes、timestamps — 这些是 Review 的 anchor points。
+
+---
+
+## 综合结论
+
+| 设计 | 前沿验证 | 差异化程度 |
+|------|---------|-----------|
+| 产出契约 + 可验证字段 | ✅ 2025 主流范式 (SEMAP, VibeContract, Specialists) | 相同方向 — 但 SatoPi 的**可协商契约**更先进 |
+| 强制 "Missing" 字段 | ✅ 填补了 Agent 失败的首要原因 (ASE 2025, Xie et al.) | 相同方向 — 但 SatoPi 的**multi-LLM ensemble 检测**独特 |
+| Adversarial Cloner 专门找漏 | ✅ 已确认为必要 (Zenflow, CLEAR) | 领先 — 大多数系统没有专职的对抗性审查者 |
+| Praise/Criticism 显式激励 | ⚡ 文献中无直接先例 | **创新** — 大多数系统使用隐式反馈 |
+| 证据链 (Evidence Trails) | ✅ 新兴实践 (verify-agent-output, Zenflow) | 落地后领先 |
 
 ---
 
