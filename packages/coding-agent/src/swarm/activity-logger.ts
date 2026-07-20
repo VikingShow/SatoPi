@@ -7,6 +7,9 @@
  *   2. Pushed to MonitorServer via SSE (real-time GUI updates)
  *
  * All write operations are fire-and-forget — they never block the main loop.
+ *
+ * Each ActivityLogger is bound to a session name so the broadcaster can
+ * route events to the correct SSE subscribers.
  */
 
 import * as fs from "node:fs/promises";
@@ -91,7 +94,7 @@ export interface ActivityEntry {
 // ============================================================================
 
 export interface ActivityBroadcaster {
-	broadcast(entry: ActivityEntry): void;
+	broadcast(sessionName: string, entry: ActivityEntry): void;
 }
 
 // ============================================================================
@@ -100,11 +103,13 @@ export interface ActivityBroadcaster {
 
 export class ActivityLogger {
 	readonly #logPath: string;
+	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
 	#writeQueue: Promise<void> = Promise.resolve();
 
-	constructor(swarmDir: string) {
+	constructor(swarmDir: string, sessionName: string) {
 		this.#logPath = path.join(swarmDir, "activity.jsonl");
+		this.#sessionName = sessionName;
 	}
 
 	/**
@@ -112,15 +117,6 @@ export class ActivityLogger {
 	 * pushed to connected browser clients in real-time.
 	 */
 	setBroadcaster(broadcaster: ActivityBroadcaster): void {
-		this.#broadcaster = broadcaster;
-	}
-
-	/**
-	 * P4-4: Replace the current broadcaster with a new one (e.g. after
-	 * MonitorServer restart). Idempotent — does nothing if no broadcaster
-	 * was previously set.
-	 */
-	replaceBroadcaster(broadcaster: ActivityBroadcaster): void {
 		this.#broadcaster = broadcaster;
 	}
 
@@ -133,7 +129,7 @@ export class ActivityLogger {
 		this.#writeQueue = this.#writeQueue
 			.then(() => fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n"))
 			.then(() => {
-				this.#broadcaster?.broadcast(entry);
+				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {
 				// Swallow errors — logging must never crash the loop

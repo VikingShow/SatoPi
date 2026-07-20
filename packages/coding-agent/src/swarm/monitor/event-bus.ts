@@ -1,14 +1,10 @@
 /**
- * EventBus — SSE subscriber management.
+ * EventBus — per-session SSE subscriber management.
  *
- * Maintains a set of active ReadableStreamDefaultController instances
- * (one per connected browser tab). When ActivityLogger emits an event,
- * it is serialized as an SSE message and enqueued to every subscriber.
- *
- * P4-3: Subscribers may optionally specify an event type filter to
- * receive only events of interest, reducing per-tab processing overhead.
- *
- * Disconnected/stale subscribers are silently removed.
+ * Maintains active ReadableStreamDefaultController instances keyed by
+ * session name.  A subscriber for session "X" only receives events
+ * broadcast to session "X".  Subscribers with no session name receive
+ * only global events (e.g. when session is unknown).
  */
 
 import type { ActivityEntry, ActivityEventType } from "../activity-logger";
@@ -22,47 +18,73 @@ interface Subscriber {
 }
 
 export class EventBus {
-	readonly #subscribers = new Set<Subscriber>();
+	/** sessionName → set of subscribers.  undefined key = global subscribers. */
+	readonly #subscribers = new Map<string | undefined, Set<Subscriber>>();
 
 	/**
-	 * Register a new SSE subscriber.
+	 * Register an SSE subscriber for a specific session.
+	 * @param sessionName — the session to subscribe to (undefined = global only)
 	 * @param controller — the SSE stream controller
-	 * @param filter — optional event type filter; when provided only matching events are delivered
+	 * @param filter — optional event type filter
 	 * @returns a cleanup function
 	 */
-	subscribe(controller: SSEController, filter?: ActivityEventType[]): () => void {
+	subscribe(
+		sessionName: string | undefined,
+		controller: SSEController,
+		filter?: ActivityEventType[],
+	): () => void {
 		const sub: Subscriber = { controller, filter };
-		this.#subscribers.add(sub);
-		return () => this.#subscribers.delete(sub);
+		let set = this.#subscribers.get(sessionName);
+		if (!set) {
+			set = new Set();
+			this.#subscribers.set(sessionName, set);
+		}
+		set.add(sub);
+		return () => {
+			set?.delete(sub);
+			if (set && set.size === 0) this.#subscribers.delete(sessionName);
+		};
 	}
 
-	/** Push an activity entry to all connected clients, respecting per-subscriber filters. */
-	broadcast(entry: ActivityEntry): void {
+	/** Send an entry to subscribers of a specific session. */
+	broadcast(sessionName: string, entry: ActivityEntry): void {
+		this.#send(this.#subscribers.get(sessionName), entry);
+	}
+
+	/** Send an entry to ALL subscribers regardless of session (global events). */
+	broadcastAll(entry: ActivityEntry): void {
+		for (const set of this.#subscribers.values()) {
+			this.#send(set, entry);
+		}
+	}
+
+	#send(set: Set<Subscriber> | undefined, entry: ActivityEntry): void {
+		if (!set || set.size === 0) return;
 		const data = `data: ${JSON.stringify(entry)}\n\n`;
 		const encoded = new TextEncoder().encode(data);
-		for (const sub of this.#subscribers) {
+		for (const sub of set) {
 			if (sub.filter && !sub.filter.includes(entry.type)) continue;
 			try {
 				sub.controller.enqueue(encoded);
 			} catch {
-				this.#subscribers.delete(sub);
+				set.delete(sub);
 			}
 		}
 	}
 
-	/** Close all SSE connections (called on server shutdown). */
+	/** Close all SSE connections. */
 	closeAll(): void {
-		for (const sub of this.#subscribers) {
-			try {
-				sub.controller.close();
-			} catch {
-				// ignore
+		for (const set of this.#subscribers.values()) {
+			for (const sub of set) {
+				try { sub.controller.close(); } catch { /* ignore */ }
 			}
 		}
 		this.#subscribers.clear();
 	}
 
 	get subscriberCount(): number {
-		return this.#subscribers.size;
+		let count = 0;
+		for (const set of this.#subscribers.values()) count += set.size;
+		return count;
 	}
 }

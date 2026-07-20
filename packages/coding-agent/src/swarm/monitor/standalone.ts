@@ -1,8 +1,10 @@
 /**
  * Standalone MonitorServer — real swarm backend with REST API + SSE.
  *
- * Bootstraps auth, ModelRegistry, and Settings (same as the CLI).
- * Exposes start/stop endpoints to launch real LoopController runs.
+ * Bootstraps auth, ModelRegistry, Settings, ExperienceStore, and
+ * RoleAssetManager as shared services.  Uses SessionRegistry to
+ * create per-session service graphs (SwarmRunManager, BeforeLoopManager,
+ * ActivityLogger, etc.) on demand.
  *
  * Usage: bun run src/swarm/monitor/standalone.ts [workspace-dir]
  */
@@ -22,27 +24,26 @@ import { Settings } from "../../config/settings";
 import { stampAndArchivePlanMd } from "../before-loop";
 import { getSessionPlanPath } from "../plan-paths";
 import { BeforeLoopManager } from "../before-loop-manager";
-import {
-  ExperienceStore,
-} from "../after-loop";
+import { ExperienceStore } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
 import type { LoopSwarmConfig } from "../schema";
 import { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
 import { runAfterLoopPipeline } from "./after-loop-runner";
+import {
+	SessionRegistry,
+	type SharedServices,
+	type SessionServices,
+} from "../session-registry";
 
 // ============================================================================
-// Shared types — used by both backend API and frontend
+// Workspace setup
 // ============================================================================
-// (AfterLoopResult is imported from ./types above)
-
-// -- Workspace setup -------------------------------------------------------
 
 const WORKSPACE_DIR = path.resolve(process.argv[2] ?? process.cwd(), ".swarm-workspace");
 const DEFAULT_SWARM_NAME = "SatoPi";
 const YAML_PATH = path.join(WORKSPACE_DIR, "loop.yaml");
 
-/** Resolve the swarm name: prefer `swarm.name` in loop.yaml, fall back to "SatoPi". */
 async function resolveSwarmName(yamlPath: string): Promise<string> {
 	try {
 		const content = await fs.readFile(yamlPath, "utf-8");
@@ -53,48 +54,30 @@ async function resolveSwarmName(yamlPath: string): Promise<string> {
 	}
 }
 
-const DEFAULT_YAML = `swarm:
-  name: SatoPi
-  workspace: .
-  mode: loop
-  target_count: 1
-  model: deepseek-v4-pro
-  max_iterations: 5
-  auto_retry: true
-  human_escalation: true
-
-  agents: {}
-
+const DEFAULT_YAML = `name: SatoPi
+mode: loop
+workspace: .
+agents: {}
+targetCount: 1
+loop:
+  maxIterations: 10
   workers:
     initial: 3
     min: 1
     max: 10
-    max_rounds: 5
-    rounds_convergence_threshold: 3
-
+    auto: false
   cloners:
     count: 2
-
-  reviewer:
+  planDebate:
     enabled: true
-
-  debate:
-    enabled: true
-    max_rounds: 2
-
-  plan_debate:
-    enabled: true
-    cloner_count: 2
-    max_rounds: 3
-
-  agent_restrictions:
-    socrates:
-      allowed: ["read", "write_file", "grep", "find"]
-    cloner:
-      blocked: ["bash", "write_file", "edit"]
+    clonerCount: 2
+    maxRounds: 2
+    convergenceThreshold: 0.7
 `;
 
-// -- RunManager implementation ---------------------------------------------
+// ============================================================================
+// SwarmRunManager — loop lifecycle for a single session
+// ============================================================================
 
 class SwarmRunManager implements RunManager {
 	#loopController: ReturnType<typeof createLoopController> | null = null;
@@ -128,42 +111,28 @@ class SwarmRunManager implements RunManager {
 		this.#experienceStore = opts.experienceStore;
 	}
 
-	get isRunning(): boolean {
-		return this.#running;
-	}
-
-	getLastAfterLoopResult(): AfterLoopResult | null {
-		return this.#lastAfterLoopResult;
-	}
+	get isRunning(): boolean { return this.#running; }
+	getLastAfterLoopResult(): AfterLoopResult | null { return this.#lastAfterLoopResult; }
 
 	async start(): Promise<{ success: boolean; error?: string }> {
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
 			const def = parseSwarmYaml(content);
 			const errors = validateSwarmDefinition(def);
-			if (errors.length > 0) {
-				return { success: false, error: errors.join("; ") };
-			}
+			if (errors.length > 0) return { success: false, error: errors.join("; ") };
+			if (!def.loopConfig) return { success: false, error: "Swarm is not in loop mode" };
 
-		if (!def.loopConfig) {
-			return { success: false, error: "Swarm is not in loop mode" };
-		}
-
-		// Cache loop config for verification hook in After Loop pipeline
-		this.#loopConfig = def.loopConfig;
-
-			// ── Update loopPhase → running ──
+			this.#loopConfig = def.loopConfig;
 			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
-			// ── Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md ──
+			// Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md
 			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);
 			let planContent: string | undefined;
 			try {
 				planContent = await stampAndArchivePlanMd(this.#stateTracker.swarmDir, this.#workspace);
 				logger.info("[RunManager] plan.md loaded and stamped", { length: planContent.length });
 			} catch {
-				// Fallback: read raw content without stamping
 				try {
 					planContent = await fs.readFile(planPath, "utf-8");
 					logger.info("[RunManager] plan.md loaded (unstamped fallback)", { length: planContent.length });
@@ -172,13 +141,10 @@ class SwarmRunManager implements RunManager {
 				}
 			}
 
-			// Re-init state tracker with parsed agents
 			const agentNames = [...def.agents.keys()];
 			await this.#stateTracker.init(agentNames, def.targetCount, def.mode);
-			// Re-set loopPhase after init (init resets some fields)
 			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
 
-			// Create loop controller with activity logger
 			this.#loopController = createLoopController(this.#stateTracker, {
 				loopConfig: def.loopConfig,
 				workspace: this.#workspace,
@@ -187,34 +153,25 @@ class SwarmRunManager implements RunManager {
 
 			this.#abortController = new AbortController();
 			this.#running = true;
-
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
-			// Run loop in background (non-blocking)
-			this.#loopController
-				.runLoop({
-					workspace: this.#workspace,
-					modelRegistry: this.#modelRegistry,
-					settings: this.#settings,
-					signal: this.#abortController.signal,
-					planContent,
-				})
-				.then(async (result) => {
+			this.#loopController.runLoop({
+				workspace: this.#workspace,
+				modelRegistry: this.#modelRegistry,
+				settings: this.#settings,
+				signal: this.#abortController.signal,
+				planContent,
+			}).then(async (result) => {
 				logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
-				if (result.errors.length > 0) {
-					logger.info("[RunManager] Loop errors", { errors: result.errors });
-				}
-					// ── After Loop pipeline ──
-					await this.#runAfterLoopPipeline(result);
-				})
-				.catch((err) => {
-					logger.error("[RunManager] Loop failed", { error: String(err) });
-				})
-				.finally(() => {
-					this.#running = false;
-					this.#loopController = null;
-					this.#abortController = null;
-				});
+				if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
+				await this.#runAfterLoopPipeline(result);
+			}).catch((err) => {
+				logger.error("[RunManager] Loop failed", { error: String(err) });
+			}).finally(() => {
+				this.#running = false;
+				this.#loopController = null;
+				this.#abortController = null;
+			});
 
 			return { success: true };
 		} catch (err) {
@@ -223,66 +180,36 @@ class SwarmRunManager implements RunManager {
 	}
 
 	async stop(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#running) {
-			return { success: false, error: "No run in progress" };
-		}
-		try {
-			this.#abortController?.abort();
-			this.#running = false;
-			logger.info("[RunManager] Stop signal sent");
-			return { success: true };
-		} catch (err) {
-			return { success: false, error: String(err) };
-		}
+		if (!this.#running) return { success: false, error: "No run in progress" };
+		this.#abortController?.abort();
+		this.#running = false;
+		logger.info("[RunManager] Stop signal sent");
+		return { success: true };
 	}
 
-async pause(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) {
-			return { success: false, error: "No loop controller available" };
-		}
-		try {
-			this.#loopController.pause();
-			return { success: true };
-		} catch (err) {
-			return { success: false, error: String(err) };
-		}
+	async pause(): Promise<{ success: boolean; error?: string }> {
+		if (!this.#loopController) return { success: false, error: "No loop controller available" };
+		this.#loopController.pause();
+		return { success: true };
 	}
 
 	async resume(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) {
-			return { success: false, error: "No loop controller available" };
-		}
-		try {
-			this.#loopController.resume();
-			return { success: true };
-		} catch (err) {
-			return { success: false, error: String(err) };
-		}
+		if (!this.#loopController) return { success: false, error: "No loop controller available" };
+		this.#loopController.resume();
+		return { success: true };
 	}
 
 	async updatePlanAndContinue(newPlan: string): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) {
-			return { success: false, error: "No loop controller available" };
-		}
-		try {
-			await this.#loopController.updatePlan(newPlan, this.#stateTracker.swarmDir);
-			// If the loop is paused, resume it so the new plan takes effect.
-			this.#loopController.resume();
-			return { success: true };
-		} catch (err) {
-			return { success: false, error: String(err) };
-		}
+		if (!this.#loopController) return { success: false, error: "No loop controller available" };
+		await this.#loopController.updatePlan(newPlan, this.#stateTracker.swarmDir);
+		this.#loopController.resume();
+		return { success: true };
 	}
 
-	/** Resolve the current blockage — delegates to LoopController. */
 	resolveBlocker(decision: "continue" | "skip" | "abort"): boolean {
-		if (!this.#loopController) return false;
-		return this.#loopController.resolveBlocker(decision);
+		return this.#loopController?.resolveBlocker(decision) ?? false;
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// After Loop pipeline: delegated to ./after-loop-runner.ts
-	// ────────────────────────────────────────────────────────────────────────
 	async #runAfterLoopPipeline(result: LoopResult): Promise<void> {
 		const result_ = await runAfterLoopPipeline(result, {
 			workspace: this.#workspace,
@@ -295,116 +222,118 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 			loopController: this.#loopController!,
 			abortController: this.#abortController,
 		});
-		if (result_) {
-			this.#lastAfterLoopResult = result_;
-		}
+		if (result_) this.#lastAfterLoopResult = result_;
 	}
 }
 
-// -- Main -------------------------------------------------------------------
+// ============================================================================
+// Session factory
+// ============================================================================
 
-async function main() {
-	// 1. Prepare workspace
-	await fs.mkdir(WORKSPACE_DIR, { recursive: true });
+async function createSessionServices(
+	shared: SharedServices,
+	name: string,
+	swarmDir: string,
+): Promise<Omit<SessionServices, "abortController">> {
+	const stateTracker = new StateTracker(shared.workspace, name);
+	const activityLogger = new ActivityLogger(swarmDir, name);
 
-	// Write default YAML if not exists
-	try {
-		await fs.access(YAML_PATH);
-	} catch {
-		await fs.writeFile(YAML_PATH, DEFAULT_YAML, "utf-8");
-	}
-
-	// Resolve the swarm name from YAML (e.g. "SatoPi")
-	const swarmName = await resolveSwarmName(YAML_PATH);
-	const swarmDir = path.join(WORKSPACE_DIR, `.swarm_${swarmName}`);
-	await fs.mkdir(swarmDir, { recursive: true });
-
-	// 2. Bootstrap auth + model registry + settings
-	logger.info("Bootstrapping auth and model registry...");
-	const authStorage = await discoverAuthStorage();
-	const modelRegistry = new ModelRegistry(authStorage);
-	const settings = Settings.isolated();
-
-	// 3. Create StateTracker (idle — no agents until a run starts)
-	const stateTracker = new StateTracker(WORKSPACE_DIR, swarmName);
-
-	// 4. Create ActivityLogger
-	const activityLogger = new ActivityLogger(stateTracker.swarmDir);
-
-	// 4b. Create and initialize ExperienceStore
-	logger.info("Initializing ExperienceStore...");
-	const experienceStore = new ExperienceStore(WORKSPACE_DIR);
-	await experienceStore.init();
-
-	// 5. Create RunManager
 	const runManager = new SwarmRunManager({
-		modelRegistry,
-		settings,
-		workspace: WORKSPACE_DIR,
-			swarmDir: stateTracker.swarmDir,
-		yamlPath: YAML_PATH,
+		modelRegistry: shared.modelRegistry,
+		settings: shared.settings,
+		workspace: shared.workspace,
+		yamlPath: shared.yamlPath,
 		stateTracker,
 		activityLogger,
-		experienceStore,
+		experienceStore: shared.experienceStore,
 	});
 
-	// 5b. Create BeforeLoopManager (shares same modelRegistry, settings, stateTracker, etc.)
 	const beforeLoopManager = new BeforeLoopManager({
-		modelRegistry,
-		settings,
-		workspace: WORKSPACE_DIR,
-			swarmDir: stateTracker.swarmDir,
-		yamlPath: YAML_PATH,
+		modelRegistry: shared.modelRegistry,
+		settings: shared.settings,
+		workspace: shared.workspace,
+		swarmDir,
+		yamlPath: shared.yamlPath,
 		stateTracker,
 		activityLogger,
-		experienceStore,
+		experienceStore: shared.experienceStore,
 		runManager,
 	});
 
-	// 5c. Create SteeringSink — logs operator steering messages via ActivityLogger → SSE
 	const steeringSink: SteeringSink = {
 		steer(text: string): void {
 			activityLogger.logSteering("operator", "all", text);
 		},
 	};
 
-	// 5d. Create and initialize RoleAssetManager — seed built-in roles if empty
+	return { name, swarmDir, stateTracker, activityLogger, runManager, beforeLoopManager, steeringSink };
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+async function main() {
+	await fs.mkdir(WORKSPACE_DIR, { recursive: true });
+	try { await fs.access(YAML_PATH); } catch {
+		await fs.writeFile(YAML_PATH, DEFAULT_YAML, "utf-8");
+	}
+
+	const swarmName = await resolveSwarmName(YAML_PATH);
+	const swarmDir = path.join(WORKSPACE_DIR, `.swarm_${swarmName}`);
+	await fs.mkdir(swarmDir, { recursive: true });
+
+	logger.info("Bootstrapping auth and model registry...");
+	const authStorage = await discoverAuthStorage();
+	const modelRegistry = new ModelRegistry(authStorage);
+	const settings = Settings.isolated();
+
+	logger.info("Initializing ExperienceStore...");
+	const experienceStore = new ExperienceStore(WORKSPACE_DIR);
+	await experienceStore.init();
+
 	logger.info("Initializing RoleAssetManager...");
 	const roleAssetManager = new RoleAssetManager(WORKSPACE_DIR);
 	await roleAssetManager.init();
 	const seeded = await roleAssetManager.seedIfEmpty();
-	if (seeded > 0) {
-		logger.info(`Seeded ${seeded} built-in role assets`);
-	}
+	if (seeded > 0) logger.info(`Seeded ${seeded} built-in role assets`);
 
-	// 6. Create and start MonitorServer (with runManager + beforeLoopManager + steeringSink + modelRegistry + roleAssetManager injected)
-	const server = new MonitorServer(stateTracker, WORKSPACE_DIR, YAML_PATH, runManager, experienceStore, beforeLoopManager, steeringSink, modelRegistry, roleAssetManager);
+	const shared: SharedServices = {
+		workspace: WORKSPACE_DIR,
+		yamlPath: YAML_PATH,
+		modelRegistry,
+		settings,
+		experienceStore,
+		roleAssetManager,
+	};
+
+	// Create SessionRegistry and default session
+	const registry = new SessionRegistry(shared, createSessionServices);
+	const session = await registry.createSession(swarmName);
+
+	// Start MonitorServer (receives the registry)
+	const server = new MonitorServer(registry);
 	const port = server.start(7878);
 
-	// 7. Wire ActivityLogger → SSE
-	activityLogger.setBroadcaster(server);
+	// Wire ActivityLogger → SSE (for real-time GUI updates)
+	session.activityLogger.setBroadcaster(server);
 
 	logger.info([
 		``,
 		`┌──────────────────────────────────────────────────┐`,
-		`│  SatoPi MonitorServer (real swarm backend)       │`,
-		`│  Swarm: ${swarmName.padEnd(40)}│`,
-		`│  API:   http://127.0.0.1:${String(port).padEnd(24)}│`,
-		`│  SSE:   http://127.0.0.1:${port}/events            │`,
+		`│  SatoPi MonitorServer (multi-session backend)    │`,
+		`│  Default session: ${swarmName.padEnd(33)}│`,
+		`│  API:   http://0.0.0.0:${String(port).padEnd(24)}│`,
+		`│  SSE:   http://0.0.0.0:${port}/events?session=${swarmName.padEnd(10)}│`,
+		`│  State: http://0.0.0.0:${port}/api/session/${swarmName}/state│`,
 		`│  YAML:  ${YAML_PATH.slice(0, 37).padEnd(37)}│`,
-		`│  POST /api/run/start  → launch swarm             │`,
-		`│  POST /api/run/stop   → abort swarm              │`,
-		`│  GET  /api/after-loop/summary → last run result  │`,
-		`│  GET  /api/experience?q=...   → search lessons    │`,
 		`└──────────────────────────────────────────────────┘`,
 	].join("\n"));
 
-	// Graceful shutdown
 	const shutdown = () => {
-		logger.info("Shutting down MonitorServer...");
-		if (runManager.isRunning) {
-			runManager.stop().catch(() => {});
-		}
+		logger.info("Shutting down...");
+		if (session.runManager.isRunning) session.runManager.stop().catch(() => {});
+		registry.destroyAll().catch(() => {});
 		server.stop();
 		experienceStore.close();
 		process.exit(0);

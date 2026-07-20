@@ -263,11 +263,35 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
-		// Set up ActivityLogger + MonitorServer for GUI integration
-		const activityLogger = new ActivityLogger(stateTracker.swarmDir);
+			// Set up ActivityLogger + MonitorServer for GUI integration
+		const activityLogger = new ActivityLogger(stateTracker.swarmDir, def.name);
 		let monitorServer: MonitorServer | null = null;
 		try {
-			monitorServer = new MonitorServer(stateTracker, workspace, resolvedPath);
+				// Create minimal SessionRegistry for TUI mode
+			const { SessionRegistry: SessReg } = await import(
+				"@oh-my-pi/pi-coding-agent/swarm/session-registry"
+			);
+			const registry = new SessReg(
+				{
+					workspace,
+					yamlPath: resolvedPath,
+					modelRegistry: ctx.modelRegistry,
+					settings: pi.pi.settings,
+					experienceStore: null!,
+					roleAssetManager: null!,
+				},
+				async (_shared, name, _swarmDir) => ({
+					name,
+					swarmDir: stateTracker.swarmDir,
+					stateTracker,
+					activityLogger,
+					runManager: null!,
+					beforeLoopManager: null!,
+					steeringSink: null!,
+				}),
+			);
+			await registry.createSession(def.name);
+			monitorServer = new MonitorServer(registry);
 			const port = monitorServer.start(7878);
 			activityLogger.setBroadcaster(monitorServer);
 			pi.logger.info("MonitorServer started", { port, url: `http://127.0.0.1:${port}` });
@@ -315,6 +339,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			try {
 				const debateResult = await runPlanDebate(
 					planContent,
+					stateTracker.swarmDir,
 					workspace,
 					def.loopConfig,
 					ctx.modelRegistry,

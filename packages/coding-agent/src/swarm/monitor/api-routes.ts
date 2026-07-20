@@ -1,8 +1,14 @@
 /**
  * API Routes — REST handlers for MonitorServer.
  *
- * Provides CRUD for loop.yaml config, state snapshots, and historical
- * activity log data. All routes return JSON responses.
+ * Routes are partitioned into two groups:
+ *   1. Session-scoped — dispatched by /api/session/{name}/...
+ *      Route key format: "METHOD/path" (e.g. "GET/state", "POST/run/start")
+ *   2. Global — dispatched by their full path (e.g. "GET /api/runs")
+ *
+ * Each request receives an ApiRouteContext populated with the correct
+ * session's paths, state, and services (or shared services for global
+ * endpoints).
  */
 
 import * as path from "node:path";
@@ -11,13 +17,15 @@ import type { ExperienceStore } from "../after-loop/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
+import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
 
 export type { AfterLoopResult };
 
-/**
- * RunManager — controls real swarm loop lifecycle.
- * Implemented by standalone.ts; injected into ApiRouteContext.
- */
+// ============================================================================
+// Service interfaces — defined here, implemented externally
+// ============================================================================
+
+/** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
@@ -29,10 +37,7 @@ export interface RunManager {
 	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
 }
 
-/**
- * BeforeLoopManager — controls the Before Loop interactive planning phase.
- * Implemented by before-loop-manager.ts; injected into ApiRouteContext.
- */
+/** Manages the Before Loop interactive planning phase. */
 export interface BeforeLoopManager {
 	start(task: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
@@ -44,32 +49,82 @@ export interface BeforeLoopManager {
 	readonly isBusy: boolean;
 }
 
-/**
- * SteeringSink — accepts steering messages from the operator during a running loop.
- * The message is logged via ActivityLogger → SSE so it appears in the chat.
- */
+/** Accepts steering messages from the operator during a running loop. */
 export interface SteeringSink {
 	steer(text: string): void;
 }
 
+// ============================================================================
+// Context — per-request bag
+// ============================================================================
+
 export interface ApiRouteContext {
+	/** File-system paths for the resolved session. */
+	paths: {
+		swarmDir: string;
+		workspaceDir: string;
+		yamlPath: string;
+	};
+	/** Core state tracker (always present). */
 	stateTracker: StateTracker;
-	swarmDir: string;
-	yamlPath: string;
-	workspaceDir: string;
-	runManager?: RunManager;
-	experienceStore?: ExperienceStore;
-	beforeLoopManager?: BeforeLoopManager;
-	steeringSink?: SteeringSink;
-	/** Model registry — used to advertise actually-available models to the UI. */
-	modelRegistry?: ModelRegistry;
-	/** Role asset manager — manages role YAML files. */
-	roleAssetManager?: RoleAssetManager;
-	/** URL path parameters (e.g. :name in /api/runs/:name) */
-	params?: Record<string, string>;
+	/** Services — populated from the session or from shared services. */
+	services: {
+		runManager?: RunManager;
+		beforeLoopManager?: BeforeLoopManager;
+		steeringSink?: SteeringSink;
+		experienceStore?: ExperienceStore;
+		modelRegistry?: ModelRegistry;
+		roleAssetManager?: RoleAssetManager;
+	};
+	/** URL path parameters extracted by the router. */
+	params: Record<string, string>;
 }
 
 type RouteHandler = (req: Request, ctx: ApiRouteContext) => Response | Promise<Response>;
+
+// ============================================================================
+// Context builder
+// ============================================================================
+
+/**
+ * Build an ApiRouteContext for the active session or for shared services only.
+ *
+ * When `session` is provided, paths and per-session services come from the
+ * session; shared services come from the registry.  When `session` is
+ * omitted, all services come from shared (e.g. for global endpoints).
+ */
+export function buildApiRouteContext(
+	registry: SessionRegistry,
+	session?: SessionServices,
+): ApiRouteContext {
+	const shared = registry.shared;
+
+	const paths = {
+		swarmDir: session?.swarmDir ?? shared.workspace,
+		workspaceDir: shared.workspace,
+		yamlPath: shared.yamlPath,
+	};
+
+	const services: ApiRouteContext["services"] = {
+		modelRegistry: shared.modelRegistry,
+		experienceStore: shared.experienceStore,
+		roleAssetManager: shared.roleAssetManager,
+		runManager: session?.runManager,
+		beforeLoopManager: session?.beforeLoopManager,
+		steeringSink: session?.steeringSink,
+	};
+
+	return {
+		paths,
+		stateTracker: session?.stateTracker as StateTracker,
+		services,
+		params: {},
+	};
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 function json(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), {
@@ -88,140 +143,35 @@ async function readActivityLog(swarmDir: string): Promise<string[]> {
 	}
 }
 
+// ============================================================================
+// Route table — session-scoped keys are "METHOD/path", global are "METHOD /path"
+// ============================================================================
+
 export const apiRoutes: Record<string, RouteHandler> = {
-	// ── Role Asset Library ──────────────────────────────────────────────────
-
-	"GET /api/roles": (req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const url = new URL(req.url);
-		const status = url.searchParams.get("status") as
-			| import("../role-asset").RoleStatus
-			| null;
-		const tag = url.searchParams.get("tag") ?? undefined;
-		const q = url.searchParams.get("q") ?? undefined;
-
-		// If search params are provided, use search endpoint logic
-		if (tag || q || status) {
-			return ctx.roleAssetManager
-				.search({ tag, status: status ?? undefined, q })
-				.then((roles) => json({ roles }));
-		}
-		return ctx.roleAssetManager.list(status ?? undefined).then((roles) => json({ roles }));
-	},
-
-	"GET /api/roles/:id": (req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const id = ctx.params?.id;
-		if (!id) return json({ error: "Missing role ID" }, 400);
-		return ctx.roleAssetManager.get(id).then((role) => {
-			if (!role) return json({ error: "Role not found" }, 404);
-			return json(role);
-		});
-	},
-
-	"POST /api/roles": async (req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		try {
-			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
-			if (!body.id || !body.name || !body.prompts) {
-				return json({ error: "Missing required fields: id, name, prompts" }, 400);
-			}
-			const role = await ctx.roleAssetManager.create(body);
-			return json(role, 201);
-		} catch (err) {
-			return json({ error: String(err) }, 409);
-		}
-	},
-
-	"PUT /api/roles/:id": async (req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const id = ctx.params?.id;
-		if (!id) return json({ error: "Missing role ID" }, 400);
-		try {
-			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
-			const role = await ctx.roleAssetManager.update(id, body);
-			return json(role);
-		} catch (err) {
-			const msg = String(err);
-			if (msg.includes("not found")) return json({ error: msg }, 404);
-			return json({ error: msg }, 500);
-		}
-	},
-
-	"POST /api/roles/:id/approve": async (_req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const id = ctx.params?.id;
-		if (!id) return json({ error: "Missing role ID" }, 400);
-		try {
-			const role = await ctx.roleAssetManager.approve(id);
-			return json(role);
-		} catch (err) {
-			const msg = String(err);
-			if (msg.includes("not found")) return json({ error: msg }, 404);
-			return json({ error: msg }, 400);
-		}
-	},
-
-	"POST /api/roles/:id/deprecate": async (_req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const id = ctx.params?.id;
-		if (!id) return json({ error: "Missing role ID" }, 400);
-		try {
-			const role = await ctx.roleAssetManager.deprecate(id);
-			return json(role);
-		} catch (err) {
-			const msg = String(err);
-			if (msg.includes("not found")) return json({ error: msg }, 404);
-			return json({ error: msg }, 500);
-		}
-	},
-
-	"DELETE /api/roles/:id": async (_req, ctx) => {
-		if (!ctx.roleAssetManager) {
-			return json({ error: "Role asset manager not available" }, 503);
-		}
-		const id = ctx.params?.id;
-		if (!id) return json({ error: "Missing role ID" }, 400);
-		try {
-			const deleted = await ctx.roleAssetManager.delete(id);
-			if (!deleted) return json({ error: "Role not found" }, 404);
-			return json({ success: true });
-		} catch (err) {
-			return json({ error: String(err) }, 500);
-		}
-	},
+	// ══════════════════════════════════════════════════════════════════════
+	// Session-scoped endpoints — dispatched via /api/session/{name}/...
+	// Route key format: "METHOD/subPath" (e.g. "GET/state", "POST/run/start")
+	// ══════════════════════════════════════════════════════════════════════
 
 	// -- State -----------------------------------------------------------
-	"GET /api/state": (_req, ctx) => {
+	"GET/state": (_req, ctx) => {
 		return json(ctx.stateTracker.state);
 	},
 
 	// -- Config ----------------------------------------------------------
-	"GET /api/config": async (_req, ctx) => {
+	"GET/config": async (_req, ctx) => {
 		try {
-			const content = await Bun.file(ctx.yamlPath).text();
+			const content = await Bun.file(ctx.paths.yamlPath).text();
 			return json({ yaml: content });
 		} catch {
 			return json({ yaml: "", error: "Config file not found" }, 404);
 		}
 	},
 
-	"PUT /api/config": async (req, ctx) => {
+	"PUT/config": async (req, ctx) => {
 		try {
 			const body = (await req.json()) as { yaml: string };
-			await Bun.write(ctx.yamlPath, body.yaml);
+			await Bun.write(ctx.paths.yamlPath, body.yaml);
 			return json({ success: true });
 		} catch (err) {
 			return json({ error: String(err) }, 500);
@@ -229,129 +179,23 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	// -- History ---------------------------------------------------------
-	"GET /api/history": async (req, ctx) => {
-		// P3-3: Support ?since=<timestamp> for incremental history fetch after reconnect.
+	"GET/history": async (req, ctx) => {
 		const url = new URL(req.url);
 		const sinceParam = url.searchParams.get("since");
 		const since = sinceParam ? Number(sinceParam) : 0;
-		const lines = await readActivityLog(ctx.swarmDir);
+		const lines = await readActivityLog(ctx.paths.swarmDir);
 		const entries = lines
 			.map((line) => {
-				try {
-					return JSON.parse(line);
-				} catch {
-					return null;
-				}
+				try { return JSON.parse(line); } catch { return null; }
 			})
 			.filter((e): e is Record<string, unknown> => e !== null)
 			.filter((e) => !since || (typeof e.ts === "number" && e.ts > since));
 		return json({ entries });
 	},
 
-	// -- Runs ------------------------------------------------------------
-	"GET /api/runs": async (_req, ctx) => {
-		// List .swarm_* directories in workspace with rich metadata
-		try {
-			const fs = await import("node:fs/promises");
-			const entries = await fs.readdir(ctx.workspaceDir);
-			const swarms = entries.filter((e) => e.startsWith(".swarm_"));
-			const runs = await Promise.all(
-				swarms.map(async (dir) => {
-					const name = dir.replace(".swarm_", "");
-					const swarmDir = path.join(ctx.workspaceDir, dir);
-					let lastActivity: string | null = null;
-					let messageCount = 0;
-					let status: "idle" | "running" | "completed" | "failed" = "idle";
-					try {
-						const statePath = path.join(swarmDir, "state", "pipeline.json");
-						const stateContent = await Bun.file(statePath).text();
-						const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number; loopPhase?: string };
-						status = (st.status as typeof status) ?? "idle";
-						if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
-						else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
-					} catch {
-						// state file might not exist
-					}
-					try {
-						const logPath = path.join(swarmDir, "activity.jsonl");
-						const logContent = await Bun.file(logPath).text();
-						messageCount = logContent.trim().split("\n").filter(Boolean).length;
-					} catch {
-						// log might not exist
-					}
-					return { name, dir, lastActivity, messageCount, status };
-				}),
-			);
-			// Sort by lastActivity desc (most recent first)
-			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
-			return json({ runs });
-		} catch {
-			return json({ runs: [] });
-		}
-	},
-
-	"GET /api/runs/:name/activity": async (_req, ctx) => {
-		// Load activity log for a specific historical run
-		const name = ctx.params?.name;
-		if (!name) {
-			return json({ error: "Missing run name" }, 400);
-		}
-		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
-		const lines = await readActivityLog(swarmDir);
-		const entries = lines.map((line) => {
-			try {
-				return JSON.parse(line);
-			} catch {
-				return null;
-			}
-		}).filter(Boolean);
-		return json({ entries });
-	},
-
-	"GET /api/runs/:name": async (_req, ctx) => {
-		// Metadata-only for a specific run (used by session switcher to confirm exists)
-		const name = ctx.params?.name;
-		if (!name) {
-			return json({ error: "Missing run name" }, 400);
-		}
-		const swarmDir = path.join(ctx.workspaceDir, `.swarm_${name}`);
-		const lines = await readActivityLog(swarmDir);
-		return json({ name, dir: `.swarm_${name}`, messageCount: lines.length });
-	},
-
-	// -- Models ----------------------------------------------------------
-	"GET /api/models": (_req, ctx) => {
-		// Dynamically list models that have auth configured so the Settings UI
-		// can only pick models the user can actually call. Falls back to a
-		// minimal known-good list when the registry is not yet wired in.
-		if (!ctx.modelRegistry) {
-			return json({
-				models: [
-					{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek", tier: "worker" },
-				],
-				warning: "ModelRegistry not available; returning fallback list",
-			});
-		}
-		const available = ctx.modelRegistry.getAvailable();
-		// Surface every model the user can authenticate to, grouping by provider.
-		// Tier is a soft default — the UI may override per-role in the YAML.
-		const models = available.map((m) => ({
-			id: `${m.provider}/${m.id}`,
-			name: m.name ?? m.id,
-			provider: m.provider,
-			tier: m.id.toLowerCase().includes("reasoner") || m.id.toLowerCase().includes("pro")
-				? "cloner"
-				: m.id.toLowerCase().includes("sonnet") || m.id.toLowerCase().includes("opus")
-				? "reviewer"
-				: "worker",
-		}));
-		return json({ models });
-	},
-
-	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md
-	// Each session has its own plan.md, archives are workspace-scoped.
-	"GET /api/plan": async (_req, ctx) => {
-		const planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
+	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md -----------
+	"GET/plan": async (_req, ctx) => {
+		const planPath = path.join(ctx.paths.swarmDir, ".omp", "plan.md");
 		try {
 			const content = await Bun.file(planPath).text();
 			return json({ content, path: planPath });
@@ -360,11 +204,11 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		}
 	},
 
-	"PUT /api/plan": async (req, ctx) => {
+	"PUT/plan": async (req, ctx) => {
 		try {
 			const body = (await req.json()) as { content: string };
 			const fs = await import("node:fs/promises");
-			const planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
+			const planPath = path.join(ctx.paths.swarmDir, ".omp", "plan.md");
 			await fs.mkdir(path.dirname(planPath), { recursive: true });
 			await fs.writeFile(planPath, body.content, "utf-8");
 			return json({ success: true, path: planPath });
@@ -373,189 +217,125 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		}
 	},
 
-	// -- Plan Todos (parsed from plan.md, tracked during loop) --------------
-	"GET /api/plan/todos": (_req, ctx) => {
+	// -- Plan Todos ------------------------------------------------------
+	"GET/plan/todos": (_req, ctx) => {
 		return json({ todos: ctx.stateTracker.state.todos ?? [] });
 	},
 
 	// -- Run control -----------------------------------------------------
-	"POST /api/run/start": async (_req, ctx) => {
-		if (!ctx.runManager) {
+	"POST/run/start": async (_req, ctx) => {
+		if (!ctx.services.runManager) {
 			return json({ error: "Run manager not available" }, 503);
 		}
-		if (ctx.runManager.isRunning) {
+		if (ctx.services.runManager.isRunning) {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
-		const result = await ctx.runManager.start();
+		const result = await ctx.services.runManager.start();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/run/stop": async (_req, ctx) => {
-		if (!ctx.runManager) {
-			return json({ error: "Run manager not available" }, 503);
-		}
-		const result = await ctx.runManager.stop();
+	"POST/run/stop": async (_req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
+		const result = await ctx.services.runManager.stop();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/run/pause": async (_req, ctx) => {
-		if (!ctx.runManager) {
-			return json({ error: "Run manager not available" }, 503);
-		}
-		const result = await ctx.runManager.pause();
+	"POST/run/pause": async (_req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
+		const result = await ctx.services.runManager.pause();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/run/resume": async (_req, ctx) => {
-		if (!ctx.runManager) {
-			return json({ error: "Run manager not available" }, 503);
-		}
-		const result = await ctx.runManager.resume();
+	"POST/run/resume": async (_req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
+		const result = await ctx.services.runManager.resume();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/plan/update-and-continue": async (req, ctx) => {
-		if (!ctx.runManager) {
-			return json({ error: "Run manager not available" }, 503);
-		}
+	"POST/plan/update-and-continue": async (req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as { content?: string };
 		if (!body.content || body.content.trim().length === 0) {
 			return json({ error: "Plan content is required" }, 400);
 		}
-		const result = await ctx.runManager.updatePlanAndContinue(body.content);
+		const result = await ctx.services.runManager.updatePlanAndContinue(body.content);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"GET /api/run/status": (_req, ctx) => {
-		return json({
-			running: ctx.runManager?.isRunning ?? false,
-		});
+	"GET/run/status": (_req, ctx) => {
+		return json({ running: ctx.services.runManager?.isRunning ?? false });
 	},
 
-	// -- After Loop results ------------------------------------------------
-	"GET /api/after-loop/summary": (_req, ctx) => {
-		const result = ctx.runManager?.getLastAfterLoopResult?.();
-		if (!result) {
-			return json({ error: "No After Loop result available yet" });
-		}
+	// -- After Loop results ----------------------------------------------
+	"GET/after-loop/summary": (_req, ctx) => {
+		const result = ctx.services.runManager?.getLastAfterLoopResult?.();
+		if (!result) return json({ error: "No After Loop result available yet" });
 		return json(result);
 	},
 
-	// -- Experience store -------------------------------------------------
-	"GET /api/experience": async (req, ctx) => {
-		if (!ctx.experienceStore) {
-			return json({ error: "Experience store not available" }, 503);
-		}
-		const url = new URL(req.url);
-		const query = url.searchParams.get("q") ?? "";
-		const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
-		if (!query) {
-			return json({ results: [] });
-		}
-		const results = ctx.experienceStore.search(query, limit);
-		return json({ results });
-	},
-
-	"GET /api/experience/stats": async (_req, ctx) => {
-		if (!ctx.experienceStore) {
-			return json({ error: "Experience store not available" }, 503);
-		}
-		const stats = ctx.experienceStore.getAggregateStats();
-		return json(stats);
-	},
-
-	"GET /api/experience/recent": async (req, ctx) => {
-		if (!ctx.experienceStore) {
-			return json({ error: "Experience store not available" }, 503);
-		}
-		const url = new URL(req.url);
-		const limit = parseInt(url.searchParams.get("limit") ?? "20", 10);
-		const lessons = ctx.experienceStore.getRecentLessons(limit);
-		return json({ lessons });
-	},
-
-	// ── Before Loop (interactive planning) ─────────────────────────────────
-
-	"POST /api/before-loop/start": async (req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		if (ctx.runManager?.isRunning) {
-			return json({ error: "A swarm run is already in progress" }, 409);
-		}
+	// -- Before Loop (interactive planning) ------------------------------
+	"POST/before-loop/start": async (req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		if (ctx.services.runManager?.isRunning) return json({ error: "A swarm run is already in progress" }, 409);
 		const body = (await req.json().catch(() => ({}))) as { task?: string };
 		if (!body.task || body.task.trim().length === 0) {
 			return json({ error: "Task description is required" }, 400);
 		}
-		const result = await ctx.beforeLoopManager.start(body.task);
+		const result = await ctx.services.beforeLoopManager.start(body.task);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/before-loop/message": async (req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
+	"POST/before-loop/message": async (req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as { text?: string };
 		if (!body.text || body.text.trim().length === 0) {
 			return json({ error: "Message text is required" }, 400);
 		}
-		const result = await ctx.beforeLoopManager.sendMessage(body.text);
+		const result = await ctx.services.beforeLoopManager.sendMessage(body.text);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"GET /api/before-loop/state": (_req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		return json(ctx.beforeLoopManager.getState());
+	"GET/before-loop/state": (_req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json(ctx.services.beforeLoopManager.getState());
 	},
 
-	"GET /api/before-loop/history": (_req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		return json({ history: ctx.beforeLoopManager.getHistory() });
+	"GET/before-loop/history": (_req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json({ history: ctx.services.beforeLoopManager.getHistory() });
 	},
 
-	"POST /api/before-loop/debate": async (_req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		const result = await ctx.beforeLoopManager.runDebate();
+	"POST/before-loop/debate": async (_req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.beforeLoopManager.runDebate();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/before-loop/confirm": async (_req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		const result = await ctx.beforeLoopManager.confirm();
+	"POST/before-loop/confirm": async (_req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.beforeLoopManager.confirm();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST /api/before-loop/cancel": async (_req, ctx) => {
-		if (!ctx.beforeLoopManager) {
-			return json({ error: "Before Loop manager not available" }, 503);
-		}
-		const result = await ctx.beforeLoopManager.cancel();
+	"POST/before-loop/cancel": async (_req, ctx) => {
+		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.beforeLoopManager.cancel();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	// ── Steering (operator → running loop) ─────────────────────────────────
-
-	"POST /api/run/steer": async (req, ctx) => {
+	// -- Steering (operator → running loop) ------------------------------
+	"POST/run/steer": async (req, ctx) => {
 		const body = (await req.json().catch(() => ({}))) as { text?: string };
 		if (!body.text || body.text.trim().length === 0) {
 			return json({ error: "Steering text is required" }, 400);
 		}
-		ctx.steeringSink?.steer(body.text);
+		ctx.services.steeringSink?.steer(body.text);
 		return json({ success: true });
 	},
 
-	// ── Blocker resolution (unblock a paused loop) ──────────────────────────
-
-	"POST /api/run/resolve-blocker": async (req, ctx) => {
-		if (!ctx.runManager?.resolveBlocker) {
+	// -- Blocker resolution ----------------------------------------------
+	"POST/run/resolve-blocker": async (req, ctx) => {
+		if (!ctx.services.runManager?.resolveBlocker) {
 			return json({ error: "Blocker resolution not available" }, 503);
 		}
 		const body = (await req.json().catch(() => ({}))) as { decision?: string };
@@ -563,22 +343,18 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (!body.decision || !validDecisions.includes(body.decision)) {
 			return json({ error: `Invalid decision. Must be one of: ${validDecisions.join(", ")}` }, 400);
 		}
-		const resolved = ctx.runManager.resolveBlocker(
-			body.decision as "continue" | "skip" | "abort",
-		);
-		if (!resolved) {
-			return json({ error: "No active blockage to resolve" }, 409);
-		}
+		const resolved = ctx.services.runManager.resolveBlocker(body.decision as "continue" | "skip" | "abort");
+		if (!resolved) return json({ error: "No active blockage to resolve" }, 409);
 		return json({ success: true });
 	},
 
-	// ── Terminal (xterm.js) ──────────────────────────────────────────────
-	"GET /api/terminal/connect": (_req, _ctx) => {
+	// -- Terminal (xterm.js) ---------------------------------------------
+	"GET/terminal/connect": (_req, _ctx) => {
 		const shell = Bun.spawn(["bash", "--norc"], {
 			stdin: "pipe",
 			stdout: "pipe",
 			stderr: "pipe",
-			cwd: _ctx.workspaceDir ?? process.cwd(),
+			cwd: _ctx.paths.swarmDir || process.cwd(),
 			env: { ...process.env, TERM: "xterm-256color", HOME: process.env.HOME ?? "/root" },
 		});
 
@@ -598,21 +374,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 							const text = new TextDecoder().decode(value);
 							write(text);
 						}
-						if (label === "stdout") {
-							try { shell.kill(); } catch {}
-							controller.close();
-						}
+						if (label === "stdout") { try { shell.kill(); } catch {}; controller.close(); }
 					};
 
 					readLoop(stdoutReader, "stdout");
 					readLoop(stderrReader, "stderr");
-				} catch {
-					controller.close();
-				}
+				} catch { controller.close(); }
 			},
-			cancel() {
-				try { shell.kill(); } catch {}
-			},
+			cancel() { try { shell.kill(); } catch {}; },
 		});
 
 		return new Response(stream, {
@@ -625,20 +394,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		});
 	},
 
-	"POST /api/terminal/input": async (req, _ctx) => {
+	"POST/terminal/input": async (req, _ctx) => {
 		const body = (await req.json().catch(() => ({}))) as { input?: string };
-		if (!body.input) {
-			return json({ error: "Missing input" }, 400);
-		}
-		// Input is handled via GET /api/terminal/connect SSE — this endpoint
-		// provides a request-response interface for sending commands.
-		// In the current architecture, the shell runs per-SSE-connection.
-		// For a simpler approach, execute the command directly and return output.
+		if (!body.input) return json({ error: "Missing input" }, 400);
 		try {
 			const proc = Bun.spawn(["bash", "-c", body.input], {
 				stdout: "pipe",
 				stderr: "pipe",
-				cwd: _ctx.workspaceDir ?? process.cwd(),
+				cwd: _ctx.paths.swarmDir || process.cwd(),
 			});
 			const output = await new Response(proc.stdout).text();
 			const stderr = await new Response(proc.stderr).text();
@@ -647,5 +410,190 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		} catch (err) {
 			return json({ error: String(err) }, 500);
 		}
+	},
+
+	// ══════════════════════════════════════════════════════════════════════
+	// Global (non-session) endpoints — dispatched directly
+	// Route key format: "METHOD /path"
+	// ══════════════════════════════════════════════════════════════════════
+
+	// -- Role Asset Library ----------------------------------------------
+	"GET /api/roles": (req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const url = new URL(req.url);
+		const status = url.searchParams.get("status") as import("../role-asset").RoleStatus | null;
+		const tag = url.searchParams.get("tag") ?? undefined;
+		const q = url.searchParams.get("q") ?? undefined;
+		if (tag || q || status) {
+			return ctx.services.roleAssetManager.search({ tag, status: status ?? undefined, q })
+				.then((roles) => json({ roles }));
+		}
+		return ctx.services.roleAssetManager.list(status ?? undefined).then((roles) => json({ roles }));
+	},
+
+	"GET /api/roles/:id": (_req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const id = ctx.params.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		return ctx.services.roleAssetManager.get(id).then((role) => {
+			if (!role) return json({ error: "Role not found" }, 404);
+			return json(role);
+		});
+	},
+
+	"POST /api/roles": async (req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
+			if (!body.id || !body.name || !body.prompts) return json({ error: "Missing required fields: id, name, prompts" }, 400);
+			const role = await ctx.services.roleAssetManager.create(body);
+			return json(role, 201);
+		} catch (err) {
+			return json({ error: String(err) }, 409);
+		}
+	},
+
+	"PUT /api/roles/:id": async (req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const id = ctx.params.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
+			const role = await ctx.services.roleAssetManager.update(id, body);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"POST /api/roles/:id/approve": async (_req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const id = ctx.params.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.services.roleAssetManager.approve(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 400);
+		}
+	},
+
+	"POST /api/roles/:id/deprecate": async (_req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const id = ctx.params.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const role = await ctx.services.roleAssetManager.deprecate(id);
+			return json(role);
+		} catch (err) {
+			const msg = String(err);
+			if (msg.includes("not found")) return json({ error: msg }, 404);
+			return json({ error: msg }, 500);
+		}
+	},
+
+	"DELETE /api/roles/:id": async (_req, ctx) => {
+		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
+		const id = ctx.params.id;
+		if (!id) return json({ error: "Missing role ID" }, 400);
+		try {
+			const deleted = await ctx.services.roleAssetManager.delete(id);
+			if (!deleted) return json({ error: "Role not found" }, 404);
+			return json({ success: true });
+		} catch (err) { return json({ error: String(err) }, 500); }
+	},
+
+	// -- Models ----------------------------------------------------------
+	"GET /api/models": (_req, ctx) => {
+		if (!ctx.services.modelRegistry) {
+			return json({
+				models: [{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek", tier: "worker" }],
+				warning: "ModelRegistry not available; returning fallback list",
+			});
+		}
+		const available = ctx.services.modelRegistry.getAvailable();
+		const models = available.map((m) => ({
+			id: `${m.provider}/${m.id}`,
+			name: m.name ?? m.id,
+			provider: m.provider,
+			tier: m.id.toLowerCase().includes("reasoner") || m.id.toLowerCase().includes("pro")
+				? "cloner"
+				: m.id.toLowerCase().includes("sonnet") || m.id.toLowerCase().includes("opus")
+				? "reviewer"
+				: "worker",
+		}));
+		return json({ models });
+	},
+
+	// -- Runs (list all sessions) ----------------------------------------
+	"GET /api/runs": async (_req, ctx) => {
+		try {
+			const fs = await import("node:fs/promises");
+			const entries = await fs.readdir(ctx.paths.workspaceDir);
+			const swarms = entries.filter((e) => e.startsWith(".swarm_"));
+			const runs = await Promise.all(swarms.map(async (dir) => {
+				const name = dir.replace(".swarm_", "");
+				const swarmDir = path.join(ctx.paths.workspaceDir, dir);
+				let lastActivity: string | null = null;
+				let messageCount = 0;
+				let status: "idle" | "running" | "completed" | "failed" = "idle";
+				try {
+					const statePath = path.join(swarmDir, "state", "pipeline.json");
+					const stateContent = await Bun.file(statePath).text();
+					const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number };
+					status = (st.status as typeof status) ?? "idle";
+					if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
+					else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
+				} catch { /* no state file */ }
+				try {
+					const logContent = await Bun.file(path.join(swarmDir, "activity.jsonl")).text();
+					messageCount = logContent.trim().split("\n").filter(Boolean).length;
+				} catch { /* no log */ }
+				return { name, dir, lastActivity, messageCount, status };
+			}));
+			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
+			return json({ runs });
+		} catch { return json({ runs: [] }); }
+	},
+
+	"GET /api/runs/:name/activity": async (_req, ctx) => {
+		const name = ctx.params.name;
+		if (!name) return json({ error: "Missing run name" }, 400);
+		const lines = await readActivityLog(path.join(ctx.paths.workspaceDir, `.swarm_${name}`));
+		const entries = lines.map((line) => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean);
+		return json({ entries });
+	},
+
+	"GET /api/runs/:name": async (_req, ctx) => {
+		const name = ctx.params.name;
+		if (!name) return json({ error: "Missing run name" }, 400);
+		const lines = await readActivityLog(path.join(ctx.paths.workspaceDir, `.swarm_${name}`));
+		return json({ name, dir: `.swarm_${name}`, messageCount: lines.length });
+	},
+
+	// -- Experience store (workspace-shared) -----------------------------
+	"GET /api/experience": async (req, ctx) => {
+		if (!ctx.services.experienceStore) return json({ error: "Experience store not available" }, 503);
+		const url = new URL(req.url);
+		const query = url.searchParams.get("q") ?? "";
+		const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
+		if (!query) return json({ results: [] });
+		return json({ results: ctx.services.experienceStore.search(query, limit) });
+	},
+
+	"GET /api/experience/stats": async (_req, ctx) => {
+		if (!ctx.services.experienceStore) return json({ error: "Experience store not available" }, 503);
+		return json(ctx.services.experienceStore.getAggregateStats());
+	},
+
+	"GET /api/experience/recent": async (req, ctx) => {
+		if (!ctx.services.experienceStore) return json({ error: "Experience store not available" }, 503);
+		const url = new URL(req.url);
+		const limit = parseInt(url.searchParams.get("limit") ?? "20", 10);
+		return json({ lessons: ctx.services.experienceStore.getRecentLessons(limit) });
 	},
 };
