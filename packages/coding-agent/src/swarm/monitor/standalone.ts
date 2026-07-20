@@ -62,6 +62,8 @@ const DEFAULT_YAML = `swarm:
   auto_retry: true
   human_escalation: true
 
+  agents: {}
+
   workers:
     initial: 3
     min: 1
