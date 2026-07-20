@@ -119,6 +119,7 @@ export function buildApiRouteContext(
 	};
 
 	return {
+		registry,
 		paths,
 		stateTracker: session?.stateTracker as StateTracker,
 		services,
