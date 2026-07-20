@@ -246,13 +246,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       sseClient.onConnectionChange((connected) => {
         set({ isConnected: connected });
         if (connected && lastEventTs > 0) {
-          // Reconnected — fetch missed events since last seen timestamp.
+          // Reconnected — fetch missed events since last seen timestamp
+          // via the session-scoped history endpoint.
           import("../lib/api-client").then(({ api }) => {
-            fetch(`/api/history?since=${lastEventTs}`)
-              .then(r => r.json())
-              .then((data: { entries?: Array<{ ts: number }> }) => {
-                const missed = (data.entries ?? []).filter((e: { ts: number }) => e.ts > lastEventTs);
-                missed.forEach((e: unknown) => get().addActivity(e as import("../lib/types").ActivityEntry, true));
+            api.getHistory(lastEventTs)
+              .then(({ entries }) => {
+                const missed = (entries ?? []).filter(
+                  (e: unknown) => (e as { ts: number }).ts > lastEventTs,
+                );
+                for (const e of missed) {
+                  get().addActivity(e as import("../lib/types").ActivityEntry, true);
+                }
                 if (missed.length > 0) {
                   toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
                 }
