@@ -46,8 +46,10 @@ export const api = {
       body: JSON.stringify({ yaml }),
     }),
 
-  getHistory: () =>
-    fetchJson<{ entries: unknown[] }>(sessionUrl("/history")),
+  getHistory: (since?: number) =>
+    fetchJson<{ entries: unknown[] }>(
+      sessionUrl(`/history${since ? `?since=${since}` : ""}`),
+    ),
 
   // -- Runs (global — lists all sessions) -----------------------------------
 
