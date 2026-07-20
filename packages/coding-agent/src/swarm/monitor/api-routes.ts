@@ -17,6 +17,7 @@ import type { ExperienceStore } from "../after-loop/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
+import type { SwarmSessionManager } from "../swarm-session-manager";
 import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
 import { SwarmSessionManager } from "../swarm-session-manager";
 
@@ -76,6 +77,7 @@ export interface ApiRouteContext {
 		experienceStore?: ExperienceStore;
 		modelRegistry?: ModelRegistry;
 		roleAssetManager?: RoleAssetManager;
+		sessionManager?: SwarmSessionManager;
 	};
 	/** URL path parameters extracted by the router. */
 	params: Record<string, string>;
@@ -113,6 +115,7 @@ export function buildApiRouteContext(
 		runManager: session?.runManager,
 		beforeLoopManager: session?.beforeLoopManager,
 		steeringSink: session?.steeringSink,
+		sessionManager: session?.sessionManager,
 	};
 
 	return {
@@ -231,6 +234,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (ctx.services.runManager.isRunning) {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
+		// Rotate session file so each Run gets a clean history slate.
+		// Old files remain on disk for historical browsing.
+		try { await ctx.services.sessionManager?.rotate(); } catch { /* best-effort */ }
 		const result = await ctx.services.runManager.start();
 		return json(result, result.success ? 200 : 500);
 	},

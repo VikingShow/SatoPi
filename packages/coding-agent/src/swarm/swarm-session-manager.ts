@@ -68,7 +68,7 @@ export const CTX = {
 // ============================================================================
 
 export class SwarmSessionManager {
-	readonly #session: SessionManager;
+	#session: SessionManager;
 	readonly #swarmDir: string;
 	/** Session data dir: .swarm_{name}/.omp/sessions/ */
 	readonly #sessionDir: string;
@@ -217,6 +217,22 @@ export class SwarmSessionManager {
 	async flush(): Promise<void> { await this.#session.flush(); }
 	flushSync(): void { this.#session.flushSync(); }
 	async close(): Promise<void> { await this.#session.close(); }
+
+	/**
+	 * Rotate to a fresh session file — closes the current file and creates
+	 * a new one.  Old files stay on disk for historical browsing via
+	 * `GET /api/runs/:name/activity`.
+	 *
+	 * Call this at the start of each Run so activities from different runs
+	 * don't interleave in the same file.
+	 */
+	async rotate(): Promise<void> {
+		await this.#session.flush();
+		await this.#session.close();
+		const created = await SwarmSessionManager.create(this.#swarmDir);
+		this.#session = created.#session;
+		logger.debug("[SwarmSessionManager] rotated to new session file", { swarmDir: this.#swarmDir });
+	}
 
 	// -- Static Query Helpers ------------------------------------------------
 
