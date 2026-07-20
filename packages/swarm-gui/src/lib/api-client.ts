@@ -1,23 +1,55 @@
 /**
  * REST API client — fetch wrapper for MonitorServer endpoints.
+ *
+ * Session-scoped endpoints are prefixed with /api/session/{name}/.
+ * Global endpoints (/api/runs, /api/models, /api/roles, /api/experience)
+ * stay at their original paths.
+ *
+ * Call setActiveSession(name) before making session-scoped calls.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, LoopPhase, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
+import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
 import { fetchJson } from "@oh-my-pi/pi-web/fetch";
 
-export const api = {
-  getState: () => fetchJson<SwarmState>("/api/state"),
+/** Active session name — set by the session store on init / switch. */
+let activeSessionName: string | null = null;
 
-  getConfig: () => fetchJson<{ yaml: string; error?: string }>("/api/config"),
+export function setActiveSession(name: string | null): void {
+  activeSessionName = name;
+}
+
+export function getActiveSession(): string | null {
+  return activeSessionName;
+}
+
+function sessionUrl(path: string): string {
+  if (!activeSessionName) {
+    console.warn(`[api] No active session set when calling ${path} — falling back to /api/${path}`);
+    return `/api/${path}`;
+  }
+  return `/api/session/${encodeURIComponent(activeSessionName)}${path}`;
+}
+
+export const api = {
+  // -- Session management ---------------------------------------------------
+
+  /** Set the active session so subsequent calls are routed correctly. */
+  setSession: (name: string | null) => setActiveSession(name),
+
+  getState: () => fetchJson<SwarmState>(sessionUrl("/state")),
+
+  getConfig: () => fetchJson<{ yaml: string; error?: string }>(sessionUrl("/config")),
 
   saveConfig: (yaml: string) =>
-    fetchJson<{ success?: boolean; error?: string }>("/api/config", {
+    fetchJson<{ success?: boolean; error?: string }>(sessionUrl("/config"), {
       method: "PUT",
       body: JSON.stringify({ yaml }),
     }),
 
   getHistory: () =>
-    fetchJson<{ entries: unknown[] }>("/api/history"),
+    fetchJson<{ entries: unknown[] }>(sessionUrl("/history")),
+
+  // -- Runs (global — lists all sessions) -----------------------------------
 
   getRuns: () =>
     fetchJson<{
@@ -36,36 +68,56 @@ export const api = {
   getRunMeta: (name: string) =>
     fetchJson<{ name: string; dir: string; messageCount: number }>(`/api/runs/${encodeURIComponent(name)}`),
 
+  // -- Models (global) ------------------------------------------------------
+
   getModels: () =>
     fetchJson<{ models: ModelOption[] }>("/api/models"),
 
+  // -- Plan (session-scoped) ------------------------------------------------
+
   getPlan: () =>
-    fetchJson<{ content: string; path?: string; error?: string }>("/api/plan"),
+    fetchJson<{ content: string; path?: string; error?: string }>(sessionUrl("/plan")),
 
   savePlan: (content: string) =>
-    fetchJson<{ success?: boolean; path?: string; error?: string }>("/api/plan", {
+    fetchJson<{ success?: boolean; path?: string; error?: string }>(sessionUrl("/plan"), {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
 
   getPlanTodos: () =>
-    fetchJson<{ todos: TodoItem[] }>("/api/plan/todos"),
+    fetchJson<{ todos: TodoItem[] }>(sessionUrl("/plan/todos")),
+
+  // -- Run control (session-scoped) -----------------------------------------
 
   startRun: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/start", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/start"), {
       method: "POST",
     }),
 
   stopRun: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/stop", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/stop"), {
       method: "POST",
     }),
 
   getRunStatus: () =>
-    fetchJson<{ running: boolean }>("/api/run/status"),
+    fetchJson<{ running: boolean }>(sessionUrl("/run/status")),
+
+  pauseRun: () =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/pause"), {
+      method: "POST",
+    }),
+
+  resumeRun: () =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/resume"), {
+      method: "POST",
+    }),
+
+  // -- After Loop (session-scoped) ------------------------------------------
 
   getAfterLoopSummary: () =>
-    fetchJson<AfterLoopResult>("/api/after-loop/summary"),
+    fetchJson<AfterLoopResult>(sessionUrl("/after-loop/summary")),
+
+  // -- Experience (workspace-shared, global) ---------------------------------
 
   searchExperience: (q: string, limit = 10) =>
     fetchJson<{ results: ExperienceSearchResult[] }>(`/api/experience?q=${encodeURIComponent(q)}&limit=${limit}`),
@@ -76,70 +128,58 @@ export const api = {
   getRecentLessons: (limit = 20) =>
     fetchJson<{ lessons: Array<{ runId: string; timestamp: string; lesson: ExperienceLesson; stats: unknown }> }>(`/api/experience/recent?limit=${limit}`),
 
-  // ── Before Loop (interactive planning) ──
+  // -- Before Loop (session-scoped) ------------------------------------------
 
   startBeforeLoop: (task: string) =>
-    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/start", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/start"), {
       method: "POST",
       body: JSON.stringify({ task }),
     }),
 
   sendBeforeLoopMessage: (text: string) =>
-    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/message", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/message"), {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
 
   getBeforeLoopState: () =>
-    fetchJson<BeforeLoopState>("/api/before-loop/state"),
+    fetchJson<BeforeLoopState>(sessionUrl("/before-loop/state")),
 
   getBeforeLoopHistory: () =>
-    fetchJson<{ history: Array<{ role: string; content: string }> }>("/api/before-loop/history"),
+    fetchJson<{ history: Array<{ role: string; content: string }> }>(sessionUrl("/before-loop/history")),
 
   runDebate: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/debate", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/debate"), {
       method: "POST",
     }),
 
   confirmBeforeLoop: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/confirm", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/confirm"), {
       method: "POST",
     }),
 
   cancelBeforeLoop: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/before-loop/cancel", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/cancel"), {
       method: "POST",
     }),
 
-  // ── Run control (pause / resume) ──
-
-  pauseRun: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/pause", {
-      method: "POST",
-    }),
-
-  resumeRun: () =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/resume", {
-      method: "POST",
-    }),
-
-  // ── Steering (operator → running loop) ──
+  // -- Steering (session-scoped) --------------------------------------------
 
   sendSteering: (text: string) =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/steer", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/steer"), {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
 
-  // ── Blocker resolution (unblock a paused loop) ──
+  // -- Blocker resolution (session-scoped) -----------------------------------
 
   resolveBlocker: (decision: BlockerResolution) =>
-    fetchJson<{ success: boolean; error?: string }>("/api/run/resolve-blocker", {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/resolve-blocker"), {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
 
-  // ── Role Asset Library ──
+  // -- Role Asset Library (global) ------------------------------------------
 
   getRoles: (status?: RoleStatus) => {
     const params = status ? `?status=${encodeURIComponent(status)}` : "";
@@ -177,7 +217,6 @@ export const api = {
     }),
 
   searchRoles: (params: { tag?: string; status?: RoleStatus; q?: string }) => {
-    // GET /api/roles already supports ?q=&tag=&status= — no separate /search route needed
     const sp = new URLSearchParams();
     if (params.tag) sp.set("tag", params.tag);
     if (params.status) sp.set("status", params.status);

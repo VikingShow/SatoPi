@@ -1,13 +1,23 @@
 /**
  * SSE client — re-exports pi-web SseClient with swarm-gui URL resolution.
  *
- * Connects to MonitorServer /events endpoint.
+ * Connects to MonitorServer /events endpoint with a query parameter
+ * for the active session name so the server routes events correctly.
  */
 import { SseClient } from "@oh-my-pi/pi-web/sse";
 import type { ActivityEntry } from "./types";
 
-/** Always use the Vite proxy path — /events is proxied to backend in both dev and prod. */
+let activeSession: string | null = null;
+
+/** Update the session name — effectively reconnects the SSE stream. */
+export function setActiveSSESession(name: string | null): void {
+  activeSession = name;
+}
+
 function getSSEUrl(): string {
+  if (activeSession) {
+    return `/events?session=${encodeURIComponent(activeSession)}`;
+  }
   return "/events";
 }
 
