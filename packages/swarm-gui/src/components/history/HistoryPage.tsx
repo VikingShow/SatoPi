@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
 import { Clock, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react";
 import { api } from "../../lib/api-client";
+import { useSessionStore } from "../../stores/session-store";
 import type { ActivityEntry } from "../../lib/types";
 
 export default function HistoryPage() {
-  const [runs, setRuns] = useState<{ name: string; dir: string }[]>([]);
+  const runs = useSessionStore((s) => s.runs);
+  const loadRuns = useSessionStore((s) => s.loadRuns);
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
 
+  // Auto-refresh run list every 10s (same as SessionSwitcher)
   useEffect(() => {
-    api.getRuns().then((data) => setRuns(data.runs)).catch(() => {});
-  }, []);
+    loadRuns();
+    const id = setInterval(() => loadRuns(), 10_000);
+    return () => clearInterval(id);
+  }, [loadRuns]);
 
   useEffect(() => {
     api.getHistory().then((data) => {
@@ -50,6 +55,9 @@ export default function HistoryPage() {
               }`}
             >
               <div className="text-sm truncate">{run.name}</div>
+              {run.messageCount > 0 && (
+                <div className="text-[10px] text-neutral-600">{run.messageCount} msgs</div>
+              )}
             </button>
           ))}
         </div>

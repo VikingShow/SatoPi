@@ -31,7 +31,10 @@ export type ActivityEventType =
 	| "crash"
 	| "tool_call"
 	| "error_flag"
-	| "file_change";
+	| "file_change"
+	| "stream_start"
+	| "stream_delta"
+	| "stream_end";
 
 export interface ActivityEntry {
 	ts: number;
@@ -227,5 +230,22 @@ export class ActivityLogger {
 	/** Logged when a worker agent creates, modifies, or deletes a file. */
 	logFileChange(agentName: string, file: string, action: "created" | "modified" | "deleted", linesChanged?: number): void {
 		this.log({ ts: Date.now(), type: "file_change", worker: agentName, file, action, linesChanged });
+	}
+
+	// -- Streaming Delta (P3-1) ----------------------------------------------
+
+	/** Start of a streaming response — frontend creates a placeholder bubble. */
+	logStreamStart(msgId: string, from: string): void {
+		this.log({ ts: Date.now(), type: "stream_start", messageId: msgId, from, body: "" });
+	}
+
+	/** Incremental text chunk — frontend appends to the streaming bubble. */
+	logStreamDelta(msgId: string, from: string, delta: string): void {
+		this.log({ ts: Date.now(), type: "stream_delta", messageId: msgId, from, body: delta });
+	}
+
+	/** End of a streaming response — frontend finalises the bubble. */
+	logStreamEnd(msgId: string, from: string, finalBody: string): void {
+		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody });
 	}
 }

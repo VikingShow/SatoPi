@@ -94,7 +94,8 @@ export interface SwarmState {
 export type ActivityEventType =
   | "broadcast" | "subgroup" | "steering" | "steering_ack" | "phase" | "convergence"
   | "verdict" | "conflict" | "scaling" | "nomination" | "crash"
-  | "tool_call" | "error_flag" | "file_change";
+  | "tool_call" | "error_flag" | "file_change"
+  | "stream_start" | "stream_delta" | "stream_end";
 
 export interface ActivityEntry {
   ts: number;

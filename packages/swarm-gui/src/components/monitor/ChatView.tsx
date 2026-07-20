@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useSwarmStore } from "../../stores/swarm-store";
+import { useSessionStore } from "../../stores/session-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
@@ -149,6 +150,7 @@ export default function ChatView() {
   const isRunning = useSwarmStore((s) => s.isRunning);
   const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
   const sendBeforeLoopMessage = useSwarmStore((s) => s.sendBeforeLoopMessage);
+  const viewingSession = useSessionStore((s) => s.viewingSession);
   const sendSteering = useSwarmStore((s) => s.sendSteering);
   const startPlanning = useSwarmStore((s) => s.startPlanning);
   const runDebate = useSwarmStore((s) => s.runDebate);
@@ -213,8 +215,12 @@ export default function ChatView() {
     overscan: 5,
   });
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom: reset prevLenRef when session changes so we always
+  // scroll to bottom when entering a new session or switching to a historical one.
   const prevLenRef = useRef(displayMessages.length);
+  useEffect(() => {
+    prevLenRef.current = -1; // force scroll-to-bottom on next render
+  }, [viewingSession]);
   useEffect(() => {
     if (displayMessages.length > prevLenRef.current) {
       virtualizer.scrollToIndex(displayMessages.length - 1, { behavior: "smooth" });

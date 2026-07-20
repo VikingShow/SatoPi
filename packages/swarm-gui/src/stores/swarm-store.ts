@@ -430,13 +430,42 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const channels = new Map(state.channels);
       const messages = new Map(state.messages);
 
-      // Use a per-addActivity invocation counter to guarantee unique IDs even
-      // when multiple activities arrive in the same millisecond from the same sender
+      // ── Streaming delta: append to the last streaming bubble ──
+      if (entry.type === "stream_delta" && entry.from) {
+        const msgId = (entry as any).messageId ?? entry.from;
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        const lastMsg = msgList[msgList.length - 1];
+        if (lastMsg && lastMsg.id.startsWith(`stream-`)) {
+          lastMsg.body += (entry.body ?? "");
+        } else {
+          msgList.push({
+            id: `stream-${String(msgId)}`,
+            channelId: "roundtable",
+            from: entry.from,
+            to: "all",
+            body: entry.body ?? "",
+            timestamp: entry.ts,
+          } as ChatMessage);
+        }
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
+
+      // ── Stream end: finalise the streaming bubble ──
+      if (entry.type === "stream_end" && entry.from) {
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        const lastMsg = msgList[msgList.length - 1];
+        if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
+          lastMsg.body = entry.body;
+        }
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
+
+      // ── Standard (non-streaming) message ──
       const seq = state.activities.length;
       const derived = deriveChannel(entry, seq);
       if (derived) {
-        // In live mode, skip operator echo messages — we add them optimistically
-        // In history mode, include all messages (loading from scratch)
         const isOperatorEcho = !fromHistory &&
           (entry.type === "broadcast" || entry.type === "steering") &&
           entry.from === "operator";
@@ -451,7 +480,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
 
         if (!isOperatorEcho) {
-          const msgList = messages.get(derived.id) ?? [];
+          const msgList = [...(messages.get(derived.id) ?? [])];
           msgList.push(derived.message);
           messages.set(derived.id, msgList);
         }
