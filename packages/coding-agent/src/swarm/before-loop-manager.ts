@@ -49,6 +49,27 @@ const SOCRATES_DEFAULT_RESTRICTION: AgentToolRestriction = {
 	allowed: ["read", "write_file", "grep", "find", "glob"],
 };
 
+/**
+ * Extract the human-readable message from a Socrates response. Socrates is
+ * instructed to respond in plain natural language but occasionally wraps
+ * its reply in a JSON envelope like {"status":"...","message":"..."}.
+ * For those cases we surface only the `message` field. Otherwise we
+ * return the original text untouched.
+ */
+function parseSocratesResponse(raw: string): string {
+	const trimmed = raw.trim();
+	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return raw;
+	try {
+		const obj = JSON.parse(trimmed);
+		if (typeof obj?.message === "string" && obj.message.length > 0) {
+			return obj.message;
+		}
+	} catch {
+		// not JSON — return original
+	}
+	return raw;
+}
+
 // ============================================================================
 // BeforeLoopManager
 // ============================================================================
@@ -179,13 +200,16 @@ export class BeforeLoopManager {
 		this.#activityLogger.logPhase("before-loop-start");
 		this.#activityLogger.logBroadcast("operator", task);
 
-		// Generate planning prompt (queries experience store for past lessons)
-		const prompt = await generatePlanningPrompt(
+		// Generate planning prompt (queries experience store for past lessons).
+		// The full prompt is sent to the LLM but we only persist the user-facing
+		// task in the conversation history so the chat UI doesn't leak the
+		// SOCRATES_SYSTEM_PROMPT and planning template into the bubble stream.
+		await generatePlanningPrompt(
 			{ workspace: this.#workspace, loopConfig, taskDescription: task },
 			this.#experienceStore,
 		);
 
-		this.#conversation.push({ role: "user", content: prompt });
+		this.#conversation.push({ role: "user", content: task });
 		await this.#saveConversation();
 
 		// Snapshot plan mtime before Socrates runs
@@ -394,12 +418,17 @@ export class BeforeLoopManager {
 
 			const output = result.output || "(no output)";
 
+			// Strip system-instruction contamination: if Socrates returns a JSON
+			// wrapper like {"status":"...","message":"..."} we extract the
+			// human-readable message field for display.
+			const displayOutput = parseSocratesResponse(output);
+
 			// Add to conversation history
-			this.#conversation.push({ role: "assistant", content: output });
+			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
 
 			// Push Socrates response to frontend via SSE
-			this.#activityLogger.logBroadcast("socrates", output);
+			this.#activityLogger.logBroadcast("socrates", displayOutput);
 
 			// Check if plan.md was written or updated during this run
 			const newMtime = await this.#getPlanMtime();
