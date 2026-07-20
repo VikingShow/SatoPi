@@ -6,14 +6,9 @@
 import { SseClient } from "@oh-my-pi/pi-web/sse";
 import type { ActivityEntry } from "./types";
 
-/** Resolve the SSE endpoint URL based on runtime environment. */
+/** Always use the Vite proxy path — /events is proxied to backend in both dev and prod. */
 function getSSEUrl(): string {
-  const host = window.location.hostname;
-  const port = window.location.port;
-  // Prod or vite dev on port 80 → use reverse proxy
-  if (port && (port === "80" || port === "")) return "/events";
-  // Dev mode → direct connection
-  return `http://${host}:7878/events`;
+  return "/events";
 }
 
 export const sseClient = new SseClient<ActivityEntry>(getSSEUrl());

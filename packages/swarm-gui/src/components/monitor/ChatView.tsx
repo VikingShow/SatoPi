@@ -188,8 +188,8 @@ export default function ChatView() {
     }
     for (let i = 0; i < channelMessages.length; i++) {
       const msg = channelMessages[i];
-      // Fallback to index-based key for messages without a stable id
-      result.push({ type: "message", key: msg.id || `m-${i}-${msg.timestamp}`, msg });
+      // Always include index to guarantee unique keys
+      result.push({ type: "message", key: `m-${i}-${msg.id || msg.timestamp}`, msg });
     }
     return result;
   }, [systemEvents, channelMessages]);

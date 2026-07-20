@@ -456,7 +456,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	"GET /api/after-loop/summary": (_req, ctx) => {
 		const result = ctx.runManager?.getLastAfterLoopResult?.();
 		if (!result) {
-			return json({ error: "No After Loop result available yet" }, 404);
+			return json({ error: "No After Loop result available yet" });
 		}
 		return json(result);
 	},
