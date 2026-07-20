@@ -1044,6 +1044,20 @@ export class LoopController {
 			// 6. Broadcast feedback and accumulate for cross-iteration memory
 			const feedback = verdict.findings.join("\n");
 			clonerFeedbackHistory.push(feedback);
+
+			// Compaction: keep at most MAX_FEEDBACK_ENTRIES individual entries.
+			// Older entries are summarised into a single compacted prefix line
+			// so Workers don't receive an ever-growing wall of text.
+			const MAX_FEEDBACK_ENTRIES = 3;
+			while (clonerFeedbackHistory.length > MAX_FEEDBACK_ENTRIES) {
+				const oldest = clonerFeedbackHistory.shift()!;
+				if (clonerFeedbackHistory[0]?.startsWith("[compacted]")) {
+					clonerFeedbackHistory[0] = `[compacted] Previous rounds: ${oldest.slice(60)}...`;
+				} else {
+					clonerFeedbackHistory.unshift(`[compacted] ${oldest.slice(0, 120)}...`);
+					break; // only one compacted entry at the front
+				}
+			}
 			await this.#channel.broadcast(this.#clonerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
 			if (iter === this.#loopConfig.maxIterations - 1) {
 				const status = this.#loopConfig.humanEscalation ? "escalated" : "failed";
