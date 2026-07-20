@@ -305,6 +305,9 @@ export class StateTracker {
 	 * Uses a serialized write chain so concurrent updates from parallel
 	 * agent waves are properly ordered. Rapid successive calls within
 	 * the same microtask tick are coalesced into a single write.
+	 *
+	 * Returns the write chain promise so callers (e.g. tests) can await
+	 * the actual write completion.
 	 */
 	async #persist(): Promise<void> {
 		if (this.#persistScheduled) return;
@@ -323,5 +326,6 @@ export class StateTracker {
 				// still accurate for the current run.
 			}
 		});
+		return this.#writeChain;
 	}
 }

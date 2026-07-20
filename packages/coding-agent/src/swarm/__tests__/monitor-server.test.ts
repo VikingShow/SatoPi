@@ -12,6 +12,7 @@ import { StateTracker } from "../state";
 import { MonitorServer } from "../monitor/server";
 import { ActivityLogger } from "../activity-logger";
 import type { ActivityEntry } from "../activity-logger";
+import { SwarmSessionManager } from "../swarm-session-manager";
 
 describe("MonitorServer", () => {
 	let tmpDir: string;
@@ -76,7 +77,7 @@ describe("MonitorServer", () => {
 	});
 
 	it("streams SSE events when ActivityLogger broadcasts", async () => {
-		const logger = new ActivityLogger(stateTracker.swarmDir);
+		const logger = new ActivityLogger(stateTracker.swarmDir, "test");
 		logger.setBroadcaster(server);
 
 		// Connect to SSE using fetch (EventSource not available in Bun test env)
@@ -124,16 +125,20 @@ describe("MonitorServer", () => {
 		expect(received[1].body).toBe("world");
 	});
 
-	it("returns history entries from activity.jsonl", async () => {
-		// Write some test entries
-		const logger = new ActivityLogger(stateTracker.swarmDir);
+	it("returns history entries from session.jsonl", async () => {
+		// Write some test entries via SwarmSessionManager-backed logger
+		const sm = await SwarmSessionManager.create(stateTracker.swarmDir);
+		const logger = new ActivityLogger(stateTracker.swarmDir, "test");
+		logger.setSessionManager(sm);
 		logger.logBroadcast("worker-1", "test message");
-		await new Promise((r) => setTimeout(r, 200));
+		await sm.flush();
 
 		const res = await fetch(`http://127.0.0.1:${port}/api/history`);
 		expect(res.status).toBe(200);
 		const data = await res.json();
 		expect(data.entries.length).toBeGreaterThanOrEqual(1);
+
+		await sm.close();
 	});
 
 	it("returns available models", async () => {

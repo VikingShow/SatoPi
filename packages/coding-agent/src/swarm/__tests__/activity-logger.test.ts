@@ -1,33 +1,42 @@
 /**
- * ActivityLogger unit tests.
+ * ActivityLogger unit tests — verifies event capture via SwarmSessionManager.
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
-import * as fs from "node:fs/promises";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as path from "node:path";
 import * as os from "node:os";
 import { ActivityLogger, type ActivityEntry, type ActivityBroadcaster } from "../activity-logger";
+import { SwarmSessionManager } from "../swarm-session-manager";
 
 describe("ActivityLogger", () => {
 	let tmpDir: string;
 	let logger: ActivityLogger;
+	let sm: SwarmSessionManager;
 
 	beforeEach(async () => {
 		tmpDir = path.join(os.tmpdir(), `activity-test-${Date.now()}`);
-		await fs.mkdir(tmpDir, { recursive: true });
-		logger = new ActivityLogger(tmpDir);
+		sm = await SwarmSessionManager.create(tmpDir);
+		logger = new ActivityLogger(tmpDir, "test-session");
+		logger.setSessionManager(sm);
 	});
 
-	it("writes broadcast events to activity.jsonl", async () => {
+	afterEach(async () => {
+		try { await sm.close(); } catch { /* cleanup */ }
+	});
+
+	/** Helper: flush session manager then read activity entries. */
+	async function readEntries(): Promise<ActivityEntry[]> {
+		await sm.flush();
+		return SwarmSessionManager.readActivityEntries(tmpDir);
+	}
+
+	it("writes broadcast events to session.jsonl", async () => {
 		logger.logBroadcast("worker-1", "I'll handle auth");
-		// Wait for write queue to flush
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const lines = content.trim().split("\n");
-		expect(lines.length).toBe(1);
+		const entries = await readEntries();
+		expect(entries.length).toBe(1);
 
-		const entry = JSON.parse(lines[0]) as ActivityEntry;
+		const entry = entries[0];
 		expect(entry.type).toBe("broadcast");
 		expect(entry.from).toBe("worker-1");
 		expect(entry.to).toBe("all");
@@ -37,35 +46,30 @@ describe("ActivityLogger", () => {
 
 	it("writes subgroup events", async () => {
 		logger.logSubGroup("auth-team", "worker-1", "need help with JWT");
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
+		const entries = await readEntries();
+		const entry = entries[0];
 		expect(entry.type).toBe("subgroup");
 		expect(entry.to).toBe("auth-team");
 	});
 
 	it("writes steering events", async () => {
 		logger.logSteering("cloner-1", "worker-2", "focus on edge cases");
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("steering");
-		expect(entry.from).toBe("cloner-1");
-		expect(entry.to).toBe("worker-2");
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("steering");
+		expect(entries[0].from).toBe("cloner-1");
+		expect(entries[0].to).toBe("worker-2");
 	});
 
 	it("writes phase events", async () => {
 		logger.logPhase("workers", 2, 1);
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("phase");
-		expect(entry.phase).toBe("workers");
-		expect(entry.round).toBe(2);
-		expect(entry.iteration).toBe(1);
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("phase");
+		expect(entries[0].phase).toBe("workers");
+		expect(entries[0].round).toBe(2);
+		expect(entries[0].iteration).toBe(1);
 	});
 
 	it("writes verdict events with all fields", async () => {
@@ -80,98 +84,87 @@ describe("ActivityLogger", () => {
 			praisedWorkers: ["worker-1"],
 			criticizedWorkers: ["worker-3"],
 		});
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("verdict");
-		expect(entry.passed).toBe(false);
-		expect(entry.approval).toBe(1);
-		expect(entry.total).toBe(3);
-		expect(entry.findings).toEqual(["missing validation", "no error handling"]);
-		expect(entry.praised).toEqual(["worker-1"]);
-		expect(entry.criticized).toEqual(["worker-3"]);
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("verdict");
+		expect(entries[0].passed).toBe(false);
+		expect(entries[0].approval).toBe(1);
+		expect(entries[0].total).toBe(3);
+		expect(entries[0].findings).toEqual(["missing validation", "no error handling"]);
+		expect(entries[0].praised).toEqual(["worker-1"]);
+		expect(entries[0].criticized).toEqual(["worker-3"]);
 	});
 
 	it("writes conflict events", async () => {
 		logger.logConflict("src/auth.ts", ["worker-1", "worker-2"], "overlap");
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("conflict");
-		expect(entry.file).toBe("src/auth.ts");
-		expect(entry.writers).toEqual(["worker-1", "worker-2"]);
-		expect(entry.severity).toBe("overlap");
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("conflict");
+		expect(entries[0].file).toBe("src/auth.ts");
+		expect(entries[0].writers).toEqual(["worker-1", "worker-2"]);
+		expect(entries[0].severity).toBe("overlap");
 	});
 
 	it("writes scaling events", async () => {
 		logger.logScaling("add", "worker-4", "cloner suggestion +1");
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("scaling");
-		expect(entry.action).toBe("add");
-		expect(entry.worker).toBe("worker-4");
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("scaling");
+		expect(entries[0].action).toBe("add");
+		expect(entries[0].worker).toBe("worker-4");
 	});
 
 	it("writes nomination events", async () => {
 		logger.logNomination(1, "worker-1", { "worker-1": ["worker-2", "worker-3"] });
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("nomination");
-		expect(entry.elected).toBe("worker-1");
-		expect(entry.votes).toEqual({ "worker-1": ["worker-2", "worker-3"] });
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("nomination");
+		expect(entries[0].elected).toBe("worker-1");
+		expect(entries[0].votes).toEqual({ "worker-1": ["worker-2", "worker-3"] });
 	});
 
 	it("writes crash events", async () => {
 		logger.logCrash("worker-3", "signal SIGTERM");
-		await new Promise((r) => setTimeout(r, 100));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const entry = JSON.parse(content.trim()) as ActivityEntry;
-		expect(entry.type).toBe("crash");
-		expect(entry.worker).toBe("worker-3");
-		expect(entry.error).toBe("signal SIGTERM");
+		const entries = await readEntries();
+		expect(entries[0].type).toBe("crash");
+		expect(entries[0].worker).toBe("worker-3");
+		expect(entries[0].error).toBe("signal SIGTERM");
 	});
 
 	it("pushes events to broadcaster when set", async () => {
 		const received: ActivityEntry[] = [];
 		const broadcaster: ActivityBroadcaster = {
-			broadcast(entry: ActivityEntry) {
+			broadcast(_sessionName: string, entry: ActivityEntry) {
 				received.push(entry);
 			},
 		};
 		logger.setBroadcaster(broadcaster);
 
 		logger.logBroadcast("worker-1", "test message");
-		await new Promise((r) => setTimeout(r, 100));
 
+		const entries = await readEntries();
 		expect(received.length).toBe(1);
 		expect(received[0].type).toBe("broadcast");
 		expect(received[0].body).toBe("test message");
+		expect(entries.length).toBe(1);
 	});
 
-	it("preserves event ordering in file", async () => {
+	it("preserves event ordering in session", async () => {
 		logger.logBroadcast("w1", "first");
 		logger.logBroadcast("w2", "second");
 		logger.logBroadcast("w3", "third");
-		await new Promise((r) => setTimeout(r, 500));
 
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		const lines = content.trim().split("\n");
-		expect(lines.length).toBe(3);
-		expect(JSON.parse(lines[0]).body).toBe("first");
-		expect(JSON.parse(lines[1]).body).toBe("second");
-		expect(JSON.parse(lines[2]).body).toBe("third");
+		const entries = await readEntries();
+		expect(entries.length).toBe(3);
+		expect(entries[0].body).toBe("first");
+		expect(entries[1].body).toBe("second");
+		expect(entries[2].body).toBe("third");
 	});
 
 	it("does not crash when broadcaster throws", async () => {
 		const badBroadcaster: ActivityBroadcaster = {
-			broadcast() {
+			broadcast(_sessionName: string, _entry: ActivityEntry) {
 				throw new Error("SSE connection closed");
 			},
 		};
@@ -179,10 +172,18 @@ describe("ActivityLogger", () => {
 
 		// Should not throw
 		logger.logBroadcast("worker-1", "test");
-		await new Promise((r) => setTimeout(r, 100));
 
-		// File should still be written
-		const content = await fs.readFile(path.join(tmpDir, "activity.jsonl"), "utf-8");
-		expect(content.trim().split("\n")).toHaveLength(1);
+		const entries = await readEntries();
+		// Entry should still be persisted even though SSE broadcast failed
+		expect(entries).toHaveLength(1);
+	});
+
+	it("does not crash when sessionManager is not set", async () => {
+		const bareLogger = new ActivityLogger(tmpDir, "bare");
+		// Should not throw — events are SSE-only
+		bareLogger.logBroadcast("worker-1", "no persistence");
+
+		const entries = await SwarmSessionManager.readActivityEntries(tmpDir);
+		expect(entries.length).toBe(0); // nothing persisted
 	});
 });

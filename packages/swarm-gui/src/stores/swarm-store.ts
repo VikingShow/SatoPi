@@ -199,7 +199,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           set({ beforeLoopState: blState });
           // Conversation history is NOT loaded separately — the activity log
           // replay below (api.getHistory → addActivity) already carries every
-          // broadcast event (operator + socrates messages) from activity.jsonl.
+          // broadcast event (operator + socrates messages) from session.jsonl.
           // Loading conversation turns in parallel would create duplicate
           // ChatMessages with different IDs, doubling every message in chat.
         } catch {

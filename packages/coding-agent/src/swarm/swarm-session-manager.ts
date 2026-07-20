@@ -41,7 +41,6 @@
  */
 
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { FileSessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
 import { logger } from "@oh-my-pi/pi-utils";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -71,33 +70,65 @@ export const CTX = {
 export class SwarmSessionManager {
 	readonly #session: SessionManager;
 	readonly #swarmDir: string;
+	/** Session data dir: .swarm_{name}/.omp/sessions/ */
+	readonly #sessionDir: string;
 
-	private constructor(session: SessionManager, swarmDir: string) {
+	private constructor(session: SessionManager, swarmDir: string, sessionDir: string) {
 		this.#session = session;
 		this.#swarmDir = swarmDir;
+		this.#sessionDir = sessionDir;
+	}
+
+	/** The session dir under the swarm directory. */
+	static sessionDir(swarmDir: string): string {
+		return path.join(swarmDir, ".omp", "sessions");
 	}
 
 	// -- Factory --------------------------------------------------------------
 
-	/** Create a new SwarmSessionManager bound to the swarm directory. */
+	/** Create a new SwarmSessionManager. Forces session file creation in the swarm dir. */
 	static async create(swarmDir: string): Promise<SwarmSessionManager> {
-		const session = SessionManager.create(swarmDir);
-		logger.debug("[SwarmSessionManager] created", { swarmDir });
-		return new SwarmSessionManager(session, swarmDir);
+		const sessionDir = SwarmSessionManager.sessionDir(swarmDir);
+		await fs.mkdir(sessionDir, { recursive: true });
+
+		// SessionManager's lazy gate only creates files after an assistant
+		// message. Since Swarm uses custom entries exclusively, we manually
+		// bootstrap the session header file, then open it with SessionManager.
+		const id = crypto.randomUUID();
+		const timestamp = new Date().toISOString();
+		const safeTs = timestamp.replace(/[:.]/g, "-");
+		const filePath = path.join(sessionDir, `${safeTs}_${id}.jsonl`);
+
+		// Write a standard OH-MY-PI session header (matches createEmptySessionFile format).
+		const header = {
+			type: "session",
+			version: 1,
+			id,
+			timestamp,
+			cwd: path.resolve(swarmDir),
+		};
+		await fs.writeFile(filePath, JSON.stringify(header) + "\n", "utf-8");
+
+		const session = await SessionManager.open(filePath);
+		logger.debug("[SwarmSessionManager] created", { swarmDir, filePath });
+		return new SwarmSessionManager(session, swarmDir, sessionDir);
 	}
 
 	/** Open an existing session by file path. */
 	static async open(filePath: string, swarmDir: string): Promise<SwarmSessionManager> {
 		const session = await SessionManager.open(filePath);
-		return new SwarmSessionManager(session, swarmDir);
+		const sessionDir = path.dirname(filePath);
+		return new SwarmSessionManager(session, swarmDir, sessionDir);
 	}
 
-	/** Open or create — convenience. */
+	/** Open or create. */
 	static async openOrCreate(swarmDir: string): Promise<SwarmSessionManager> {
-		// Try to open existing session file at swarmDir/.omp/session.jsonl
+		const sessionDir = SwarmSessionManager.sessionDir(swarmDir);
 		try {
-			const sessions = await SessionManager.list(swarmDir);
+			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length > 0) {
+				// Open the most recently modified session
+				sessions.sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? ""));
 				return SwarmSessionManager.open(sessions[0].path, swarmDir);
 			}
 		} catch {
@@ -189,17 +220,29 @@ export class SwarmSessionManager {
 
 	// -- Static Query Helpers ------------------------------------------------
 
-	/** Known session.jsonl path for a given swarm directory. */
-	static sessionFilePath(swarmDir: string): string {
-		return path.join(swarmDir, ".omp", "session.jsonl");
+	/**
+	 * Find the latest session file in the swarm's session directory.
+	 * Returns the file path, or null if no sessions exist.
+	 */
+	static async findLatestSessionFile(swarmDir: string): Promise<string | null> {
+		const sessionDir = SwarmSessionManager.sessionDir(swarmDir);
+		try {
+			const sessions = await SessionManager.list(swarmDir, sessionDir);
+			if (sessions.length === 0) return null;
+			sessions.sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? ""));
+			return sessions[0].path;
+		} catch {
+			return null;
+		}
 	}
 
 	/**
-	 * Read all raw entries from the session.jsonl file.
+	 * Read all raw entries from the swarm's latest session file.
 	 * Each entry is a JSON line: { type: "custom", customType: "swarm_*", data: {...}, ... }.
 	 */
 	static async readRawEntries(swarmDir: string): Promise<Array<Record<string, unknown>>> {
-		const filePath = SwarmSessionManager.sessionFilePath(swarmDir);
+		const filePath = await SwarmSessionManager.findLatestSessionFile(swarmDir);
+		if (!filePath) return [];
 		try {
 			const content = await fs.readFile(filePath, "utf-8");
 			return content.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
@@ -210,7 +253,7 @@ export class SwarmSessionManager {
 
 	/**
 	 * Read all activity entries (customType === "swarm_activity") from the
-	 * session.jsonl file.  Returns the unwrapped data payloads.
+	 * session file.  Returns the unwrapped data payloads.
 	 */
 	static async readActivityEntries(swarmDir: string): Promise<ActivityEntry[]> {
 		const raw = await SwarmSessionManager.readRawEntries(swarmDir);
@@ -220,7 +263,7 @@ export class SwarmSessionManager {
 	}
 
 	/**
-	 * Read the most recent swarm state entry from session.jsonl.
+	 * Read the most recent swarm state entry from the session file.
 	 * Returns null if no state has been persisted yet.
 	 */
 	static async readLatestState(swarmDir: string): Promise<Partial<SwarmState> | null> {
@@ -235,7 +278,7 @@ export class SwarmSessionManager {
 	}
 
 	/**
-	 * Count all activity entries in the session.jsonl file.
+	 * Count all activity entries in the session file.
 	 */
 	static async countActivityEntries(swarmDir: string): Promise<number> {
 		const entries = await SwarmSessionManager.readActivityEntries(swarmDir);
