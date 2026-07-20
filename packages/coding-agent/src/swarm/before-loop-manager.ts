@@ -384,7 +384,7 @@ export class BeforeLoopManager {
 		this.#activityLogger.logStreamStart(msgId, "socrates");
 
 		// Track streaming deltas so the frontend sees output in real-time.
-		let lastSentIdx = -1;
+		let sentLen = 0;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();
@@ -419,9 +419,16 @@ export class BeforeLoopManager {
 				keepAlive: false,
 				modelOverride: loopConfig?.model ?? undefined,
 				onProgress: (progress) => {
-					const outputLines = progress.recentOutput ?? [];
-					while (lastSentIdx + 1 < outputLines.length) {
-						lastSentIdx++;
+					// recentOutput is reversed (newest first).  Build full
+					// text, then send only characters not yet delivered.
+					const lines = [...(progress.recentOutput ?? [])].reverse();
+					const currentText = lines.join("\n");
+					if (currentText.length > sentLen) {
+						const delta = currentText.slice(sentLen);
+						sentLen = currentText.length;
+						this.#activityLogger.logStreamDelta(msgId, "socrates", delta);
+					}
+				},
 						this.#activityLogger.logStreamDelta(msgId, "socrates", outputLines[lastSentIdx]);
 					}
 				},
