@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, ChevronDown, ChevronUp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
@@ -125,7 +125,17 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : "bg-background-elevated text-neutral-200"
         }`}
       >
-        <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+        {(msg as any).thinking ? (
+            <details className="mb-1.5">
+              <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-400">
+                Thinking
+              </summary>
+              <div className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap border-l-2 border-neutral-700 pl-2 max-h-32 overflow-y-auto">
+                {(msg as any).thinking}
+              </div>
+            </details>
+          ) : null}
+          <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
       </div>
     </div>
   );

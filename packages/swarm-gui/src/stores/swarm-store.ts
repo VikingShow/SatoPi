@@ -443,6 +443,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         const lastMsg = msgList[msgList.length - 1];
         if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
           lastMsg.body = entry.body;
+          if (entry.thinking) lastMsg.thinking = entry.thinking;
         }
         messages.set("roundtable", msgList);
         return { activities, channels, messages };

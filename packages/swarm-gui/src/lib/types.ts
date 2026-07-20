@@ -139,6 +139,8 @@ export interface ActivityEntry {
   recoverable?: boolean;
   suggestion?: string;
   linesChanged?: number;
+  /** Chain-of-thought reasoning from the model. */
+  thinking?: string;
 }
 
 export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
@@ -152,6 +154,8 @@ export interface ChatMessage extends PiChatMessage {
   to: string;
   threadId?: string;
   threadReplies?: ChatMessage[];
+  /** Chain-of-thought reasoning from the model, displayed in a collapsible section. */
+  thinking?: string;
 }
 
 export interface ModelOption {
