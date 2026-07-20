@@ -90,12 +90,19 @@ export class MonitorServer implements ActivityBroadcaster {
 								: ": connected\n\n";
 							controller.enqueue(new TextEncoder().encode(handshake));
 							const unsub = bus.subscribe(sessionName, controller);
+							
+							// SSE keepalive — prevents browser from closing the
+							// connection during long model thinking phases.
+							const keepalive = setInterval(() => {
+								try { controller.enqueue(new TextEncoder().encode(": keepalive\n\n")); } catch { /* closed */ }
+							}, 15_000);
 
 							// Cleanup on disconnect
 							/** @ts-expect-error — lib mismatch between Bun and DOM ReadableStream */
 							req.signal.addEventListener("abort", () => {
 								unsub();
 								try { controller.close(); } catch { /* closed */ }
+							clearInterval(keepalive);
 							});
 						},
 					});

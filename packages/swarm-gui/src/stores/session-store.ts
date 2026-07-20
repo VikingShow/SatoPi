@@ -85,6 +85,11 @@ export const useSessionStore = create<SessionStore>()(
       // If YAML update fails, still continue — backend will use the new name on next run
     }
 
+    // Switch the api/sse clients to the new session BEFORE refreshing
+    // state, otherwise refreshState() reads from the old session.
+    setActiveSession(newName);
+    setActiveSSESession(newName);
+
     // Reset the swarm store to a clean idle state
     useSwarmStore.setState({
       swarmState: null,
@@ -101,13 +106,12 @@ export const useSessionStore = create<SessionStore>()(
       error: null,
     });
 
-    // Refresh state from backend — the BACKEND is source of truth for the active swarm name.
-    // We stored the new name in YAML but the backend holds the live StateTracker, so
-    // activeSwarm MUST follow whatever the backend reports (e.g. old name until restart).
+    // Update the session store so the subscribe doesn't revert our sync.
+    set({ activeSwarm: newName, viewingSession: null });
+
+    // Refresh state from the new session.
     const swarmStore = useSwarmStore.getState();
     await swarmStore.refreshState();
-    const backendName = useSwarmStore.getState().swarmState?.name ?? newName;
-    set({ activeSwarm: backendName, viewingSession: null });
     // Immediately add the new session to the runs list so it appears in the UI
     // (it won't have a .swarm_* directory until the first run, but we show it anyway)
     const currentRuns = get().runs;
