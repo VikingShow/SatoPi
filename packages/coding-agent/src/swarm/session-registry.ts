@@ -21,6 +21,8 @@ import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { RoleAssetManager } from "./role-asset";
+import type { SwarmSessionManager } from "./swarm-session-manager";
+import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================
 // Types
@@ -46,6 +48,8 @@ export interface SessionServices {
 	beforeLoopManager: BeforeLoopManager;
 	steeringSink: SteeringSink;
 	abortController: AbortController;
+	/** OH-MY-PI-based session persistence (replaces pipeline.json, activity.jsonl, conversation.json). */
+	sessionManager?: SwarmSessionManager;
 }
 
 export type SessionStatus =
@@ -128,9 +132,20 @@ export class SessionRegistry {
 		const services = await this.#factory(this.#shared, name, swarmDir);
 		const abortController = new AbortController();
 
+		// Create SwarmSessionManager for unified OH-MY-PI persistence.
+		// This replaces pipeline.json, activity.jsonl, and conversation.json.
+		let sessionManager: SwarmSessionManager | undefined;
+		try {
+			sessionManager = await SwarmSessionManager.openOrCreate(swarmDir);
+			logger.info("[SessionRegistry] SwarmSessionManager created", { name, swarmDir });
+		} catch (err) {
+			logger.warn("[SessionRegistry] SwarmSessionManager unavailable — falling back to legacy persistence", { error: String(err) });
+		}
+
 		const session: SessionServices = {
 			...services,
 			abortController,
+			sessionManager,
 		};
 
 		this.#sessions.set(name, session);
@@ -141,6 +156,11 @@ export class SessionRegistry {
 		const session = this.#sessions.get(name);
 		if (!session) return;
 		session.abortController.abort();
+		// Flush and close SwarmSessionManager before cleanup
+		if (session.sessionManager) {
+			try { await session.sessionManager.flush(); } catch { /* best-effort */ }
+			try { await session.sessionManager.close(); } catch { /* best-effort */ }
+		}
 		this.#sessions.delete(name);
 	}
 
