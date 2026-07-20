@@ -1,8 +1,8 @@
 /**
- * Filesystem state tracker for swarm pipeline execution.
+ * In-memory state tracker for swarm pipeline execution.
  *
- * Persists pipeline and per-agent state to `.swarm_<name>/` in the workspace.
- * Supports resumability by loading state from disk.
+ * Persists state via SwarmSessionManager → session.jsonl (OH-MY-PI SessionManager).
+ * Per-agent logs are still written to `.swarm_<name>/logs/` for forensic debugging.
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -88,7 +88,7 @@ export class StateTracker {
 	#swarmDir: string;
 	#state: SwarmState;
 	/**
-	 * Serialized write queue for pipeline.json persistence.
+	 * Serialized write chain for session.jsonl persistence.
 	 * All `#persist()` calls are chained on this promise so concurrent
 	 * updates from parallel agent waves never interleave JSON writes.
 	 */
@@ -298,25 +298,13 @@ export class StateTracker {
 		await fs.appendFile(logPath, `[${timestamp}] ${message}\n`);
 	}
 
-	async load(): Promise<SwarmState | null> {
-		const statePath = path.join(this.#swarmDir, "state", "pipeline.json");
-		try {
-			const content = await Bun.file(statePath).text();
-			this.#state = JSON.parse(content) as SwarmState;
-			return this.#state;
-		} catch {
-			return null;
-		}
-	}
-
 	/**
-	 * Persist the current in-memory state to pipeline.json and (if connected)
-	 * to SwarmSessionManager for unified session.jsonl persistence.
+	 * Persist the current in-memory state snapshot to session.jsonl via
+	 * SwarmSessionManager.
 	 *
 	 * Uses a serialized write chain so concurrent updates from parallel
-	 * agent waves never interleave or corrupt the JSON file. Rapid
-	 * successive calls within the same microtask tick are coalesced into
-	 * a single write.
+	 * agent waves are properly ordered. Rapid successive calls within
+	 * the same microtask tick are coalesced into a single write.
 	 */
 	async #persist(): Promise<void> {
 		if (this.#persistScheduled) return;
@@ -328,11 +316,6 @@ export class StateTracker {
 			// queued behind us see fresh data.
 			const snapshot = this.#state;
 			try {
-				await Bun.write(
-					path.join(this.#swarmDir, "state", "pipeline.json"),
-					JSON.stringify(snapshot, null, 2),
-				);
-				// OH-MY-PI dual-write: log to session.jsonl
 				this.#sessionManager?.logSwarmState(snapshot);
 			} catch {
 				// Swallow persist errors — we don't want state tracking

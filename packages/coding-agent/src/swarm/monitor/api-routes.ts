@@ -18,6 +18,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
 import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
+import { SwarmSessionManager } from "../swarm-session-manager";
 
 export type { AfterLoopResult };
 
@@ -133,14 +134,14 @@ function json(data: unknown, status = 200): Response {
 	});
 }
 
+/**
+ * Read activity entries from session.jsonl for a given swarm directory.
+ * Returns serialised JSON lines (mirroring the old activity.jsonl format
+ * so existing frontend code continues to work unchanged).
+ */
 async function readActivityLog(swarmDir: string): Promise<string[]> {
-	const logPath = path.join(swarmDir, "activity.jsonl");
-	try {
-		const content = await Bun.file(logPath).text();
-		return content.trim().split("\n").filter(Boolean);
-	} catch {
-		return [];
-	}
+	const entries = await SwarmSessionManager.readActivityEntries(swarmDir);
+	return entries.map(e => JSON.stringify(e));
 }
 
 // ============================================================================
@@ -541,18 +542,17 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				let lastActivity: string | null = null;
 				let messageCount = 0;
 				let status: "idle" | "running" | "completed" | "failed" = "idle";
-				try {
-					const statePath = path.join(swarmDir, "state", "pipeline.json");
-					const stateContent = await Bun.file(statePath).text();
-					const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number };
-					status = (st.status as typeof status) ?? "idle";
-					if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
-					else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
-				} catch { /* no state file */ }
-				try {
-					const logContent = await Bun.file(path.join(swarmDir, "activity.jsonl")).text();
-					messageCount = logContent.trim().split("\n").filter(Boolean).length;
-				} catch { /* no log */ }
+				// Read latest state from session.jsonl
+				const latestState = await SwarmSessionManager.readLatestState(swarmDir);
+				if (latestState) {
+					status = (latestState.status as typeof status) ?? "idle";
+					const completedAt = (latestState as any).completedAt;
+					const startedAt = (latestState as any).startedAt;
+					if (completedAt) lastActivity = new Date(completedAt).toISOString();
+					else if (startedAt) lastActivity = new Date(startedAt).toISOString();
+				}
+				// Count activity entries from session.jsonl
+				messageCount = await SwarmSessionManager.countActivityEntries(swarmDir);
 				return { name, dir, lastActivity, messageCount, status };
 			}));
 			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));

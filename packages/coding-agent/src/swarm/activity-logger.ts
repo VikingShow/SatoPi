@@ -3,7 +3,7 @@
  *
  * Captures all IRC messages, phase transitions, verdicts, file conflicts,
  * scaling events, nominations, and crashes. Each event is:
- *   1. Appended to `.swarm_{name}/activity.jsonl` (permanent history)
+ *   1. Written to session.jsonl via SwarmSessionManager (permanent history)
  *   2. Pushed to MonitorServer via SSE (real-time GUI updates)
  *
  * All write operations are fire-and-forget — they never block the main loop.
@@ -12,8 +12,6 @@
  * route events to the correct SSE subscribers.
  */
 
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import type { ReviewVerdict } from "./roundtable";
 import type { SwarmSessionManager } from "./swarm-session-manager";
 
@@ -103,21 +101,18 @@ export interface ActivityBroadcaster {
 // ============================================================================
 
 export class ActivityLogger {
-	readonly #logPath: string;
 	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
 	#writeQueue: Promise<void> = Promise.resolve();
 	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(swarmDir: string, sessionName: string) {
-		this.#logPath = path.join(swarmDir, "activity.jsonl");
 		this.#sessionName = sessionName;
 	}
 
 	/**
-	 * Inject a SwarmSessionManager for OH-MY-PI dual-write persistence.
-	 * When set, all log events are also written to the SessionManager
-	 * (session.jsonl) in parallel with the legacy activity.jsonl file.
+	 * Inject a SwarmSessionManager for session.jsonl persistence.
+	 * Required — without it, events are pushed to SSE only (no durable storage).
 	 */
 	setSessionManager(sm: SwarmSessionManager): void {
 		this.#sessionManager = sm;
@@ -132,19 +127,16 @@ export class ActivityLogger {
 	}
 
 	/**
-	 * Core write method — appends to activity.jsonl, pushes to SSE, and
-	 * (if connected) writes to SwarmSessionManager for unified persistence.
-	 * Serialized via writeQueue to preserve event ordering.
+	 * Core write method — writes to session.jsonl via SwarmSessionManager
+	 * and pushes to SSE. Serialized via writeQueue to preserve event ordering.
 	 * Fire-and-forget: callers never await this.
 	 */
 	private log(entry: ActivityEntry): void {
 		this.#writeQueue = this.#writeQueue
 			.then(async () => {
-				// Legacy: append to activity.jsonl
-				await fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n");
-				// OH-MY-PI: dual-write to session.jsonl
+				// Persist to session.jsonl via OH-MY-PI SessionManager
 				this.#sessionManager?.logActivity(entry);
-				// Push to SSE
+				// Push to SSE for real-time frontend updates
 				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {

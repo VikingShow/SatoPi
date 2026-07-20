@@ -43,6 +43,8 @@
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { FileSessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
 import { logger } from "@oh-my-pi/pi-utils";
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
 import type { ActivityEntry, ActivityEventType } from "./activity-logger";
 import type { LoopPhase, PipelineStatus, SwarmState, AgentState } from "./state";
 
@@ -184,4 +186,59 @@ export class SwarmSessionManager {
 	async flush(): Promise<void> { await this.#session.flush(); }
 	flushSync(): void { this.#session.flushSync(); }
 	async close(): Promise<void> { await this.#session.close(); }
+
+	// -- Static Query Helpers ------------------------------------------------
+
+	/** Known session.jsonl path for a given swarm directory. */
+	static sessionFilePath(swarmDir: string): string {
+		return path.join(swarmDir, ".omp", "session.jsonl");
+	}
+
+	/**
+	 * Read all raw entries from the session.jsonl file.
+	 * Each entry is a JSON line: { type: "custom", customType: "swarm_*", data: {...}, ... }.
+	 */
+	static async readRawEntries(swarmDir: string): Promise<Array<Record<string, unknown>>> {
+		const filePath = SwarmSessionManager.sessionFilePath(swarmDir);
+		try {
+			const content = await fs.readFile(filePath, "utf-8");
+			return content.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * Read all activity entries (customType === "swarm_activity") from the
+	 * session.jsonl file.  Returns the unwrapped data payloads.
+	 */
+	static async readActivityEntries(swarmDir: string): Promise<ActivityEntry[]> {
+		const raw = await SwarmSessionManager.readRawEntries(swarmDir);
+		return raw
+			.filter(e => e.type === "custom" && e.customType === CTX.ACTIVITY)
+			.map(e => e.data as ActivityEntry);
+	}
+
+	/**
+	 * Read the most recent swarm state entry from session.jsonl.
+	 * Returns null if no state has been persisted yet.
+	 */
+	static async readLatestState(swarmDir: string): Promise<Partial<SwarmState> | null> {
+		const raw = await SwarmSessionManager.readRawEntries(swarmDir);
+		for (let i = raw.length - 1; i >= 0; i--) {
+			const e = raw[i];
+			if (e.type === "custom" && e.customType === CTX.SWARM_STATE) {
+				return (e.data as Partial<SwarmState>) ?? null;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Count all activity entries in the session.jsonl file.
+	 */
+	static async countActivityEntries(swarmDir: string): Promise<number> {
+		const entries = await SwarmSessionManager.readActivityEntries(swarmDir);
+		return entries.length;
+	}
 }

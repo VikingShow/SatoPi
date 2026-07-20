@@ -11,7 +11,6 @@
  * All agent output is pushed to the frontend via ActivityLogger → SSE.
  */
 
-import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
@@ -88,13 +87,12 @@ export class BeforeLoopManager {
 	#runManager: RunManager;
 
 	#conversation: ConversationTurn[] = [];
-	#conversationPath: string;
 	#taskDescription = "";
 	#phase: LoopPhase = "idle";
 	#busy = false;
 	#planReady = false;
 	#planMtime = 0;
-	/** OH-MY-PI SessionManager for dual-write persistence (optional). */
+	/** OH-MY-PI SessionManager for session.jsonl persistence. */
 	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(opts: {
@@ -117,43 +115,14 @@ export class BeforeLoopManager {
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#runManager = opts.runManager;
-		this.#conversationPath = path.join(this.#swarmDir, "conversation.json");
-
-		// Try to restore existing conversation from disk
-		this.#loadConversation().catch(err => {
-			logger.warn("Failed to load conversation history", { error: String(err) });
-		});
 	}
 
 	/**
-	 * Load conversation history from disk (if it exists).
-	 * Called once in constructor to restore state after page refresh / restart.
-	 */
-	async #loadConversation(): Promise<void> {
-		try {
-			const content = await fs.readFile(this.#conversationPath, "utf-8");
-			const parsed = JSON.parse(content) as ConversationTurn[];
-			if (Array.isArray(parsed)) {
-				this.#conversation = parsed;
-			}
-		} catch {
-			// File doesn't exist or is invalid — start with empty conversation
-		}
-	}
-
-	/**
-	 * Persist current conversation to disk as JSON.
-	 * Called after every conversation mutation.
-	 * When SwarmSessionManager is connected, also dual-writes to session.jsonl.
+	 * Persist current conversation snapshot to session.jsonl via
+	 * SwarmSessionManager. Called after every conversation mutation.
 	 */
 	async #saveConversation(): Promise<void> {
 		try {
-			await fs.writeFile(
-				this.#conversationPath,
-				JSON.stringify(this.#conversation, null, 2),
-				"utf-8",
-			);
-			// OH-MY-PI dual-write: full snapshot to session.jsonl
 			this.#sessionManager?.logConversationSnapshot(this.#conversation);
 		} catch (err) {
 			logger.warn("Failed to save conversation history", { error: String(err) });
