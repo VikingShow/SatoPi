@@ -59,6 +59,7 @@ export const CTX = {
 	VERDICT:      "swarm_verdict" as const,
 	CONVERSATION: "socrates_turn" as const,
 	BEFORE_LOOP:  "before_loop_state" as const,
+	CONVERSATION_SNAPSHOT: "conversation_snapshot" as const,
 } as const;
 
 // ============================================================================
@@ -164,9 +165,18 @@ export class SwarmSessionManager {
 
 	// -- Socrates Conversation ------------------------------------------------
 
-	/** Append a conversation turn (replaces conversation.json). */
+	/** Append a single conversation turn (incremental — future use). */
 	appendConversationTurn(role: "user" | "assistant", content: string): void {
 		this.#session.appendCustomEntry(CTX.CONVERSATION, { ts: Date.now(), role, content });
+	}
+
+	/**
+	 * Persist the full conversation history as a snapshot.
+	 * Called by BeforeLoopManager after each turn mutation.
+	 * This replaces the legacy conversation.json file.
+	 */
+	logConversationSnapshot(turns: Array<{ role: string; content: string }>): void {
+		this.#session.appendCustomEntry(CTX.CONVERSATION_SNAPSHOT, { ts: Date.now(), turns });
 	}
 
 	// -- Lifecycle ------------------------------------------------------------

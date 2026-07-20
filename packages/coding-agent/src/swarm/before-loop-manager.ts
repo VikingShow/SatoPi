@@ -20,6 +20,7 @@ import type { StateTracker, LoopPhase } from "./state";
 import type { ActivityLogger } from "./activity-logger";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
+import type { SwarmSessionManager } from "./swarm-session-manager";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
 import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
@@ -93,6 +94,8 @@ export class BeforeLoopManager {
 	#busy = false;
 	#planReady = false;
 	#planMtime = 0;
+	/** OH-MY-PI SessionManager for dual-write persistence (optional). */
+	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -141,6 +144,7 @@ export class BeforeLoopManager {
 	/**
 	 * Persist current conversation to disk as JSON.
 	 * Called after every conversation mutation.
+	 * When SwarmSessionManager is connected, also dual-writes to session.jsonl.
 	 */
 	async #saveConversation(): Promise<void> {
 		try {
@@ -149,6 +153,8 @@ export class BeforeLoopManager {
 				JSON.stringify(this.#conversation, null, 2),
 				"utf-8",
 			);
+			// OH-MY-PI dual-write: full snapshot to session.jsonl
+			this.#sessionManager?.logConversationSnapshot(this.#conversation);
 		} catch (err) {
 			logger.warn("Failed to save conversation history", { error: String(err) });
 		}
@@ -160,6 +166,14 @@ export class BeforeLoopManager {
 	 */
 	getHistory(): ConversationTurn[] {
 		return [...this.#conversation];
+	}
+
+	/**
+	 * Inject a SwarmSessionManager for dual-write persistence.
+	 * When set, conversation turns are also written to session.jsonl.
+	 */
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
 	}
 
 	get isBusy(): boolean {

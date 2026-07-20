@@ -15,6 +15,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ReviewVerdict } from "./roundtable";
+import type { SwarmSessionManager } from "./swarm-session-manager";
 
 // ============================================================================
 // Types
@@ -106,10 +107,20 @@ export class ActivityLogger {
 	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
 	#writeQueue: Promise<void> = Promise.resolve();
+	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(swarmDir: string, sessionName: string) {
 		this.#logPath = path.join(swarmDir, "activity.jsonl");
 		this.#sessionName = sessionName;
+	}
+
+	/**
+	 * Inject a SwarmSessionManager for OH-MY-PI dual-write persistence.
+	 * When set, all log events are also written to the SessionManager
+	 * (session.jsonl) in parallel with the legacy activity.jsonl file.
+	 */
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
 	}
 
 	/**
@@ -121,14 +132,19 @@ export class ActivityLogger {
 	}
 
 	/**
-	 * Core write method — appends to activity.jsonl and pushes to SSE.
-	 * Serialized via writeQueue to preserve event ordering in the file.
+	 * Core write method — appends to activity.jsonl, pushes to SSE, and
+	 * (if connected) writes to SwarmSessionManager for unified persistence.
+	 * Serialized via writeQueue to preserve event ordering.
 	 * Fire-and-forget: callers never await this.
 	 */
 	private log(entry: ActivityEntry): void {
 		this.#writeQueue = this.#writeQueue
-			.then(() => fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n"))
-			.then(() => {
+			.then(async () => {
+				// Legacy: append to activity.jsonl
+				await fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n");
+				// OH-MY-PI: dual-write to session.jsonl
+				this.#sessionManager?.logActivity(entry);
+				// Push to SSE
 				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {

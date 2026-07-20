@@ -148,6 +148,15 @@ export class SessionRegistry {
 			sessionManager,
 		};
 
+		// Inject SwarmSessionManager into legacy persistence layers (dual-write).
+		// Each service keeps its existing file writes AND additionally writes to
+		// session.jsonl through the SessionManager.
+		if (sessionManager) {
+			services.stateTracker.setSessionManager(sessionManager);
+			services.activityLogger.setSessionManager(sessionManager);
+			services.beforeLoopManager.setSessionManager(sessionManager);
+		}
+
 		this.#sessions.set(name, session);
 		return session;
 	}

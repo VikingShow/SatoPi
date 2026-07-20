@@ -6,6 +6,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { SwarmSessionManager } from "./swarm-session-manager";
 
 // ============================================================================
 // State types
@@ -94,6 +95,8 @@ export class StateTracker {
 	#writeChain: Promise<void> = Promise.resolve();
 	/** Tracks whether a persist is already scheduled on the microtask queue. */
 	#persistScheduled = false;
+	/** OH-MY-PI SessionManager for dual-write persistence (optional). */
+	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(workspaceDir: string, name: string) {
 		this.#swarmDir = path.join(workspaceDir, `.swarm_${name}`);
@@ -107,6 +110,14 @@ export class StateTracker {
 			startedAt: Date.now(),
 			loopPhase: "idle",
 		};
+	}
+
+	/**
+	 * Inject a SwarmSessionManager for dual-write persistence.
+	 * When set, every state mutation is also written to session.jsonl.
+	 */
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
 	}
 
 	get swarmDir(): string {
@@ -299,7 +310,8 @@ export class StateTracker {
 	}
 
 	/**
-	 * Persist the current in-memory state to pipeline.json.
+	 * Persist the current in-memory state to pipeline.json and (if connected)
+	 * to SwarmSessionManager for unified session.jsonl persistence.
 	 *
 	 * Uses a serialized write chain so concurrent updates from parallel
 	 * agent waves never interleave or corrupt the JSON file. Rapid
@@ -320,6 +332,8 @@ export class StateTracker {
 					path.join(this.#swarmDir, "state", "pipeline.json"),
 					JSON.stringify(snapshot, null, 2),
 				);
+				// OH-MY-PI dual-write: log to session.jsonl
+				this.#sessionManager?.logSwarmState(snapshot);
 			} catch {
 				// Swallow persist errors — we don't want state tracking
 				// failures to crash the pipeline. The in-memory state is
