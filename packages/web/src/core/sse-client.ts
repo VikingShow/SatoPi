@@ -18,6 +18,11 @@ export class SseClient<T = Record<string, unknown>> {
 
   constructor(private url: string) {}
 
+  /** Update the target URL (e.g. after session change). Does NOT reconnect. */
+  setUrl(url: string): void {
+    this.url = url;
+  }
+
   connect(): void {
     if (this.eventSource?.readyState === EventSource.OPEN) return;
 

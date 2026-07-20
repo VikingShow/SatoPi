@@ -62,9 +62,24 @@ function parseSocratesResponse(raw: string): string {
 	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return raw;
 	try {
 		const obj = JSON.parse(trimmed);
+		// Extract human-readable content from common JSON wrapper shapes.
+		// Ordered by conversational relevance: plan (the deliverable),
+		// message (conversation), error (clarification needed), text (generic).
+		if (typeof obj?.plan === "string" && obj.plan.length > 0) {
+			const prefix = obj.status === "ready" ? "[Plan Ready]\n\n" : "";
+			return prefix + obj.plan;
+		}
 		if (typeof obj?.message === "string" && obj.message.length > 0) {
 			return obj.message;
 		}
+		if (typeof obj?.error === "string" && obj.error.length > 0) {
+			return obj.error;
+		}
+		if (typeof obj?.text === "string" && obj.text.length > 0) {
+			return obj.text;
+		}
+		// Last resort — pretty-print the JSON so it's at least readable.
+		return JSON.stringify(obj, null, 2);
 	} catch {
 		// not JSON — return original
 	}

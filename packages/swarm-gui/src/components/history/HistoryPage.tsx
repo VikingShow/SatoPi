@@ -18,9 +18,17 @@ export default function HistoryPage() {
   }, [loadRuns]);
 
   useEffect(() => {
-    api.getHistory().then((data) => {
-      setEntries(data.entries as ActivityEntry[]);
-    }).catch(() => {});
+    if (selectedRun) {
+      // Global endpoint — fetches a specific historical run's activity
+      api.getRunActivity(selectedRun).then(({ entries }) => {
+        setEntries(entries as ActivityEntry[]);
+      }).catch(() => {});
+    } else {
+      // Session-scoped — fetches the active session's current history
+      api.getHistory().then((data) => {
+        setEntries(data.entries as ActivityEntry[]);
+      }).catch(() => {});
+    }
   }, [selectedRun]);
 
   const verdicts = entries.filter((e) => e.type === "verdict");

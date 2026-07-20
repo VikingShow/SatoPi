@@ -21,7 +21,10 @@ import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { RoleAssetManager } from "./role-asset";
-import type { SwarmSessionManager } from "./swarm-session-manager";
+// NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
+// type — the `import type` above is kept for documentation but the value import
+// is what makes persistence actually work.
+import { SwarmSessionManager } from "./swarm-session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================

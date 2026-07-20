@@ -9,8 +9,8 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
-import { api } from "../lib/api-client";
-import { sseClient } from "../lib/sse-client";
+import { api, setActiveSession, getActiveSession } from "../lib/api-client";
+import { sseClient, setActiveSSESession } from "../lib/sse-client";
 
 const MAX_ACTIVITIES = 500;
 
@@ -179,7 +179,21 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   fileChanges: [],
 
   init: async () => {
+    // Guard against duplicate initialisation (React Strict Mode
+    // double-mounts effects, which would otherwise register a second
+    // set of SSE listeners and cause every event to appear 2×/4×).
+    if ((get() as any).__initRunning) return;
+    (get() as any).__initRunning = true;
+
     try {
+      // Sync the api/sse clients to the active session BEFORE any
+      // session-scoped calls.  The session-store subscribe (see
+      // session-store.ts) normally keeps these in sync, but during
+      // first-ever mount the subscriber may not have fired yet.
+      const sessionName = getActiveSession() || "SatoPi";
+      setActiveSession(sessionName);
+      setActiveSSESession(sessionName);
+
       const [state, runStatus] = await Promise.all([
         api.getState(),
         api.getRunStatus(),

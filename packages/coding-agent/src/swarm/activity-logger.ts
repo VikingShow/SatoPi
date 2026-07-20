@@ -134,9 +134,7 @@ export class ActivityLogger {
 	private log(entry: ActivityEntry): void {
 		this.#writeQueue = this.#writeQueue
 			.then(async () => {
-				// Persist to session.jsonl via OH-MY-PI SessionManager
 				this.#sessionManager?.logActivity(entry);
-				// Push to SSE for real-time frontend updates
 				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {

@@ -12,7 +12,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { api } from "../lib/api-client";
+import { api, setActiveSession } from "../lib/api-client";
+import { setActiveSSESession } from "../lib/sse-client";
 import type { ActivityEntry } from "../lib/types";
 import { useSwarmStore } from "./swarm-store";
 
@@ -156,3 +157,13 @@ export const useSessionStore = create<SessionStore>()(
 { name: "satopi-sessions" },
 ),
 );
+
+// Whenever the active swarm changes, keep the api-client and sse-client
+// module-level variables in sync so ALL components and stores automatically
+// target the correct session — no individual caller needs to remember.
+useSessionStore.subscribe((state, prevState) => {
+  if (state.activeSwarm !== prevState.activeSwarm) {
+    setActiveSession(state.activeSwarm);
+    setActiveSSESession(state.activeSwarm);
+  }
+});

@@ -54,13 +54,13 @@ async function resolveSwarmName(yamlPath: string): Promise<string> {
 	}
 }
 
-const DEFAULT_YAML = `name: SatoPi
-mode: loop
-workspace: .
-agents: {}
-targetCount: 1
-loop:
-  maxIterations: 10
+const DEFAULT_YAML = `swarm:
+  name: SatoPi
+  mode: loop
+  workspace: .
+  agents: {}
+  target_count: 1
+  max_iterations: 10
   workers:
     initial: 3
     min: 1
@@ -68,11 +68,11 @@ loop:
     auto: false
   cloners:
     count: 2
-  planDebate:
+  plan_debate:
     enabled: true
-    clonerCount: 2
-    maxRounds: 2
-    convergenceThreshold: 0.7
+    cloner_count: 2
+    max_rounds: 2
+    convergence_threshold: 0.7
 `;
 
 // ============================================================================
@@ -274,6 +274,10 @@ async function createSessionServices(
 // ============================================================================
 
 async function main() {
+	if (process.env.OMP_CONSOLE_LOG) {
+		logger.setTransports({ console: true, file: true });
+	}
+
 	await fs.mkdir(WORKSPACE_DIR, { recursive: true });
 	try { await fs.access(YAML_PATH); } catch {
 		await fs.writeFile(YAML_PATH, DEFAULT_YAML, "utf-8");
