@@ -324,6 +324,18 @@ async function main() {
 	const registry = new SessionRegistry(shared, createSessionServices);
 	const session = await registry.createSession(swarmName);
 
+	// Discover and restore sessions from previous runs.
+	try {
+		const entries = await fs.readdir(WORKSPACE_DIR);
+		for (const entry of entries) {
+			if (!entry.startsWith(".swarm_")) continue;
+			const name = entry.replace(".swarm_", "");
+			if (name === swarmName || registry.getSession(name)) continue;
+			await registry.createSession(name);
+			logger.info("Restored historical session", { name });
+		}
+	} catch { /* best-effort */ }
+
 	// Start MonitorServer (receives the registry)
 	const server = new MonitorServer(registry);
 	const port = server.start(7878);
