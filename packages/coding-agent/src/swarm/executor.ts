@@ -11,6 +11,7 @@
  * the pipeline controller.
  */
 import * as path from "node:path";
+import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type {
 	AgentDefinition,
 	AgentProgress,
@@ -69,6 +70,20 @@ export interface SwarmExecutorOptions {
 	 * instead of the default `SubprocessAgentExecutor`.
 	 */
 	executor?: AgentExecutor;
+	/**
+	 * Optional tool hooks passed through to the subprocess's AgentLoopConfig.
+	 * beforeToolCall can block write/edit/bash calls (e.g. deliberation phase).
+	 * afterToolCall is used for lock release coordination.
+	 */
+	toolHooks?: {
+		beforeToolCall?: AgentLoopConfig["beforeToolCall"];
+		afterToolCall?: AgentLoopConfig["afterToolCall"];
+	};
+	/**
+	 * Optional AgentDefinition overrides merged into the built agent def.
+	 * Lets callers supply custom systemPrompt, tools, blockedTools, source, etc.
+	 */
+	agentOverrides?: Partial<AgentDefinition>;
 }
 
 // ============================================================================
@@ -121,6 +136,8 @@ export async function executeSwarmAgent(
 		stateTracker,
 		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
 		onStarted,
+		toolHooks,
+		agentOverrides,
 	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
@@ -133,15 +150,15 @@ export async function executeSwarmAgent(
 		source: "project" as AgentSource,
 		...(agent.allowedTools ? { tools: agent.allowedTools } : {}),
 		...(agent.blockedTools ? { blockedTools: agent.blockedTools } : {}),
+		// Merge caller-provided AgentDefinition overrides (systemPrompt, tools, blockedTools, source, etc.).
+		...agentOverrides,
 	};
 
 	// Build a per-agent timeout controller and combine with the caller's signal.
 	// The caller can terminate the agent via onStarted's controller.
 	const agentController = new AbortController();
 	const effectiveSignal =
-		signal && timeoutMs > 0
-			? AbortSignal.any([signal, agentController.signal])
-			: signal ?? agentController.signal;
+		signal && timeoutMs > 0 ? AbortSignal.any([signal, agentController.signal]) : (signal ?? agentController.signal);
 
 	// Arm the timeout if enabled.
 	let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -179,6 +196,8 @@ export async function executeSwarmAgent(
 			enableLsp: false,
 			artifactsDir: path.join(stateTracker.swarmDir, "context"),
 			keepAlive: false,
+			beforeToolCall: toolHooks?.beforeToolCall,
+			afterToolCall: toolHooks?.afterToolCall,
 		});
 
 		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);
@@ -203,10 +222,7 @@ export async function executeSwarmAgent(
 			completedAt: Date.now(),
 			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 		});
-		await stateTracker.appendLog(
-			agent.name,
-			`Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`,
-		);
+		await stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`);
 
 		const failResult: SingleResult = {
 			index,
