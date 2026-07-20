@@ -378,112 +378,94 @@ export class BeforeLoopManager {
 	// Internal: run Socrates agent with full conversation history
 	// ────────────────────────────────────────────────────────────────────────
 
-	async #runSocrates(): Promise<void> {
-		this.#busy = true;
-		this.#activityLogger.logBroadcast("system", "Socrates is thinking...");
+async #runSocrates(): Promise<void> {
+			this.#busy = true;
+			const msgId = `socrates-${Date.now()}`;
+			this.#activityLogger.logStreamStart(msgId, "socrates");
 
-		try {
-			// Build task text from full conversation history
-			const taskText = this.#buildTaskFromHistory();
+			// Track streaming deltas — sentinel starts at -1 so the first
+			// progress tick pushes any accumulated output to the frontend.
+			let lastSentIdx = -1;
 
-			// Resolve tool restrictions: use agent_restrictions.socrates from YAML if present,
-			// otherwise fall back to the default read-only planning restriction.
-			const loopConfig = await this.#readLoopConfig();
-			const socratesRestriction = loopConfig?.agentRestrictions?.socrates
-				?? loopConfig?.agentRestrictions?.["*"]
-				?? SOCRATES_DEFAULT_RESTRICTION;
+			try {
+				// Build task text from full conversation history
+				const taskText = this.#buildTaskFromHistory();
 
-			const agentDef: AgentDefinition = {
-				name: "socrates",
-				description: "Before Loop planning agent (Socratic dialogue)",
-				systemPrompt: SOCRATES_SYSTEM_PROMPT,
-				source: "project" as AgentSource,
-			};
-			if (socratesRestriction.allowed && socratesRestriction.allowed.length > 0) {
-				agentDef.tools = socratesRestriction.allowed;
+				// Resolve tool restrictions: use agent_restrictions.socrates from YAML if present,
+				// otherwise fall back to the default read-only planning restriction.
+				const loopConfig = await this.#readLoopConfig();
+				const socratesRestriction = loopConfig?.agentRestrictions?.socrates
+					?? loopConfig?.agentRestrictions?.["*"]
+					?? SOCRATES_DEFAULT_RESTRICTION;
+
+				const agentDef: AgentDefinition = {
+					name: "socrates",
+					description: "Before Loop planning agent (Socratic dialogue)",
+					systemPrompt: SOCRATES_SYSTEM_PROMPT,
+					source: "project" as AgentSource,
+				};
+				if (socratesRestriction.allowed && socratesRestriction.allowed.length > 0) {
+					agentDef.tools = socratesRestriction.allowed;
+				}
+				if (socratesRestriction.blocked && socratesRestriction.blocked.length > 0) {
+					agentDef.blockedTools = socratesRestriction.blocked;
+				}
+
+				const result = await runSubprocess({
+					cwd: this.#stateTracker.swarmDir,
+					agent: agentDef,
+					task: taskText,
+					index: 0,
+					id: `socrates-${Date.now()}`,
+					modelRegistry: this.#modelRegistry,
+					settings: this.#settings,
+					enableLsp: false,
+					keepAlive: false,
+					modelOverride: loopConfig?.model ?? undefined,
+					onProgress: (progress) => {
+						// Push new lines of output to the frontend as they arrive.
+						const lines = progress.recentOutput ?? [];
+						while (lastSentIdx + 1 < lines.length) {
+							lastSentIdx++;
+							this.#activityLogger.logStreamDelta(msgId, "socrates", lines[lastSentIdx]);
+						}
+					},
+				});
+
+				const output = result.output || "(no output)";
+
+				// Strip system-instruction contamination: if Socrates returns a JSON
+				// wrapper like {"status":"...","message":"..."} we extract the
+				// human-readable message field for display.
+				const displayOutput = parseSocratesResponse(output);
+
+				// Add to conversation history
+				this.#conversation.push({ role: "assistant", content: displayOutput });
+				await this.#saveConversation();
+
+				// Push final Socrates response to frontend via SSE (stream_end
+				// finalises the streaming bubble the frontend created on stream_start).
+				this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput);
+
+				// Check if plan.md was written or updated during this run
+				const newMtime = await this.#getPlanMtime();
+				if (newMtime > this.#planMtime) {
+					this.#planReady = true;
+					this.#planMtime = newMtime;
+					this.#activityLogger.logPhase("plan-updated");
+					this.#activityLogger.logBroadcast(
+						"system",
+						"Draft plan.md is ready. Click 'Run Debate' to refine it, or 'Confirm & Start' to proceed.",
+					);
+				}
+			} catch (err) {
+				const errMsg = err instanceof Error ? err.message : String(err);
+				this.#activityLogger.logStreamEnd(msgId, "socrates", `[Error] ${errMsg}`);
+				throw err;
+			} finally {
+				this.#busy = false;
 			}
-			if (socratesRestriction.blocked && socratesRestriction.blocked.length > 0) {
-				agentDef.blockedTools = socratesRestriction.blocked;
-			}
-
-			const result = await runSubprocess({
-				cwd: this.#stateTracker.swarmDir,
-				agent: agentDef,
-				task: taskText,
-				index: 0,
-				id: `socrates-${Date.now()}`,
-				modelRegistry: this.#modelRegistry,
-				settings: this.#settings,
-				enableLsp: false,
-				keepAlive: false,
-				modelOverride: loopConfig?.model ?? undefined,
-			});
-
-			const output = result.output || "(no output)";
-
-			// Strip system-instruction contamination: if Socrates returns a JSON
-			// wrapper like {"status":"...","message":"..."} we extract the
-			// human-readable message field for display.
-			const displayOutput = parseSocratesResponse(output);
-
-			// Add to conversation history
-			this.#conversation.push({ role: "assistant", content: displayOutput });
-			await this.#saveConversation();
-
-			// Push Socrates response to frontend via SSE
-			this.#activityLogger.logBroadcast("socrates", displayOutput);
-
-			// Check if plan.md was written or updated during this run
-			const newMtime = await this.#getPlanMtime();
-			if (newMtime > this.#planMtime) {
-				this.#planReady = true;
-				this.#planMtime = newMtime;
-				this.#activityLogger.logPhase("plan-updated");
-				this.#activityLogger.logBroadcast(
-					"system",
-					"Draft plan.md is ready. Click 'Run Debate' to refine it, or 'Confirm & Start' to proceed.",
-				);
-			}
-		} catch (err) {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			this.#activityLogger.logBroadcast("system", `[Error] Socrates failed: ${errMsg}`);
-			throw err;
-		} finally {
-			this.#busy = false;
 		}
-	}
-
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: build task text from conversation history
-	// ────────────────────────────────────────────────────────────────────────
-
-	#buildTaskFromHistory(): string {
-		if (this.#conversation.length === 0) {
-			return "No conversation yet.";
-		}
-
-		const parts = this.#conversation.map(turn => {
-			const label = turn.role === "user" ? "Human" : "Assistant (You)";
-			return `### ${label}\n\n${turn.content}`;
-		});
-
-		return [
-			"## Conversation History",
-			"",
-			"Below is the full conversation so far. Respond to the LATEST Human message.",
-			"If you now have enough information, write the plan to .omp/plan.md and summarize it.",
-			"",
-			parts.join("\n\n---\n\n"),
-		].join("\n");
-	}
-
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: helpers
-	// ────────────────────────────────────────────────────────────────────────
-
-	async #setPhase(phase: LoopPhase): Promise<void> {
-		await this.#stateTracker.updatePipeline({ loopPhase: phase });
-	}
 
 	async #readLoopConfig(): Promise<LoopSwarmConfig | null> {
 		try {
