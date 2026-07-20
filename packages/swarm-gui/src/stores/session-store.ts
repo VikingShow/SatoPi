@@ -97,8 +97,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await swarmStore.refreshState();
 
     set({ activeSwarm: newName, viewingSession: null });
-    // Reload run list so the new session appears
-    setTimeout(() => get().loadRuns(), 500);
+    // Immediately add the new session to the runs list so it appears in the UI
+    // (it won't have a .swarm_* directory until the first run, but we show it anyway)
+    const currentRuns = get().runs;
+    if (!currentRuns.find(r => r.name === newName)) {
+      set({ runs: [{ name: newName, dir: `.swarm_${newName}`, lastActivity: null, messageCount: 0, status: "idle" }, ...currentRuns] });
+    } else {
+      setTimeout(() => get().loadRuns(), 500);
+    }
     return newName;
   },
 
