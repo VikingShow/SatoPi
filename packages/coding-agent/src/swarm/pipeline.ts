@@ -130,7 +130,7 @@ export interface LoopPipelineHooks extends PipelineHooks {
 	/** Called before cloner review starts. */
 	beforeClonerReview?: (iteration: number, workerOutput: string, ctx: PipelineContext) => Promise<void>;
 	/** Called after cloner review completes. */
-	afterClonerReview?: (iteration: number, verdict: ReviewVerdict, ctx: PipelineContext) => Promise<void>;
+	afterClonerReview?: (iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) => Promise<void>;
 }
 
 // ============================================================================

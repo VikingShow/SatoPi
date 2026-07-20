@@ -415,7 +415,7 @@ export class LoopController {
 		});
 	}
 
-	async runLoop(options: PipelineOptions & { planContent?: string }): Promise<LoopResult> {
+	async runLoop(options: Omit<PipelineOptions, "hooks"> & { hooks?: LoopPipelineHooks; planContent?: string }): Promise<LoopResult> {
 		const verdicts: ReviewVerdict[] = [];
 		const errors: string[] = [];
 		const clonerFeedbackHistory: string[] = [];
@@ -507,6 +507,12 @@ export class LoopController {
 			// This allows the operator to update the plan between iterations.
 			await this.#checkPause();
 
+			// P0-F: beforeIteration hook — can skip.
+			const shouldRunIter = await invokeHook(hooks, "beforeIteration", () =>
+				hooks?.beforeIteration?.(iter, pipelineCtx),
+			);
+			if (shouldRunIter === false) continue;
+
 			if (signal?.aborted) {
 				return {
 					status: "aborted",
@@ -589,7 +595,13 @@ export class LoopController {
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}
 
-					let roundResults = await this.#spawnWorkers(
+					// P0-F: beforeWorkerRound hook — can skip.
+				const shouldRunRound = await invokeHook(hooks, "beforeWorkerRound", () =>
+					hooks?.beforeWorkerRound?.(round, workerIds, pipelineCtx),
+				);
+				if (shouldRunRound === false) continue;
+
+				let roundResults = await this.#spawnWorkers(
 						workerIds,
 						workspace,
 						this.#planContent,
@@ -619,10 +631,19 @@ export class LoopController {
 					for (const id of workerIds) lockMgr.releaseAll(id);
 					allWorkerResults.push(...roundResults);
 
+					// P0-F: afterWorkerRound hook.
+					await invokeHook(hooks, "afterWorkerRound", () =>
+						hooks?.afterWorkerRound?.(round, roundResults, pipelineCtx),
+					);
+
 					// Deliberation phase: structured debate when enabled and round > 0
 					const debateConfig = this.#loopConfig.debate ?? { enabled: true, maxRounds: 2 };
 					if (debateConfig.enabled && round > 0 && debateConfig.maxRounds > 0) {
 						await this.#stateTracker.updatePipeline({ roundtablePhase: "Debate: challenging" });
+
+						// P0-F: beforeDeliberation hook.
+						await invokeHook(hooks, "beforeDeliberation", () => hooks?.beforeDeliberation?.(round, pipelineCtx));
+
 						roundResults = await this.#runDeliberationPhase(
 							roundResults,
 							workerIds,
@@ -633,6 +654,11 @@ export class LoopController {
 							iterSignal,
 							errors,
 							debateConfig.maxRounds,
+						);
+
+						// P0-F: afterDeliberation hook.
+						await invokeHook(hooks, "afterDeliberation", () =>
+							hooks?.afterDeliberation?.(round, roundResults, pipelineCtx),
 						);
 					}
 					// Build prior outputs for next round — filter out crashed workers
@@ -828,6 +854,12 @@ export class LoopController {
 				});
 
 				// Spawn cloners to review (parallel)
+
+				// P0-F: beforeClonerReview hook.
+				await invokeHook(hooks, "beforeClonerReview", () =>
+					hooks?.beforeClonerReview?.(iter, lastWorkerOutput, pipelineCtx),
+				);
+
 				verdict = await this.#runClonerReview(
 					clonerIds,
 					iter,
@@ -839,6 +871,9 @@ export class LoopController {
 					settings,
 					iterSignal,
 				);
+
+				// P0-F: afterClonerReview hook.
+				await invokeHook(hooks, "afterClonerReview", () => hooks?.afterClonerReview?.(iter, verdict, pipelineCtx));
 
 				verdicts.push(verdict);
 
@@ -1068,6 +1103,10 @@ export class LoopController {
 			const feedback = verdict.findings.join("\n");
 			clonerFeedbackHistory.push(feedback);
 			await this.#channel.broadcast(this.#clonerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
+
+			// P0-F: afterIteration hook.
+			await invokeHook(hooks, "afterIteration", () => hooks?.afterIteration?.(iter, pipelineCtx));
+
 			if (iter === this.#loopConfig.maxIterations - 1) {
 				const status = this.#loopConfig.humanEscalation ? "escalated" : "failed";
 				const result: LoopResult = {
