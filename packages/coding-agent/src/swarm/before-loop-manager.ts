@@ -273,7 +273,7 @@ export class BeforeLoopManager {
 		this.#activityLogger.logBroadcast("system", "Starting plan debate (Cloner Roundtable)...");
 
 		// Read current draft plan
-		const planPath = path.join(this.#workspace, ".omp", "plan.md");
+		const planPath = path.join(this.#stateTracker.swarmDir, ".omp", "plan.md");
 		let draftPlan: string;
 		try {
 			draftPlan = await Bun.file(planPath).text();
@@ -295,7 +295,7 @@ export class BeforeLoopManager {
 
 				const result = await runPlanDebate(
 					draftPlan,
-					this.#workspace,
+					this.#stateTracker.swarmDir,
 					loopConfig,
 					this.#modelRegistry,
 					this.#settings,
@@ -404,7 +404,7 @@ export class BeforeLoopManager {
 			}
 
 			const result = await runSubprocess({
-				cwd: this.#workspace,
+				cwd: this.#stateTracker.swarmDir,
 				agent: agentDef,
 				task: taskText,
 				index: 0,

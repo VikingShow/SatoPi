@@ -348,9 +348,11 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ models });
 	},
 
-	// -- Plan (plan.md) ---------------------------------------------------
+	// -- Plan (plan.md) — per-session: lives in .swarm_{name}/.omp/plan.md
+	// Falls back to workspace-level paths for backward compatibility.
 	"GET /api/plan": async (_req, ctx) => {
 		const candidates = [
+			path.join(ctx.swarmDir, ".omp", "plan.md"),
 			path.join(ctx.workspaceDir, ".omp", "plan.md"),
 			path.join(ctx.workspaceDir, "plan.md"),
 		];
@@ -362,8 +364,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				// try next
 			}
 		}
-		// Return 200 with error in body so fetchJson doesn't throw.
-		// The PlanViewer frontend checks res.error to display a friendly message.
 		return json({ content: "", path: "", error: "plan.md not found" });
 	},
 
@@ -371,9 +371,10 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		try {
 			const body = (await req.json()) as { content: string };
 			const fs = await import("node:fs/promises");
-			// Try existing plan path, default to .omp/plan.md
-			let planPath = path.join(ctx.workspaceDir, ".omp", "plan.md");
+			// Write to the per-session .omp/plan.md
+			let planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
 			for (const p of [
+				path.join(ctx.swarmDir, ".omp", "plan.md"),
 				path.join(ctx.workspaceDir, ".omp", "plan.md"),
 				path.join(ctx.workspaceDir, "plan.md"),
 			]) {

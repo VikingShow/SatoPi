@@ -155,9 +155,9 @@ class SwarmRunManager implements RunManager {
 			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
-			// ── Read & stamp plan.md ──
-			// Check if plan.md exists in any of the candidate locations
+			// ── Read & stamp plan.md — per-session: swarm dir first ──
 			const planCandidates = [
+				path.join(this.#stateTracker.swarmDir, ".omp", "plan.md"),
 				path.join(this.#workspace, ".omp", "plan.md"),
 				path.join(this.#workspace, "plan.md"),
 			];
@@ -177,7 +177,7 @@ class SwarmRunManager implements RunManager {
 				// Stamp the plan with a generation timestamp (for tracking)
 				// stampAndArchivePlanMd writes the stamped version back to .omp/plan.md
 				try {
-					planContent = await stampAndArchivePlanMd(this.#workspace);
+					planContent = await stampAndArchivePlanMd(this.#stateTracker.swarmDir);
 					logger.info("[RunManager] plan.md loaded and stamped", { length: planContent.length });
 				} catch (stampErr) {
 					// Fallback: read raw content without stamping
@@ -281,7 +281,7 @@ async pause(): Promise<{ success: boolean; error?: string }> {
 			return { success: false, error: "No loop controller available" };
 		}
 		try {
-			await this.#loopController.updatePlan(newPlan, this.#workspace);
+			await this.#loopController.updatePlan(newPlan, this.#stateTracker.swarmDir);
 			// If the loop is paused, resume it so the new plan takes effect.
 			this.#loopController.resume();
 			return { success: true };
