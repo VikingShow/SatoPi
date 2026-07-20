@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, ChevronDown, ChevronUp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
