@@ -23,7 +23,6 @@ import {
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
-import { RegionLockManager } from "@oh-my-pi/pi-coding-agent/swarm/region-lock";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import {
 	parseSwarmYaml,
@@ -139,7 +138,7 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			}
 
 			const workspace = path.isAbsolute(def.workspace) ? def.workspace : path.resolve(yamlDir, def.workspace);
-			const hasPlan = await planExists(workspace);
+			const hasPlan = await planExists(stateTracker.swarmDir);
 
 			if (hasPlan) {
 				// Plan exists — run directly
@@ -264,11 +263,35 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	// 9. Run pipeline — route by mode
 	if (def.mode === "loop" && def.loopConfig) {
-		// Set up ActivityLogger + MonitorServer for GUI integration
-		const activityLogger = new ActivityLogger(stateTracker.swarmDir);
+			// Set up ActivityLogger + MonitorServer for GUI integration
+		const activityLogger = new ActivityLogger(stateTracker.swarmDir, def.name);
 		let monitorServer: MonitorServer | null = null;
 		try {
-			monitorServer = new MonitorServer(stateTracker, workspace, resolvedPath);
+				// Create minimal SessionRegistry for TUI mode
+			const { SessionRegistry: SessReg } = await import(
+				"@oh-my-pi/pi-coding-agent/swarm/session-registry"
+			);
+			const registry = new SessReg(
+				{
+					workspace,
+					yamlPath: resolvedPath,
+					modelRegistry: ctx.modelRegistry,
+					settings: pi.pi.settings,
+					experienceStore: null!,
+					roleAssetManager: null!,
+				},
+				async (_shared, name, _swarmDir) => ({
+					name,
+					swarmDir: stateTracker.swarmDir,
+					stateTracker,
+					activityLogger,
+					runManager: null!,
+					beforeLoopManager: null!,
+					steeringSink: null!,
+				}),
+			);
+			await registry.createSession(def.name);
+			monitorServer = new MonitorServer(registry);
 			const port = monitorServer.start(7878);
 			activityLogger.setBroadcaster(monitorServer);
 			pi.logger.info("MonitorServer started", { port, url: `http://127.0.0.1:${port}` });
@@ -281,10 +304,10 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			pi.logger.debug("MonitorServer failed to start", { error: String(err) });
 		}
 
-		// Read plan.md from workspace if it exists (stamp with timestamp on first read)
+		// Read plan.md from session directory if it exists (stamp with timestamp on first read)
 		let planContent: string | undefined;
 		try {
-			planContent = await stampAndArchivePlanMd(workspace);
+			planContent = await stampAndArchivePlanMd(stateTracker.swarmDir, workspace);
 		} catch {
 			/* plan.md is optional */
 		}
@@ -316,6 +339,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			try {
 				const debateResult = await runPlanDebate(
 					planContent,
+					stateTracker.swarmDir,
 					workspace,
 					def.loopConfig,
 					ctx.modelRegistry,
@@ -407,9 +431,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
-					// Reset agent states and locks for a clean retry
+					// Reset agent states for a clean retry
 					await stateTracker.resetAgentStatuses();
-					RegionLockManager.reset();
 					continue;
 				}
 
@@ -489,9 +512,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
-					// Reset agent states and locks for a clean retry
+					// Reset agent states for a clean retry
 					await stateTracker.resetAgentStatuses();
-					RegionLockManager.reset();
 					continue;
 				default:
 					break;
@@ -501,8 +523,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	const loopStatus =
 		loopResult.status === "completed" ? "completed" : loopResult.status === "aborted" ? "aborted" : "failed";
-	// Clean up global lock state after loop exits (normal, crash, or escalation)
-	RegionLockManager.reset();
+	// Clean up after loop exits (normal, crash, or escalation)
 
 	// Finalize pipeline state — set status + completedAt so the widget and
 	// summary show the correct final state and elapsed time (mirrors what

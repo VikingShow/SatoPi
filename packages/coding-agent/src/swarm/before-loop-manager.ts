@@ -21,6 +21,7 @@ import type { ActivityLogger } from "./activity-logger";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
+import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
 import SOCRATES_SYSTEM_PROMPT from "./prompts/socrates.hbs" with { type: "text" };
 
@@ -49,6 +50,27 @@ const SOCRATES_DEFAULT_RESTRICTION: AgentToolRestriction = {
 	allowed: ["read", "write_file", "grep", "find", "glob"],
 };
 
+/**
+ * Extract the human-readable message from a Socrates response. Socrates is
+ * instructed to respond in plain natural language but occasionally wraps
+ * its reply in a JSON envelope like {"status":"...","message":"..."}.
+ * For those cases we surface only the `message` field. Otherwise we
+ * return the original text untouched.
+ */
+function parseSocratesResponse(raw: string): string {
+	const trimmed = raw.trim();
+	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return raw;
+	try {
+		const obj = JSON.parse(trimmed);
+		if (typeof obj?.message === "string" && obj.message.length > 0) {
+			return obj.message;
+		}
+	} catch {
+		// not JSON — return original
+	}
+	return raw;
+}
+
 // ============================================================================
 // BeforeLoopManager
 // ============================================================================
@@ -57,6 +79,7 @@ export class BeforeLoopManager {
 	#modelRegistry: ModelRegistry;
 	#settings: Settings;
 	#workspace: string;
+	#swarmDir: string;
 	#yamlPath: string;
 	#stateTracker: StateTracker;
 	#activityLogger: ActivityLogger;
@@ -75,6 +98,7 @@ export class BeforeLoopManager {
 		modelRegistry: ModelRegistry;
 		settings: Settings;
 		workspace: string;
+		swarmDir: string;
 		yamlPath: string;
 		stateTracker: StateTracker;
 		activityLogger: ActivityLogger;
@@ -84,12 +108,13 @@ export class BeforeLoopManager {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
 		this.#workspace = opts.workspace;
+		this.#swarmDir = opts.swarmDir;
 		this.#yamlPath = opts.yamlPath;
 		this.#stateTracker = opts.stateTracker;
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#runManager = opts.runManager;
-		this.#conversationPath = path.join(this.#stateTracker.swarmDir, "conversation.json");
+		this.#conversationPath = path.join(this.#swarmDir, "conversation.json");
 
 		// Try to restore existing conversation from disk
 		this.#loadConversation().catch(err => {
@@ -179,13 +204,16 @@ export class BeforeLoopManager {
 		this.#activityLogger.logPhase("before-loop-start");
 		this.#activityLogger.logBroadcast("operator", task);
 
-		// Generate planning prompt (queries experience store for past lessons)
-		const prompt = await generatePlanningPrompt(
-			{ workspace: this.#workspace, loopConfig, taskDescription: task },
+		// Generate planning prompt (queries experience store for past lessons).
+		// The full prompt is sent to the LLM but we only persist the user-facing
+		// task in the conversation history so the chat UI doesn't leak the
+		// SOCRATES_SYSTEM_PROMPT and planning template into the bubble stream.
+		await generatePlanningPrompt(
+			{ swarmDir: this.#swarmDir, workspace: this.#workspace, loopConfig, taskDescription: task },
 			this.#experienceStore,
 		);
 
-		this.#conversation.push({ role: "user", content: prompt });
+		this.#conversation.push({ role: "user", content: task });
 		await this.#saveConversation();
 
 		// Snapshot plan mtime before Socrates runs
@@ -248,8 +276,8 @@ export class BeforeLoopManager {
 		this.#activityLogger.logPhase("debate-start");
 		this.#activityLogger.logBroadcast("system", "Starting plan debate (Cloner Roundtable)...");
 
-		// Read current draft plan
-		const planPath = path.join(this.#workspace, ".omp", "plan.md");
+		// Read current draft plan from per-session path
+		const planPath = getSessionPlanPath(this.#swarmDir);
 		let draftPlan: string;
 		try {
 			draftPlan = await Bun.file(planPath).text();
@@ -271,6 +299,7 @@ export class BeforeLoopManager {
 
 				const result = await runPlanDebate(
 					draftPlan,
+					this.#swarmDir,
 					this.#workspace,
 					loopConfig,
 					this.#modelRegistry,
@@ -380,7 +409,7 @@ export class BeforeLoopManager {
 			}
 
 			const result = await runSubprocess({
-				cwd: this.#workspace,
+				cwd: this.#stateTracker.swarmDir,
 				agent: agentDef,
 				task: taskText,
 				index: 0,
@@ -394,12 +423,17 @@ export class BeforeLoopManager {
 
 			const output = result.output || "(no output)";
 
+			// Strip system-instruction contamination: if Socrates returns a JSON
+			// wrapper like {"status":"...","message":"..."} we extract the
+			// human-readable message field for display.
+			const displayOutput = parseSocratesResponse(output);
+
 			// Add to conversation history
-			this.#conversation.push({ role: "assistant", content: output });
+			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
 
 			// Push Socrates response to frontend via SSE
-			this.#activityLogger.logBroadcast("socrates", output);
+			this.#activityLogger.logBroadcast("socrates", displayOutput);
 
 			// Check if plan.md was written or updated during this run
 			const newMtime = await this.#getPlanMtime();
@@ -471,7 +505,7 @@ export class BeforeLoopManager {
 
 	async #getPlanMtime(): Promise<number> {
 		try {
-			const stat = await fs.stat(path.join(this.#workspace, ".omp", "plan.md"));
+			const stat = await fs.stat(getSessionPlanPath(this.#swarmDir));
 			return stat.mtimeMs;
 		} catch {
 			return 0;

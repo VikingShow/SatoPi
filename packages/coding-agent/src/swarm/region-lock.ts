@@ -1,8 +1,8 @@
 /**
  * RegionLockManager — in-process file-region lock for swarm workers.
  *
- * Workers share one Node.js process, so a module-level singleton provides
- * real-time mutual exclusion on files (optionally scoped to line ranges).
+ * Each session owns its own RegionLockManager instance. Workers in different
+ * sessions cannot block each other's file edits.
  *
  * Lifecycle:
  * 1. Worker's beforeToolCall hook calls tryLock(file, workerId) before edit.
@@ -42,29 +42,6 @@ export interface LockCheckResult {
 // ============================================================================
 
 export class RegionLockManager {
-	/**
-	 * Global singleton — all workers in the same process share this instance.
-	 * Created lazily; explicitly created per swarm run via `create()`.
-	 */
-	static #instance: RegionLockManager | null = null;
-
-	static create(): RegionLockManager {
-		const instance = new RegionLockManager();
-		RegionLockManager.#instance = instance;
-		return instance;
-	}
-
-	static global(): RegionLockManager {
-		if (!RegionLockManager.#instance) {
-			RegionLockManager.#instance = new RegionLockManager();
-		}
-		return RegionLockManager.#instance;
-	}
-
-	static reset(): void {
-		RegionLockManager.#instance = null;
-	}
-
 	// -------------------------------------------------------------------
 	// State
 	// -------------------------------------------------------------------

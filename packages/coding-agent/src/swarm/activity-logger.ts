@@ -7,6 +7,9 @@
  *   2. Pushed to MonitorServer via SSE (real-time GUI updates)
  *
  * All write operations are fire-and-forget — they never block the main loop.
+ *
+ * Each ActivityLogger is bound to a session name so the broadcaster can
+ * route events to the correct SSE subscribers.
  */
 
 import * as fs from "node:fs/promises";
@@ -30,7 +33,11 @@ export type ActivityEventType =
 	| "nomination"
 	| "crash"
 	| "tool_call"
-	| "error_flag";
+	| "error_flag"
+	| "file_change"
+	| "stream_start"
+	| "stream_delta"
+	| "stream_end";
 
 export interface ActivityEntry {
 	ts: number;
@@ -87,7 +94,7 @@ export interface ActivityEntry {
 // ============================================================================
 
 export interface ActivityBroadcaster {
-	broadcast(entry: ActivityEntry): void;
+	broadcast(sessionName: string, entry: ActivityEntry): void;
 }
 
 // ============================================================================
@@ -96,11 +103,13 @@ export interface ActivityBroadcaster {
 
 export class ActivityLogger {
 	readonly #logPath: string;
+	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
 	#writeQueue: Promise<void> = Promise.resolve();
 
-	constructor(swarmDir: string) {
+	constructor(swarmDir: string, sessionName: string) {
 		this.#logPath = path.join(swarmDir, "activity.jsonl");
+		this.#sessionName = sessionName;
 	}
 
 	/**
@@ -108,15 +117,6 @@ export class ActivityLogger {
 	 * pushed to connected browser clients in real-time.
 	 */
 	setBroadcaster(broadcaster: ActivityBroadcaster): void {
-		this.#broadcaster = broadcaster;
-	}
-
-	/**
-	 * P4-4: Replace the current broadcaster with a new one (e.g. after
-	 * MonitorServer restart). Idempotent — does nothing if no broadcaster
-	 * was previously set.
-	 */
-	replaceBroadcaster(broadcaster: ActivityBroadcaster): void {
 		this.#broadcaster = broadcaster;
 	}
 
@@ -129,7 +129,7 @@ export class ActivityLogger {
 		this.#writeQueue = this.#writeQueue
 			.then(() => fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n"))
 			.then(() => {
-				this.#broadcaster?.broadcast(entry);
+				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {
 				// Swallow errors — logging must never crash the loop
@@ -219,5 +219,29 @@ export class ActivityLogger {
 	/** Logged when a provider-level error is classified with a bit flag. */
 	logProviderError(agentName: string, errorFlag: string, message: string, recoverable: boolean, suggestion?: string): void {
 		this.log({ ts: Date.now(), type: "error_flag", worker: agentName, errorFlag, body: message, recoverable, suggestion });
+	}
+
+	// -- File Change ---------------------------------------------------------
+
+	/** Logged when a worker agent creates, modifies, or deletes a file. */
+	logFileChange(agentName: string, file: string, action: "created" | "modified" | "deleted", linesChanged?: number): void {
+		this.log({ ts: Date.now(), type: "file_change", worker: agentName, file, action, linesChanged });
+	}
+
+	// -- Streaming Delta (P3-1) ----------------------------------------------
+
+	/** Start of a streaming response — frontend creates a placeholder bubble. */
+	logStreamStart(msgId: string, from: string): void {
+		this.log({ ts: Date.now(), type: "stream_start", messageId: msgId, from, body: "" });
+	}
+
+	/** Incremental text chunk — frontend appends to the streaming bubble. */
+	logStreamDelta(msgId: string, from: string, delta: string): void {
+		this.log({ ts: Date.now(), type: "stream_delta", messageId: msgId, from, body: delta });
+	}
+
+	/** End of a streaming response — frontend finalises the bubble. */
+	logStreamEnd(msgId: string, from: string, finalBody: string): void {
+		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody });
 	}
 }

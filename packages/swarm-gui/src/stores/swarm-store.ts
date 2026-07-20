@@ -32,6 +32,11 @@ interface SwarmStore {
   /** P2-5: Latest convergence values for trend display. */
   convergenceHistory: Array<{ ts: number; jaccard: number; converged: boolean }>;
 
+  /** P2-10: Tool-call log for AgentTimeline visualization. */
+  toolCalls: Map<string, Array<{ ts: number; tool: string; file?: string; duration?: number; tokens?: number; exitCode?: number }>>;
+  /** File changes tracked for FileChangesPanel. */
+  fileChanges: Array<{ ts: number; agent: string; file: string; action: string; linesChanged?: number }>;
+
   init: () => Promise<void>;
   setActiveChannel: (id: string) => void;
   addActivity: (entry: ActivityEntry, fromHistory?: boolean) => void;
@@ -170,6 +175,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   blockerContext: null,
   error: null,
   convergenceHistory: [],
+  toolCalls: new Map(),
+  fileChanges: [],
 
   init: async () => {
     try {
@@ -190,43 +197,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         try {
           const blState = await api.getBeforeLoopState();
           set({ beforeLoopState: blState });
-
-          // Load persisted conversation history so page refresh doesn't lose dialogue
-          try {
-            const { history } = await api.getBeforeLoopHistory();
-            const messages = new Map(get().messages);
-            const channels = new Map(get().channels);
-            const msgList: ChatMessage[] = [];
-            for (let i = 0; i < history.length; i++) {
-              const turn = history[i];
-              const from = turn.role === "user" ? "operator" : "socrates";
-              msgList.push({
-                id: `history-${i}-${turn.role}`,
-                channelId: "roundtable",
-                from,
-                to: "all",
-                body: turn.content,
-                timestamp: 0,
-              });
-            }
-            if (msgList.length > 0) {
-              messages.set("roundtable", msgList);
-              if (!channels.has("roundtable")) {
-                channels.set("roundtable", {
-                  id: "roundtable",
-                  type: "roundtable",
-                  name: "Roundtable",
-                  participants: [],
-                  unreadCount: 0,
-                  lastMessage: msgList[msgList.length - 1].body,
-                  lastMessageTime: msgList[msgList.length - 1].timestamp,
-                });
-              }
-              set({ messages, channels });
-            }
-          } catch {
-            // History endpoint might not be available
-          }
+          // Conversation history is NOT loaded separately — the activity log
+          // replay below (api.getHistory → addActivity) already carries every
+          // broadcast event (operator + socrates messages) from activity.jsonl.
+          // Loading conversation turns in parallel would create duplicate
+          // ChatMessages with different IDs, doubling every message in chat.
         } catch {
           // might not be available
         }
@@ -255,6 +230,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // P3-3: Track last event timestamp for reconnection recovery.
       let lastEventTs = 0;
       sseClient.onConnectionChange((connected) => {
+        set({ isConnected: connected });
         if (connected && lastEventTs > 0) {
           // Reconnected — fetch missed events since last seen timestamp.
           import("../lib/api-client").then(({ api }) => {
@@ -344,6 +320,38 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               duration: 3000,
             });
           }
+
+          // Populate toolCalls for AgentTimeline
+          set((s) => {
+            const toolCalls = new Map(s.toolCalls);
+            const agent = entry.worker ?? entry.from ?? "unknown";
+            const agentCalls = [...(toolCalls.get(agent) ?? [])];
+            const call = {
+              ts: entry.ts,
+              tool: entry.toolName,
+              duration: entry.toolDurationMs ?? undefined,
+              exitCode: (entry.toolError ? 1 : 0) as number | undefined,
+            } as { ts: number; tool: string; file?: string; duration?: number; tokens?: number; exitCode?: number };
+            if (entry.file) {
+              call.file = entry.file;
+            }
+            agentCalls.push(call);
+            toolCalls.set(agent, agentCalls);
+            return { toolCalls };
+          });
+        }
+
+        // Track file_change events for FileChangesPanel
+        if (entry.type === "file_change" && entry.file) {
+          set((s) => ({
+            fileChanges: [...s.fileChanges, {
+              ts: entry.ts,
+              agent: entry.worker ?? entry.from ?? "unknown",
+              file: entry.file!,
+              action: entry.action ?? "modified",
+              linesChanged: entry.linesChanged,
+            }],
+          }));
         }
 
         // P2-11: Error flag — categorized error notification.
@@ -390,13 +398,42 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const channels = new Map(state.channels);
       const messages = new Map(state.messages);
 
-      // Use a per-addActivity invocation counter to guarantee unique IDs even
-      // when multiple activities arrive in the same millisecond from the same sender
+      // ── Streaming delta: append to the last streaming bubble ──
+      if (entry.type === "stream_delta" && entry.from) {
+        const msgId = (entry as any).messageId ?? entry.from;
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        const lastMsg = msgList[msgList.length - 1];
+        if (lastMsg && lastMsg.id.startsWith(`stream-`)) {
+          lastMsg.body += (entry.body ?? "");
+        } else {
+          msgList.push({
+            id: `stream-${String(msgId)}`,
+            channelId: "roundtable",
+            from: entry.from,
+            to: "all",
+            body: entry.body ?? "",
+            timestamp: entry.ts,
+          } as ChatMessage);
+        }
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
+
+      // ── Stream end: finalise the streaming bubble ──
+      if (entry.type === "stream_end" && entry.from) {
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        const lastMsg = msgList[msgList.length - 1];
+        if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
+          lastMsg.body = entry.body;
+        }
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
+
+      // ── Standard (non-streaming) message ──
       const seq = state.activities.length;
       const derived = deriveChannel(entry, seq);
       if (derived) {
-        // In live mode, skip operator echo messages — we add them optimistically
-        // In history mode, include all messages (loading from scratch)
         const isOperatorEcho = !fromHistory &&
           (entry.type === "broadcast" || entry.type === "steering") &&
           entry.from === "operator";
@@ -411,7 +448,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
 
         if (!isOperatorEcho) {
-          const msgList = messages.get(derived.id) ?? [];
+          const msgList = [...(messages.get(derived.id) ?? [])];
           msgList.push(derived.message);
           messages.set(derived.id, msgList);
         }

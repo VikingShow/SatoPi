@@ -80,7 +80,7 @@ if (def.mode === "loop" && def.loopConfig) {
 	// Read plan.md from workspace if it exists
 	let planContent: string | undefined;
 	try {
-		planContent = await Bun.file(path.join(workspace, ".omp", "plan.md")).text();
+		planContent = await Bun.file(path.join(swarmDir, ".omp", "plan.md")).text();
 	} catch {
 		/* plan.md is optional */
 	}

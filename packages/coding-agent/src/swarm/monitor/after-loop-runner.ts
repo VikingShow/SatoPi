@@ -118,11 +118,11 @@ export async function runAfterLoopPipeline(
     await experienceStore.writeSummary(runId, summary.markdown);
     logger.info("[AfterLoop] Summary written", { path: `.omp/experience/summaries/${runId}.md` });
 
-    // 7. Archive plan.md
+    // 7. Archive plan.md — plan lives in per-session swarm dir, archives in workspace .omp/plans/
     await stateTracker.updatePipeline({ roundtablePhase: "After Loop: archiving plan" });
     try {
       const { archivePlanForHistory } = await import("../before-loop");
-      await archivePlanForHistory(workspace);
+      await archivePlanForHistory(stateTracker.swarmDir, workspace);
       logger.info("[AfterLoop] plan.md archived to .omp/plans/");
     } catch (archiveErr) {
       logger.warn("[AfterLoop] Plan archival failed", { error: String(archiveErr) });
