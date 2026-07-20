@@ -27,6 +27,7 @@ import { BeforeLoopManager } from "../before-loop-manager";
 import { ExperienceStore } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
 import type { LoopSwarmConfig } from "../schema";
+import type { SwarmSessionManager } from "../swarm-session-manager";
 import { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
 import { runAfterLoopPipeline } from "./after-loop-runner";
@@ -89,6 +90,8 @@ class SwarmRunManager implements RunManager {
 	#stateTracker: StateTracker;
 	#activityLogger: ActivityLogger;
 	#experienceStore: ExperienceStore;
+		sessionManager?: SwarmSessionManager;
+	#sessionManager: SwarmSessionManager | undefined;
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
 	#loopConfig: LoopSwarmConfig | null = null;
@@ -109,12 +112,18 @@ class SwarmRunManager implements RunManager {
 		this.#stateTracker = opts.stateTracker;
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
+		this.#sessionManager = opts.sessionManager;
 	}
 
+
+		setSessionManager(sm: SwarmSessionManager): void { this.#sessionManager = sm; }
 	get isRunning(): boolean { return this.#running; }
 	getLastAfterLoopResult(): AfterLoopResult | null { return this.#lastAfterLoopResult; }
 
 	async start(): Promise<{ success: boolean; error?: string }> {
+
+			// Rotate session file so each Run gets a clean history slate.
+			try { await this.#sessionManager?.rotate(); } catch { /* best-effort */ }
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
 			const def = parseSwarmYaml(content);

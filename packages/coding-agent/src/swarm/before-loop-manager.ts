@@ -438,7 +438,10 @@ export class BeforeLoopManager {
 			await this.#saveConversation();
 
 			// stream_end finalises the streaming bubble the frontend created on stream_start.
-			this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput, result.thinking);
+			if (result.thinking) {
+				this.#activityLogger.logThinking("socrates", result.thinking);
+			}
+			this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput);
 
 			const newMtime = await this.#getPlanMtime();
 			if (newMtime > this.#planMtime) {

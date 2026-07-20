@@ -29,6 +29,7 @@ export type { AfterLoopResult };
 
 /** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
+		setSessionManager?(sm: import("../swarm-session-manager").SwarmSessionManager): void;
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
 	pause(): Promise<{ success: boolean; error?: string }>;
@@ -235,9 +236,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (ctx.services.runManager.isRunning) {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
-		// Rotate session file so each Run gets a clean history slate.
-		// Old files remain on disk for historical browsing.
-		try { await ctx.services.sessionManager?.rotate(); } catch { /* best-effort */ }
 		const result = await ctx.services.runManager.start();
 		return json(result, result.success ? 200 : 500);
 	},
