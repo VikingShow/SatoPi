@@ -536,6 +536,23 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ models });
 	},
 
+
+	// -- Sessions (create / list) ---------------------------------------
+	"POST /api/sessions": async (req, ctx) => {
+		try {
+			const body = (await req.json()) as { name: string };
+			if (!body.name || typeof body.name !== "string") {
+				return json({ error: "name is required" }, 400);
+			}
+			const registry = ctx.registry;
+			const existing = registry.getSession(body.name);
+			if (existing) return json({ name: body.name, exists: true });
+			const session = await registry.createSession(body.name);
+			return json({ name: session.name, exists: false });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
 	// -- Runs (list all sessions) ----------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
 		try {

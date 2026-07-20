@@ -8,16 +8,18 @@ import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
+import { Copy, Check } from "lucide-react";
 import { EmptyState } from "../shared/EmptyState";
 
 // ── Code block cache ──────────────────────────────────────────────────
 const codeCache = new Map<string, string>();
 function cacheKey(code: string, lang: string) { return `${lang}:${code.slice(0, 200)}`; }
 
-// ── Shiki code block renderer ──────────────────────────────────────────
+// ── Shiki code block renderer with copy button ─────────────────────────
 
 function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   const [html, setHtml] = useState<string | null>(() => codeCache.get(cacheKey(code, lang)) ?? null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,19 +31,46 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
     return () => { cancelled = true; };
   }, [code, lang]);
 
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard denied */ }
+  }, [code]);
+
+  const header = (
+    <div className="flex items-center justify-between px-3 py-1 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+      <span className="text-[11px] text-neutral-500 font-mono">{lang || "text"}</span>
+      <button
+        onClick={handleCopy}
+        className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+      >
+        {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+    </div>
+  );
+
   if (html === null) {
     return (
-      <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-3 overflow-x-auto my-1 text-xs font-mono">
-        <code>{code}</code>
-      </pre>
+      <div className="my-1 rounded-lg overflow-hidden border border-[#1a1a1a]">
+        {header}
+        <pre className="bg-[#0d0d0d] p-3 overflow-x-auto text-xs font-mono">
+          <code>{code}</code>
+        </pre>
+      </div>
     );
   }
 
   return (
-    <div
-      className="shiki-wrapper my-1 rounded-lg overflow-hidden border border-[#1a1a1a] text-xs [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:overflow-x-auto"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="my-1 rounded-lg overflow-hidden border border-[#1a1a1a]">
+      {header}
+      <div
+        className="shiki-wrapper text-xs [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:overflow-x-auto"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
   );
 }
 
