@@ -51,15 +51,20 @@ export class MonitorServer implements ActivityBroadcaster {
 	) {
 		this.#ctx = {
 			stateTracker,
-			swarmDir: stateTracker.swarmDir,
-			yamlPath,
-			workspaceDir,
-			runManager,
-			experienceStore,
-			beforeLoopManager,
-			steeringSink,
-			modelRegistry,
-			roleAssetManager,
+			paths: {
+				swarmDir: stateTracker.swarmDir,
+				workspaceDir,
+				yamlPath,
+			},
+			services: {
+				runManager,
+				experienceStore,
+				beforeLoopManager,
+				steeringSink,
+				modelRegistry,
+				roleAssetManager,
+			},
+			params: {},
 		};
 	}
 

@@ -23,7 +23,6 @@ import {
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
-import { RegionLockManager } from "@oh-my-pi/pi-coding-agent/swarm/region-lock";
 import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
 import {
 	parseSwarmYaml,
@@ -139,7 +138,7 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 			}
 
 			const workspace = path.isAbsolute(def.workspace) ? def.workspace : path.resolve(yamlDir, def.workspace);
-			const hasPlan = await planExists(workspace);
+			const hasPlan = await planExists(stateTracker.swarmDir);
 
 			if (hasPlan) {
 				// Plan exists — run directly
@@ -281,10 +280,10 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			pi.logger.debug("MonitorServer failed to start", { error: String(err) });
 		}
 
-		// Read plan.md from workspace if it exists (stamp with timestamp on first read)
+		// Read plan.md from session directory if it exists (stamp with timestamp on first read)
 		let planContent: string | undefined;
 		try {
-			planContent = await stampAndArchivePlanMd(workspace);
+			planContent = await stampAndArchivePlanMd(stateTracker.swarmDir, workspace);
 		} catch {
 			/* plan.md is optional */
 		}
@@ -407,9 +406,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
-					// Reset agent states and locks for a clean retry
+					// Reset agent states for a clean retry
 					await stateTracker.resetAgentStatuses();
-					RegionLockManager.reset();
 					continue;
 				}
 
@@ -489,9 +487,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 						maxRetries: maxEscalationRetries,
 						workspace,
 					});
-					// Reset agent states and locks for a clean retry
+					// Reset agent states for a clean retry
 					await stateTracker.resetAgentStatuses();
-					RegionLockManager.reset();
 					continue;
 				default:
 					break;
@@ -501,8 +498,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 
 	const loopStatus =
 		loopResult.status === "completed" ? "completed" : loopResult.status === "aborted" ? "aborted" : "failed";
-	// Clean up global lock state after loop exits (normal, crash, or escalation)
-	RegionLockManager.reset();
+	// Clean up after loop exits (normal, crash, or escalation)
 
 	// Finalize pipeline state — set status + completedAt so the widget and
 	// summary show the correct final state and elapsed time (mirrors what

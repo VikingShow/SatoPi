@@ -393,13 +393,13 @@ export class LoopController {
 	}
 
 	/**
-	 * Update the plan content. Writes the new plan to .omp/plan.md and
-	 * updates the in-memory planContent so subsequent iterations use it.
+	 * Update the plan content per-session. Writes the new plan to
+	 * {swarmDir}/.omp/plan.md and updates in-memory planContent.
 	 * Should be called while the loop is paused.
 	 */
-	async updatePlan(newPlanContent: string, workspace: string): Promise<void> {
+	async updatePlan(newPlanContent: string, swarmDir: string): Promise<void> {
 		this.#planContent = newPlanContent;
-		const planPath = path.join(workspace, ".omp", "plan.md");
+		const planPath = path.join(swarmDir, ".omp", "plan.md");
 		try {
 			await fs.mkdir(path.dirname(planPath), { recursive: true });
 			await fs.writeFile(planPath, newPlanContent, "utf-8");
@@ -497,8 +497,8 @@ export class LoopController {
 			workers: workerIds,
 			cloners: clonerIds,
 		}, this.#activityLogger);
-		// Create per-swarm RegionLockManager for file-level lock coordination.
-		const lockMgr = RegionLockManager.create();
+		// Create per-session RegionLockManager for file-level lock coordination.
+		const lockMgr = new RegionLockManager();
 		await this.#channel.broadcast(
 			this.#clonerId,
 			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`,

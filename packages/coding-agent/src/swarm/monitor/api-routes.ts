@@ -348,44 +348,23 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ models });
 	},
 
-	// -- Plan (plan.md) — per-session: lives in .swarm_{name}/.omp/plan.md
-	// Falls back to workspace-level paths for backward compatibility.
+	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md
+	// Each session has its own plan.md, archives are workspace-scoped.
 	"GET /api/plan": async (_req, ctx) => {
-		const candidates = [
-			path.join(ctx.swarmDir, ".omp", "plan.md"),
-			path.join(ctx.workspaceDir, ".omp", "plan.md"),
-			path.join(ctx.workspaceDir, "plan.md"),
-		];
-		for (const p of candidates) {
-			try {
-				const content = await Bun.file(p).text();
-				return json({ content, path: p });
-			} catch {
-				// try next
-			}
+		const planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
+		try {
+			const content = await Bun.file(planPath).text();
+			return json({ content, path: planPath });
+		} catch {
+			return json({ content: "", path: planPath, error: "plan.md not found" });
 		}
-		return json({ content: "", path: "", error: "plan.md not found" });
 	},
 
 	"PUT /api/plan": async (req, ctx) => {
 		try {
 			const body = (await req.json()) as { content: string };
 			const fs = await import("node:fs/promises");
-			// Write to the per-session .omp/plan.md
-			let planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
-			for (const p of [
-				path.join(ctx.swarmDir, ".omp", "plan.md"),
-				path.join(ctx.workspaceDir, ".omp", "plan.md"),
-				path.join(ctx.workspaceDir, "plan.md"),
-			]) {
-				try {
-					await fs.access(p);
-					planPath = p;
-					break;
-				} catch {
-					// not found, try next
-				}
-			}
+			const planPath = path.join(ctx.swarmDir, ".omp", "plan.md");
 			await fs.mkdir(path.dirname(planPath), { recursive: true });
 			await fs.writeFile(planPath, body.content, "utf-8");
 			return json({ success: true, path: planPath });

@@ -20,6 +20,7 @@ import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
 import { stampAndArchivePlanMd } from "../before-loop";
+import { getSessionPlanPath } from "../plan-paths";
 import { BeforeLoopManager } from "../before-loop-manager";
 import {
   ExperienceStore,
@@ -155,37 +156,20 @@ class SwarmRunManager implements RunManager {
 			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
-			// ── Read & stamp plan.md — per-session: swarm dir first ──
-			const planCandidates = [
-				path.join(this.#stateTracker.swarmDir, ".omp", "plan.md"),
-				path.join(this.#workspace, ".omp", "plan.md"),
-				path.join(this.#workspace, "plan.md"),
-			];
-			let planPath: string | null = null;
-			for (const p of planCandidates) {
-				try {
-					await fs.access(p);
-					planPath = p;
-					break;
-				} catch {
-					// not found, try next
-				}
-			}
-
+			// ── Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md ──
+			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);
 			let planContent: string | undefined;
-			if (planPath) {
-				// Stamp the plan with a generation timestamp (for tracking)
-				// stampAndArchivePlanMd writes the stamped version back to .omp/plan.md
+			try {
+				planContent = await stampAndArchivePlanMd(this.#stateTracker.swarmDir, this.#workspace);
+				logger.info("[RunManager] plan.md loaded and stamped", { length: planContent.length });
+			} catch {
+				// Fallback: read raw content without stamping
 				try {
-					planContent = await stampAndArchivePlanMd(this.#stateTracker.swarmDir);
-					logger.info("[RunManager] plan.md loaded and stamped", { length: planContent.length });
-				} catch (stampErr) {
-					// Fallback: read raw content without stamping
 					planContent = await fs.readFile(planPath, "utf-8");
 					logger.info("[RunManager] plan.md loaded (unstamped fallback)", { length: planContent.length });
+				} catch {
+					logger.warn("[RunManager] No plan.md found — workers will run without a plan");
 				}
-			} else {
-				logger.warn("[RunManager] No plan.md found — workers will run without a plan");
 			}
 
 			// Re-init state tracker with parsed agents
@@ -357,6 +341,7 @@ async function main() {
 		modelRegistry,
 		settings,
 		workspace: WORKSPACE_DIR,
+			swarmDir: stateTracker.swarmDir,
 		yamlPath: YAML_PATH,
 		stateTracker,
 		activityLogger,
@@ -368,6 +353,7 @@ async function main() {
 		modelRegistry,
 		settings,
 		workspace: WORKSPACE_DIR,
+			swarmDir: stateTracker.swarmDir,
 		yamlPath: YAML_PATH,
 		stateTracker,
 		activityLogger,
