@@ -371,6 +371,7 @@
       "name": "@oh-my-pi/pi-web",
       "version": "0.1.0",
       "dependencies": {
+        "lucide-react": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "^1.0.0",

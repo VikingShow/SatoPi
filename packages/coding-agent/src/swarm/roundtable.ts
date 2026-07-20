@@ -11,6 +11,7 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { RoleAsset } from "./role-asset";
+import { guardTaskBudget } from "./context-guard";
 
 // ============================================================================
 // Types
@@ -111,14 +112,28 @@ export class ClonerCouncil {
 			`- Optionally list \`praised_workers\` and \`criticized_workers\` by worker ID.`,
 			`\nReturn a single JSON line:`,
 			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
-		].join("\n");
+		];
+
+		// Guard: token budget for cloner review (default 128K)
+		const guard = guardTaskBudget(reviewPrompt, undefined, `ClonerCouncil #${iteration}`);
+		if (guard.exceeded) {
+			reviewPrompt.length = 0;
+			reviewPrompt.push(
+				`Review the output from iteration ${iteration + 1}.`,
+				planContent ? `Plan: ${planContent.slice(0, 4000)}...` : "",
+				`Worker Output: ${workerOutput.slice(0, 8000)}...`,
+				`Return JSON: {"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["..."],"worker_count_delta":0,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
+			);
+		}
+
+		const reviewText = reviewPrompt.join("\n");
 
 		const settled = await Promise.allSettled(
 			clonerIds.map((id, i) =>
 				runSubprocess({
 					cwd: workspace,
 					agent: buildClonerAgent(id, i),
-					task: reviewPrompt,
+					task: reviewText,
 					index: i,
 					id: `cloner-review-${id}-${iteration}`,
 					modelRegistry,

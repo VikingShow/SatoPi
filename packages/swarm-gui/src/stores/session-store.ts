@@ -11,6 +11,7 @@
  */
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { api } from "../lib/api-client";
 import type { ActivityEntry } from "../lib/types";
 import { useSwarmStore } from "./swarm-store";
@@ -44,10 +45,12 @@ function generateSwarmName(): string {
   return `SatoPi-${yyyymmdd}-${hhmm}`;
 }
 
-export const useSessionStore = create<SessionStore>((set, get) => ({
-  activeSwarm: "SatoPi",
-  viewingSession: null,
-  runs: [],
+export const useSessionStore = create<SessionStore>()(
+  persist(
+    (set, get) => ({
+      activeSwarm: "SatoPi",
+      viewingSession: null,
+      runs: [],
 
   loadRuns: async () => {
     try {
@@ -149,4 +152,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Re-init to reload live state
     useSwarmStore.getState().init();
   },
-}));
+}),
+{ name: "satopi-sessions" },
+),
+);

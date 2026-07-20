@@ -9,6 +9,7 @@ import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";  // kept for gradual migration
 import { SubprocessAgentExecutor, type AgentExecutor, type SwarmExecutorOptions } from "./executor";
 import { logger } from "@oh-my-pi/pi-utils";
+import { guardTaskBudget, type ContextGuardResult } from "./context-guard";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
 import { invokeHook, type PipelineHooks, type PipelineContext } from "./pipeline";
@@ -1257,19 +1258,35 @@ export class LoopController {
 			};
 			applyToolRestrictions(agentDef, resolveToolRestrictions(this.#loopConfig, "worker"));
 
-			return runSubprocess({ cwd: workspace, agent: agentDef, task: [
-						`You are Worker ${i + 1} of ${workerIds.length}.`,
-						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
-						`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
-						`Work in the workspace: ${workspace}.`,
-						planContent ? `\n## Plan\n\n${planContent}` : "",
-						feedbackBlock,
-						roleSuggestions?.[id]
-							? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
-							: "",
-						nominationPrompt ?? "",
-						extraContext ?? "",
-					].join("\n"),
+			const taskPieces = [
+				`You are Worker ${i + 1} of ${workerIds.length}.`,
+				`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
+				`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
+				`Work in the workspace: ${workspace}.`,
+				planContent ? `\n## Plan\n\n${planContent}` : "",
+				feedbackBlock,
+				roleSuggestions?.[id]
+					? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
+					: "",
+				nominationPrompt ?? "",
+				extraContext ?? "",
+			];
+
+			// Guard: check total token budget before spawning (default 128K for DeepSeek V3)
+			const guard = guardTaskBudget(taskPieces, undefined, `Worker ${id}`);
+			if (guard.exceeded) {
+				const shortFallback = [
+					`You are Worker ${i + 1} of ${workerIds.length}.`,
+					`Peers: ${workerIds.filter(w => w !== id).join(", ")}.`,
+					planContent ? `Plan: ${planContent.slice(0, 4000)}...` : "",
+					`Context exceeded — compacted. Work on your assigned area and coordinate via IRC.`,
+				];
+				logger.warn(`[LoopController] Task too long for ${id} (${guard.utilisation.toFixed(1)}%), using fallback`);
+				taskPieces.length = 0;
+				taskPieces.push(...shortFallback);
+			}
+
+			return runSubprocess({ cwd: workspace, agent: agentDef, task: taskPieces.join("\n"),
 					index: i,
 					id: `worker-${id}`,
 					modelRegistry,
