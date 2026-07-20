@@ -445,7 +445,7 @@ async #runSocrates(): Promise<void> {
 
 				// Push final Socrates response to frontend via SSE (stream_end
 				// finalises the streaming bubble the frontend created on stream_start).
-				this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput);
+				this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput, result.thinking);
 
 				// Check if plan.md was written or updated during this run
 				const newMtime = await this.#getPlanMtime();

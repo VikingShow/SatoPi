@@ -426,6 +426,8 @@ export interface SingleResult {
 	modelOverride?: string | string[];
 	/** Resolved model display string in the form `<provider>/<id>`, optionally suffixed with `:<thinkingLevel>` when the level was set explicitly. Omitted from tool-result JSON when undefined to keep wire payloads small. */
 	resolvedModel?: string;
+	/** Aggregated thinking/reasoning text captured from the model's chain-of-thought. */
+	thinking?: string;
 	error?: string;
 	aborted?: boolean;
 	abortReason?: string;

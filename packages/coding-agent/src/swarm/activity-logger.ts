@@ -247,7 +247,7 @@ export class ActivityLogger {
 	}
 
 	/** End of a streaming response — frontend finalises the bubble. */
-	logStreamEnd(msgId: string, from: string, finalBody: string): void {
-		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody });
+	logStreamEnd(msgId: string, from: string, finalBody: string, thinking?: string): void {
+		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody, thinking });
 	}
 }
