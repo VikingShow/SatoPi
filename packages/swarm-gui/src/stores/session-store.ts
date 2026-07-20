@@ -72,18 +72,8 @@ export const useSessionStore = create<SessionStore>()(
     const newName = generateSwarmName();
 
     // Create the session on the backend (creates .swarm_{name}/ directory
-    // and session services).  Call this BEFORE updating the YAML so the
-    // backend has the session ready when the UI switches.
+    // and session services).
     try { await api.createSession(newName); } catch { /* ok if exists */ }
-
-    // Update the YAML's swarm.name so a restart picks up the new name.
-    try {
-      const { yaml } = await api.getConfig();
-      const updated = yaml.replace(/^(\s*name:\s*).+$/m, `$1${newName}`);
-      await api.saveConfig(updated);
-    } catch {
-      // If YAML update fails, still continue — backend will use the new name on next run
-    }
 
     // Switch the api/sse clients to the new session BEFORE refreshing
     // state, otherwise refreshState() reads from the old session.
