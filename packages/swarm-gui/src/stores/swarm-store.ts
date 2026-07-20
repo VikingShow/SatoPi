@@ -262,6 +262,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // P3-3: Track last event timestamp for reconnection recovery.
       let lastEventTs = 0;
       sseClient.onConnectionChange((connected) => {
+        set({ isConnected: connected });
         if (connected && lastEventTs > 0) {
           // Reconnected — fetch missed events since last seen timestamp.
           import("../lib/api-client").then(({ api }) => {
