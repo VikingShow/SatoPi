@@ -3,6 +3,7 @@ import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkTreeToCode } from "../../lib/remark-tree-to-code";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
@@ -74,7 +75,7 @@ function MessageBody({ body }: { body: string }) {
       [&_hr]:border-neutral-700 [&_hr]:my-2
     ">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkTreeToCode]}
         components={{
           code: ({ className, children, ...props }) => {
             // Only use custom code renderer for block code (has className with language-)

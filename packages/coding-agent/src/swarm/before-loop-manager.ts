@@ -429,9 +429,6 @@ export class BeforeLoopManager {
 						this.#activityLogger.logStreamDelta(msgId, "socrates", delta);
 					}
 				},
-						this.#activityLogger.logStreamDelta(msgId, "socrates", outputLines[lastSentIdx]);
-					}
-				},
 			});
 
 			const output = result.output || "(no output)";
