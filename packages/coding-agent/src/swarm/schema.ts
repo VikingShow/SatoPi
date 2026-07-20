@@ -194,6 +194,10 @@ export interface LoopSwarmConfig {
 	hooks?: HookConfig[];
 	/** Git-based snapshot / rollback configuration for loop iterations. */
 	snapshot?: LoopSnapshotConfig;
+	/** P4: Mnemopi semantic recall configuration. */
+	mnemopi?: MnemopiConfig;
+	/** P5.5: Offload pipeline + Mermaid context graph configuration. */
+	offload?: OffloadConfig;
 }
 
 // ============================================================================
@@ -280,6 +284,43 @@ export interface AgentToolRestriction {
 	blocked?: string[];
 }
 
+// ============================================================================
+// P4: Mnemopi semantic recall config
+// ============================================================================
+
+/** Semantic recall configuration powered by mnemopi. */
+export interface MnemopiConfig {
+	/** Enable semantic recall across the swarm loop. Default false. */
+	enabled?: boolean;
+	/** Recall top-K. Default 5. */
+	topK?: number;
+	/** Deduplicate injections across iterations. Default true. */
+	deduplicate?: boolean;
+	/** Auto-store threshold: only outcomes with score >= this value are persisted. Default 5. */
+	autoStoreThreshold?: number;
+}
+
+// ============================================================================
+// P5.5: Offload pipeline + Mermaid context graph config
+// ============================================================================
+
+/**
+ * Offload pipeline configuration for L1→L1.5→L2→L3 context offload
+ * and Mermaid context graph injection into Worker/Cloner/LoopController.
+ */
+export interface OffloadConfig {
+	/** Enable the full offload pipeline. Default false. */
+	enabled?: boolean;
+	/** L1 trigger threshold: flush pending entries when count >= this. Default 4. */
+	l1TriggerThreshold?: number;
+	/** L2 trigger threshold: trigger L2 when null-phase entries >= this. Default 3. */
+	l2NullThreshold?: number;
+	/** L2 timeout (seconds): force L2 when no L2 ran within this window. Default 120. */
+	l2TimeoutSeconds?: number;
+	/** Inject Mermaid context graph into agent prompts. Default true. */
+	injectMermaid?: boolean;
+}
+
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
 	const workersRaw = (raw.workers as Record<string, unknown>) ?? {};
@@ -327,6 +368,39 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		hooks: parseHooksConfig(raw.hooks as Record<string, unknown>[] | undefined),
 		// Snapshot / rollback config.
 		snapshot: parseSnapshotConfig(raw.snapshot as Record<string, unknown> | undefined),
+		// P4: Mnemopi semantic recall (opt-in, disabled by default).
+		mnemopi: parseMnemopiConfig(raw.mnemopi as Record<string, unknown> | undefined),
+		// P5.5: Offload pipeline (opt-in, disabled by default).
+		offload: parseOffloadConfig(raw.offload as Record<string, unknown> | undefined),
+	};
+}
+
+// ============================================================================
+// P4: Parse Mnemopi config from YAML
+// ============================================================================
+
+function parseMnemopiConfig(raw: Record<string, unknown> | undefined): MnemopiConfig | undefined {
+	if (!raw) return undefined;
+	return {
+		enabled: (raw.enabled as boolean) ?? false,
+		topK: (raw.top_k as number) ?? 5,
+		deduplicate: (raw.deduplicate as boolean) ?? true,
+		autoStoreThreshold: (raw.auto_store_threshold as number) ?? 5,
+	};
+}
+
+// ============================================================================
+// P5.5: Parse Offload config from YAML
+// ============================================================================
+
+function parseOffloadConfig(raw: Record<string, unknown> | undefined): OffloadConfig | undefined {
+	if (!raw) return undefined;
+	return {
+		enabled: (raw.enabled as boolean) ?? false,
+		l1TriggerThreshold: (raw.l1_trigger_threshold as number) ?? 4,
+		l2NullThreshold: (raw.l2_null_threshold as number) ?? 3,
+		l2TimeoutSeconds: (raw.l2_timeout_seconds as number) ?? 120,
+		injectMermaid: (raw.inject_mermaid as boolean) ?? true,
 	};
 }
 
