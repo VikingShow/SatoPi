@@ -16,6 +16,7 @@ import { useSessionStore } from "../../stores/session-store";
 import { ChevronDown, History, Play, Check, AlertCircle, Loader2, RotateCcw, Plus, X, FolderOpen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { Button } from "../ui/button";
 
 type RunMeta = {
   name: string;
@@ -42,7 +43,7 @@ function timeAgo(iso: string | null): string {
 function StatusBadge({ status }: { status: RunMeta["status"] }) {
   if (status === "running") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
         <Loader2 size={9} className="animate-spin" />
         RUN
       </span>
@@ -50,7 +51,7 @@ function StatusBadge({ status }: { status: RunMeta["status"] }) {
   }
   if (status === "completed") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-status-success">
         <Check size={9} />
         DONE
       </span>
@@ -58,7 +59,7 @@ function StatusBadge({ status }: { status: RunMeta["status"] }) {
   }
   if (status === "failed") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-red-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-status-danger">
         <AlertCircle size={9} />
         FAIL
       </span>
@@ -139,23 +140,21 @@ export default function SessionSwitcher() {
   return (
     <div className="relative" ref={popoverRef}>
       {/* Trigger button — shows current session name */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-sm transition-colors cursor-pointer ${
-          open
-            ? "bg-primary/15 text-primary"
-            : "text-foreground/80 hover:text-foreground/90 hover:bg-background-elevated"
-        }`}
+        className={open ? "bg-primary/15 text-primary" : ""}
         title="Switch session"
       >
         {viewingSession ? (
-          <History size={13} className="text-amber-400" />
+          <History size={13} className="text-primary" />
         ) : (
-          <Play size={13} className="text-emerald-400" />
+          <Play size={13} className="text-status-success" />
         )}
         <span className="font-medium tracking-tight max-w-[180px] truncate">{displayedName}</span>
         <ChevronDown size={12} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+      </Button>
 
       {open && (
         <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-lg border border-border bg-background-card shadow-2xl shadow-black/40 overflow-hidden">
@@ -166,19 +165,21 @@ export default function SessionSwitcher() {
               Sessions ({allRuns.length})
             </span>
             {viewingSession && (
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => { backToCurrent(); setOpen(false); }}
-                className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="text-status-success hover:text-status-success"
               >
                 <RotateCcw size={10} />
                 Back to live
-              </button>
+              </Button>
             )}
           </div>
 
           {/* "Viewing historical" banner */}
           {viewingSession && (
-            <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-[11px] text-amber-300 flex items-center gap-1.5">
+            <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-[11px] text-primary flex items-center gap-1.5">
               <History size={11} />
               Viewing: <span className="font-mono font-medium">{viewingSession}</span>
             </div>
@@ -212,38 +213,40 @@ export default function SessionSwitcher() {
                       isViewing
                         ? "bg-primary/10"
                         : isActive
-                        ? "bg-emerald-500/5 hover:bg-emerald-500/10"
+                        ? "bg-status-success/5 hover:bg-status-success/10"
                         : "hover:bg-background-elevated"
                     }`}
                   >
                     <div className="flex items-center gap-2 w-full">
                       {isActive && !isViewing ? (
-                        <Play size={11} className="text-emerald-400 shrink-0" fill="currentColor" />
+                        <Play size={11} className="text-status-success shrink-0" fill="currentColor" />
                       ) : isViewing ? (
-                        <History size={11} className="text-amber-400 shrink-0" />
+                        <History size={11} className="text-primary shrink-0" />
                       ) : (
                         <FolderOpen size={11} className="text-muted-foreground shrink-0" />
                       )}
                       <span className={`text-xs flex-1 truncate font-medium ${
-                        isViewing ? "text-primary" : isActive ? "text-emerald-300" : "text-foreground"
+                        isViewing ? "text-primary" : isActive ? "text-status-success" : "text-foreground"
                       }`}>
                         {run.name}
                       </span>
-                      {isViewing && <span className="text-[9px] uppercase tracking-wider text-amber-400 font-bold">VIEW</span>}
-                      {isActive && !isViewing && <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-bold">LIVE</span>}
+                      {isViewing && <span className="text-[9px] uppercase tracking-wider text-primary font-bold">VIEW</span>}
+                      {isActive && !isViewing && <span className="text-[9px] uppercase tracking-wider text-status-success font-bold">LIVE</span>}
                       {/* Delete — confirmed via native confirm() to avoid accidental data loss */}
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm(`Delete session “${run.name}”? This cannot be undone.`)) {
+                          if (window.confirm(`Delete session "${run.name}"? This cannot be undone.`)) {
                             deleteSession(run.name);
                           }
                         }}
-                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto shrink-0 p-0.5 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto hover:text-status-danger hover:bg-status-danger/10"
                         title="Delete session"
                       >
                         <Trash2 size={11} />
-                      </button>
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between gap-2 pl-5">
                       <StatusBadge status={run.status} />
@@ -259,16 +262,18 @@ export default function SessionSwitcher() {
 
           {/* New session action */}
           <div className="border-t border-border p-2 bg-background-elevated/30">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleNew}
               disabled={newBusy || isRunning}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-foreground bg-background-card hover:bg-primary/15 hover:text-primary border border-border rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full hover:bg-primary/15 hover:text-primary"
               title={isRunning ? "Stop the current run first" : "Start a fresh session"}
             >
               {newBusy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
               New session
               {isRunning && <span className="text-[10px] text-status-warning ml-1">(stop current first)</span>}
-            </button>
+            </Button>
           </div>
         </div>
       )}

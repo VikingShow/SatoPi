@@ -8,6 +8,7 @@ import {
 import { api } from "../../lib/api-client";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { CodeEditor } from "./CodeEditor";
+import { Button } from "../ui/button";
 
 export default function PlanViewer() {
   const planVersion = useSwarmStore((s) => s.planVersion);
@@ -88,12 +89,14 @@ export default function PlanViewer() {
           <span className="text-[11px] text-amber-300/90">
             The swarm is running. Pause before editing so workers don't read a half-written plan.
           </span>
-          <button
+          <Button
+            variant="default"
+            size="xs"
             onClick={() => pauseRun()}
-            className="flex shrink-0 items-center gap-1 rounded bg-amber-600/80 px-2 py-1 text-xs font-medium text-foreground hover:bg-amber-500 transition-colors"
+            className="bg-primary/80 hover:bg-primary"
           >
             <Pause size={12} /> Pause
-          </button>
+          </Button>
         </div>
       );
     }
@@ -103,14 +106,16 @@ export default function PlanViewer() {
           <span className="text-[11px] text-emerald-300/90">
             {isDirty ? "Save your changes, then resume to apply the updated plan." : "Loop paused. Resume when you're done editing."}
           </span>
-          <button
+          <Button
+            variant="default"
+            size="xs"
             onClick={() => resumeRun()}
             disabled={isDirty}
-            className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/80 px-2 py-1 text-xs font-medium text-foreground hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-status-success/80 hover:bg-status-success"
             title={isDirty ? "Save first" : "Resume the loop"}
           >
             <Play size={12} /> Resume
-          </button>
+          </Button>
         </div>
       );
     }
@@ -123,69 +128,71 @@ export default function PlanViewer() {
       <div className="flex items-center gap-1">
         {/* Mode toggle */}
         {mode === "preview" ? (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setMode("edit")}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-muted-foreground hover:text-foreground/80" : "text-muted-foreground hover:text-foreground bg-background-elevated"}`}
             title="Edit plan"
           >
             <Pencil size={12} />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => { setMode("preview"); setEditContent(content); }}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-muted-foreground hover:text-foreground/80" : "text-muted-foreground hover:text-foreground bg-background-elevated"}`}
             title="Preview"
           >
             <Eye size={12} />
-          </button>
+          </Button>
         )}
 
         {/* Save (edit mode only) */}
         {mode === "edit" && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={savePlan}
             disabled={!isDirty || saving}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-              saved ? "text-status-success bg-status-success/10" :
-              isDirty && !saving ? "text-primary bg-primary/10 hover:bg-primary/20" :
-              "text-muted-foreground/60 bg-background-elevated"
-            }`}
+            className={saved ? "text-status-success" : isDirty && !saving ? "text-primary" : "text-muted-foreground/60"}
             title="Save"
           >
             {saved ? <Check size={12} /> : <Save size={12} />}
-          </button>
+          </Button>
         )}
 
         {/* Monaco toggle (edit mode only) */}
         {mode === "edit" && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setUseMonaco((v) => !v)}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors cursor-pointer ${
-              useMonaco ? "text-blue-400 bg-blue-500/10" : "text-muted-foreground hover:text-foreground/80"
-            }`}
+            className={useMonaco ? "text-status-info" : ""}
             title={useMonaco ? "Switch to textarea" : "Switch to Monaco Editor"}
           >
             <Code2 size={12} />
-          </button>
+          </Button>
         )}
 
         {/* Refresh */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={loadPlan}
-          className="text-muted-foreground/60 hover:text-muted-foreground transition-colors p-1"
           title="Refresh"
         >
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-        </button>
+        </Button>
 
         {/* Fullscreen */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={() => setFullscreen(true)}
-          className="text-muted-foreground/60 hover:text-muted-foreground transition-colors p-1"
           title="Expand"
         >
           <Maximize2 size={12} />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -295,12 +302,13 @@ export default function PlanViewer() {
               </div>
               <div className="flex items-center gap-2">
                 <Toolbar />
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => setFullscreen(false)}
-                  className="text-muted-foreground hover:text-foreground/80 transition-colors p-1"
                 >
                   <X size={16} />
-                </button>
+                </Button>
               </div>
             </div>
 
