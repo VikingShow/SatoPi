@@ -9,6 +9,7 @@ import { useSessionStore } from "../../stores/session-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
+import { ErrorBoundary } from "../shared/ErrorBoundary";
 
 // ── Code block cache ──────────────────────────────────────────────────
 const codeCache = new Map<string, string>();
@@ -185,7 +186,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         }`}
       >
         {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
-        <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+        <ErrorBoundary fallbackText={msg.body}>
+          <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+        </ErrorBoundary>
       </div>
     </div>
   );
@@ -265,18 +268,36 @@ export default function ChatView() {
     overscan: 5,
   });
 
-  // Auto-scroll to bottom: reset prevLenRef when session changes so we always
-  // scroll to bottom when entering a new session or switching to a historical one.
-  const prevLenRef = useRef(displayMessages.length);
+  // ── P1-3: stick-to-bottom during streaming ────────────────────────────
+  // The last bubble grows token-by-token WITHOUT changing displayMessages.length,
+  // so a length-only effect would not follow the stream. We track whether the
+  // user is pinned near the bottom; if so we follow both new messages and the
+  // growing body of the last one. If the user scrolls up to read history, we
+  // stop auto-scrolling so we don't yank them back down.
+  const stickRef = useRef(true);
+  const handleScroll = useCallback(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // Body length of the last message — changes on every flushed stream batch.
+  const lastBodyLen = channelMessages.length > 0
+    ? channelMessages[channelMessages.length - 1].body.length
+    : 0;
+
+  // Reset stick + force scroll when switching sessions.
   useEffect(() => {
-    prevLenRef.current = -1; // force scroll-to-bottom on next render
+    stickRef.current = true;
   }, [viewingSession]);
+
   useEffect(() => {
-    if (displayMessages.length > prevLenRef.current) {
-      virtualizer.scrollToIndex(displayMessages.length - 1, { behavior: "smooth" });
+    if (displayMessages.length === 0) return;
+    if (stickRef.current) {
+      // Instant align to end — smooth behavior janks during rapid streaming.
+      virtualizer.scrollToIndex(displayMessages.length - 1, { align: "end" });
     }
-    prevLenRef.current = displayMessages.length;
-  }, [displayMessages.length, virtualizer]);
+  }, [displayMessages.length, lastBodyLen, viewingSession, virtualizer]);
 
   function getSystemText(a: typeof activities[0]): string {
     switch (a.type) {
@@ -333,7 +354,7 @@ export default function ChatView() {
   return (
     <div className="flex-1 flex flex-col bg-background">
       {/* Messages — virtualized for performance */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
+      <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (
           <>
             {isIdle ? (
