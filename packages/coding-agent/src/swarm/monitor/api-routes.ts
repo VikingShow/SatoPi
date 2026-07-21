@@ -18,6 +18,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
 import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
+import { SwarmSessionManager } from "../swarm-session-manager";
 
 export type { AfterLoopResult };
 
@@ -27,6 +28,7 @@ export type { AfterLoopResult };
 
 /** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
+		setSessionManager?(sm: import("../swarm-session-manager").SwarmSessionManager): void;
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
 	pause(): Promise<{ success: boolean; error?: string }>;
@@ -39,6 +41,7 @@ export interface RunManager {
 
 /** Manages the Before Loop interactive planning phase. */
 export interface BeforeLoopManager {
+		setSessionManager?(sm: SwarmSessionManager): void;
 	start(task: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
@@ -59,6 +62,8 @@ export interface SteeringSink {
 // ============================================================================
 
 export interface ApiRouteContext {
+		/** The session registry (for create/destroy endpoints). */
+		registry: SessionRegistry;
 	/** File-system paths for the resolved session. */
 	paths: {
 		swarmDir: string;
@@ -75,6 +80,7 @@ export interface ApiRouteContext {
 		experienceStore?: ExperienceStore;
 		modelRegistry?: ModelRegistry;
 		roleAssetManager?: RoleAssetManager;
+		sessionManager?: SwarmSessionManager;
 	};
 	/** URL path parameters extracted by the router. */
 	params: Record<string, string>;
@@ -112,9 +118,11 @@ export function buildApiRouteContext(
 		runManager: session?.runManager,
 		beforeLoopManager: session?.beforeLoopManager,
 		steeringSink: session?.steeringSink,
+		sessionManager: session?.sessionManager,
 	};
 
 	return {
+		registry,
 		paths,
 		stateTracker: session?.stateTracker as StateTracker,
 		services,
@@ -133,14 +141,14 @@ function json(data: unknown, status = 200): Response {
 	});
 }
 
+/**
+ * Read activity entries from session.jsonl for a given swarm directory.
+ * Returns serialised JSON lines (mirroring the old activity.jsonl format
+ * so existing frontend code continues to work unchanged).
+ */
 async function readActivityLog(swarmDir: string): Promise<string[]> {
-	const logPath = path.join(swarmDir, "activity.jsonl");
-	try {
-		const content = await Bun.file(logPath).text();
-		return content.trim().split("\n").filter(Boolean);
-	} catch {
-		return [];
-	}
+	const entries = await SwarmSessionManager.readActivityEntries(swarmDir);
+	return entries.map(e => JSON.stringify(e));
 }
 
 // ============================================================================
@@ -230,14 +238,15 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (ctx.services.runManager.isRunning) {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
-		const result = await ctx.services.runManager.start();
-		return json(result, result.success ? 200 : 500);
+		// Guard: the only valid entry point for starting a run is
+		// POST /before-loop/confirm (via the BeforeLoop flow).
+		return json({ error: "Use the Before Loop flow to start a run. Direct /run/start is not allowed." }, 400);
 	},
 
 	"POST/run/stop": async (_req, ctx) => {
 		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
 		const result = await ctx.services.runManager.stop();
-		return json(result, result.success ? 200 : 500);
+		return json(result, result.success ? 200 : 409);
 	},
 
 	"POST/run/pause": async (_req, ctx) => {
@@ -377,7 +386,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 						if (label === "stdout") { try { shell.kill(); } catch {}; controller.close(); }
 					};
 
+					// @ts-expect-error — Bun's ReadableStreamDefaultReader lacks the spec `readMany` method
 					readLoop(stdoutReader, "stdout");
+					// @ts-expect-error — Bun's ReadableStreamDefaultReader lacks the spec `readMany` method
 					readLoop(stderrReader, "stderr");
 				} catch { controller.close(); }
 			},
@@ -529,6 +540,35 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ models });
 	},
 
+
+	// -- Sessions (create / list) ---------------------------------------
+	"POST /api/sessions": async (req, ctx) => {
+		try {
+			const body = (await req.json()) as { name: string };
+			if (!body.name || typeof body.name !== "string") {
+				return json({ error: "name is required" }, 400);
+			}
+			const registry = ctx.registry;
+			const existing = registry.getSession(body.name);
+			if (existing) return json({ name: body.name, exists: true });
+			const session = await registry.createSession(body.name);
+			return json({ name: session.name, exists: false });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
+	"DELETE /api/sessions": async (req, ctx) => {
+		try {
+			const body = (await req.json()) as { name: string };
+			if (!body.name || typeof body.name !== "string") {
+				return json({ error: "name is required" }, 400);
+			}
+			await ctx.registry.destroySession(body.name);
+			return json({ success: true, name: body.name });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
 	// -- Runs (list all sessions) ----------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
 		try {
@@ -541,18 +581,17 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				let lastActivity: string | null = null;
 				let messageCount = 0;
 				let status: "idle" | "running" | "completed" | "failed" = "idle";
-				try {
-					const statePath = path.join(swarmDir, "state", "pipeline.json");
-					const stateContent = await Bun.file(statePath).text();
-					const st = JSON.parse(stateContent) as { status?: string; startedAt?: number; completedAt?: number };
-					status = (st.status as typeof status) ?? "idle";
-					if (st.completedAt) lastActivity = new Date(st.completedAt).toISOString();
-					else if (st.startedAt) lastActivity = new Date(st.startedAt).toISOString();
-				} catch { /* no state file */ }
-				try {
-					const logContent = await Bun.file(path.join(swarmDir, "activity.jsonl")).text();
-					messageCount = logContent.trim().split("\n").filter(Boolean).length;
-				} catch { /* no log */ }
+				// Read latest state from session.jsonl
+				const latestState = await SwarmSessionManager.readLatestState(swarmDir);
+				if (latestState) {
+					status = (latestState.status as typeof status) ?? "idle";
+					const completedAt = (latestState as any).completedAt;
+					const startedAt = (latestState as any).startedAt;
+					if (completedAt) lastActivity = new Date(completedAt).toISOString();
+					else if (startedAt) lastActivity = new Date(startedAt).toISOString();
+				}
+				// Count activity entries from session.jsonl
+				messageCount = await SwarmSessionManager.countActivityEntries(swarmDir);
 				return { name, dir, lastActivity, messageCount, status };
 			}));
 			runs.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));

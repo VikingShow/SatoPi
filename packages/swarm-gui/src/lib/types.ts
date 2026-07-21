@@ -32,6 +32,10 @@ export interface BlockerContext {
   stagnationCount: number;
   workerCrashCounts: Record<string, number>;
   reason: string;
+  /** Auto-continue timeout in ms (0 / undefined = no auto-continue). */
+  timeoutMs?: number;
+  /** Absolute epoch-ms deadline for auto-continue, drives the client countdown. */
+  deadline?: number;
 }
 
 export type BlockerResolution = "continue" | "skip" | "abort";
@@ -139,6 +143,8 @@ export interface ActivityEntry {
   recoverable?: boolean;
   suggestion?: string;
   linesChanged?: number;
+  /** Chain-of-thought reasoning from the model. */
+  thinking?: string;
 }
 
 export type ChatChannel = Omit<PiChatChannel, "messageCount"> & {
@@ -152,6 +158,10 @@ export interface ChatMessage extends PiChatMessage {
   to: string;
   threadId?: string;
   threadReplies?: ChatMessage[];
+  /** Chain-of-thought reasoning from the model, displayed in a collapsible section. */
+  thinking?: string;
+  /** True while a streaming message is still receiving deltas (no body yet → show loading indicator). */
+  streaming?: boolean;
 }
 
 export interface ModelOption {

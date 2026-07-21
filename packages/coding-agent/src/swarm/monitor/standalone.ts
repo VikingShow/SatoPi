@@ -27,6 +27,7 @@ import { BeforeLoopManager } from "../before-loop-manager";
 import { ExperienceStore } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
 import type { LoopSwarmConfig } from "../schema";
+import type { SwarmSessionManager } from "../swarm-session-manager";
 import { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
 import { runAfterLoopPipeline } from "./after-loop-runner";
@@ -54,13 +55,13 @@ async function resolveSwarmName(yamlPath: string): Promise<string> {
 	}
 }
 
-const DEFAULT_YAML = `name: SatoPi
-mode: loop
-workspace: .
-agents: {}
-targetCount: 1
-loop:
-  maxIterations: 10
+const DEFAULT_YAML = `swarm:
+  name: SatoPi
+  mode: loop
+  workspace: .
+  agents: {}
+  target_count: 1
+  max_iterations: 10
   workers:
     initial: 3
     min: 1
@@ -68,11 +69,11 @@ loop:
     auto: false
   cloners:
     count: 2
-  planDebate:
+  plan_debate:
     enabled: true
-    clonerCount: 2
-    maxRounds: 2
-    convergenceThreshold: 0.7
+    cloner_count: 2
+    max_rounds: 2
+    convergence_threshold: 0.7
 `;
 
 // ============================================================================
@@ -89,6 +90,7 @@ class SwarmRunManager implements RunManager {
 	#stateTracker: StateTracker;
 	#activityLogger: ActivityLogger;
 	#experienceStore: ExperienceStore;
+	#sessionManager: SwarmSessionManager | undefined;
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
 	#loopConfig: LoopSwarmConfig | null = null;
@@ -101,6 +103,7 @@ class SwarmRunManager implements RunManager {
 		stateTracker: StateTracker;
 		activityLogger: ActivityLogger;
 		experienceStore: ExperienceStore;
+		sessionManager?: SwarmSessionManager;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -109,12 +112,18 @@ class SwarmRunManager implements RunManager {
 		this.#stateTracker = opts.stateTracker;
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
+		this.#sessionManager = opts.sessionManager;
 	}
 
+
+		setSessionManager(sm: SwarmSessionManager): void { this.#sessionManager = sm; }
 	get isRunning(): boolean { return this.#running; }
 	getLastAfterLoopResult(): AfterLoopResult | null { return this.#lastAfterLoopResult; }
 
 	async start(): Promise<{ success: boolean; error?: string }> {
+
+			// Rotate session file so each Run gets a clean history slate.
+			try { await this.#sessionManager?.rotate(); } catch { /* best-effort */ }
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
 			const def = parseSwarmYaml(content);
@@ -274,6 +283,10 @@ async function createSessionServices(
 // ============================================================================
 
 async function main() {
+	if (process.env.OMP_CONSOLE_LOG) {
+		logger.setTransports({ console: true, file: true });
+	}
+
 	await fs.mkdir(WORKSPACE_DIR, { recursive: true });
 	try { await fs.access(YAML_PATH); } catch {
 		await fs.writeFile(YAML_PATH, DEFAULT_YAML, "utf-8");
@@ -310,6 +323,18 @@ async function main() {
 	// Create SessionRegistry and default session
 	const registry = new SessionRegistry(shared, createSessionServices);
 	const session = await registry.createSession(swarmName);
+
+	// Discover and restore sessions from previous runs.
+	try {
+		const entries = await fs.readdir(WORKSPACE_DIR);
+		for (const entry of entries) {
+			if (!entry.startsWith(".swarm_")) continue;
+			const name = entry.replace(".swarm_", "");
+			if (name === swarmName || registry.getSession(name)) continue;
+			await registry.createSession(name);
+			logger.info("Restored historical session", { name });
+		}
+	} catch { /* best-effort */ }
 
 	// Start MonitorServer (receives the registry)
 	const server = new MonitorServer(registry);

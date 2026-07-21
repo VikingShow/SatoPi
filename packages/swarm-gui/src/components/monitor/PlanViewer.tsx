@@ -3,14 +3,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FileText, ChevronDown, ChevronRight, RefreshCw,
-  Maximize2, X, Pencil, Eye, Save, Check, Code2,
+  Maximize2, X, Pencil, Eye, Save, Check, Code2, Pause, Play,
 } from "lucide-react";
 import { api } from "../../lib/api-client";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { CodeEditor } from "./CodeEditor";
+import { Button } from "../ui/button";
 
 export default function PlanViewer() {
   const planVersion = useSwarmStore((s) => s.planVersion);
+  const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const pauseRun = useSwarmStore((s) => s.pauseRun);
+  const resumeRun = useSwarmStore((s) => s.resumeRun);
   const [content, setContent] = useState("");
   const [editContent, setEditContent] = useState("");
   const [path, setPath] = useState("");
@@ -73,75 +77,122 @@ export default function PlanViewer() {
 
   const isDirty = editContent !== content;
 
+  // ── Pause→edit→resume closed loop ──
+  // Editing plan.md while the swarm is actively running is unsafe: workers may
+  // read a half-written plan mid-iteration. Guide the user to pause first, then
+  // resume after saving so the fresh plan is picked up cleanly next iteration.
+  function EditLifecycleBanner() {
+    if (mode !== "edit") return null;
+    if (loopPhase === "running") {
+      return (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-amber-500/25 bg-amber-950/20 px-3 py-2">
+          <span className="text-[11px] text-amber-300/90">
+            The swarm is running. Pause before editing so workers don't read a half-written plan.
+          </span>
+          <Button
+            variant="default"
+            size="xs"
+            onClick={() => pauseRun()}
+            className="bg-primary/80 hover:bg-primary"
+          >
+            <Pause size={12} /> Pause
+          </Button>
+        </div>
+      );
+    }
+    if (loopPhase === "paused") {
+      return (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-emerald-500/25 bg-emerald-950/20 px-3 py-2">
+          <span className="text-[11px] text-emerald-300/90">
+            {isDirty ? "Save your changes, then resume to apply the updated plan." : "Loop paused. Resume when you're done editing."}
+          </span>
+          <Button
+            variant="default"
+            size="xs"
+            onClick={() => resumeRun()}
+            disabled={isDirty}
+            className="bg-status-success/80 hover:bg-status-success"
+            title={isDirty ? "Save first" : "Resume the loop"}
+          >
+            <Play size={12} /> Resume
+          </Button>
+        </div>
+      );
+    }
+    return null;
+  }
+
   // ── Shared toolbar ──
   function Toolbar({ compact = false }: { compact?: boolean }) {
     return (
       <div className="flex items-center gap-1">
         {/* Mode toggle */}
         {mode === "preview" ? (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setMode("edit")}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-400 hover:text-neutral-200 bg-background-elevated"}`}
             title="Edit plan"
           >
             <Pencil size={12} />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => { setMode("preview"); setEditContent(content); }}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-400 hover:text-neutral-200 bg-background-elevated"}`}
             title="Preview"
           >
             <Eye size={12} />
-          </button>
+          </Button>
         )}
 
         {/* Save (edit mode only) */}
         {mode === "edit" && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={savePlan}
             disabled={!isDirty || saving}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-              saved ? "text-status-success bg-status-success/10" :
-              isDirty && !saving ? "text-primary bg-primary/10 hover:bg-primary/20" :
-              "text-neutral-600 bg-background-elevated"
-            }`}
+            className={saved ? "text-status-success" : isDirty && !saving ? "text-primary" : "text-muted-foreground/60"}
             title="Save"
           >
             {saved ? <Check size={12} /> : <Save size={12} />}
-          </button>
+          </Button>
         )}
 
         {/* Monaco toggle (edit mode only) */}
         {mode === "edit" && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setUseMonaco((v) => !v)}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors cursor-pointer ${
-              useMonaco ? "text-blue-400 bg-blue-500/10" : "text-neutral-500 hover:text-neutral-300"
-            }`}
+            className={useMonaco ? "text-status-info" : ""}
             title={useMonaco ? "Switch to textarea" : "Switch to Monaco Editor"}
           >
             <Code2 size={12} />
-          </button>
+          </Button>
         )}
 
         {/* Refresh */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={loadPlan}
-          className="text-neutral-600 hover:text-neutral-400 transition-colors p-1"
           title="Refresh"
         >
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-        </button>
+        </Button>
 
         {/* Fullscreen */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={() => setFullscreen(true)}
-          className="text-neutral-600 hover:text-neutral-400 transition-colors p-1"
           title="Expand"
         >
           <Maximize2 size={12} />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -151,15 +202,15 @@ export default function PlanViewer() {
     if (loading) {
       return (
         <div className="flex items-center justify-center py-4">
-          <RefreshCw size={14} className="text-neutral-600 animate-spin" />
+          <RefreshCw size={14} className="text-muted-foreground/60 animate-spin" />
         </div>
       );
     }
     if (error) {
-      return <div className="text-xs text-neutral-600 italic py-2">{error}</div>;
+      return <div className="text-xs text-muted-foreground/60 italic py-2">{error}</div>;
     }
     if (!content) {
-      return <div className="text-xs text-neutral-600 italic py-2">No plan yet. Start a planning dialog to generate one, or switch to edit mode to create manually.</div>;
+      return <div className="text-xs text-muted-foreground/60 italic py-2">No plan yet. Start a planning dialog to generate one, or switch to edit mode to create manually.</div>;
     }
     return (
       <div className="markdown-body">
@@ -185,7 +236,7 @@ export default function PlanViewer() {
       <textarea
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
-        className="w-full h-full bg-background-elevated text-neutral-200 text-xs font-mono p-3 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden resize-none"
+        className="w-full h-full bg-background-elevated text-foreground text-xs font-mono p-3 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden resize-none"
         style={{ minHeight: "200px" }}
         placeholder="# Plan title&#10;&#10;Write your plan in Markdown..."
         spellCheck={false}
@@ -196,7 +247,7 @@ export default function PlanViewer() {
   return (
     <>
       {/* ── Inline panel (in ContextPanel) ── */}
-      <div className="border-b border-background-border">
+      <div className="border-b border-border">
         <div
           role="button"
           tabIndex={0}
@@ -210,9 +261,9 @@ export default function PlanViewer() {
           className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-1.5">
-            {collapsed ? <ChevronRight size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
+            {collapsed ? <ChevronRight size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
             <FileText size={14} className="text-primary" />
-            <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Plan</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Plan</span>
             {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-primary" title="Unsaved changes" />}
           </div>
           {!collapsed && (
@@ -225,6 +276,7 @@ export default function PlanViewer() {
 
         {!collapsed && (
           <div className="px-3 pb-3 max-h-80 overflow-y-auto">
+            <EditLifecycleBanner />
             {mode === "preview" ? <MarkdownContent /> : <Editor />}
           </div>
         )}
@@ -237,30 +289,32 @@ export default function PlanViewer() {
           onClick={() => setFullscreen(false)}
         >
           <div
-            className="flex flex-col w-full max-w-5xl h-[90vh] mx-auto mt-[5vh] bg-background-card rounded-2xl border border-background-border overflow-hidden"
+            className="flex flex-col w-full max-w-5xl h-[90vh] mx-auto mt-[5vh] bg-background-card rounded-2xl border border-border overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-background-border">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-primary" />
-                <span className="text-sm font-medium text-neutral-200">plan.md</span>
-                {path && <span className="text-xs text-neutral-600">{path}</span>}
+                <span className="text-sm font-medium text-foreground">plan.md</span>
+                {path && <span className="text-xs text-muted-foreground/60">{path}</span>}
                 {isDirty && <span className="text-xs text-primary">● unsaved</span>}
               </div>
               <div className="flex items-center gap-2">
                 <Toolbar />
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => setFullscreen(false)}
-                  className="text-neutral-500 hover:text-neutral-300 transition-colors p-1"
                 >
                   <X size={16} />
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* Modal content */}
             <div className="flex-1 overflow-y-auto p-5">
+              <EditLifecycleBanner />
               {mode === "preview" ? <MarkdownContent /> : <Editor />}
             </div>
           </div>

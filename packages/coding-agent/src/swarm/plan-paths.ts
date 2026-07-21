@@ -26,7 +26,7 @@ export function getSessionPlanPath(swarmDir: string): string {
 }
 
 /**
- * Per-session .omp directory (contains plan.md and conversation.json).
+ * Per-session .omp directory (contains plan.md and session.jsonl).
  * Created lazily on first write.
  */
 export function getSessionOmpDir(swarmDir: string): string {

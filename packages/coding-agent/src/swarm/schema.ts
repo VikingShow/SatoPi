@@ -62,6 +62,8 @@ export interface SwarmDefinition {
 // ============================================================================
 
 export interface LoopSwarmConfig {
+	/** Optional model override for socrates / planning agents. */
+	model?: string;
 	/** Maximum review-retry iterations before escalating to human. Default: 5. */
 	maxIterations: number;
 	/** If true, rejected outputs trigger automatic retry without human input. */
@@ -101,6 +103,11 @@ export interface LoopSwarmConfig {
 		 * `{{priorOutputs}}` contains the prior rounds' outputs.
 		 */
 		roundtablePrompt?: string;
+		/**
+		 * Per-worker wall-clock timeout in ms. When exceeded the agent is
+		 * aborted and marked as CRASHED. Default 5 min. 0 = no limit.
+		 */
+		agentTimeoutMs?: number;
 	};
 	/** Reviewer election configuration. */
 	reviewer: {
@@ -187,6 +194,32 @@ export interface LoopSwarmConfig {
 	agentRestrictions?: Record<string, AgentToolRestriction>;
 	/** P4-1: Lifecycle hook commands executed at pipeline events. */
 	hooks?: HookConfig[];
+	/** Git-based snapshot / rollback configuration for loop iterations. */
+	snapshot?: LoopSnapshotConfig;
+	/** P4: Mnemopi semantic recall configuration. */
+	mnemopi?: MnemopiConfig;
+	/** P5.5: Offload pipeline + Mermaid context graph configuration. */
+	offload?: OffloadConfig;
+}
+
+// ============================================================================
+// Git-based snapshot / rollback config
+// ============================================================================
+
+/**
+ * Git-based snapshot / rollback configuration for loop iterations.
+ * When enabled, the loop creates a git commit before each iteration
+ * and can roll back the workspace on failure.
+ */
+export interface LoopSnapshotConfig {
+	/** Enable automatic git snapshots before each iteration. Default false. */
+	enabled?: boolean;
+	/** Auto-rollback workspace on iteration crash or timeout. Default false. */
+	rollbackOnError?: boolean;
+	/** Auto-rollback on blocking verification failure. Default false. */
+	rollbackOnVerificationFailure?: boolean;
+	/** Maximum snapshot history to keep. Older ones get cleaned. Default 5. */
+	maxSnapshots?: number;
 }
 
 // ============================================================================
@@ -211,8 +244,12 @@ export interface HookConfig {
 export function parseHooksConfig(raw: Record<string, unknown>[] | undefined): HookConfig[] | undefined {
 	if (!raw || !Array.isArray(raw)) return undefined;
 	const validEvents = new Set([
-		"beforePipeline", "beforeIteration", "afterIteration",
-		"beforeWave", "afterWave", "afterPipeline",
+		"beforePipeline",
+		"beforeIteration",
+		"afterIteration",
+		"beforeWave",
+		"afterWave",
+		"afterPipeline",
 	]);
 	const hooks: HookConfig[] = [];
 	for (const entry of raw) {
@@ -247,6 +284,45 @@ export interface AgentToolRestriction {
 	allowed?: string[];
 	/** Blacklist — these tools are blocked. */
 	blocked?: string[];
+	/** Write allowlist — restrict the write tool to only these file paths (relative to workspace root). */
+	write_allowlist?: string[];
+}
+
+// ============================================================================
+// P4: Mnemopi semantic recall config
+// ============================================================================
+
+/** Semantic recall configuration powered by mnemopi. */
+export interface MnemopiConfig {
+	/** Enable semantic recall across the swarm loop. Default false. */
+	enabled?: boolean;
+	/** Recall top-K. Default 5. */
+	topK?: number;
+	/** Deduplicate injections across iterations. Default true. */
+	deduplicate?: boolean;
+	/** Auto-store threshold: only outcomes with score >= this value are persisted. Default 5. */
+	autoStoreThreshold?: number;
+}
+
+// ============================================================================
+// P5.5: Offload pipeline + Mermaid context graph config
+// ============================================================================
+
+/**
+ * Offload pipeline configuration for L1→L1.5→L2→L3 context offload
+ * and Mermaid context graph injection into Worker/Cloner/LoopController.
+ */
+export interface OffloadConfig {
+	/** Enable the full offload pipeline. Default false. */
+	enabled?: boolean;
+	/** L1 trigger threshold: flush pending entries when count >= this. Default 4. */
+	l1TriggerThreshold?: number;
+	/** L2 trigger threshold: trigger L2 when null-phase entries >= this. Default 3. */
+	l2NullThreshold?: number;
+	/** L2 timeout (seconds): force L2 when no L2 ran within this window. Default 120. */
+	l2TimeoutSeconds?: number;
+	/** Inject Mermaid context graph into agent prompts. Default true. */
+	injectMermaid?: boolean;
 }
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
@@ -272,6 +348,7 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 			maxRounds: (workersRaw.max_rounds as number) ?? 5,
 			roundsConvergenceThreshold: (workersRaw.rounds_convergence_threshold as number) ?? 3,
 			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
+			agentTimeoutMs: workersRaw.agent_timeout_ms as number | undefined,
 		},
 		reviewer: {
 			enabled: ((raw.reviewer as Record<string, unknown>)?.enabled as boolean) ?? true,
@@ -288,9 +365,60 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		iterationTimeoutMs: (raw.iteration_timeout_ms as number) ?? 300_000,
 		enableDeliberation: (raw.enable_deliberation as boolean) ?? true,
 		verification: parseVerificationConfig(raw.verification as Record<string, unknown> | undefined),
-		agentRestrictions: parseAgentRestrictions(raw.agent_restrictions as Record<string, Record<string, unknown>> | undefined),
+		agentRestrictions: parseAgentRestrictions(
+			raw.agent_restrictions as Record<string, Record<string, unknown>> | undefined,
+		),
 		// P4-1: YAML-configured lifecycle hooks.
 		hooks: parseHooksConfig(raw.hooks as Record<string, unknown>[] | undefined),
+		// Snapshot / rollback config.
+		snapshot: parseSnapshotConfig(raw.snapshot as Record<string, unknown> | undefined),
+		// P4: Mnemopi semantic recall (opt-in, disabled by default).
+		mnemopi: parseMnemopiConfig(raw.mnemopi as Record<string, unknown> | undefined),
+		// P5.5: Offload pipeline (opt-in, disabled by default).
+		offload: parseOffloadConfig(raw.offload as Record<string, unknown> | undefined),
+	};
+}
+
+// ============================================================================
+// P4: Parse Mnemopi config from YAML
+// ============================================================================
+
+function parseMnemopiConfig(raw: Record<string, unknown> | undefined): MnemopiConfig | undefined {
+	if (!raw) return undefined;
+	return {
+		enabled: (raw.enabled as boolean) ?? false,
+		topK: (raw.top_k as number) ?? 5,
+		deduplicate: (raw.deduplicate as boolean) ?? true,
+		autoStoreThreshold: (raw.auto_store_threshold as number) ?? 5,
+	};
+}
+
+// ============================================================================
+// P5.5: Parse Offload config from YAML
+// ============================================================================
+
+function parseOffloadConfig(raw: Record<string, unknown> | undefined): OffloadConfig | undefined {
+	if (!raw) return undefined;
+	return {
+		enabled: (raw.enabled as boolean) ?? false,
+		l1TriggerThreshold: (raw.l1_trigger_threshold as number) ?? 4,
+		l2NullThreshold: (raw.l2_null_threshold as number) ?? 3,
+		l2TimeoutSeconds: (raw.l2_timeout_seconds as number) ?? 120,
+		injectMermaid: (raw.inject_mermaid as boolean) ?? true,
+	};
+}
+
+function parseSnapshotConfig(raw: Record<string, unknown> | undefined): LoopSnapshotConfig | undefined {
+	if (!raw) return undefined;
+	// If the entire block is present but enabled isn't true, still return
+	// undefined — snapshot is disabled by default.
+	const enabled = raw.enabled as boolean | undefined;
+	if (enabled !== true) return undefined;
+	return {
+		enabled: true,
+		rollbackOnError: (raw.rollback_on_error as boolean) ?? false,
+		rollbackOnVerificationFailure: (raw.rollback_on_verification_failure as boolean) ?? false,
+		maxSnapshots: (raw.max_snapshots as number) ?? 5,
 	};
 }
 
@@ -304,7 +432,9 @@ function parseVerificationConfig(raw: Record<string, unknown> | undefined): Veri
 	};
 }
 
-function parseAgentRestrictions(raw: Record<string, Record<string, unknown>> | undefined): Record<string, AgentToolRestriction> | undefined {
+function parseAgentRestrictions(
+	raw: Record<string, Record<string, unknown>> | undefined,
+): Record<string, AgentToolRestriction> | undefined {
 	if (!raw || typeof raw !== "object") return undefined;
 	const result: Record<string, AgentToolRestriction> = {};
 	for (const [agentName, config] of Object.entries(raw)) {
@@ -316,7 +446,10 @@ function parseAgentRestrictions(raw: Record<string, Record<string, unknown>> | u
 		if (Array.isArray(config.blocked)) {
 			restriction.blocked = (config.blocked as unknown[]).map(String);
 		}
-		if (restriction.allowed || restriction.blocked) {
+		if (Array.isArray(config.write_allowlist)) {
+			restriction.write_allowlist = (config.write_allowlist as unknown[]).map(String);
+		}
+		if (restriction.allowed || restriction.blocked || restriction.write_allowlist) {
 			result[agentName] = restriction;
 		}
 	}
@@ -379,8 +512,12 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 			model: typeof config.model === "string" ? config.model.trim() : undefined,
 			waitsFor: Array.isArray(config.waits_for) ? config.waits_for : [],
 			// P1-5: Tool restrictions per agent.
-			allowedTools: Array.isArray(config.allowed_tools) ? config.allowed_tools.map(t => t.trim()).filter(Boolean) : undefined,
-			blockedTools: Array.isArray(config.blocked_tools) ? config.blocked_tools.map(t => t.trim()).filter(Boolean) : undefined,
+			allowedTools: Array.isArray(config.allowed_tools)
+				? config.allowed_tools.map(t => t.trim()).filter(Boolean)
+				: undefined,
+			blockedTools: Array.isArray(config.blocked_tools)
+				? config.blocked_tools.map(t => t.trim()).filter(Boolean)
+				: undefined,
 		});
 	}
 

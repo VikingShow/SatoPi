@@ -22,10 +22,19 @@ export function getActiveSession(): string | null {
   return activeSessionName;
 }
 
+/**
+ * Build a session-scoped API URL.
+ *
+ * With an active session:  /api/session/{name}{path}
+ * Fallback (no session):  /api/{path}          (strips path's leading '/')
+ */
 function sessionUrl(path: string): string {
   if (!activeSessionName) {
-    console.warn(`[api] No active session set when calling ${path} — falling back to /api/${path}`);
-    return `/api/${path}`;
+    // path always starts with "/" (e.g. "/state", "/before-loop/start").
+    // Strip the leading slash to avoid a double-slash like /api//state.
+    const cleanPath = path.replace(/^\/+/, "");
+    console.warn(`[api] No active session set when calling /${cleanPath} — falling back to /api/${cleanPath}`);
+    return `/api/${cleanPath}`;
   }
   return `/api/session/${encodeURIComponent(activeSessionName)}${path}`;
 }
@@ -35,6 +44,19 @@ export const api = {
 
   /** Set the active session so subsequent calls are routed correctly. */
   setSession: (name: string | null) => setActiveSession(name),
+
+  /** Create a new session on the backend (global endpoint). */
+  createSession: (name: string) =>
+    fetchJson<{ name: string; exists: boolean }>("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteSession: (name: string) =>
+    fetchJson<{ success: boolean }>("/api/sessions", {
+      method: "DELETE",
+      body: JSON.stringify({ name }),
+    }),
 
   getState: () => fetchJson<SwarmState>(sessionUrl("/state")),
 
@@ -46,8 +68,10 @@ export const api = {
       body: JSON.stringify({ yaml }),
     }),
 
-  getHistory: () =>
-    fetchJson<{ entries: unknown[] }>(sessionUrl("/history")),
+  getHistory: (since?: number) =>
+    fetchJson<{ entries: unknown[] }>(
+      sessionUrl(`/history${since ? `?since=${since}` : ""}`),
+    ),
 
   // -- Runs (global — lists all sessions) -----------------------------------
 

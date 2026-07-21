@@ -43,6 +43,29 @@ export interface LockCheckResult {
 
 export class RegionLockManager {
 	// -------------------------------------------------------------------
+	// Static singleton (for tests and global access)
+	// -------------------------------------------------------------------
+
+	static #instance: RegionLockManager | null = null;
+
+	static create(): RegionLockManager {
+		const mgr = new RegionLockManager();
+		RegionLockManager.#instance = mgr;
+		return mgr;
+	}
+
+	static global(): RegionLockManager {
+		if (!RegionLockManager.#instance) {
+			RegionLockManager.#instance = new RegionLockManager();
+		}
+		return RegionLockManager.#instance;
+	}
+
+	static reset(): void {
+		RegionLockManager.#instance = null;
+	}
+
+	// -------------------------------------------------------------------
 	// State
 	// -------------------------------------------------------------------
 

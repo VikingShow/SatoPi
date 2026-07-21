@@ -874,6 +874,8 @@ interface SubagentRunMonitor {
 	lastAssistantSalvageText(): string | undefined;
 	/** Final raw output: end-of-run assistant text when available, else accumulated chunks. */
 	rawOutput(): string;
+		/** Final raw thinking: accumulated thinking/reasoning chunks. */
+		rawThinking(): string;
 	scheduleProgress(flush?: boolean): void;
 	/** Stop processing events and clear listeners/timers. Call once the run settled. */
 	finish(): void;
@@ -916,6 +918,8 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 
 	const outputChunks: string[] = [];
 	const finalOutputChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+		const finalThinkingChunks: string[] = [];
 	const RECENT_OUTPUT_TAIL_BYTES = 8 * 1024;
 	let recentOutputTail = "";
 	let tailLastLineRepresentable = false;
@@ -1462,6 +1466,9 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 								if (block.type === "text" && block.text) {
 									finalOutputChunks.push(block.text);
 								}
+								if (block.type === "thinking" && block.thinking) {
+									finalThinkingChunks.push(block.thinking);
+								}
 							}
 						}
 					}
@@ -1580,6 +1587,7 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 		captureSalvage,
 		lastAssistantSalvageText: () => lastAssistantSalvageText,
 		rawOutput: () => (finalOutputChunks.length > 0 ? finalOutputChunks.join("") : outputChunks.join("")),
+			rawThinking: () => (finalThinkingChunks.length > 0 ? finalThinkingChunks.join("") : thinkingChunks.join("")),
 		scheduleProgress,
 		finish: () => {
 			resolved = true;
@@ -1804,6 +1812,7 @@ async function finalizeRunResult(args: FinalizeRunArgs): Promise<SingleResult> {
 
 	// Use final output if available, otherwise accumulated output
 	let rawOutput = monitor.rawOutput();
+		const thinking = monitor.rawThinking();
 	const yieldItems = progress.extractedToolData?.yield as YieldItem[] | undefined;
 	const reportFindingDetails = progress.extractedToolData?.report_finding as ReportFindingDetails[] | undefined;
 	const reportFindings: ReviewFinding[] | undefined = reportFindingDetails?.map(toReviewFinding);
@@ -1917,6 +1926,7 @@ async function finalizeRunResult(args: FinalizeRunArgs): Promise<SingleResult> {
 		truncated: Boolean(truncated),
 		durationMs: Date.now() - args.startTime,
 		tokens: progress.tokens,
+		thinking: thinking || undefined,
 		requests: progress.requests,
 		contextTokens: progress.contextTokens,
 		contextWindow: progress.contextWindow,
@@ -2453,6 +2463,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,
 				blockedTools,
+				writeAllowList: agent.writeAllowList,
 				outputSchema,
 				requireYieldTool: true,
 				contextFiles: options.contextFiles,

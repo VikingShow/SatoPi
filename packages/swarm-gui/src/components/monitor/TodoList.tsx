@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Circle, Clock, CheckCircle2, ChevronDown, ChevronRight, ListTodo } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { TodoItem } from "../../lib/types";
+import { Button } from "../ui/button";
 
 function TodoRow({ todo }: { todo: TodoItem }) {
   const icon = (() => {
@@ -11,15 +12,15 @@ function TodoRow({ todo }: { todo: TodoItem }) {
       case "in_progress":
         return <Clock size={14} className="text-status-warning shrink-0 animate-pulse" />;
       default:
-        return <Circle size={14} className="text-neutral-600 shrink-0" />;
+        return <Circle size={14} className="text-muted-foreground/60 shrink-0" />;
     }
   })();
 
   const titleColor = todo.status === "completed"
-    ? "text-neutral-500 line-through"
+    ? "text-muted-foreground line-through"
     : todo.status === "in_progress"
-      ? "text-amber-400"
-      : "text-neutral-400";
+      ? "text-primary"
+      : "text-muted-foreground";
 
   return (
     <div className="flex items-start gap-1.5 px-3 py-1.5">
@@ -29,7 +30,7 @@ function TodoRow({ todo }: { todo: TodoItem }) {
         {todo.files && todo.files.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-1">
             {todo.files.map((f, i) => (
-              <span key={i} className="text-[10px] text-neutral-600 bg-background-elevated px-1 py-0.5 rounded truncate max-w-[120px]">
+              <span key={i} className="text-[10px] text-muted-foreground/60 bg-background-elevated px-1 py-0.5 rounded truncate max-w-[120px]">
                 {f}
               </span>
             ))}
@@ -52,22 +53,23 @@ export default function TodoList() {
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
-    <div className="border-b border-background-border">
-      <button
+    <div className="border-b border-border">
+      <Button
+        variant="ghost"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50"
       >
         <div className="flex items-center gap-1.5">
           {collapsed
-            ? <ChevronRight size={14} className="text-neutral-500" />
-            : <ChevronDown size={14} className="text-neutral-500" />}
+            ? <ChevronRight size={14} className="text-muted-foreground" />
+            : <ChevronDown size={14} className="text-muted-foreground" />}
           <ListTodo size={14} className="text-primary" />
-          <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Tasks</span>
-          <span className="text-xs text-neutral-600">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tasks</span>
+          <span className="text-xs text-muted-foreground/60">
             {completed}/{total}
           </span>
           {inProgress > 0 && (
-            <span className="text-xs text-amber-500">{inProgress} active</span>
+            <span className="text-xs text-primary">{inProgress} active</span>
           )}
         </div>
         {!collapsed && (
@@ -78,10 +80,10 @@ export default function TodoList() {
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            <span className="text-[10px] text-neutral-600 font-mono">{progressPct}%</span>
+            <span className="text-[10px] text-muted-foreground/60 font-mono">{progressPct}%</span>
           </div>
         )}
-      </button>
+      </Button>
 
       {!collapsed && (
         <div className="max-h-64 overflow-y-auto pb-1">

@@ -1,12 +1,13 @@
 import { Hash, Lock, Bot, Megaphone } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatChannel } from "../../lib/types";
+import { Button } from "../ui/button";
 
 function ChannelIcon({ type }: { type: ChatChannel["type"] }) {
   switch (type) {
     case "roundtable": return <Hash size={14} className="text-primary" />;
     case "subgroup": return <Hash size={14} className="text-status-info" />;
-    case "private": return <Lock size={14} className="text-neutral-500" />;
+    case "private": return <Lock size={14} className="text-muted-foreground" />;
     case "steering": return <Bot size={14} className="text-status-accent" />;
     default: return <Hash size={14} />;
   }
@@ -23,22 +24,23 @@ export default function ChannelList() {
   });
 
   return (
-    <div className="w-56 flex flex-col border-r border-background-border bg-background-card">
-      <div className="px-3 py-2 border-b border-background-border">
-        <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Channels</span>
+    <div className="w-56 flex flex-col border-r border-border bg-background-card">
+      <div className="px-3 py-2 border-b border-border">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Channels</span>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {channelList.length === 0 && (
-          <div className="px-3 py-4 text-xs text-neutral-600">No channels yet. Swarm activity will appear here.</div>
+          <div className="px-3 py-4 text-xs text-muted-foreground/60">No channels yet. Swarm activity will appear here.</div>
         )}
         {channelList.map((ch) => (
-          <button
+          <Button
+            variant="ghost"
             key={ch.id}
             onClick={() => setActive(ch.id)}
-            className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors cursor-pointer ${
+            className={`w-full px-3 py-2 flex items-center gap-2 text-left ${
               activeId === ch.id
-                ? "bg-primary/10 text-neutral-100"
-                : "text-neutral-400 hover:bg-background-elevated"
+                ? "bg-primary/10 text-foreground/90"
+                : "text-muted-foreground hover:bg-background-elevated"
             }`}
           >
             <ChannelIcon type={ch.type} />
@@ -48,7 +50,7 @@ export default function ChannelList() {
                 {ch.unreadCount}
               </span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

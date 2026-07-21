@@ -9,6 +9,7 @@
 import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { AgentExecutor } from "./executor";
 import { executeSwarmAgent } from "./executor";
+import type { ReviewVerdict } from "./roundtable";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
 
@@ -109,6 +110,27 @@ export interface PipelineHooks {
 	afterPipeline?: (status: PipelineResult["status"], ctx: PipelineContext) => Promise<void>;
 	/** Called when a hook throws. Receives the hook name and error. */
 	onHookError?: (hookName: string, error: unknown) => void;
+}
+
+/**
+ * Extended lifecycle hooks for LoopController.
+ *
+ * Adds loop-specific events (worker rounds, deliberation, cloner review)
+ * on top of the base {@link PipelineHooks}.
+ */
+export interface LoopPipelineHooks extends PipelineHooks {
+	/** Called before each worker round within an iteration. Return false to skip. */
+	beforeWorkerRound?: (round: number, workerIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
+	/** Called after each worker round completes. */
+	afterWorkerRound?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
+	/** Called before deliberation phase starts. */
+	beforeDeliberation?: (round: number, ctx: PipelineContext) => Promise<void>;
+	/** Called after deliberation phase completes. */
+	afterDeliberation?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
+	/** Called before cloner review starts. */
+	beforeClonerReview?: (iteration: number, workerOutput: string, ctx: PipelineContext) => Promise<void>;
+	/** Called after cloner review completes. */
+	afterClonerReview?: (iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) => Promise<void>;
 }
 
 // ============================================================================
@@ -225,9 +247,7 @@ export class PipelineController {
 				this.#completedIterations = iteration + 1;
 
 				// P1-6: afterIteration hook.
-				await invokeHook(hooks, "afterIteration", () =>
-					hooks?.afterIteration?.(iteration, pipelineCtx),
-				);
+				await invokeHook(hooks, "afterIteration", () => hooks?.afterIteration?.(iteration, pipelineCtx));
 			}
 
 			const status = errors.length > 0 ? ("failed" as const) : ("completed" as const);
@@ -278,9 +298,7 @@ export class PipelineController {
 			if (options.signal?.aborted) break;
 
 			// P1-6: beforeWave hook — can skip.
-			const shouldRun = await invokeHook(hooks, "beforeWave", () =>
-				hooks?.beforeWave?.(waveIdx, wave, pipelineCtx),
-			);
+			const shouldRun = await invokeHook(hooks, "beforeWave", () => hooks?.beforeWave?.(waveIdx, wave, pipelineCtx));
 			if (shouldRun === false) continue;
 
 			await this.#stateTracker.appendOrchestratorLog(
@@ -367,9 +385,7 @@ export class PipelineController {
 			pipelineCtx.waves.push(waveResult);
 
 			// P1-6: afterWave hook.
-			await invokeHook(hooks, "afterWave", () =>
-				hooks?.afterWave?.(waveIdx, waveResult, pipelineCtx),
-			);
+			await invokeHook(hooks, "afterWave", () => hooks?.afterWave?.(waveIdx, waveResult, pipelineCtx));
 
 			options.emitProgress(waveIdx);
 		}

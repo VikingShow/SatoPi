@@ -1,46 +1,21 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-
-const en = {
-  common: {
-    start: "Start Swarm",
-    stop: "Stop",
-    cancel: "Cancel",
-    save: "Save",
-    edit: "Edit",
-    delete: "Delete",
-    confirm: "Confirm",
-    close: "Close",
-  },
-  swarm: {
-    running: "Running",
-    idle: "Idle",
-    blocked: "Blocked",
-    beforeLoop: "Before Loop",
-    afterLoop: "After Loop",
-    planningDialog: "Planning (Dialog)",
-    planningDebate: "Planning (Debate)",
-    readyToStart: "Ready to Start",
-    unknown: "Unknown",
-    workers: "workers",
-    chat: "Chat",
-    topology: "Topology",
-  },
-  config: {
-    title: "Configuration",
-    workers: "Workers",
-    cloners: "Cloners",
-    model: "Model",
-    save: "Save Changes",
-    saved: "Saved",
-  },
-};
+import en from "./locales/en.json";
+import zh from "./locales/zh.json";
 
 i18n.use(initReactI18next).init({
-  resources: { en: { translation: en } },
-  lng: "en",
+  resources: {
+    en: { translation: en },
+    zh: { translation: zh },
+  },
+  lng: localStorage.getItem("satopi-lang") || "en",
   fallbackLng: "en",
   interpolation: { escapeValue: false },
+});
+
+// Persist language preference
+i18n.on("languageChanged", (lng) => {
+  localStorage.setItem("satopi-lang", lng);
 });
 
 export default i18n;
