@@ -2,6 +2,15 @@ import { useState, useEffect } from "react";
 import { AlertTriangle, Play, SkipForward, OctagonX, Loader2, Timer } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { BlockerResolution } from "../../lib/types";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
 
 /** Live countdown to the backend's auto-continue deadline. */
 function useCountdown(deadline?: number): { remainingMs: number; ratio: number } | null {
@@ -53,20 +62,16 @@ export default function BlockerDialog() {
     countdown && ctx?.timeoutMs ? 1 - Math.min(1, countdown.remainingMs / ctx.timeoutMs) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Glassmorphism backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" />
-
-      {/* Dialog card */}
-      <div className="relative w-full max-w-2xl mx-4 rounded-card border border-red-500/30 bg-background/80 backdrop-blur-xl shadow-2xl shadow-red-500/10">
+    <Dialog open={true} onOpenChange={() => {}}>
+      <DialogContent showCloseButton={false} className="max-w-2xl p-0 gap-0 overflow-hidden">
         {/* Header — amber/red accent bar */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-red-500/20 bg-linear-to-r from-red-950/40 to-amber-950/30 rounded-t-card">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-red-500/20 bg-linear-to-r from-red-950/40 to-amber-950/30">
           <AlertTriangle size={24} className="text-amber-400 shrink-0" />
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-amber-300">Loop Blocked</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <DialogTitle className="text-lg font-semibold text-amber-300">Loop Blocked</DialogTitle>
+            <DialogDescription className="text-xs mt-0.5">
               The swarm is stuck and needs your decision to proceed.
-            </p>
+            </DialogDescription>
           </div>
         </div>
 
@@ -173,35 +178,36 @@ export default function BlockerDialog() {
         </div>
 
         {/* Footer — action buttons */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-background/50 rounded-b-card">
-          <button
+        <DialogFooter className="px-6 py-4 border-t border-border bg-background/50">
+          <Button
+            variant="default"
             onClick={() => handleResolve("continue")}
             disabled={pending !== null}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-foreground bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-status-success text-foreground hover:bg-status-success/80"
           >
             {pending === "continue" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
             Continue (reset)
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
             onClick={() => handleResolve("skip")}
             disabled={pending !== null}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-foreground bg-background-elevated hover:bg-background-overlay rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {pending === "skip" ? <Loader2 size={14} className="animate-spin" /> : <SkipForward size={14} />}
             Skip Iteration
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="destructive"
             onClick={() => handleResolve("abort")}
             disabled={pending !== null}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-foreground bg-red-600 hover:bg-red-500 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {pending === "abort" ? <Loader2 size={14} className="animate-spin" /> : <OctagonX size={14} />}
             Abort Run
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
