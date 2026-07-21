@@ -1,6 +1,7 @@
 import { Hash, Lock, Bot, Megaphone } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { ChatChannel } from "../../lib/types";
+import { Button } from "../ui/button";
 
 function ChannelIcon({ type }: { type: ChatChannel["type"] }) {
   switch (type) {
@@ -32,10 +33,11 @@ export default function ChannelList() {
           <div className="px-3 py-4 text-xs text-muted-foreground/60">No channels yet. Swarm activity will appear here.</div>
         )}
         {channelList.map((ch) => (
-          <button
+          <Button
+            variant="ghost"
             key={ch.id}
             onClick={() => setActive(ch.id)}
-            className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors cursor-pointer ${
+            className={`w-full px-3 py-2 flex items-center gap-2 text-left ${
               activeId === ch.id
                 ? "bg-primary/10 text-foreground/90"
                 : "text-muted-foreground hover:bg-background-elevated"
@@ -48,7 +50,7 @@ export default function ChannelList() {
                 {ch.unreadCount}
               </span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

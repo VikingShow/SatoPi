@@ -3,6 +3,7 @@ import { Clock, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react";
 import { api } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/session-store";
 import type { ActivityEntry } from "../../lib/types";
+import { Button } from "../ui/button";
 
 export default function HistoryPage() {
   const runs = useSessionStore((s) => s.runs);
@@ -55,10 +56,11 @@ export default function HistoryPage() {
             <div className="px-3 py-4 text-xs text-muted-foreground/60">No past runs found.</div>
           )}
           {runs.map((run) => (
-            <button
+            <Button
+              variant="ghost"
               key={run.name}
               onClick={() => setSelectedRun(run.name)}
-              className={`w-full px-3 py-2 text-left transition-colors cursor-pointer ${
+              className={`w-full px-3 py-2 text-left ${
                 selectedRun === run.name ? "bg-primary/10 text-foreground/90" : "text-muted-foreground hover:bg-background-elevated"
               }`}
             >
@@ -66,7 +68,7 @@ export default function HistoryPage() {
               {run.messageCount > 0 && (
                 <div className="text-[10px] text-muted-foreground/60">{run.messageCount} msgs</div>
               )}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

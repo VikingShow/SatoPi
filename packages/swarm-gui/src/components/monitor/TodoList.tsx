@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Circle, Clock, CheckCircle2, ChevronDown, ChevronRight, ListTodo } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { TodoItem } from "../../lib/types";
+import { Button } from "../ui/button";
 
 function TodoRow({ todo }: { todo: TodoItem }) {
   const icon = (() => {
@@ -18,7 +19,7 @@ function TodoRow({ todo }: { todo: TodoItem }) {
   const titleColor = todo.status === "completed"
     ? "text-muted-foreground line-through"
     : todo.status === "in_progress"
-      ? "text-amber-400"
+      ? "text-primary"
       : "text-muted-foreground";
 
   return (
@@ -53,9 +54,10 @@ export default function TodoList() {
 
   return (
     <div className="border-b border-border">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50"
       >
         <div className="flex items-center gap-1.5">
           {collapsed
@@ -67,7 +69,7 @@ export default function TodoList() {
             {completed}/{total}
           </span>
           {inProgress > 0 && (
-            <span className="text-xs text-amber-500">{inProgress} active</span>
+            <span className="text-xs text-primary">{inProgress} active</span>
           )}
         </div>
         {!collapsed && (
@@ -81,7 +83,7 @@ export default function TodoList() {
             <span className="text-[10px] text-muted-foreground/60 font-mono">{progressPct}%</span>
           </div>
         )}
-      </button>
+      </Button>
 
       {!collapsed && (
         <div className="max-h-64 overflow-y-auto pb-1">

@@ -8,6 +8,7 @@ import {
 import { useSwarmStore } from "../../stores/swarm-store";
 import { api } from "../../lib/api-client";
 import type { ExperienceStats } from "../../lib/types";
+import { Button } from "../ui/button";
 
 const LESSON_ICONS: Record<string, typeof CheckCircle> = {
   success: CheckCircle,
@@ -24,7 +25,7 @@ const LESSON_COLORS: Record<string, string> = {
   warning: "text-status-warning",
   insight: "text-primary",
   pattern: "text-primary",
-  reflection: "text-purple-400",
+  reflection: "text-status-accent",
 };
 
 export default function AfterLoopPanel() {
@@ -54,18 +55,19 @@ export default function AfterLoopPanel() {
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50"
       >
         <div className="flex items-center gap-1.5">
           {collapsed ? <ChevronRight size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-          <Brain size={14} className="text-purple-400" />
+          <Brain size={14} className="text-status-accent" />
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">After Loop</span>
           <span className={`text-xs ${statusColor}`}>{status}</span>
         </div>
         <span className="text-xs text-muted-foreground/60">{iterations} iter</span>
-      </button>
+      </Button>
 
       {!collapsed && (
         <div className="px-3 pb-3 space-y-3">
@@ -88,7 +90,7 @@ export default function AfterLoopPanel() {
           {/* Deep Reflection */}
           {reflection && (
             <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-status-accent">
                 <Brain size={12} />
                 <span>Deep Reflection</span>
                 <span className="text-muted-foreground/60 ml-auto">conf: {Math.round(reflection.confidence * 100)}%</span>
