@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, Brain, ChevronDown, Copy } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -39,7 +39,7 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   }, [code]);
 
   const header = (
-    <div className="flex items-center justify-between px-3 py-1 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+    <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a0a0a] border-b border-[#1a1a1a] rounded-t-lg">
       <span className="text-[11px] text-neutral-500 font-mono">{lang || "text"}</span>
       <button
         onClick={handleCopy}
@@ -53,9 +53,9 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
 
   if (html === null) {
     return (
-      <div className="my-1 rounded-lg overflow-hidden border border-[#1a1a1a]">
+      <div className="my-1.5 rounded-lg overflow-hidden border border-[#1a1a1a] bg-[#0d0d0d]">
         {header}
-        <pre className="bg-[#0d0d0d] p-3 overflow-x-auto text-xs font-mono">
+        <pre className="p-3 overflow-x-auto text-xs font-mono bg-[#0d0d0d]">
           <code>{code}</code>
         </pre>
       </div>
@@ -63,10 +63,10 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   }
 
   return (
-    <div className="my-1 rounded-lg overflow-hidden border border-[#1a1a1a]">
+    <div className="my-1.5 rounded-lg overflow-hidden border border-[#1a1a1a] bg-[#0d0d0d]">
       {header}
       <div
-        className="shiki-wrapper text-xs [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:overflow-x-auto"
+        className="shiki-wrapper text-xs [&_pre]:bg-[#0d0d0d]! [&_pre]:p-3 [&_pre]:overflow-x-auto"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
@@ -88,36 +88,66 @@ function MessageBody({ body }: { body: string }) {
       [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
       [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
       [&_li]:my-0.5
-      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2
+      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-neutral-800 [&_h1]:pb-1
       [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
       [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
-      [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-600 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-neutral-400 [&_blockquote]:italic
+      [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-600 [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-neutral-400 [&_blockquote]:italic [&_blockquote]:bg-neutral-800/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
       [&_strong]:font-bold [&_strong]:text-neutral-100
       [&_em]:italic
       [&_del]:line-through [&_del]:text-neutral-500
-      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2
+      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-primary/80
       [&_code]:bg-[#0d0d0d] [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
-      [&_table]:w-full [&_table]:my-1 [&_table]:text-xs [&_table]:border-collapse
-      [&_th]:border [&_th]:border-[#1a1a1a] [&_th]:px-2 [&_th]:py-1 [&_th]:bg-[#0d0d0d] [&_th]:font-semibold [&_th]:text-left
-      [&_td]:border [&_td]:border-[#1a1a1a] [&_td]:px-2 [&_td]:py-1
+      [&_table]:w-full [&_table]:my-1.5 [&_table]:text-xs [&_table]:border-collapse
+      [&_th]:border [&_th]:border-neutral-700 [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-[#0d0d0d] [&_th]:font-semibold [&_th]:text-left
+      [&_td]:border [&_td]:border-neutral-800 [&_td]:px-2 [&_td]:py-1
       [&_hr]:border-neutral-700 [&_hr]:my-2
+      [&_img]:rounded-lg [&_img]:max-w-full
     ">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkTreeToCode]}
         components={{
           code: ({ className, children, ...props }) => {
-            // Only use custom code renderer for block code (has className with language-)
             if (className) {
               return <CodeRenderer className={className}>{children}</CodeRenderer>;
             }
-            // Inline code
             return <code className="bg-[#0d0d0d] text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
           },
           pre: ({ children }) => <>{children}</>,
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          ),
         }}
       >
         {body}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+// ── Thinking block ── collapsible chain-of-thought section ─────────────
+
+function ThinkingBlock({ thinking }: { thinking: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-1.5">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[11px] text-neutral-500 hover:text-neutral-400 transition-colors cursor-pointer select-none"
+      >
+        <Brain size={11} />
+        <span>Thinking</span>
+        <ChevronDown
+          size={10}
+          className={`transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap border-l-2 border-neutral-700/60 pl-2.5 py-1 max-h-48 overflow-y-auto leading-relaxed">
+          {thinking}
+        </div>
+      )}
     </div>
   );
 }
@@ -154,17 +184,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : "bg-background-elevated text-neutral-200"
         }`}
       >
-        {(msg as any).thinking ? (
-            <details className="mb-1.5">
-              <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-400">
-                Thinking
-              </summary>
-              <div className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap border-l-2 border-neutral-700 pl-2 max-h-32 overflow-y-auto">
-                {(msg as any).thinking}
-              </div>
-            </details>
-          ) : null}
-          <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+        {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
+        <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
       </div>
     </div>
   );
@@ -196,18 +217,8 @@ export default function ChatView() {
   const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
   const stopRun = useSwarmStore((s) => s.stopRun);
   const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
-  const loadBeforeLoopHistory = useSwarmStore((s) => s.loadBeforeLoopHistory);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
-  // P2-2: Before-loop history state.
-  const [historyEntries, setHistoryEntries] = useState<Array<{ role: string; content: string }>>([]);
-  const [showHistory, setShowHistory] = useState(false);
-
-  useEffect(() => {
-    if (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") {
-      loadBeforeLoopHistory().then(h => { if (h.length > 0) { setHistoryEntries(h); setShowHistory(true); } });
-    }
-  }, [loopPhase, loadBeforeLoopHistory]);
 
   const channelMessages = messages.get(activeId ?? "roundtable") ?? [];
 
@@ -321,26 +332,6 @@ export default function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
-      {/* P2-2: Before-loop conversation history */}
-      {historyEntries.length > 0 && showHistory && (
-        <div className="px-4 pt-2">
-          <button
-            onClick={() => setShowHistory(false)}
-            className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300 mb-1 cursor-pointer"
-          >
-            <ChevronDown size={12} /> Previous planning conversation ({historyEntries.length} turns) — click to hide
-          </button>
-          <div className="space-y-1 max-h-48 overflow-y-auto bg-neutral-900/30 rounded-lg p-2 border border-neutral-800/50">
-            {historyEntries.map((entry, i) => (
-              <div key={i} className={`text-xs px-2 py-1 rounded ${entry.role === "user" ? "text-neutral-400" : "text-primary/70"}`}>
-                <span className="font-medium">{entry.role === "user" ? "You" : "Socrates"}:</span>{" "}
-                {entry.content.slice(0, 300)}{entry.content.length > 300 ? "…" : ""}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Messages — virtualized for performance */}
       <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (

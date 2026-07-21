@@ -103,14 +103,6 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* P3-5: Offline/disconnected banner */}
-        {!isConnected && (
-          <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs">
-            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            Disconnected from monitor server — reconnecting automatically. Write operations are disabled.
-          </div>
-        )}
-
         {/* Top bar */}
         <header className="h-12 flex items-center justify-between px-4 border-b border-background-border bg-background-card">
           <div className="flex items-center gap-3">
@@ -123,9 +115,9 @@ function App() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs ${isConnected ? "text-status-success" : "text-neutral-600"}`}>
-              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${isConnected ? "bg-status-success" : "bg-neutral-600"}`} />
-              {isConnected ? "Connected" : "Disconnected"}
+            <span className={`text-xs ${isConnected ? "text-status-success" : "text-amber-400"}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${isConnected ? "bg-status-success animate-pulse-ring" : "bg-amber-400 animate-pulse"}`} />
+              {isConnected ? "Connected" : "Reconnecting"}
             </span>
           </div>
         </header>

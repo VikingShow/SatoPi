@@ -131,7 +131,9 @@ function pushUserMessage(
   setFn((state) => {
     const messages = new Map(state.messages);
     const channels = new Map(state.channels);
-    const msgList = messages.get("roundtable") ?? [];
+    // Spread to create a new array reference — avoids useMemo caching
+    // the same reference so React re-renders the message list.
+    const msgList = [...(messages.get("roundtable") ?? [])];
     msgList.push({
       id,
       channelId: "roundtable",
@@ -417,12 +419,19 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const messages = new Map(state.messages);
 
       // ── Streaming delta: append to the last streaming bubble ──
+      // During history replay (fromHistory), skip stream_delta — the
+      // downstream broadcast event already carries the full message body.
       if (entry.type === "stream_delta" && entry.from) {
+        if (fromHistory) return { activities, channels, messages };
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
         if (lastMsg && lastMsg.id.startsWith(`stream-`)) {
-          lastMsg.body += (entry.body ?? "");
+          // Replace with a new object so React.memo detects the prop change
+          msgList[msgList.length - 1] = {
+            ...lastMsg,
+            body: lastMsg.body + (entry.body ?? ""),
+          };
         } else {
           msgList.push({
             id: `stream-${String(msgId)}`,
@@ -439,11 +448,31 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
       // ── Stream end: finalise the streaming bubble ──
       if (entry.type === "stream_end" && entry.from) {
+        // During history replay: apply thinking to the most recent broadcast
+        // message from the same source, then skip stream_start/stream_delta
+        // events. Broadcast already carries the full body text.
+        if (fromHistory && entry.thinking) {
+          const msgList = [...(messages.get("roundtable") ?? [])];
+          // Walk backwards to find the latest broadcast from the same source
+          for (let i = msgList.length - 1; i >= 0; i--) {
+            if (msgList[i].from === entry.from && !msgList[i].id.startsWith("stream-")) {
+              msgList[i] = { ...msgList[i], thinking: entry.thinking };
+              messages.set("roundtable", msgList);
+              break;
+            }
+          }
+          return { activities, channels, messages };
+        }
+        if (fromHistory) return { activities, channels, messages };
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
         if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
-          lastMsg.body = entry.body;
-          if (entry.thinking) lastMsg.thinking = entry.thinking;
+          // Replace with a new object so React.memo detects the prop change
+          msgList[msgList.length - 1] = {
+            ...lastMsg,
+            body: entry.body,
+            thinking: entry.thinking || lastMsg.thinking,
+          };
         }
         messages.set("roundtable", msgList);
         return { activities, channels, messages };
