@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { Save, Square, FileText, ArrowRight } from "lucide-react";
 import { useConfigStore } from "../../stores/config-store";
 import { useSwarmStore } from "../../stores/swarm-store";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Switch } from "../ui/switch";
 
 interface ConfigPageProps {
   onNavigateToMonitor?: () => void;
@@ -25,12 +28,11 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground">{label}</label>
-        <input
+        <Input
           type="number"
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           min={min} max={max} step={step}
-          className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden"
         />
       </div>
     );
@@ -42,12 +44,7 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
     return (
       <div className="flex items-center justify-between">
         <label className="text-xs text-muted-foreground">{label}</label>
-        <button
-          onClick={() => onChange(!checked)}
-          className={`w-9 h-5 rounded-full transition-colors cursor-pointer ${checked ? "bg-primary" : "bg-background-border"}`}
-        >
-          <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
-        </button>
+        <Switch checked={checked} onCheckedChange={onChange} />
       </div>
     );
   }
@@ -162,28 +159,31 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
           <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">{yamlPreview || "# Loading..."}</pre>
         </div>
         <div className="px-3 py-2.5 border-t border-border flex items-center gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => config.saveConfig()}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-              isDirty ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-background-elevated text-muted-foreground/60"
-            }`}
+            className={isDirty ? "bg-primary/20 text-primary hover:bg-primary/30" : "text-muted-foreground/60"}
           >
             <Save size={13} /> Save
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={() => { config.saveConfig(); onNavigateToMonitor?.(); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors cursor-pointer"
             title="Save config and go to Monitor to start planning"
           >
             Save & Plan <ArrowRight size={12} />
-          </button>
+          </Button>
           {isRunning ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => stopRun()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors cursor-pointer ml-auto"
+              className="ml-auto"
             >
               <Square size={13} fill="currentColor" /> Stop
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

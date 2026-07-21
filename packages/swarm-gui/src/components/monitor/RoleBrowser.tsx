@@ -13,9 +13,9 @@ import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput } from ".
 function statusColor(s: RoleStatus): string {
   switch (s) {
     case "approved": return "text-emerald-400 bg-emerald-400/10 border-emerald-400/30";
-    case "proposed": return "text-amber-400 bg-amber-400/10 border-amber-400/30";
+    case "proposed": return "text-primary bg-primary/10 border-primary/30";
     case "draft": return "text-muted-foreground bg-muted-foreground/10 border-border/30";
-    case "deprecated": return "text-red-400 bg-red-400/10 border-red-400/30";
+    case "deprecated": return "text-status-danger bg-status-danger/10 border-status-danger/30";
   }
 }
 
@@ -213,22 +213,23 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
           <span className="text-xs text-muted-foreground/60">({roles.length})</span>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => { setShowCreate(!showCreate); if (showCreate) setCreateForm(emptyForm); }}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-              showCreate ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-background-elevated"
-            }`}
+            className={showCreate ? "bg-primary/20 text-primary" : ""}
           >
             <Plus size={12} />
             Create
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={fetchRoles}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground/80 hover:bg-card transition-colors cursor-pointer"
             title="Refresh"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -243,7 +244,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 value={createForm.id}
                 onChange={e => setCreateForm(f => ({ ...f, id: e.target.value }))}
                 placeholder="e.g. senior-backend-dev"
-                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
               />
             </div>
             <div>
@@ -253,7 +254,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 value={createForm.name}
                 onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Senior Backend Developer"
-                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
               />
             </div>
           </div>
@@ -264,7 +265,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               value={createForm.description}
               onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
               placeholder="Brief description of this role"
-              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
             />
           </div>
           <div>
@@ -274,7 +275,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               onChange={e => setCreateForm(f => ({ ...f, systemPrompt: e.target.value }))}
               placeholder="You are a senior backend developer..."
               rows={4}
-              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 resize-none font-mono"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -285,7 +286,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 onChange={e => setCreateForm(f => ({ ...f, guidelines: e.target.value }))}
                 placeholder="Use TypeScript&#10;Write tests&#10;Document APIs"
                 rows={3}
-                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 resize-none"
               />
             </div>
             <div>
@@ -295,7 +296,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 onChange={e => setCreateForm(f => ({ ...f, tools: e.target.value }))}
                 placeholder="read_file, write_to_file, execute_command"
                 rows={3}
-                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 resize-none font-mono"
               />
             </div>
           </div>
@@ -306,24 +307,26 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               value={createForm.tags}
               onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
               placeholder="backend, typescript, api"
-              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
             />
           </div>
           <div className="flex items-center gap-2 pt-1">
-            <button
+            <Button
+              variant="default"
+              size="sm"
               onClick={handleCreate}
               disabled={creating}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-foreground hover:bg-primary/80 disabled:opacity-50 cursor-pointer transition-colors"
             >
               {creating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               {creating ? "Creating..." : "Create Role"}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => { setShowCreate(false); setCreateForm(emptyForm); }}
-              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 cursor-pointer"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -338,7 +341,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               placeholder="Search roles..."
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-card border border-border rounded-md text-foreground placeholder-neutral-600 focus:outline-none focus:border-primary/50"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
             />
           </div>
           <select
@@ -357,24 +360,28 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
         {/* Tag chips */}
         {allTags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => setFilterTag("")}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer ${
+              className={`rounded-full px-2 py-0.5 text-[10px] ${
                 filterTag === "" ? "bg-primary/20 text-primary" : "bg-card text-muted-foreground hover:text-foreground/80"
               }`}
             >
               all
-            </button>
+            </Button>
             {allTags.map(tag => (
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 key={tag}
                 onClick={() => setFilterTag(filterTag === tag ? "" : tag)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer ${
+                className={`rounded-full px-2 py-0.5 text-[10px] ${
                   filterTag === tag ? "bg-primary/20 text-primary" : "bg-card text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 {tag}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -405,15 +412,17 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 >
                   {/* Expand toggle (non-selection mode) */}
                   {!onSelect && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={e => { e.stopPropagation(); toggleExpand(role.id); }}
-                      className="p-0.5 mr-2 text-muted-foreground/60 hover:text-foreground/80 cursor-pointer"
+                      className="mr-2 text-muted-foreground/60 hover:text-foreground/80"
                     >
                       {expandedId === role.id
                         ? <ChevronDown size={14} />
                         : <ChevronRight size={14} />
                       }
-                    </button>
+                    </Button>
                   )}
 
                   {/* Selection checkbox */}
@@ -454,33 +463,39 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                   {!onSelect && (
                     <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
                       {role.status === "proposed" && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           onClick={() => handleApprove(role.id)}
                           disabled={actionBusy === role.id}
-                          className="p-1 rounded text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50 cursor-pointer"
+                          className="text-status-success hover:bg-status-success/10"
                           title="Approve"
                         >
                           {actionBusy === role.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-                        </button>
+                        </Button>
                       )}
                       {role.status === "approved" && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           onClick={() => handleDeprecate(role.id)}
                           disabled={actionBusy === role.id}
-                          className="p-1 rounded text-amber-500 hover:bg-amber-500/10 disabled:opacity-50 cursor-pointer"
+                          className="text-primary hover:bg-primary/10"
                           title="Deprecate"
                         >
                           <XCircle size={12} />
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
                         onClick={() => handleDelete(role.id)}
                         disabled={actionBusy === role.id}
-                        className="p-1 rounded text-red-500/60 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50 cursor-pointer"
+                        className="text-status-danger/60 hover:text-status-danger hover:bg-status-danger/10"
                         title="Delete"
                       >
                         <Trash2 size={12} />
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
