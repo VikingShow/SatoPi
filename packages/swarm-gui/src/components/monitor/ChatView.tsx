@@ -10,6 +10,8 @@ import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 
 // ── Code block cache ──────────────────────────────────────────────────
 const codeCache = new Map<string, string>();
@@ -42,13 +44,14 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   const header = (
     <div className="flex items-center justify-between px-3 py-1.5 bg-background border-b border-border rounded-t-lg">
       <span className="text-[11px] text-muted-foreground font-mono">{lang || "text"}</span>
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         onClick={handleCopy}
-        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground/80 transition-colors cursor-pointer"
       >
         {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
         <span>{copied ? "Copied" : "Copy"}</span>
-      </button>
+      </Button>
     </div>
   );
 
@@ -133,9 +136,11 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="mb-1.5">
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-muted-foreground transition-colors cursor-pointer select-none"
+        className="select-none"
       >
         <Brain size={11} />
         <span>Thinking</span>
@@ -143,7 +148,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
           size={10}
           className={`transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
         />
-      </button>
+      </Button>
       {open && (
         <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap border-l-2 border-border/60 pl-2.5 py-1 max-h-48 overflow-y-auto leading-relaxed">
           {thinking}
@@ -371,13 +376,14 @@ export default function ChatView() {
               Press Stop to interrupt at the next iteration boundary.
             </span>
           </div>
-          <button
+          <Button
+            variant="destructive"
+            size="xs"
             onClick={() => stopRun()}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-foreground bg-red-600/80 hover:bg-red-500 rounded-md transition-colors cursor-pointer"
           >
             <Square size={12} fill="currentColor" />
             Stop Swarm
-          </button>
+          </Button>
         </div>
       )}
 
@@ -443,20 +449,24 @@ export default function ChatView() {
               {loopPhase === "before-loop-confirm" ? "Debate complete — plan refined" : "Plan draft ready"}
             </span>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="default"
+                size="xs"
                 onClick={() => runDebate()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground bg-purple-600 hover:bg-purple-500 rounded-md transition-colors cursor-pointer"
+                className="bg-status-accent hover:bg-status-accent/80"
               >
                 <Swords size={12} />
                 {loopPhase === "before-loop-confirm" ? "Run Debate Again" : "Run Debate"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
                 onClick={() => confirmAndStart()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors cursor-pointer"
+                className="bg-status-success hover:bg-status-success/80"
               >
                 <Check size={12} />
                 Confirm & Start
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -492,43 +502,47 @@ export default function ChatView() {
               </>
             )}
           </div>
-          <input
+          <Input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={!canSend || isBusy}
             placeholder={placeholder}
-            className="flex-1 bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
+            className="flex-1"
           />
           {/* Right-side action button — morphs by phase */}
           {loopPhase === "running" && isRunning ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => stopRun()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
               title="Stop the running swarm"
             >
               <Square size={14} fill="currentColor" />
               <span>Stop</span>
-            </button>
+            </Button>
           ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => cancelBeforeLoop()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-background-elevated hover:bg-background-overlay rounded-lg transition-colors cursor-pointer"
               title="Cancel Before Loop planning"
             >
               <X size={14} />
               <span>Cancel</span>
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleSend}
               disabled={!canSend || isBusy || !inputText.trim()}
-              className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              className="bg-primary/20 hover:bg-primary/30 text-primary"
               title="Send message"
             >
               {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </button>
+            </Button>
           )}
         </div>
       </div>
