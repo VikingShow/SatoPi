@@ -126,6 +126,9 @@ export const useSessionStore = create<SessionStore>()(
       // conversation display reflects any new events that arrived while
       // the user was viewing another session.
       set({ viewingSession: null });
+      // init() has a __initRunning guard (set on mount) that blocks re-entry.
+      // Clear it before calling init() so the live history + SSE are reloaded.
+      (useSwarmStore.getState() as any).__initRunning = false;
       useSwarmStore.getState().init();
       return;
     }

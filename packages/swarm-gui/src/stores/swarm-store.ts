@@ -203,8 +203,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // setActiveSSESession already calls disconnect + connect, so if the SSE
       // connects before onConnectionChange is set up, isConnected stays false
       // forever — causing the UI to show "Reconnecting" indefinitely.
+      // Re-register after setActiveSSESession too, in case disconnect() clears
+      // internal listeners.
       let lastEventTs = 0;
-      sseClient.onConnectionChange((connected) => {
+      const onConnChange = (connected: boolean) => {
         set({ isConnected: connected });
         if (connected && lastEventTs > 0) {
           import("../lib/api-client").then(({ api }) => {
@@ -223,7 +225,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               .catch(() => {});
           });
         }
-      });
+      };
+      sseClient.onConnectionChange(onConnChange);
 
       // Initialize isConnected from the SSE client's current state — if the
       // subscriber in session-store.ts already connected (via persist hydration),
@@ -232,6 +235,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       set({ isConnected: sseClient.isConnected });
 
       setActiveSSESession(sessionName);
+
+      // Re-register — disconnect() inside setActiveSSESession may have
+      // cleared the internal listener list on the old EventSource.
+      sseClient.onConnectionChange(onConnChange);
 
       const [state, runStatus] = await Promise.all([
         api.getState(),
@@ -549,7 +556,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       ]);
       const wasRunning = get().isRunning;
       const nowRunning = runStatus.running;
-      const polledPhase = state.loopPhase ?? (nowRunning ? "running" : "idle");
+      const polledPhase = state?.loopPhase ?? (nowRunning ? "running" : "idle");
 
       // Don't overwrite "blocked" phase from polling if we're still blocked
       // (the backend sets loopPhase="blocked" and keeps it until resolved)
@@ -559,10 +566,13 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         : polledPhase;
 
       set({
-        swarmState: state,
+        // Guard against null API response — a brand-new session may not
+        // have swarm state yet, which would overwrite our minimal idle state
+        // and cause the right panel (ContextPanel) to disappear.
+        swarmState: state || get().swarmState,
         isRunning: nowRunning,
         loopPhase: newPhase,
-        todos: state.todos ?? [],
+        todos: state?.todos ?? [],
         error: null,
       });
 
