@@ -1,8 +1,11 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense, useCallback } from "react";
 import { Settings, Activity, History, PlusCircle, Sparkles } from "lucide-react";
 import { Toaster } from "sonner";
 import { useSwarmStore } from "./stores/swarm-store";
 import { useSessionStore } from "./stores/session-store";
+import { useConfigStore } from "./stores/config-store";
+import { useGlobalKeybindings } from "./hooks/use-keybindings";
+import "./i18n";
 import MonitorPage from "./components/monitor/MonitorPage";
 import SessionSwitcher from "./components/monitor/SessionSwitcher";
 
@@ -33,6 +36,17 @@ function App() {
   const newSession = useSessionStore((s) => s.newSession);
   const loadRuns = useSessionStore((s) => s.loadRuns);
   const [newSessionBusy, setNewSessionBusy] = useState(false);
+  const saveConfig = useConfigStore((s) => s.saveConfig);
+
+  // Global keyboard shortcuts
+  const keyHandlers = useCallback({
+    send: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "send" })),
+    escape: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "escape" })),
+    save: () => { if (page === "config") saveConfig(); },
+    command: () => console.debug("[keybinding] command palette (not yet implemented)"),
+    toggleTopology: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "toggleTopology" })),
+  }, [page, saveConfig]);
+  useGlobalKeybindings(keyHandlers);
 
   // Delay init() until Zustand's persist middleware has rehydrated
   // activeSwarm from localStorage.  Otherwise getActiveSession() (used
