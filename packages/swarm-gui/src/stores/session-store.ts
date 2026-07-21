@@ -96,6 +96,11 @@ export const useSessionStore = create<SessionStore>()(
       error: null,
     });
 
+    // Clear the __initRunning guard so init() can execute again when the
+    // user refreshes or navigates back.  Without this, the guard set by
+    // the initial mount prevents init() from re-running.
+    (useSwarmStore.getState() as any).__initRunning = false;
+
     // Update the session store so the subscribe doesn't revert our sync.
     set({ activeSwarm: newName, viewingSession: null });
 

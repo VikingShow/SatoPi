@@ -25,6 +25,7 @@ type Page = "config" | "monitor" | "history";
 
 function App() {
   const [page, setPage] = useState<Page>("monitor");
+  const [hydrated, setHydrated] = useState(false);
   const init = useSwarmStore((s) => s.init);
   const swarmState = useSwarmStore((s) => s.swarmState);
   const isConnected = useSwarmStore((s) => s.isConnected);
@@ -33,10 +34,25 @@ function App() {
   const loadRuns = useSessionStore((s) => s.loadRuns);
   const [newSessionBusy, setNewSessionBusy] = useState(false);
 
+  // Delay init() until Zustand's persist middleware has rehydrated
+  // activeSwarm from localStorage.  Otherwise getActiveSession() (used
+  // inside swarm-store init()) returns null and falls back to the default
+  // "SatoPi" session, causing cross-session message leakage.
   useEffect(() => {
+    const store = useSessionStore as any;
+    if (store.persist?.hasHydrated?.()) {
+      setHydrated(true);
+      return;
+    }
+    const unsub = store.persist?.onFinishHydration(() => setHydrated(true));
+    return () => { unsub?.(); };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     init();
     loadRuns();
-  }, [init, loadRuns]);
+  }, [hydrated, init, loadRuns]);
 
   const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
     { id: "config", label: "Config", icon: <Settings size={18} /> },

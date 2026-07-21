@@ -9,8 +9,9 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
-import { api, setActiveSession, getActiveSession } from "../lib/api-client";
+import { api, setActiveSession } from "../lib/api-client";
 import { sseClient, setActiveSSESession } from "../lib/sse-client";
+import { useSessionStore } from "./session-store";
 
 const MAX_ACTIVITIES = 500;
 
@@ -190,7 +191,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // session-scoped calls.  The session-store subscribe (see
       // session-store.ts) normally keeps these in sync, but during
       // first-ever mount the subscriber may not have fired yet.
-      const sessionName = getActiveSession() || "SatoPi";
+      // Read directly from the session store's Zustand state instead of
+      // the module-level getActiveSession(), which may be stale before
+      // the persist middleware has rehydrated activeSwarm.
+      const sessionName = useSessionStore.getState().activeSwarm || "SatoPi";
       setActiveSession(sessionName);
       setActiveSSESession(sessionName);
 

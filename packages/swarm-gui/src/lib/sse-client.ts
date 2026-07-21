@@ -29,10 +29,12 @@ function buildSSEUrl(): string {
   return base;
 }
 
-/** Update the session name — the client's URL is kept in sync. */
+/** Update the session name — disconnect old EventSource, update URL, reconnect. */
 export function setActiveSSESession(name: string | null): void {
   activeSession = name;
+  sseClient.disconnect();
   sseClient.setUrl(buildSSEUrl());
+  sseClient.connect();
 }
 
 export const sseClient = new SseClient<ActivityEntry>(buildSSEUrl());
