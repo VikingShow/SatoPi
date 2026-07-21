@@ -416,8 +416,31 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const channels = new Map(state.channels);
       const messages = new Map(state.messages);
 
+      // ── Stream start: create an empty streaming bubble in roundtable ──
+      // During history replay, skip — the downstream broadcast event already
+      // carries the full message body.  Creating a stream bubble during replay
+      // would produce a duplicate alongside the broadcast message.
+      if (entry.type === "stream_start" && entry.from) {
+        if (fromHistory) return { activities, channels, messages };
+
+        const msgId = (entry as any).messageId ?? entry.from;
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        msgList.push({
+          id: `stream-${String(msgId)}`,
+          channelId: "roundtable",
+          from: entry.from,
+          to: "all",
+          body: "",
+          timestamp: entry.ts,
+        } as ChatMessage);
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
+
       // ── Streaming delta: append to the last streaming bubble ──
       if (entry.type === "stream_delta" && entry.from) {
+        // During history replay, skip stream_delta (see stream_start note above).
+        if (fromHistory) return { activities, channels, messages };
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
@@ -439,6 +462,20 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
       // ── Stream end: finalise the streaming bubble ──
       if (entry.type === "stream_end" && entry.from) {
+        // During history replay: apply thinking to the most recent broadcast
+        // message from the same source, then skip.
+        if (fromHistory && entry.thinking) {
+          const msgList = [...(messages.get("roundtable") ?? [])];
+          for (let i = msgList.length - 1; i >= 0; i--) {
+            if (msgList[i].from === entry.from && !msgList[i].id.startsWith("stream-")) {
+              msgList[i] = { ...msgList[i], thinking: entry.thinking };
+              messages.set("roundtable", msgList);
+              break;
+            }
+          }
+          return { activities, channels, messages };
+        }
+        if (fromHistory) return { activities, channels, messages };
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
         if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
