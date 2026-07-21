@@ -198,6 +198,39 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // the persist middleware has rehydrated activeSwarm.
       const sessionName = useSessionStore.getState().activeSwarm || "SatoPi";
       setActiveSession(sessionName);
+
+      // IMPORTANT: register connection-change listener BEFORE first connect.
+      // setActiveSSESession already calls disconnect + connect, so if the SSE
+      // connects before onConnectionChange is set up, isConnected stays false
+      // forever — causing the UI to show "Reconnecting" indefinitely.
+      let lastEventTs = 0;
+      sseClient.onConnectionChange((connected) => {
+        set({ isConnected: connected });
+        if (connected && lastEventTs > 0) {
+          import("../lib/api-client").then(({ api }) => {
+            api.getHistory(lastEventTs)
+              .then(({ entries }) => {
+                const missed = (entries ?? []).filter(
+                  (e: unknown) => (e as { ts: number }).ts > lastEventTs,
+                );
+                for (const e of missed) {
+                  get().addActivity(e as import("../lib/types").ActivityEntry, true);
+                }
+                if (missed.length > 0) {
+                  toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
+                }
+              })
+              .catch(() => {});
+          });
+        }
+      });
+
+      // Initialize isConnected from the SSE client's current state — if the
+      // subscriber in session-store.ts already connected (via persist hydration),
+      // onConnectionChange may have already fired (or won't fire again since
+      // the state didn't change).  We must seed isConnected here.
+      set({ isConnected: sseClient.isConnected });
+
       setActiveSSESession(sessionName);
 
       const [state, runStatus] = await Promise.all([
@@ -247,31 +280,6 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // History might not be available yet
       }
 
-      // P3-3: Track last event timestamp for reconnection recovery.
-      let lastEventTs = 0;
-      sseClient.onConnectionChange((connected) => {
-        set({ isConnected: connected });
-        if (connected && lastEventTs > 0) {
-          // Reconnected — fetch missed events since last seen timestamp
-          // via the session-scoped history endpoint.
-          import("../lib/api-client").then(({ api }) => {
-            api.getHistory(lastEventTs)
-              .then(({ entries }) => {
-                const missed = (entries ?? []).filter(
-                  (e: unknown) => (e as { ts: number }).ts > lastEventTs,
-                );
-                for (const e of missed) {
-                  get().addActivity(e as import("../lib/types").ActivityEntry, true);
-                }
-                if (missed.length > 0) {
-                  toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
-                }
-              })
-              .catch(() => {});
-          });
-        }
-      });
-      sseClient.connect();
       sseClient.on((entry) => {
         lastEventTs = Math.max(lastEventTs, entry.ts);
         get().addActivity(entry);

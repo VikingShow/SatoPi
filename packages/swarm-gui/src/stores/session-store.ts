@@ -80,9 +80,11 @@ export const useSessionStore = create<SessionStore>()(
     setActiveSession(newName);
     setActiveSSESession(newName);
 
-    // Reset the swarm store to a clean idle state
+    // Reset the swarm store to a clean idle state.
+    // Keep a minimal swarmState so the right panel (ContextPanel) doesn't
+    // disappear — ContextPanel returns null when swarmState is null.
     useSwarmStore.setState({
-      swarmState: null,
+      swarmState: { name: newName, status: "idle", mode: "loop", iteration: 0, targetCount: 0, agents: {}, startedAt: Date.now() },
       activities: [],
       channels: new Map(),
       messages: new Map(),
@@ -120,8 +122,11 @@ export const useSessionStore = create<SessionStore>()(
 
   switchToSession: async (name: string) => {
     if (name === get().activeSwarm) {
-      // Switching to the active session just clears any read-only view
+      // Switching to the active session — reload live state to ensure the
+      // conversation display reflects any new events that arrived while
+      // the user was viewing another session.
       set({ viewingSession: null });
+      useSwarmStore.getState().init();
       return;
     }
     // Load historical activity into a read-only view (without affecting live state)

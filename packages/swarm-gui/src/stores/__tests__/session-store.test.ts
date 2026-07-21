@@ -91,7 +91,10 @@ describe("SessionStore: newSession", () => {
   it("resets swarm-store state to idle", async () => {
     await useSessionStore.getState().newSession();
 
-    expect(mockSwarmState.swarmState).toBeNull();
+    // swarmState is kept as a minimal idle object (not null) so the right
+    // panel (ContextPanel) doesn't disappear during the transition.
+    expect(mockSwarmState.swarmState).not.toBeNull();
+    expect((mockSwarmState.swarmState as { status: string }).status).toBe("idle");
     expect((mockSwarmState.activities as unknown[]).length).toBe(0);
     expect(mockSwarmState.loopPhase).toBe("idle");
     expect(mockSwarmState.beforeLoopState).toBeNull();
