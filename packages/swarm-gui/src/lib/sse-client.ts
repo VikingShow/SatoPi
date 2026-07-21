@@ -11,15 +11,17 @@ import { SseClient } from "@oh-my-pi/pi-web/sse";
 import type { ActivityEntry } from "./types";
 
 let activeSession: string | null = null;
+/** The URL we most recently connected to. Used to short-circuit duplicate calls. */
+let currentUrl: string | null = null;
 
 // Bypass Vite proxy for SSE in dev — http-proxy buffers streamed responses,
 // which delays or drops real-time events. Use the same host as the page so
 // the browser never blocks the connection as private-network access.
 const SSE_PORT = 7878;
 
-function buildSSEUrl(): string {
-  const base = activeSession
-    ? `/events?session=${encodeURIComponent(activeSession)}`
+function buildSSEUrl(session: string | null): string {
+  const base = session
+    ? `/events?session=${encodeURIComponent(session)}`
     : "/events";
   // In production the backend serves static files and SSE on the same origin,
   // so relative URLs work. In dev (Vite), use the absolute backend URL on the
@@ -36,19 +38,24 @@ function buildSSEUrl(): string {
  *
  * Idempotent: this is invoked from multiple call sites (swarm-store.init and
  * session-store.subscribe) that can fire for the same session in quick
- * succession. Reconnecting to the exact same session while already live would
- * needlessly tear down a healthy stream (causing a "Reconnecting" flicker and
- * a gap in events), so we short-circuit when the target session is unchanged
- * and the socket is already open.
+ * succession.  We short-circuit when the resolved URL is unchanged — no
+ * need to tear down a healthy connection and re-establish it for the same
+ * target, which causes a "Reconnecting" flicker and a gap in events.
  */
 export function setActiveSSESession(name: string | null): void {
-  if (name === activeSession && (sseClient.isConnected || sseClient.isConnecting)) {
+  const newUrl = buildSSEUrl(name);
+  if (newUrl === currentUrl) {
+    // Same target — the existing connection (or in-flight connection) is fine.
+    // Update activeSession in case name changed but resolved to the same URL
+    // (e.g. null → null edge case).
+    activeSession = name;
     return;
   }
+  currentUrl = newUrl;
   activeSession = name;
   sseClient.disconnect();
-  sseClient.setUrl(buildSSEUrl());
+  sseClient.setUrl(newUrl);
   sseClient.connect();
 }
 
-export const sseClient = new SseClient<ActivityEntry>(buildSSEUrl());
+export const sseClient = new SseClient<ActivityEntry>(buildSSEUrl(activeSession));

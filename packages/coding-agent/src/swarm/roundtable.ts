@@ -11,6 +11,7 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { RoleAsset } from "./role-asset";
+import type { ActivityLogger } from "./activity-logger";
 import { guardTaskBudget } from "./context-guard";
 
 // ============================================================================
@@ -53,6 +54,8 @@ export interface ClonerReviewConfig {
 	clonerRoles?: Record<string, RoleAsset>;
 	/** Tool restriction to apply to cloner agents (config-as-constraint). */
 	toolRestriction?: import("./schema").AgentToolRestriction;
+		/** Optional activity logger for SSE streaming output. */
+		activityLogger?: ActivityLogger;
 }
 
 // ============================================================================
@@ -74,7 +77,7 @@ export class ClonerCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles } = config;
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles, activityLogger } = config;
 
 		// Build a cloner agent definition with optional tool restrictions applied.
 		const buildClonerAgent = (id: string, i: number): AgentDefinition => {
@@ -129,18 +132,37 @@ export class ClonerCouncil {
 		const reviewText = reviewPrompt.join("\n");
 
 		const settled = await Promise.allSettled(
-			clonerIds.map((id, i) =>
-				runSubprocess({
+			clonerIds.map((id, i) => {
+				const clonerMsgId = `cloner-review-${id}-${iteration}`;
+				let clonerSentLen = 0;
+				activityLogger?.logStreamStart(clonerMsgId, id);
+				return runSubprocess({
 					cwd: workspace,
 					agent: buildClonerAgent(id, i),
 					task: reviewText,
 					index: i,
-					id: `cloner-review-${id}-${iteration}`,
+					id: clonerMsgId,
 					modelRegistry,
 					settings,
 					signal,
-				}),
-			),
+					onProgress: (progress) => {
+						const lines = [...(progress.recentOutput ?? [])].reverse();
+						const currentText = lines.join("\n");
+						if (currentText.length > clonerSentLen) {
+							const delta = currentText.slice(clonerSentLen);
+							clonerSentLen = currentText.length;
+							activityLogger?.logStreamDelta(clonerMsgId, id, delta);
+						}
+					},
+				}).then((r) => {
+					activityLogger?.logStreamEnd(clonerMsgId, id, r.output, r.thinking);
+					return r;
+				}).catch((err) => {
+					const errMsg = err instanceof Error ? err.message : String(err);
+					activityLogger?.logStreamEnd(clonerMsgId, id, `[Error] ${errMsg}`, undefined);
+					throw err;
+				});
+			}),
 		);
 		const results: SingleResult[] = settled.map((s, i) => {
 			if (s.status === "fulfilled") return s.value;
@@ -184,18 +206,37 @@ export class ClonerCouncil {
 			].join("\n");
 
 			const deliberationSettled = await Promise.allSettled(
-				clonerIds.map((id, i) =>
-					runSubprocess({
+				clonerIds.map((id, i) => {
+					const delibMsgId = `cloner-deliberation-${id}-${iteration}`;
+					let delibSentLen = 0;
+					activityLogger?.logStreamStart(delibMsgId, id);
+					return runSubprocess({
 						cwd: workspace,
 						agent: buildClonerAgent(id, i),
 						task: deliberationPrompt,
 						index: i,
-						id: `cloner-deliberation-${id}-${iteration}`,
+						id: delibMsgId,
 						modelRegistry,
 						settings,
 						signal,
-					}),
-				),
+						onProgress: (progress) => {
+							const lines = [...(progress.recentOutput ?? [])].reverse();
+							const currentText = lines.join("\n");
+							if (currentText.length > delibSentLen) {
+								const delta = currentText.slice(delibSentLen);
+								delibSentLen = currentText.length;
+								activityLogger?.logStreamDelta(delibMsgId, id, delta);
+							}
+						},
+					}).then((r) => {
+						activityLogger?.logStreamEnd(delibMsgId, id, r.output, r.thinking);
+						return r;
+					}).catch((err) => {
+						const errMsg = err instanceof Error ? err.message : String(err);
+						activityLogger?.logStreamEnd(delibMsgId, id, `[Error] ${errMsg}`, undefined);
+						throw err;
+					});
+				}),
 			);
 			const deliberationResults: SingleResult[] = deliberationSettled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;

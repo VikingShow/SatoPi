@@ -1445,6 +1445,7 @@ export class LoopController {
 						beforeToolCall: workerHooks?.beforeToolCall,
 						afterToolCall: workerHooks?.afterToolCall,
 					},
+					activityLogger: this.#activityLogger,
 				}).then(
 					result => result,
 					err => {
@@ -1598,8 +1599,11 @@ export class LoopController {
 			});
 
 			const subResults = await Promise.allSettled(
-				workerIds.map((id, i) =>
-					runSubprocess({
+				workerIds.map((id, i) => {
+					const delibMsgId = `deliberation-${id}-${sub}`;
+					let delibSentLen = 0;
+					this.#activityLogger?.logStreamStart(delibMsgId, id);
+					return runSubprocess({
 						cwd: workspace,
 						agent: (() => {
 							const def: AgentDefinition = {
@@ -1628,8 +1632,24 @@ export class LoopController {
 						settings,
 						signal,
 						beforeToolCall: deliberationHooks.beforeToolCall,
-					}),
-				),
+						onProgress: (progress) => {
+							const lines = [...(progress.recentOutput ?? [])].reverse();
+							const currentText = lines.join("\n");
+							if (currentText.length > delibSentLen) {
+								const delta = currentText.slice(delibSentLen);
+								delibSentLen = currentText.length;
+								this.#activityLogger?.logStreamDelta(delibMsgId, id, delta);
+							}
+						},
+					}).then((r) => {
+						this.#activityLogger?.logStreamEnd(delibMsgId, id, r.output, (r as any).thinking);
+						return r;
+					}).catch((err) => {
+						const errMsg = err instanceof Error ? err.message : String(err);
+						this.#activityLogger?.logStreamEnd(delibMsgId, id, `[Error] ${errMsg}`, undefined);
+						throw err;
+					});
+				}),
 			);
 
 			currentOutputs = subResults.map((r, i) => {
@@ -1683,6 +1703,7 @@ export class LoopController {
 				previousFindings,
 				deliberation: this.#loopConfig.enableDeliberation,
 				toolRestriction: resolveToolRestrictions(this.#loopConfig, "cloner"),
+					activityLogger: this.#activityLogger,
 			},
 			modelRegistry,
 			settings,
