@@ -18,7 +18,20 @@ import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
 import type { LoopPhase, StateTracker } from "./state";
 import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
+import { computeScaleDelta } from "./worker-scaler";
+import { evaluateBlockage } from "./blockage";
+import {
+	type RoundSummaryData,
+	extractRoundSummary,
+	findingsSimilarity,
+	jaccardSimilarity,
+	parseNomination,
+	parseRoundSummaryJson,
+} from "./convergence";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
+
+// Re-export for backward compatibility with external importers.
+export type { RoundSummaryData };
 import { TodoTracker } from "./todo-tracker";
 import { VerificationHook, type VerificationResult } from "./verification-hook";
 import { type Nomination, WorkerChannel } from "./worker-channel";
@@ -66,22 +79,8 @@ export interface LoopOptions extends PipelineOptions {
 	hooks?: LoopPipelineHooks;
 }
 
-/** Structured round summary produced by the elected reviewer. */
-export interface RoundSummaryData {
-	round: number;
-	reviewer: string;
-	accomplished: Record<string, string>;
-	issues: Array<{
-		severity: "blocker" | "major" | "minor";
-		workers: string[];
-		file?: string;
-		description: string;
-		resolution?: string;
-	}>;
-	remaining: string[];
-	recommended_division: Record<string, string>;
-	convergence_opinion: "converging" | "diverging" | "stalled";
-}
+// RoundSummaryData now lives in ./convergence; re-exported (below) for
+// backward compatibility with any external importer.
 
 export interface LoopResult {
 	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
@@ -106,7 +105,14 @@ export interface BlockerContext {
 	stagnationCount: number;
 	workerCrashCounts: Record<string, number>;
 	reason: string;
+	/** Auto-continue timeout in ms (0 = no auto-continue). */
+	timeoutMs: number;
+	/** Absolute epoch-ms deadline for auto-continue, for a client-side countdown. */
+	deadline: number;
 }
+
+/** Auto-continue timeout for an unresolved blocker (P2-4). */
+export const BLOCKER_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** User resolution to a blockage. */
 export type BlockerResolution = "continue" | "skip" | "abort";
@@ -244,64 +250,7 @@ OUTPUT:
 // Similarity & Summary Utilities
 // ============================================================================
 
-/** Extract the `## Round Summary` section from a worker's output.
- * Falls back to the first 2000 chars when no summary section is found. */
-function extractRoundSummary(output: string): string {
-	const match = output.match(/## Round Summary\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
-	return match?.[1]?.trim() || output.slice(0, 2000);
-}
-
-/**
- * Parse a `## Nomination` section from a worker's output.
- * Format expected:
- *   ## Nomination
- *   nominated: worker-3
- *   reason: has auth expertise
- */
-function parseNomination(output: string): Nomination | null {
-	const section = output.match(/## Nomination\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
-	if (!section?.[1]) return null;
-	const nominated = section[1].match(/nominated:\s*(\S+)/);
-	if (!nominated?.[1]) return null;
-	return { nominator: "", nominee: nominated[1] };
-}
-/** Jaccard similarity between two arrays of tokens. Returns 0–1. */
-
-function jaccardSimilarity(a: string[], b: string[]): number {
-	const setA = new Set(a);
-	const setB = new Set(b);
-	if (setA.size === 0 && setB.size === 0) return 1;
-	let intersection = 0;
-	for (const item of setA) {
-		if (setB.has(item)) intersection++;
-	}
-	const union = new Set([...setA, ...setB]).size;
-	return union === 0 ? 0 : intersection / union;
-}
-
-/** Compute Jaccard similarity between two sets of findings. */
-function findingsSimilarity(prev: string[], curr: string[]): number {
-	const prevTokens = prev.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
-	const currTokens = curr.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
-	return jaccardSimilarity(prevTokens, currTokens);
-}
-
-/**
- * Parse the reviewer's Round Summary JSON from a worker's output.
- * Looks for a JSON code block after `## Round Summary`.
- * Returns null if no valid JSON round summary is found.
- */
-function parseRoundSummaryJson(output: string): RoundSummaryData | null {
-	const jsonBlock = output.match(/```json\n([\s\S]*?)\n```/);
-	if (!jsonBlock?.[1]) return null;
-	try {
-		const parsed = JSON.parse(jsonBlock[1]) as RoundSummaryData;
-		if (typeof parsed.round !== "number" || typeof parsed.convergence_opinion !== "string") return null;
-		return parsed;
-	} catch {
-		return null;
-	}
-}
+// (Convergence & summary utilities moved to ./convergence — imported above.)
 
 // ============================================================================
 // Controller
@@ -1089,27 +1038,14 @@ export class LoopController {
 			//    Otherwise fall back to conservative ±1.
 			const { min, max } = this.#loopConfig.workers;
 			const suggestions = verdict.workerCountSuggestions;
-			if (suggestions.length >= Math.ceil(clonerIds.length / 2)) {
-				const upVotes = suggestions.filter(d => d > 0).length;
-				const downVotes = suggestions.filter(d => d < 0).length;
-				const superMajority = Math.ceil((clonerIds.length * 2) / 3);
-				const majority = Math.ceil(clonerIds.length / 2);
-
-				suggestions.sort((a, b) => a - b);
-				const medianDelta = suggestions[Math.floor(suggestions.length / 2)];
-
-				// Fast scaling: super-majority + ≥2 delta → jump
-				// Conservative: simple majority → ±1
-				let delta: number;
-				if ((upVotes >= superMajority || downVotes >= superMajority) && Math.abs(medianDelta) >= 2) {
-					delta = medianDelta;
-				} else if (upVotes >= majority) {
-					delta = 1;
-				} else if (downVotes >= majority && currentWorkerCount > min) {
-					delta = -1;
-				} else {
-					delta = 0;
-				}
+			{
+				// Pure decision extracted to worker-scaler.ts (unit-tested).
+				const delta = computeScaleDelta({
+					suggestions,
+					clonerCount: clonerIds.length,
+					currentWorkerCount,
+					min,
+				});
 
 				if (delta > 0) {
 					const addCount = Math.min(delta, max - currentWorkerCount);
@@ -1221,29 +1157,17 @@ export class LoopController {
 		verdict: ReviewVerdict,
 		lastWorkerOutput: string,
 	): Promise<BlockerResolution> {
-		const STAGNATION_THRESHOLD = 3;
-		const CRASH_THRESHOLD = 3;
+		// Pure blockage decision extracted to blockage.ts (unit-tested).
+		const decision = evaluateBlockage({
+			stagnationCount: this.#stagnationCount,
+			workerCrashCounts: this.#workerCrashCounts,
+		});
 
-		// Stagnation: already tracked by convergence detection
-		const stagnated = this.#stagnationCount >= STAGNATION_THRESHOLD;
-
-		// Worker crash deadlock: any single worker crashed CRASH_THRESHOLD+ times
-		let deadlocked = false;
-		for (const count of Object.values(this.#workerCrashCounts)) {
-			if (count >= CRASH_THRESHOLD) {
-				deadlocked = true;
-				break;
-			}
-		}
-
-		if (!stagnated && !deadlocked) {
+		if (!decision.blocked) {
 			return "continue";
 		}
 
-		// Build blocker context
-		const reason = stagnated
-			? `Cloner findings have stagnated for ${this.#stagnationCount} consecutive iterations`
-			: `Worker crash deadlock detected (a worker crashed ${CRASH_THRESHOLD}+ times)`;
+		const reason = decision.reason!;
 
 		this.#currentBlockerContext = {
 			iteration: iteration + 1,
@@ -1252,6 +1176,8 @@ export class LoopController {
 			stagnationCount: this.#stagnationCount,
 			workerCrashCounts: { ...this.#workerCrashCounts },
 			reason,
+			timeoutMs: BLOCKER_TIMEOUT_MS,
+			deadline: Date.now() + BLOCKER_TIMEOUT_MS,
 		};
 
 		// Set loop phase to blocked (state machine validates + broadcasts atomically;
@@ -1268,7 +1194,6 @@ export class LoopController {
 		logger.warn(`Blockage detected at iteration ${iteration + 1}: ${reason}`);
 
 		// Await user resolution with P2-4 timeout (5 min auto-degrade to continue).
-		const BLOCKER_TIMEOUT_MS = 5 * 60 * 1000;
 		const resolution = await new Promise<BlockerResolution>(resolve => {
 			this.#blockerResolver = resolve;
 			// P2-4: Auto-continue after timeout to prevent indefinite blocking.

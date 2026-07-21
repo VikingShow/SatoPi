@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FileText, ChevronDown, ChevronRight, RefreshCw,
-  Maximize2, X, Pencil, Eye, Save, Check, Code2,
+  Maximize2, X, Pencil, Eye, Save, Check, Code2, Pause, Play,
 } from "lucide-react";
 import { api } from "../../lib/api-client";
 import { useSwarmStore } from "../../stores/swarm-store";
@@ -11,6 +11,9 @@ import { CodeEditor } from "./CodeEditor";
 
 export default function PlanViewer() {
   const planVersion = useSwarmStore((s) => s.planVersion);
+  const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const pauseRun = useSwarmStore((s) => s.pauseRun);
+  const resumeRun = useSwarmStore((s) => s.resumeRun);
   const [content, setContent] = useState("");
   const [editContent, setEditContent] = useState("");
   const [path, setPath] = useState("");
@@ -72,6 +75,47 @@ export default function PlanViewer() {
   }, []);
 
   const isDirty = editContent !== content;
+
+  // ── Pause→edit→resume closed loop ──
+  // Editing plan.md while the swarm is actively running is unsafe: workers may
+  // read a half-written plan mid-iteration. Guide the user to pause first, then
+  // resume after saving so the fresh plan is picked up cleanly next iteration.
+  function EditLifecycleBanner() {
+    if (mode !== "edit") return null;
+    if (loopPhase === "running") {
+      return (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-amber-500/25 bg-amber-950/20 px-3 py-2">
+          <span className="text-[11px] text-amber-300/90">
+            The swarm is running. Pause before editing so workers don't read a half-written plan.
+          </span>
+          <button
+            onClick={() => pauseRun()}
+            className="flex shrink-0 items-center gap-1 rounded bg-amber-600/80 px-2 py-1 text-xs font-medium text-white hover:bg-amber-500 transition-colors"
+          >
+            <Pause size={12} /> Pause
+          </button>
+        </div>
+      );
+    }
+    if (loopPhase === "paused") {
+      return (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-emerald-500/25 bg-emerald-950/20 px-3 py-2">
+          <span className="text-[11px] text-emerald-300/90">
+            {isDirty ? "Save your changes, then resume to apply the updated plan." : "Loop paused. Resume when you're done editing."}
+          </span>
+          <button
+            onClick={() => resumeRun()}
+            disabled={isDirty}
+            className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/80 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={isDirty ? "Save first" : "Resume the loop"}
+          >
+            <Play size={12} /> Resume
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
 
   // ── Shared toolbar ──
   function Toolbar({ compact = false }: { compact?: boolean }) {
@@ -225,6 +269,7 @@ export default function PlanViewer() {
 
         {!collapsed && (
           <div className="px-3 pb-3 max-h-80 overflow-y-auto">
+            <EditLifecycleBanner />
             {mode === "preview" ? <MarkdownContent /> : <Editor />}
           </div>
         )}
@@ -261,6 +306,7 @@ export default function PlanViewer() {
 
             {/* Modal content */}
             <div className="flex-1 overflow-y-auto p-5">
+              <EditLifecycleBanner />
               {mode === "preview" ? <MarkdownContent /> : <Editor />}
             </div>
           </div>

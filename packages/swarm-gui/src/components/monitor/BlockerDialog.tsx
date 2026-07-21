@@ -1,7 +1,27 @@
-import { useState } from "react";
-import { AlertTriangle, Play, SkipForward, OctagonX, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { AlertTriangle, Play, SkipForward, OctagonX, Loader2, Timer } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import type { BlockerResolution } from "../../lib/types";
+
+/** Live countdown to the backend's auto-continue deadline. */
+function useCountdown(deadline?: number): { remainingMs: number; ratio: number } | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!deadline) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+  if (!deadline) return null;
+  const remainingMs = Math.max(0, deadline - now);
+  return { remainingMs, ratio: remainingMs };
+}
+
+function formatMs(ms: number): string {
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 /**
  * BlockerDialog — modal overlay shown when the loop is blocked.
@@ -17,6 +37,7 @@ export default function BlockerDialog() {
   const resolveBlocker = useSwarmStore((s) => s.resolveBlocker);
 
   const [pending, setPending] = useState<BlockerResolution | null>(null);
+  const countdown = useCountdown(blockerContext?.deadline);
 
   if (loopPhase !== "blocked") return null;
 
@@ -27,6 +48,9 @@ export default function BlockerDialog() {
   };
 
   const ctx = blockerContext;
+  // Fraction of the auto-continue window elapsed (0 → just blocked, 1 → firing).
+  const urgency =
+    countdown && ctx?.timeoutMs ? 1 - Math.min(1, countdown.remainingMs / ctx.timeoutMs) : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -50,6 +74,30 @@ export default function BlockerDialog() {
         <div className="px-6 py-5 space-y-4 max-h-[50vh] overflow-y-auto">
           {ctx ? (
             <>
+              {/* Auto-continue countdown */}
+              {countdown && ctx.timeoutMs ? (
+                <div className="rounded-md border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-amber-300/90">
+                      <Timer size={13} />
+                      Auto-continue in
+                    </span>
+                    <span className="font-mono text-sm text-amber-200 tabular-nums">
+                      {countdown.remainingMs > 0 ? formatMs(countdown.remainingMs) : "now…"}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-neutral-800">
+                    <div
+                      className="h-full rounded-full bg-linear-to-r from-amber-500 to-red-500 transition-[width] duration-1000 ease-linear"
+                      style={{ width: `${Math.round(urgency * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-neutral-500">
+                    No decision needed — the swarm will continue automatically if you don't respond.
+                  </p>
+                </div>
+              ) : null}
+
               {/* Reason */}
               <div>
                 <span className="text-xs font-medium uppercase tracking-wide text-neutral-600">Reason</span>

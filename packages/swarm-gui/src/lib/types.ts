@@ -32,6 +32,10 @@ export interface BlockerContext {
   stagnationCount: number;
   workerCrashCounts: Record<string, number>;
   reason: string;
+  /** Auto-continue timeout in ms (0 / undefined = no auto-continue). */
+  timeoutMs?: number;
+  /** Absolute epoch-ms deadline for auto-continue, drives the client countdown. */
+  deadline?: number;
 }
 
 export type BlockerResolution = "continue" | "skip" | "abort";

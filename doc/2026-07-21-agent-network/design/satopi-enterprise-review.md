@@ -234,11 +234,13 @@ packages/
 - [x] **LoopController 相位改道**：`pause/resume/blocked/unblock` 全部经由 `#setLoopPhase → 状态机`，后端成为 LoopPhase 唯一权威。
 - [x] **前端纯投影**：`swarm-store` 移除本地相位推断补丁（`refreshState` 的 blocked 守卫、`addActivity` 的 blocked/running 特判），改为直接采用后端下发的权威 phase 事件（`AUTHORITATIVE_LOOP_PHASES`）。
 - [x] 单测：`swarm-state-machine.test.ts` 13 用例（合法/非法/幂等/force/timed/错误隔离）全绿；前端 57、后端 state 12、nomination 30、event-bus 6 全绿。
-- [ ] 将 `runLoop()` 进一步拆分为 `ConvergenceDetector / BlockageDetector / WorkerScaler / SnapshotManager` 等单一职责单元，各自单测。
-- [ ] 统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）。
-- [ ] 前端阻塞裁决行动卡片（continue/skip/abort + 倒计时）+ plan 编辑闭环 + 流式打断 UI。
-
-> 待办健康度提示：`packages/coding-agent/src/swarm/__tests__/robustness.test.ts` 有 11 个用例因 `RegionLockManager.reset()` 静态方法已移除（RegionLockManager 现为 per-session 实例）而全灭，属**既有陈旧测试**、与本轮改动无关，建议单独修复（更新为实例化 API）。
+- [x] **runLoop 拆分为纯函数单元（第一批）**：抽取 `convergence.ts`（`extractRoundSummary/parseNomination/jaccardSimilarity/findingsSimilarity/parseRoundSummaryJson` + `RoundSummaryData`，收敛判定纯逻辑）、`worker-scaler.ts`（`computeScaleDelta` 缩放投票决策）、`blockage.ts`（`evaluateBlockage` 停滞/崩溃阈值判定）。均为 side-effect-free、行为等价，`runLoop` 相应内联逻辑改为调用。
+- [x] **前端阻塞裁决倒计时**：`BlockerContext` 增加 `timeoutMs/deadline`，`BlockerDialog` 增加实时倒计时（mm:ss + 紧迫度进度条 + 自动 continue 说明）。
+- [x] **前端 plan 编辑闭环**：`PlanViewer` 在运行中提示「先暂停再编辑」并提供 Pause 按钮；暂停中提供 Resume（有未保存变更时禁用，引导先保存），形成 暂停→编辑→保存→恢复 闭环。
+- [x] 单测：新增 `convergence.test.ts`(15) / `worker-scaler.test.ts`(8) / `blockage.test.ts`(6)；相关后端 8 文件共 **102 通过 / 0 失败**；前端 **57 通过**；loop 集成 smoke 无回归。
+- [x] **修复既有 `robustness.test.ts`**：`RegionLockManager` 静态 `create()/reset()` 已移除（现为 per-session 实例），测试更新为实例化 API + 新增 releaseAll/release 隔离用例 → 12 通过（原 11 失败清零）。
+- [ ] （剩余）统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）。
+- [ ] （剩余）流式打断 UI（steering/stop 已有 API，待接前端按钮）。
 
 #### P3（6–10 周）——可靠性与可扩展性对齐分布式
 - [ ] **事件溯源**：状态由 activity 事件流可重放重建，支持进程重启恢复运行态。
