@@ -52,6 +52,12 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  deleteSession: (name: string) =>
+    fetchJson<{ success: boolean }>("/api/sessions", {
+      method: "DELETE",
+      body: JSON.stringify({ name }),
+    }),
+
   getState: () => fetchJson<SwarmState>(sessionUrl("/state")),
 
   getConfig: () => fetchJson<{ yaml: string; error?: string }>(sessionUrl("/config")),

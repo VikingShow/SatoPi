@@ -39,6 +39,8 @@ interface SessionStore {
 
   loadRuns: () => Promise<void>;
   newSession: () => Promise<string | null>;
+  /** Delete a session on the backend and remove it from the local list. */
+  deleteSession: (name: string) => Promise<void>;
   switchToSession: (name: string) => Promise<void>;
   backToCurrent: () => void;
 }
@@ -65,6 +67,33 @@ export const useSessionStore = create<SessionStore>()(
     } catch {
       // Runs API might not return results
     }
+  },
+
+  deleteSession: async (name: string) => {
+    try {
+      await api.deleteSession(name);
+    } catch (err: any) {
+      toastOnce(`Failed to delete session: ${err?.message ?? String(err)}`);
+      return;
+    }
+    // Remove from local runs list.
+    const { runs, activeSwarm } = get();
+    const nextRuns = runs.filter((r) => r.name !== name);
+    let nextActive = activeSwarm;
+    let nextViewing = get().viewingSession;
+    // If the deleted session was the active one, fall back to the first
+    // remaining session (or "SatoPi" if none).
+    if (activeSwarm === name || nextViewing === name) {
+      nextActive = nextRuns.length > 0 ? nextRuns[0]!.name : "SatoPi";
+      nextViewing = null;
+      // Switch the api/sse clients to the fallback session.
+      setActiveSession(nextActive);
+      setActiveSSESession(nextActive);
+      // Reset swarm store for the fallback session.
+      try { useSwarmStore.getState().init(); } catch {}
+    }
+    set({ runs: nextRuns, activeSwarm: nextActive, viewingSession: nextViewing });
+    import("sonner").then(({ toast }) => toast.success(`Deleted session “${name}”`));
   },
 
   newSession: async () => {

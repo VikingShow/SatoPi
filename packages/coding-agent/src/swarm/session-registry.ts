@@ -84,7 +84,7 @@ export class SessionRegistry {
 	constructor(
 		shared: SharedServices,
 		factory: SessionFactory,
-		maxConcurrent = 3,
+		maxConcurrent = Infinity,
 	) {
 		this.#shared = shared;
 		this.#factory = factory;

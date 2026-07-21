@@ -554,6 +554,18 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: String(err) }, 500);
 		}
 	},
+	"DELETE /api/sessions": async (req, ctx) => {
+		try {
+			const body = (await req.json()) as { name: string };
+			if (!body.name || typeof body.name !== "string") {
+				return json({ error: "name is required" }, 400);
+			}
+			await ctx.registry.destroySession(body.name);
+			return json({ success: true, name: body.name });
+		} catch (err) {
+			return json({ error: String(err) }, 500);
+		}
+	},
 	// -- Runs (list all sessions) ----------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
 		try {

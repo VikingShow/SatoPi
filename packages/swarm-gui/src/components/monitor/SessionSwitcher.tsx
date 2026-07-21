@@ -13,7 +13,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
-import { ChevronDown, History, Play, Check, AlertCircle, Loader2, RotateCcw, Plus, X, FolderOpen } from "lucide-react";
+import { ChevronDown, History, Play, Check, AlertCircle, Loader2, RotateCcw, Plus, X, FolderOpen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -75,6 +75,7 @@ export default function SessionSwitcher() {
   const switchToSession = useSessionStore((s) => s.switchToSession);
   const backToCurrent = useSessionStore((s) => s.backToCurrent);
   const newSession = useSessionStore((s) => s.newSession);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
   const isRunning = useSwarmStore((s) => s.isRunning);
   const swarmState = useSwarmStore((s) => s.swarmState);
   const { t } = useTranslation();
@@ -204,7 +205,7 @@ export default function SessionSwitcher() {
                       }
                       setOpen(false);
                     }}
-                    className={`w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-background-border/40 last:border-b-0 ${
+                    className={`group w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-background-border/40 last:border-b-0 ${
                       isViewing
                         ? "bg-primary/10"
                         : isActive
@@ -227,6 +228,19 @@ export default function SessionSwitcher() {
                       </span>
                       {isViewing && <span className="text-[9px] uppercase tracking-wider text-amber-400 font-bold">VIEW</span>}
                       {isActive && !isViewing && <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-bold">LIVE</span>}
+                      {/* Delete — confirmed via native confirm() to avoid accidental data loss */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete session “${run.name}”? This cannot be undone.`)) {
+                            deleteSession(run.name);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto shrink-0 p-0.5 rounded text-neutral-700 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                        title="Delete session"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </div>
                     <div className="flex items-center justify-between gap-2 pl-5">
                       <StatusBadge status={run.status} />
