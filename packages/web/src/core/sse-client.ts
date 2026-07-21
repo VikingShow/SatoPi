@@ -106,6 +106,11 @@ export class SseClient<T = Record<string, unknown>> {
     return this.eventSource?.readyState === EventSource.OPEN;
   }
 
+  /** True while the EventSource is establishing the connection (readyState 0). */
+  get isConnecting(): boolean {
+    return this.eventSource?.readyState === 0;
+  }
+
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {

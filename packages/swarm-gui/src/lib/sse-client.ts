@@ -42,7 +42,7 @@ function buildSSEUrl(): string {
  * and the socket is already open.
  */
 export function setActiveSSESession(name: string | null): void {
-  if (name === activeSession && sseClient.isConnected) {
+  if (name === activeSession && (sseClient.isConnected || sseClient.isConnecting)) {
     return;
   }
   activeSession = name;

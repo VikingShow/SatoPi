@@ -420,6 +420,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           setTimeout(() => get().refreshBeforeLoopState(), 300);
         }
 
+        // Stream ended from Socrates during before-loop — unlock the input
+        // immediately instead of waiting for the next phase event.
+        if (entry.type === "stream_end" && entry.from === "socrates" && get().loopPhase.startsWith("before-loop")) {
+          get().refreshBeforeLoopState();
+        }
+
         // P2-5: Track convergence events.
         if (entry.type === "convergence" && entry.jaccard !== undefined) {
           set((s) => ({
