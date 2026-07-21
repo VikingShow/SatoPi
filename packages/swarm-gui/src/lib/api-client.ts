@@ -22,10 +22,19 @@ export function getActiveSession(): string | null {
   return activeSessionName;
 }
 
+/**
+ * Build a session-scoped API URL.
+ *
+ * With an active session:  /api/session/{name}{path}
+ * Fallback (no session):  /api/{path}          (strips path's leading '/')
+ */
 function sessionUrl(path: string): string {
   if (!activeSessionName) {
-    console.warn(`[api] No active session set when calling ${path} — falling back to /api/${path}`);
-    return `/api/${path}`;
+    // path always starts with "/" (e.g. "/state", "/before-loop/start").
+    // Strip the leading slash to avoid a double-slash like /api//state.
+    const cleanPath = path.replace(/^\/+/, "");
+    console.warn(`[api] No active session set when calling /${cleanPath} — falling back to /api/${cleanPath}`);
+    return `/api/${cleanPath}`;
   }
   return `/api/session/${encodeURIComponent(activeSessionName)}${path}`;
 }
