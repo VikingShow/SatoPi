@@ -272,21 +272,44 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // and was causing the "Reconnected" toast to fire spuriously: the duplicate
       // callback on the second invocation saw hasConnectedOnce===true.
 
-      const [state, runStatus] = await Promise.all([
-        api.getState(),
-        api.getRunStatus(),
-      ]);
-      // Null guard: for a brand-new session (or a transient backend hiccup)
-      // getState() may resolve to null/undefined. We must NOT blindly overwrite
-      // swarmState with a falsy value — that is what made the right-hand panel
-      // vanish. Preserve any existing state and only merge when we actually
-      // received one. loopPhase is also read defensively via optional chaining.
-      set((prev) => ({
-        swarmState: state ?? prev.swarmState,
-        isRunning: runStatus.running,
-        loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
-        error: null,
-      }));
+      try {
+        const [state, runStatus] = await Promise.all([
+          api.getState(),
+          api.getRunStatus(),
+        ]);
+        // Null guard: for a brand-new session (or a transient backend hiccup)
+        // getState() may resolve to null/undefined. We must NOT blindly overwrite
+        // swarmState with a falsy value — that is what made the right-hand panel
+        // vanish. Preserve any existing state and only merge when we actually
+        // received one. loopPhase is also read defensively via optional chaining.
+        set((prev) => ({
+          swarmState: state ?? prev.swarmState,
+          isRunning: runStatus.running,
+          loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
+          error: null,
+        }));
+      } catch (apiErr: any) {
+        const msg = String(apiErr?.message ?? apiErr);
+        // If the stored session does not exist on the backend (stale from a
+        // previous failed createSession, or was deleted externally), clean
+        // up localStorage and fall back to the default "SatoPi" session.
+        if (msg.includes("not found") || msg.includes("404")) {
+          const { useSessionStore } = await import("./session-store");
+          const { setActiveSession } = await import("../lib/api-client");
+          const { setActiveSSESession } = await import("../lib/sse-client");
+          const staleName = useSessionStore.getState().activeSwarm;
+          useSessionStore.getState().deleteSession(staleName);
+          const fallback = "SatoPi";
+          setActiveSession(fallback);
+          setActiveSSESession(fallback);
+          set({ loopPhase: "idle", isRunning: false, error: null });
+          // Re-init with the fallback session.
+          (get() as any).__initRunning = false;
+          get().init();
+          return;
+        }
+        set({ error: msg });
+      }
 
       // Fetch before-loop state if in a before-loop phase
       const phase = get().loopPhase;

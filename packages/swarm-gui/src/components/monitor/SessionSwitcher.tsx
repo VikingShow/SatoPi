@@ -195,8 +195,10 @@ export default function SessionSwitcher() {
                 const isActive = run.name === activeSwarm;
                 const isViewing = viewingSession === run.name;
                 return (
-                  <button
+                  <div
                     key={run.name}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => {
                       if (isViewing) {
                         backToCurrent();
@@ -205,6 +207,7 @@ export default function SessionSwitcher() {
                       }
                       setOpen(false);
                     }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
                     className={`group w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-background-border/40 last:border-b-0 ${
                       isViewing
                         ? "bg-primary/10"
@@ -248,7 +251,7 @@ export default function SessionSwitcher() {
                         {timeAgo(run.lastActivity)} · {run.messageCount} msgs
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
