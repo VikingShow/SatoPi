@@ -1,6 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain, Clock, FileText } from "lucide-react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain, Clock, FileText, GitBranch, ArrowRightLeft } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
@@ -13,6 +13,8 @@ import AgentTopology from "./AgentTopology";
 import AgentTimeline from "./AgentTimeline";
 import FileChangesPanel from "./FileChangesPanel";
 import RoleBrowser from "./RoleBrowser";
+import ScalingHistory from "./ScalingHistory";
+import CommMatrix from "./CommMatrix";
 import AfterLoopPanel from "./AfterLoopPanel";
 
 function formatTokens(n: number): string {
@@ -39,7 +41,7 @@ export default function MonitorPage() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "afterloop">("chat");
+  const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "scaling" | "commatrix" | "afterloop">("chat");
 
   const afterLoopResult = useSwarmStore((s) => s.afterLoopResult);
   const isActive = loopPhase === "running" || loopPhase === "blocked";
@@ -108,6 +110,12 @@ export default function MonitorPage() {
               </Button>
               <Button variant={viewMode === "roles" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("roles")}>
                 <Users size={12} /> Roles
+              </Button>
+              <Button variant={viewMode === "scaling" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("scaling")}>
+                <GitBranch size={12} /> Scaling
+              </Button>
+              <Button variant={viewMode === "commatrix" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("commatrix")}>
+                <ArrowRightLeft size={12} /> Comm
               </Button>
               {afterLoopResult && (
                 <Button
@@ -222,6 +230,14 @@ export default function MonitorPage() {
         ) : viewMode === "files" ? (
           <div className="flex-1 relative">
             <FileChangesPanel />
+          </div>
+        ) : viewMode === "scaling" ? (
+          <div className="flex-1 relative">
+            <ScalingHistory />
+          </div>
+        ) : viewMode === "commatrix" ? (
+          <div className="flex-1 relative">
+            <CommMatrix />
           </div>
         ) : viewMode === "afterloop" ? (
           <div className="flex-1 overflow-y-auto p-4">

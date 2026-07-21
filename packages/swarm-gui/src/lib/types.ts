@@ -61,6 +61,7 @@ export interface AgentState {
   conflictCount: number;
   mentorId?: string;
   role?: "reviewer";
+  modelName?: string;
 }
 
 /**
@@ -99,7 +100,9 @@ export type ActivityEventType =
   | "broadcast" | "subgroup" | "steering" | "steering_ack" | "phase" | "convergence"
   | "verdict" | "conflict" | "scaling" | "nomination" | "crash"
   | "tool_call" | "error_flag" | "file_change"
-  | "stream_start" | "stream_delta" | "stream_end";
+  | "stream_start" | "stream_delta" | "stream_end"
+  | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
+  | "cloner_individual" | "file_coordination";
 
 export interface ActivityEntry {
   ts: number;

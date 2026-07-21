@@ -59,6 +59,8 @@ export interface AgentState {
 	mentorId?: string;
 	/** Role override — "reviewer" when elected, undefined for normal workers. */
 	role?: "reviewer";
+	/** Model name assigned to this agent (from loop config or swarm definition). */
+	modelName?: string;
 }
 
 export interface SwarmState {
@@ -158,7 +160,7 @@ export class StateTracker {
 	 * created dynamically by LoopController, not from YAML).
 	 * Idempotent — does nothing if the agent is already registered.
 	 */
-	async registerAgent(name: string): Promise<void> {
+	async registerAgent(name: string, modelName?: string): Promise<void> {
 		if (this.#state.agents[name]) return;
 		this.#state.agents[name] = {
 			name,
@@ -168,6 +170,7 @@ export class StateTracker {
 			praiseCount: 0,
 			criticismCount: 0,
 			conflictCount: 0,
+			modelName,
 		};
 		await this.#persist();
 	}

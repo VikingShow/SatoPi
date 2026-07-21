@@ -468,10 +468,10 @@ export class LoopController {
 		// subsequent updateAgent / incrementPraise / etc. calls don't
 		// silently no-op (state.ts:127 `if (!agent) return`).
 		for (const id of workerIds) {
-			await this.#stateTracker.registerAgent(id);
+			await this.#stateTracker.registerAgent(id, this.#loopConfig.workers.model);
 		}
 		for (const id of clonerIds) {
-			await this.#stateTracker.registerAgent(id);
+			await this.#stateTracker.registerAgent(id, this.#loopConfig.cloners.model);
 		}
 
 		this.#channel = new WorkerChannel(
@@ -933,6 +933,12 @@ export class LoopController {
 					};
 				}
 			} catch (err) {
+				// Release all region locks held by this iteration's workers.
+				// A crash bypasses the normal releaseAll path (line ~619), leaking
+				// locks into the next iteration where same-named workers would be
+				// blocked on their own stale locks.
+				for (const id of workerIds) lockMgr.releaseAll(id);
+
 				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
 				const message = isTimeout
 					? `Iteration ${iter + 1} timed out after ${this.#loopConfig.iterationTimeoutMs}ms`
@@ -1053,7 +1059,7 @@ export class LoopController {
 					for (let i = 0; i < addCount; i++) {
 						const newId = `worker-${workerIds.length + 1}`;
 						this.#channel.addWorker(newId);
-						await this.#stateTracker.registerAgent(newId);
+						await this.#stateTracker.registerAgent(newId, this.#loopConfig.workers.model);
 						workerIds.push(newId);
 						currentWorkerCount++;
 						this.#activityLogger?.logScaling("add", newId, `cloner suggestion +${delta}`);

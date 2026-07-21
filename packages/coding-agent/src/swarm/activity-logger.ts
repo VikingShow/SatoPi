@@ -36,7 +36,12 @@ export type ActivityEventType =
 	| "file_change"
 	| "stream_start"
 	| "stream_delta"
-	| "stream_end";
+	| "stream_end"
+	| "deliberation_challenge"
+	| "deliberation_rebuttal"
+	| "deliberation_ruling"
+	| "cloner_individual"
+	| "file_coordination";
 
 export interface ActivityEntry {
 	ts: number;
@@ -253,5 +258,38 @@ export class ActivityLogger {
 	/** End of a streaming response — frontend finalises the bubble. */
 	logStreamEnd(msgId: string, from: string, finalBody: string, thinking?: string): void {
 		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody, thinking });
+	}
+
+	// ── Deliberation events (P2 — GUI channel routing) ──────────────
+
+	/** Worker challenges a peer's output during the deliberation phase. */
+	logDeliberationChallenge(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_challenge", from, body, round });
+	}
+
+	/** Worker rebuts a challenge during the deliberation phase. */
+	logDeliberationRebuttal(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_rebuttal", from, body, round });
+	}
+
+	/** Reviewer issues a ruling during the deliberation resolution sub-round. */
+	logDeliberationRuling(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_ruling", from, body, round });
+	}
+
+	// ── Cloner individual verdict (P2 — per-cloner insight) ─────────
+
+	/** Emit a single cloner's verdict before aggregation. Enables the
+	 *  frontend to show per-cloner findings in dedicated channels. */
+	logClonerIndividual(clonerId: string, passed: boolean, findings: string[]): void {
+		this.log({ ts: Date.now(), type: "cloner_individual", from: clonerId, passed, findings });
+	}
+
+	// ── File coordination (P2 — file-conflict channel routing) ───────
+
+	/** Emit a file-specific coordination message when workers need to
+	 *  negotiate access to a conflicted file. */
+	logFileCoordination(file: string, from: string, body: string): void {
+		this.log({ ts: Date.now(), type: "file_coordination", file, from, body });
 	}
 }

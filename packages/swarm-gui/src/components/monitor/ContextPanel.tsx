@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Crown, FileWarning, Bot, ListTodo, FileText, Brain } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Crown, FileWarning, Bot, ListTodo, FileText, Brain, TrendingUp, TrendingDown, ChevronDown, ChevronRight } from "lucide-react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import PlanViewer from "./PlanViewer";
 import TodoList from "./TodoList";
@@ -29,6 +29,51 @@ function WorkerCard({ name, praise, criticism, conflict, status, role }: {
         <span>{criticism}✗</span>
         <span>{conflict}⚡</span>
       </div>
+    </div>
+  );
+}
+
+// ── Scaling events (collapsible) ──────────────────────────────────────
+
+function ScalingEvents() {
+  const activities = useSwarmStore((s) => s.activities);
+  const [collapsed, setCollapsed] = useState(true);
+  const scalingEvents = useMemo(
+    () => activities.filter((a) => a.type === "scaling").slice(-10).reverse(),
+    [activities],
+  );
+
+  if (scalingEvents.length === 0) return null;
+
+  return (
+    <div className="px-3 py-2 border-t border-border bg-background-elevated/20">
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full flex items-center gap-1 text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider hover:text-muted-foreground"
+      >
+        {collapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+        Scaling ({scalingEvents.length})
+      </Button>
+      {!collapsed && (
+        <div className="mt-1 space-y-0.5">
+          {scalingEvents.map((ev, i) => {
+            const isAdd = ev.action === "add";
+            return (
+              <div key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                {isAdd ? (
+                  <TrendingUp size={10} className="text-status-success flex-shrink-0" />
+                ) : (
+                  <TrendingDown size={10} className="text-status-danger flex-shrink-0" />
+                )}
+                <span className="font-mono text-foreground/80">{ev.worker}</span>
+                <span>{ev.reason ?? (isAdd ? "added" : "removed")}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -164,6 +209,9 @@ export default function ContextPanel() {
               </div>
             </div>
           )}
+
+          {/* Worker scaling events */}
+          <ScalingEvents />
 
           {/* After Loop results */}
           <AfterLoopPanel />

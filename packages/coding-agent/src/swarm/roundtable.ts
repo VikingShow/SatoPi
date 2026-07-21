@@ -156,6 +156,11 @@ export class ClonerCouncil {
 					},
 				}).then((r) => {
 					activityLogger?.logStreamEnd(clonerMsgId, id, r.output, r.thinking);
+					// Emit per-cloner individual verdict for GUI channel routing
+					const verdict = extractVerdict(id, r.output);
+					if (verdict) {
+						activityLogger?.logClonerIndividual(id, verdict.passed, verdict.findings);
+					}
 					return r;
 				}).catch((err) => {
 					const errMsg = err instanceof Error ? err.message : String(err);
@@ -432,6 +437,23 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 			if (verdict.praisedWorkers) for (const w of verdict.praisedWorkers) praisedWorkers.add(w);
 			if (verdict.criticizedWorkers) for (const w of verdict.criticizedWorkers) criticizedWorkers.add(w);
 		}
+	}
+
+	// When all cloner subprocesses crashed, totalCount is 0. This is a
+	// systemic failure (not normal FAIL), so surface it explicitly so the
+	// LoopController can escalate rather than silently retrying.
+	if (totalCount === 0) {
+		return {
+			passed: false,
+			approvalCount: 0,
+			totalCount: 0,
+			findings: ["[SYSTEM] All cloner subprocesses failed — no review available"],
+			workerCountSuggestions: [],
+			disagreed: false,
+			roleSuggestions: {},
+			praisedWorkers: [],
+			criticizedWorkers: [],
+		};
 	}
 
 	// P0-D: Veto overrides weighted majority.
