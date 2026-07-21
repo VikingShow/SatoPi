@@ -17,6 +17,11 @@ import { setActiveSSESession } from "../lib/sse-client";
 import type { ActivityEntry } from "../lib/types";
 import { useSwarmStore } from "./swarm-store";
 
+async function toastOnce(message: string, opts?: { description?: string }) {
+  const { toast } = await import("sonner");
+  toast.error(message, { id: "session-error", ...opts });
+}
+
 export interface RunMeta {
   name: string;
   dir: string;
@@ -63,17 +68,29 @@ export const useSessionStore = create<SessionStore>()(
   },
 
   newSession: async () => {
-    // Cancel any active before-loop
+    // Cancel any active before-loop — ignore failures (none may be active).
     try { await api.cancelBeforeLoop(); } catch {}
-    // Stop any running swarm
+    // Stop any running swarm — ignore "No run in progress" errors.
     try { await api.stopRun(); } catch {}
 
     // Generate a new unique name (visible to the user immediately)
     const newName = generateSwarmName();
 
-    // Create the session on the backend (creates .swarm_{name}/ directory
-    // and session services).
-    try { await api.createSession(newName); } catch { /* ok if exists */ }
+    // Create the session on the backend. This is the gate: if it fails (e.g.
+    // session limit reached, backend error), we must NOT proceed — switching
+    // to a non-existent session would cause every subsequent API call to 404.
+    try {
+      await api.createSession(newName);
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      // Dedup toast via id — avoids stacking when retried quickly.
+      if (msg.includes("Max 3 concurrent")) {
+        toastOnce("Session limit reached", { description: "Max 3 concurrent sessions. Delete old ones in the session list." });
+      } else {
+        toastOnce(`Failed to create session: ${msg}`);
+      }
+      return null;
+    }
 
     // Switch the api/sse clients to the new session BEFORE refreshing
     // state, otherwise refreshState() reads from the old session.

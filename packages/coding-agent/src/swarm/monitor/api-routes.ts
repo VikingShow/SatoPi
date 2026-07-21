@@ -245,7 +245,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	"POST/run/stop": async (_req, ctx) => {
 		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
 		const result = await ctx.services.runManager.stop();
-		return json(result, result.success ? 200 : 500);
+		return json(result, result.success ? 200 : 409);
 	},
 
 	"POST/run/pause": async (_req, ctx) => {
