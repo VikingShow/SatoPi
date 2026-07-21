@@ -1,10 +1,12 @@
 import { useEffect, useState, lazy, Suspense, useCallback } from "react";
-import { Settings, Activity, History, PlusCircle, Sparkles } from "lucide-react";
+import { Settings, Activity, History, PlusCircle, Sparkles, Languages } from "lucide-react";
 import { Toaster } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useSwarmStore } from "./stores/swarm-store";
 import { useSessionStore } from "./stores/session-store";
 import { useConfigStore } from "./stores/config-store";
 import { useGlobalKeybindings } from "./hooks/use-keybindings";
+import { Button } from "./components/ui/button";
 import "./i18n";
 import MonitorPage from "./components/monitor/MonitorPage";
 import SessionSwitcher from "./components/monitor/SessionSwitcher";
@@ -37,6 +39,7 @@ function App() {
   const loadRuns = useSessionStore((s) => s.loadRuns);
   const [newSessionBusy, setNewSessionBusy] = useState(false);
   const saveConfig = useConfigStore((s) => s.saveConfig);
+  const { t, i18n } = useTranslation();
 
   // Global keyboard shortcuts
   const keyHandlers = useCallback({
@@ -69,9 +72,9 @@ function App() {
   }, [hydrated, init, loadRuns]);
 
   const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
-    { id: "config", label: "Config", icon: <Settings size={18} /> },
-    { id: "monitor", label: "Monitor", icon: <Activity size={18} /> },
-    { id: "history", label: "History", icon: <History size={18} /> },
+    { id: "config", label: t("nav.config"), icon: <Settings size={18} /> },
+    { id: "monitor", label: t("nav.monitor"), icon: <Activity size={18} /> },
+    { id: "history", label: t("nav.history"), icon: <History size={18} /> },
   ];
 
   const status = swarmState?.status ?? "idle";
@@ -100,23 +103,32 @@ function App() {
           <Sparkles size={18} className="text-primary" />
         </div>
         {navItems.map((item) => (
-          <button
+          <Button
             key={item.id}
+            variant="ghost"
+            size="icon"
             onClick={() => setPage(item.id)}
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
-              page === item.id
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground/80 hover:bg-background-elevated"
-            }`}
+            className={page === item.id ? "bg-primary/15 text-primary" : ""}
             title={item.label}
           >
             {item.icon}
-          </button>
+          </Button>
         ))}
         {/* Spacer */}
         <div className="flex-1" />
+        {/* Language toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => i18n.changeLanguage(i18n.language === "en" ? "zh" : "en")}
+          title={i18n.language === "en" ? "切换到中文" : "Switch to English"}
+        >
+          <Languages size={16} />
+        </Button>
         {/* New Session */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={async () => {
             setNewSessionBusy(true);
             await newSession();
@@ -124,11 +136,11 @@ function App() {
             setPage("monitor");
           }}
           disabled={newSessionBusy || isRunning}
-          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-muted-foreground hover:text-status-success hover:bg-status-success/10 disabled:opacity-30 disabled:cursor-not-allowed"
-          title="New Session"
+          className="hover:text-status-success hover:bg-status-success/10"
+          title={t("session.newSession")}
         >
           <PlusCircle size={20} className={newSessionBusy ? "animate-spin" : ""} />
-        </button>
+        </Button>
       </aside>
 
       {/* Main content */}
