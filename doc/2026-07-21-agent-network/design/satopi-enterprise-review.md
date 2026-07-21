@@ -239,8 +239,9 @@ packages/
 - [x] **前端 plan 编辑闭环**：`PlanViewer` 在运行中提示「先暂停再编辑」并提供 Pause 按钮；暂停中提供 Resume（有未保存变更时禁用，引导先保存），形成 暂停→编辑→保存→恢复 闭环。
 - [x] 单测：新增 `convergence.test.ts`(15) / `worker-scaler.test.ts`(8) / `blockage.test.ts`(6)；相关后端 8 文件共 **102 通过 / 0 失败**；前端 **57 通过**；loop 集成 smoke 无回归。
 - [x] **修复既有 `robustness.test.ts`**：`RegionLockManager` 静态 `create()/reset()` 已移除（现为 per-session 实例），测试更新为实例化 API + 新增 releaseAll/release 隔离用例 → 12 通过（原 11 失败清零）。
-- [ ] （剩余）统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）。
-- [ ] （剩余）流式打断 UI（steering/stop 已有 API，待接前端按钮）。
+- [x] **runLoop executor 对齐 pipeline**：`#spawnWorkers` 改为经 `this.#executor.execute()`（AgentExecutor 接口）而非直接 `runSubprocess`。worker 定义通过 `SwarmAgent + agentOverrides.systemPrompt` 映射，`timeoutMs:0` 保留迭代级 signal 控制不变。自定义执行器（远程/沙箱/mock）现可真正介入 worker 生成。锁释放与崩溃跟踪保留在 Promise 链中。
+- [x] **流式打断指示器**：ChatView 顶部增加 `loopPhase==="running"` 常驻横条——脉冲绿点 + "Swarm is working" + Stop 按钮（迭代边界中断）。与原有底部输入栏 Stop 按钮共存，确保滚动中始终可触达。
+- [ ] （剩余）统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）——已通过 executor 对齐大幅收窄差距，完整复用在 P3。
 
 #### P3（6–10 周）——可靠性与可扩展性对齐分布式
 - [ ] **事件溯源**：状态由 activity 事件流可重放重建，支持进程重启恢复运行态。

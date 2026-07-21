@@ -353,6 +353,26 @@ export default function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
+      {/* ── Streaming indicator bar (always visible during active run) ── */}
+      {loopPhase === "running" && isRunning && (
+        <div className="shrink-0 flex items-center justify-between gap-3 border-b border-emerald-500/20 bg-emerald-950/30 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse-ring" />
+            <span className="text-xs font-medium text-emerald-300/90">Swarm is working</span>
+            <span className="text-[10px] text-emerald-400/60 hidden sm:inline">
+              Press Stop to interrupt at the next iteration boundary.
+            </span>
+          </div>
+          <button
+            onClick={() => stopRun()}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-white bg-red-600/80 hover:bg-red-500 rounded-md transition-colors cursor-pointer"
+          >
+            <Square size={12} fill="currentColor" />
+            Stop Swarm
+          </button>
+        </div>
+      )}
+
       {/* Messages — virtualized for performance */}
       <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (

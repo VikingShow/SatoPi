@@ -1396,34 +1396,54 @@ export class LoopController {
 				};
 				applyToolRestrictions(agentDef, resolveToolRestrictions(this.#loopConfig, "worker"));
 
-				return runSubprocess({
-					cwd: workspace,
-					agent: agentDef,
-					task: [
-						`You are Worker ${i + 1} of ${workerIds.length}.`,
-						`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
-						`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
-						`Work in the workspace: ${workspace}.`,
-						planContent ? `\n## Plan\n\n${planContent}` : "",
-						feedbackBlock,
-						roleSuggestions?.[id]
-							? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
-							: "",
-						nominationPrompt ?? "",
-						extraContext ?? "",
-					].join("\n"),
-					index: i,
-					id: `worker-${id}`,
+				const taskText = [
+					`You are Worker ${i + 1} of ${workerIds.length}.`,
+					`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
+					`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
+					`Work in the workspace: ${workspace}.`,
+					planContent ? `\n## Plan\n\n${planContent}` : "",
+					feedbackBlock,
+					roleSuggestions?.[id]
+						? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
+						: "",
+					nominationPrompt ?? "",
+					extraContext ?? "",
+				].join("\n");
+
+				// ── Route through the AgentExecutor (pipeline-aligned) ──
+				// Uses agentOverrides.systemPrompt to inject the full worker
+				// system prompt on top of the auto-built "You are a {role}."
+				// prefix. timeoutMs:0 disables per-worker timeout — iteration-
+				// level signal handles cancellation. Tool restrictions flow
+				// through SwarmAgent.allowedTools/blockedTools.
+				const swarmAgent = {
+					name: id,
+					role: `Loop Engineering Worker ${i + 1}`,
+					task: taskText,
+					...(agentDef.tools?.length ? { allowedTools: agentDef.tools as string[] } : {}),
+					...(agentDef.blockedTools?.length ? { blockedTools: agentDef.blockedTools as string[] } : {}),
+				};
+
+				return this.#executor.execute(swarmAgent, i, {
+					workspace,
+					swarmName: this.#stateTracker.swarmName,
+					iteration: iterationCounter,
 					modelRegistry,
 					settings,
 					signal,
-					beforeToolCall: workerHooks?.beforeToolCall,
-					afterToolCall: workerHooks?.afterToolCall,
+					timeoutMs: 0,
+					stateTracker: this.#stateTracker,
+					agentOverrides: {
+						systemPrompt,
+						source: "project" as const,
+					},
+					toolHooks: {
+						beforeToolCall: workerHooks?.beforeToolCall,
+						afterToolCall: workerHooks?.afterToolCall,
+					},
 				}).then(
 					result => result,
 					err => {
-						// Release locks immediately on crash so other still-running
-						// workers are not blocked on stale file locks.
 						if (lockMgr) lockMgr.releaseAll(id);
 						throw err;
 					},
