@@ -64,7 +64,7 @@ function StatusBadge({ status }: { status: RunMeta["status"] }) {
       </span>
     );
   }
-  return <span className="text-[10px] font-medium text-neutral-600">IDLE</span>;
+  return <span className="text-[10px] font-medium text-muted-foreground/60">IDLE</span>;
 }
 
 export default function SessionSwitcher() {
@@ -144,7 +144,7 @@ export default function SessionSwitcher() {
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-sm transition-colors cursor-pointer ${
           open
             ? "bg-primary/15 text-primary"
-            : "text-neutral-300 hover:text-neutral-100 hover:bg-background-elevated"
+            : "text-foreground/80 hover:text-foreground/90 hover:bg-background-elevated"
         }`}
         title="Switch session"
       >
@@ -154,14 +154,14 @@ export default function SessionSwitcher() {
           <Play size={13} className="text-emerald-400" />
         )}
         <span className="font-medium tracking-tight max-w-[180px] truncate">{displayedName}</span>
-        <ChevronDown size={12} className={`text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={12} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-lg border border-background-border bg-background-card shadow-2xl shadow-black/40 overflow-hidden">
+        <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-lg border border-border bg-background-card shadow-2xl shadow-black/40 overflow-hidden">
           {/* Header */}
-          <div className="px-3 py-2 border-b border-background-border flex items-center justify-between bg-background-elevated/30">
-            <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between bg-background-elevated/30">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <FolderOpen size={11} className="text-primary" />
               Sessions ({allRuns.length})
             </span>
@@ -187,7 +187,7 @@ export default function SessionSwitcher() {
           {/* Session list */}
           <div className="max-h-80 overflow-y-auto">
             {allRuns.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-neutral-600">
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground/60">
                 No sessions yet
               </div>
             ) : (
@@ -208,7 +208,7 @@ export default function SessionSwitcher() {
                       setOpen(false);
                     }}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
-                    className={`group w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-background-border/40 last:border-b-0 ${
+                    className={`group w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-border/40 last:border-b-0 ${
                       isViewing
                         ? "bg-primary/10"
                         : isActive
@@ -222,10 +222,10 @@ export default function SessionSwitcher() {
                       ) : isViewing ? (
                         <History size={11} className="text-amber-400 shrink-0" />
                       ) : (
-                        <FolderOpen size={11} className="text-neutral-500 shrink-0" />
+                        <FolderOpen size={11} className="text-muted-foreground shrink-0" />
                       )}
                       <span className={`text-xs flex-1 truncate font-medium ${
-                        isViewing ? "text-primary" : isActive ? "text-emerald-300" : "text-neutral-200"
+                        isViewing ? "text-primary" : isActive ? "text-emerald-300" : "text-foreground"
                       }`}>
                         {run.name}
                       </span>
@@ -239,7 +239,7 @@ export default function SessionSwitcher() {
                             deleteSession(run.name);
                           }
                         }}
-                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto shrink-0 p-0.5 rounded text-neutral-700 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto shrink-0 p-0.5 rounded text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
                         title="Delete session"
                       >
                         <Trash2 size={11} />
@@ -247,7 +247,7 @@ export default function SessionSwitcher() {
                     </div>
                     <div className="flex items-center justify-between gap-2 pl-5">
                       <StatusBadge status={run.status} />
-                      <span className="text-[10px] text-neutral-600 font-mono">
+                      <span className="text-[10px] text-muted-foreground/60 font-mono">
                         {timeAgo(run.lastActivity)} · {run.messageCount} msgs
                       </span>
                     </div>
@@ -258,11 +258,11 @@ export default function SessionSwitcher() {
           </div>
 
           {/* New session action */}
-          <div className="border-t border-background-border p-2 bg-background-elevated/30">
+          <div className="border-t border-border p-2 bg-background-elevated/30">
             <button
               onClick={handleNew}
               disabled={newBusy || isRunning}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-200 bg-background-card hover:bg-primary/15 hover:text-primary border border-background-border rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-foreground bg-background-card hover:bg-primary/15 hover:text-primary border border-border rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               title={isRunning ? "Stop the current run first" : "Start a fresh session"}
             >
               {newBusy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}

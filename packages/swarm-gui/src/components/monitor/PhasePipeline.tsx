@@ -81,7 +81,7 @@ export default function PhasePipeline() {
               ) : status === "active" ? (
                 <Loader2 size={14} className="text-warning animate-spin flex-shrink-0" />
               ) : (
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-neutral-700 flex-shrink-0" />
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-border flex-shrink-0" />
               )}
 
               <span
@@ -104,7 +104,7 @@ export default function PhasePipeline() {
 
             {!isLast && (
               <div
-                className={`w-8 h-px mx-1.5 ${status === "done" ? "bg-success/40" : "bg-neutral-800"}`}
+                className={`w-8 h-px mx-1.5 ${status === "done" ? "bg-success/40" : "bg-card"}`}
               />
             )}
           </div>

@@ -10,15 +10,15 @@ interface EmptyStateProps {
 /**
  * EmptyState — consistent placeholder for pages with no content.
  *
- * Use design tokens: icon in fg-faint, title in fg-muted, desc in fg-faint.
+ * Uses CSS variable semantic classes so it responds to theme switching.
  */
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-center gap-3 px-6 py-12">
-      {icon && <div className="text-fg-faint">{icon}</div>}
+      {icon && <div className="text-muted-foreground/50">{icon}</div>}
       <div className="space-y-1">
-        <p className="text-sm font-medium text-fg-muted">{title}</p>
-        {description && <p className="text-xs text-fg-faint max-w-sm">{description}</p>}
+        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        {description && <p className="text-xs text-muted-foreground/60 max-w-sm">{description}</p>}
       </div>
       {action && <div className="mt-2">{action}</div>}
     </div>

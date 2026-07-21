@@ -81,13 +81,13 @@ function AgentNode({ data }: { data: { label: string; agentType: string; status:
     >
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
-        <span className="text-xs font-semibold text-neutral-200">{data.label}</span>
+        <span className="text-xs font-semibold text-foreground">{data.label}</span>
       </div>
-      <div className="flex items-center gap-2 text-[10px] text-neutral-500">
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <span className="uppercase tracking-wider" style={{ color }}>{data.agentType}</span>
         {data.model && <span className="opacity-60">{data.model}</span>}
       </div>
-      <div className="flex items-center gap-3 mt-1 text-[10px] text-neutral-600">
+      <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground/60">
         <span>#{data.iteration}</span>
         {data.score !== undefined && <span>★ {data.score.toFixed(1)}</span>}
       </div>
@@ -151,7 +151,7 @@ export default function AgentTopology() {
 
   if (rawNodes.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-600 text-sm">
+      <div className="h-full flex items-center justify-center text-muted-foreground/60 text-sm">
         No agents spawned yet. Start a swarm run to see topology.
       </div>
     );
@@ -172,11 +172,11 @@ export default function AgentTopology() {
       className="bg-background"
     >
       <Background color="#1a1a1a" gap={20} />
-      <Controls className="bg-neutral-800! border-neutral-700! rounded-lg!" />
+      <Controls className="bg-card! border-border! rounded-lg!" />
       <MiniMap
         nodeColor={(n) => AGENT_COLORS[(n.data as { agentType: string }).agentType] || "#7C3AED"}
         maskColor="rgba(0,0,0,0.7)"
-        className="bg-neutral-900! border-neutral-700! rounded-lg!"
+        className="bg-background! border-border! rounded-lg!"
       />
     </ReactFlow>
   );

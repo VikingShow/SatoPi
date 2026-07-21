@@ -40,11 +40,11 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   }, [code]);
 
   const header = (
-    <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a0a0a] border-b border-[#1a1a1a] rounded-t-lg">
-      <span className="text-[11px] text-neutral-500 font-mono">{lang || "text"}</span>
+    <div className="flex items-center justify-between px-3 py-1.5 bg-background border-b border-border rounded-t-lg">
+      <span className="text-[11px] text-muted-foreground font-mono">{lang || "text"}</span>
       <button
         onClick={handleCopy}
-        className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground/80 transition-colors cursor-pointer"
       >
         {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
         <span>{copied ? "Copied" : "Copy"}</span>
@@ -54,9 +54,9 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
 
   if (html === null) {
     return (
-      <div className="my-1.5 rounded-lg overflow-hidden border border-[#1a1a1a] bg-[#0d0d0d]">
+      <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
         {header}
-        <pre className="p-3 overflow-x-auto text-xs font-mono bg-[#0d0d0d]">
+        <pre className="p-3 overflow-x-auto text-xs font-mono bg-background">
           <code>{code}</code>
         </pre>
       </div>
@@ -64,10 +64,10 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   }
 
   return (
-    <div className="my-1.5 rounded-lg overflow-hidden border border-[#1a1a1a] bg-[#0d0d0d]">
+    <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
       {header}
       <div
-        className="shiki-wrapper text-xs [&_pre]:bg-[#0d0d0d]! [&_pre]:p-3 [&_pre]:overflow-x-auto"
+        className="shiki-wrapper text-xs [&_pre]:bg-background! [&_pre]:p-3 [&_pre]:overflow-x-auto"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
@@ -89,19 +89,19 @@ function MessageBody({ body }: { body: string }) {
       [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
       [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
       [&_li]:my-0.5
-      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-neutral-800 [&_h1]:pb-1
+      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-border [&_h1]:pb-1
       [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
       [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
-      [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-600 [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-neutral-400 [&_blockquote]:italic [&_blockquote]:bg-neutral-800/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
-      [&_strong]:font-bold [&_strong]:text-neutral-100
+      [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_blockquote]:bg-card/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
+      [&_strong]:font-bold [&_strong]:text-foreground/90
       [&_em]:italic
-      [&_del]:line-through [&_del]:text-neutral-500
+      [&_del]:line-through [&_del]:text-muted-foreground
       [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-primary/80
-      [&_code]:bg-[#0d0d0d] [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+      [&_code]:bg-background [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
       [&_table]:w-full [&_table]:my-1.5 [&_table]:text-xs [&_table]:border-collapse
-      [&_th]:border [&_th]:border-neutral-700 [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-[#0d0d0d] [&_th]:font-semibold [&_th]:text-left
-      [&_td]:border [&_td]:border-neutral-800 [&_td]:px-2 [&_td]:py-1
-      [&_hr]:border-neutral-700 [&_hr]:my-2
+      [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-background [&_th]:font-semibold [&_th]:text-left
+      [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1
+      [&_hr]:border-border [&_hr]:my-2
       [&_img]:rounded-lg [&_img]:max-w-full
     ">
       <ReactMarkdown
@@ -111,7 +111,7 @@ function MessageBody({ body }: { body: string }) {
             if (className) {
               return <CodeRenderer className={className}>{children}</CodeRenderer>;
             }
-            return <code className="bg-[#0d0d0d] text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+            return <code className="bg-background text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
           },
           pre: ({ children }) => <>{children}</>,
           a: ({ href, children }) => (
@@ -135,7 +135,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
     <div className="mb-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] text-neutral-500 hover:text-neutral-400 transition-colors cursor-pointer select-none"
+        className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-muted-foreground transition-colors cursor-pointer select-none"
       >
         <Brain size={11} />
         <span>Thinking</span>
@@ -145,7 +145,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
         />
       </button>
       {open && (
-        <div className="mt-1 text-xs text-neutral-500 whitespace-pre-wrap border-l-2 border-neutral-700/60 pl-2.5 py-1 max-h-48 overflow-y-auto leading-relaxed">
+        <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap border-l-2 border-border/60 pl-2.5 py-1 max-h-48 overflow-y-auto leading-relaxed">
           {thinking}
         </div>
       )}
@@ -164,10 +164,10 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div className="flex items-center gap-1.5 px-1">
         <span className={`text-xs font-medium ${
           isSocrates ? "text-primary" :
-          isSystem ? "text-neutral-500" :
-          "text-neutral-300"
+          isSystem ? "text-muted-foreground" :
+          "text-foreground/80"
         }`}>{msg.from}</span>
-        <span className="text-xs text-neutral-600">
+        <span className="text-xs text-muted-foreground/60">
           {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
         {isSteering && <Megaphone size={11} className="text-status-accent" />}
@@ -175,22 +175,22 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div
         className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm ${
           isSteering
-            ? "bg-status-accent/15 border border-status-accent/30 text-neutral-200"
+            ? "bg-status-accent/15 border border-status-accent/30 text-foreground"
             : isSystem
-            ? "bg-neutral-800/50 text-neutral-400 italic text-xs"
+            ? "bg-card/50 text-muted-foreground italic text-xs"
             : isOperator
-            ? "bg-primary/20 text-neutral-100"
+            ? "bg-primary/20 text-foreground/90"
             : isSocrates
-            ? "bg-primary/10 border border-primary/20 text-neutral-100"
-            : "bg-background-elevated text-neutral-200"
+            ? "bg-primary/10 border border-primary/20 text-foreground/90"
+            : "bg-background-elevated text-foreground"
         }`}
       >
         {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
         {msg.streaming && !msg.body ? (
           <div className="flex items-center gap-1.5 py-0.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "0ms" }} />
-            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "200ms" }} />
-            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "400ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "0ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "200ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "400ms" }} />
           </div>
         ) : (
           <ErrorBoundary fallbackText={msg.body}>
@@ -208,7 +208,7 @@ const MemoMessageBubble = memo(MessageBubble);
 function SystemEvent({ text }: { text: string }) {
   return (
     <div className="flex items-center justify-center py-1">
-      <span className="text-xs text-neutral-600 bg-background-elevated px-2 py-0.5 rounded-full">{text}</span>
+      <span className="text-xs text-muted-foreground/60 bg-background-elevated px-2 py-0.5 rounded-full">{text}</span>
     </div>
   );
 }
@@ -373,7 +373,7 @@ export default function ChatView() {
           </div>
           <button
             onClick={() => stopRun()}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-white bg-red-600/80 hover:bg-red-500 rounded-md transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-foreground bg-red-600/80 hover:bg-red-500 rounded-md transition-colors cursor-pointer"
           >
             <Square size={12} fill="currentColor" />
             Stop Swarm
@@ -445,14 +445,14 @@ export default function ChatView() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runDebate()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-500 rounded-md transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground bg-purple-600 hover:bg-purple-500 rounded-md transition-colors cursor-pointer"
               >
                 <Swords size={12} />
                 {loopPhase === "before-loop-confirm" ? "Run Debate Again" : "Run Debate"}
               </button>
               <button
                 onClick={() => confirmAndStart()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors cursor-pointer"
               >
                 <Check size={12} />
                 Confirm & Start
@@ -467,9 +467,9 @@ export default function ChatView() {
             - before-loop-dialog / before-loop-confirm (idle) → Cancel planning
             - running → Stop Swarm (red)
         */}
-      <div className="border-t border-background-border px-4 py-2.5 bg-background-card">
+      <div className="border-t border-border px-4 py-2.5 bg-background-card">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-xs text-neutral-500 px-2 py-1 rounded-md bg-background-elevated">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground px-2 py-1 rounded-md bg-background-elevated">
             {isIdle ? (
               <>
                 <Shield size={12} />
@@ -499,13 +499,13 @@ export default function ChatView() {
             onKeyDown={handleKeyDown}
             disabled={!canSend || isBusy}
             placeholder={placeholder}
-            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
+            className="flex-1 bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
           />
           {/* Right-side action button — morphs by phase */}
           {loopPhase === "running" && isRunning ? (
             <button
               onClick={() => stopRun()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
               title="Stop the running swarm"
             >
               <Square size={14} fill="currentColor" />
@@ -514,7 +514,7 @@ export default function ChatView() {
           ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
             <button
               onClick={() => cancelBeforeLoop()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-200 bg-neutral-700 hover:bg-neutral-600 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-background-elevated hover:bg-background-overlay rounded-lg transition-colors cursor-pointer"
               title="Cancel Before Loop planning"
             >
               <X size={14} />

@@ -90,7 +90,7 @@ export default function PlanViewer() {
           </span>
           <button
             onClick={() => pauseRun()}
-            className="flex shrink-0 items-center gap-1 rounded bg-amber-600/80 px-2 py-1 text-xs font-medium text-white hover:bg-amber-500 transition-colors"
+            className="flex shrink-0 items-center gap-1 rounded bg-amber-600/80 px-2 py-1 text-xs font-medium text-foreground hover:bg-amber-500 transition-colors"
           >
             <Pause size={12} /> Pause
           </button>
@@ -106,7 +106,7 @@ export default function PlanViewer() {
           <button
             onClick={() => resumeRun()}
             disabled={isDirty}
-            className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/80 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/80 px-2 py-1 text-xs font-medium text-foreground hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={isDirty ? "Save first" : "Resume the loop"}
           >
             <Play size={12} /> Resume
@@ -125,7 +125,7 @@ export default function PlanViewer() {
         {mode === "preview" ? (
           <button
             onClick={() => setMode("edit")}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-400 hover:text-neutral-200 bg-background-elevated"}`}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-muted-foreground hover:text-foreground/80" : "text-muted-foreground hover:text-foreground bg-background-elevated"}`}
             title="Edit plan"
           >
             <Pencil size={12} />
@@ -133,7 +133,7 @@ export default function PlanViewer() {
         ) : (
           <button
             onClick={() => { setMode("preview"); setEditContent(content); }}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-neutral-500 hover:text-neutral-300" : "text-neutral-400 hover:text-neutral-200 bg-background-elevated"}`}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${compact ? "text-muted-foreground hover:text-foreground/80" : "text-muted-foreground hover:text-foreground bg-background-elevated"}`}
             title="Preview"
           >
             <Eye size={12} />
@@ -148,7 +148,7 @@ export default function PlanViewer() {
             className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
               saved ? "text-status-success bg-status-success/10" :
               isDirty && !saving ? "text-primary bg-primary/10 hover:bg-primary/20" :
-              "text-neutral-600 bg-background-elevated"
+              "text-muted-foreground/60 bg-background-elevated"
             }`}
             title="Save"
           >
@@ -161,7 +161,7 @@ export default function PlanViewer() {
           <button
             onClick={() => setUseMonaco((v) => !v)}
             className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors cursor-pointer ${
-              useMonaco ? "text-blue-400 bg-blue-500/10" : "text-neutral-500 hover:text-neutral-300"
+              useMonaco ? "text-blue-400 bg-blue-500/10" : "text-muted-foreground hover:text-foreground/80"
             }`}
             title={useMonaco ? "Switch to textarea" : "Switch to Monaco Editor"}
           >
@@ -172,7 +172,7 @@ export default function PlanViewer() {
         {/* Refresh */}
         <button
           onClick={loadPlan}
-          className="text-neutral-600 hover:text-neutral-400 transition-colors p-1"
+          className="text-muted-foreground/60 hover:text-muted-foreground transition-colors p-1"
           title="Refresh"
         >
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
@@ -181,7 +181,7 @@ export default function PlanViewer() {
         {/* Fullscreen */}
         <button
           onClick={() => setFullscreen(true)}
-          className="text-neutral-600 hover:text-neutral-400 transition-colors p-1"
+          className="text-muted-foreground/60 hover:text-muted-foreground transition-colors p-1"
           title="Expand"
         >
           <Maximize2 size={12} />
@@ -195,15 +195,15 @@ export default function PlanViewer() {
     if (loading) {
       return (
         <div className="flex items-center justify-center py-4">
-          <RefreshCw size={14} className="text-neutral-600 animate-spin" />
+          <RefreshCw size={14} className="text-muted-foreground/60 animate-spin" />
         </div>
       );
     }
     if (error) {
-      return <div className="text-xs text-neutral-600 italic py-2">{error}</div>;
+      return <div className="text-xs text-muted-foreground/60 italic py-2">{error}</div>;
     }
     if (!content) {
-      return <div className="text-xs text-neutral-600 italic py-2">No plan yet. Start a planning dialog to generate one, or switch to edit mode to create manually.</div>;
+      return <div className="text-xs text-muted-foreground/60 italic py-2">No plan yet. Start a planning dialog to generate one, or switch to edit mode to create manually.</div>;
     }
     return (
       <div className="markdown-body">
@@ -229,7 +229,7 @@ export default function PlanViewer() {
       <textarea
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
-        className="w-full h-full bg-background-elevated text-neutral-200 text-xs font-mono p-3 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden resize-none"
+        className="w-full h-full bg-background-elevated text-foreground text-xs font-mono p-3 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden resize-none"
         style={{ minHeight: "200px" }}
         placeholder="# Plan title&#10;&#10;Write your plan in Markdown..."
         spellCheck={false}
@@ -240,7 +240,7 @@ export default function PlanViewer() {
   return (
     <>
       {/* ── Inline panel (in ContextPanel) ── */}
-      <div className="border-b border-background-border">
+      <div className="border-b border-border">
         <div
           role="button"
           tabIndex={0}
@@ -254,9 +254,9 @@ export default function PlanViewer() {
           className="w-full flex items-center justify-between px-3 py-2 hover:bg-background-elevated/50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-1.5">
-            {collapsed ? <ChevronRight size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
+            {collapsed ? <ChevronRight size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
             <FileText size={14} className="text-primary" />
-            <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Plan</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Plan</span>
             {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-primary" title="Unsaved changes" />}
           </div>
           {!collapsed && (
@@ -282,22 +282,22 @@ export default function PlanViewer() {
           onClick={() => setFullscreen(false)}
         >
           <div
-            className="flex flex-col w-full max-w-5xl h-[90vh] mx-auto mt-[5vh] bg-background-card rounded-2xl border border-background-border overflow-hidden"
+            className="flex flex-col w-full max-w-5xl h-[90vh] mx-auto mt-[5vh] bg-background-card rounded-2xl border border-border overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-background-border">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-primary" />
-                <span className="text-sm font-medium text-neutral-200">plan.md</span>
-                {path && <span className="text-xs text-neutral-600">{path}</span>}
+                <span className="text-sm font-medium text-foreground">plan.md</span>
+                {path && <span className="text-xs text-muted-foreground/60">{path}</span>}
                 {isDirty && <span className="text-xs text-primary">● unsaved</span>}
               </div>
               <div className="flex items-center gap-2">
                 <Toolbar />
                 <button
                   onClick={() => setFullscreen(false)}
-                  className="text-neutral-500 hover:text-neutral-300 transition-colors p-1"
+                  className="text-muted-foreground hover:text-foreground/80 transition-colors p-1"
                 >
                   <X size={16} />
                 </button>

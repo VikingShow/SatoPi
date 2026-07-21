@@ -28,7 +28,7 @@ const TOOL_COLORS: Record<string, string> = {
   bash: "bg-purple-500/60",
   grep: "bg-cyan-500/60",
   glob: "bg-pink-500/60",
-  round_complete: "bg-neutral-500/60",
+  round_complete: "bg-background-overlay/60",
 };
 
 function formatMs(ms: number): string {
@@ -95,7 +95,7 @@ export default function AgentTimeline() {
                 {calls.map((call, i) => {
                   const left = ((call.ts - startTs) / totalMs) * 100;
                   const width = Math.max(((call.duration ?? 100) / totalMs) * 100, 2);
-                  const color = TOOL_COLORS[call.tool] ?? "bg-neutral-600/40";
+                  const color = TOOL_COLORS[call.tool] ?? "bg-background-overlay/40";
                   return (
                     <div
                       key={`${agentName}-${i}`}

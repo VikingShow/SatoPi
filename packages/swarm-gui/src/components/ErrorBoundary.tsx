@@ -41,14 +41,14 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle size={24} className="text-red-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-neutral-200 mb-1">Something went wrong</h2>
-              <p className="text-sm text-neutral-500 break-all">
+              <h2 className="text-lg font-semibold text-foreground mb-1">Something went wrong</h2>
+              <p className="text-sm text-muted-foreground break-all">
                 {this.state.error?.message ?? "An unexpected error occurred."}
               </p>
             </div>
             <button
               onClick={this.handleRetry}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/80 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground bg-primary hover:bg-primary/80 rounded-lg transition-colors cursor-pointer"
             >
               <RefreshCw size={14} />
               Retry

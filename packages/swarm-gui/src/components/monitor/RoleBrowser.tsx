@@ -14,7 +14,7 @@ function statusColor(s: RoleStatus): string {
   switch (s) {
     case "approved": return "text-emerald-400 bg-emerald-400/10 border-emerald-400/30";
     case "proposed": return "text-amber-400 bg-amber-400/10 border-amber-400/30";
-    case "draft": return "text-neutral-400 bg-neutral-400/10 border-neutral-400/30";
+    case "draft": return "text-muted-foreground bg-muted-foreground/10 border-border/30";
     case "deprecated": return "text-red-400 bg-red-400/10 border-red-400/30";
   }
 }
@@ -206,17 +206,17 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50">
         <div className="flex items-center gap-2">
           <Users size={16} className="text-primary" />
           <span className="text-sm font-medium">Role Library</span>
-          <span className="text-xs text-neutral-600">({roles.length})</span>
+          <span className="text-xs text-muted-foreground/60">({roles.length})</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => { setShowCreate(!showCreate); if (showCreate) setCreateForm(emptyForm); }}
             className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-              showCreate ? "bg-primary/20 text-primary" : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700"
+              showCreate ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-background-elevated"
             }`}
           >
             <Plus size={12} />
@@ -224,7 +224,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
           </button>
           <button
             onClick={fetchRoles}
-            className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground/80 hover:bg-card transition-colors cursor-pointer"
             title="Refresh"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -234,93 +234,93 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
 
       {/* Create form */}
       {showCreate && (
-        <div className="px-4 py-3 border-b border-neutral-800/50 bg-neutral-800/30 space-y-2">
+        <div className="px-4 py-3 border-b border-border/50 bg-card/30 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Role ID *</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Role ID *</label>
               <input
                 type="text"
                 value={createForm.id}
                 onChange={e => setCreateForm(f => ({ ...f, id: e.target.value }))}
                 placeholder="e.g. senior-backend-dev"
-                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
               />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Name *</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Name *</label>
               <input
                 type="text"
                 value={createForm.name}
                 onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Senior Backend Developer"
-                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
               />
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Description</label>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Description</label>
             <input
               type="text"
               value={createForm.description}
               onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
               placeholder="Brief description of this role"
-              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
             />
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">System Prompt *</label>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">System Prompt *</label>
             <textarea
               value={createForm.systemPrompt}
               onChange={e => setCreateForm(f => ({ ...f, systemPrompt: e.target.value }))}
               placeholder="You are a senior backend developer..."
               rows={4}
-              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Guidelines (one per line)</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Guidelines (one per line)</label>
               <textarea
                 value={createForm.guidelines}
                 onChange={e => setCreateForm(f => ({ ...f, guidelines: e.target.value }))}
                 placeholder="Use TypeScript&#10;Write tests&#10;Document APIs"
                 rows={3}
-                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none"
               />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Tools (comma separated)</label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools (comma separated)</label>
               <textarea
                 value={createForm.tools}
                 onChange={e => setCreateForm(f => ({ ...f, tools: e.target.value }))}
                 placeholder="read_file, write_to_file, execute_command"
                 rows={3}
-                className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50 resize-none font-mono"
               />
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 uppercase tracking-wider">Tags (comma separated)</label>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tags (comma separated)</label>
             <input
               type="text"
               value={createForm.tags}
               onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
               placeholder="backend, typescript, api"
-              className="w-full px-2 py-1 text-xs bg-neutral-700 border border-neutral-600 rounded text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-primary/50"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder-neutral-500 focus:outline-none focus:border-primary/50"
             />
           </div>
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={handleCreate}
               disabled={creating}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/80 disabled:opacity-50 cursor-pointer transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-foreground hover:bg-primary/80 disabled:opacity-50 cursor-pointer transition-colors"
             >
               {creating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               {creating ? "Creating..." : "Create Role"}
             </button>
             <button
               onClick={() => { setShowCreate(false); setCreateForm(emptyForm); }}
-              className="px-3 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 cursor-pointer"
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/80 cursor-pointer"
             >
               Cancel
             </button>
@@ -329,22 +329,22 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
       )}
 
       {/* Search & Filter */}
-      <div className="px-4 py-2 space-y-2 border-b border-neutral-800/50">
+      <div className="px-4 py-2 space-y-2 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-600" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
             <input
               type="text"
               placeholder="Search roles..."
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded-md text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-primary/50"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-card border border-border rounded-md text-foreground placeholder-neutral-600 focus:outline-none focus:border-primary/50"
             />
           </div>
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value as RoleStatus | "all")}
-            className="px-2 py-1.5 text-xs bg-neutral-800 border border-neutral-700 rounded-md text-neutral-300 focus:outline-none focus:border-primary/50 cursor-pointer"
+            className="px-2 py-1.5 text-xs bg-card border border-border rounded-md text-foreground/80 focus:outline-none focus:border-primary/50 cursor-pointer"
           >
             <option value="all">All status</option>
             <option value="approved">Approved</option>
@@ -360,7 +360,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
             <button
               onClick={() => setFilterTag("")}
               className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer ${
-                filterTag === "" ? "bg-primary/20 text-primary" : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
+                filterTag === "" ? "bg-primary/20 text-primary" : "bg-card text-muted-foreground hover:text-foreground/80"
               }`}
             >
               all
@@ -370,7 +370,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 key={tag}
                 onClick={() => setFilterTag(filterTag === tag ? "" : tag)}
                 className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer ${
-                  filterTag === tag ? "bg-primary/20 text-primary" : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
+                  filterTag === tag ? "bg-primary/20 text-primary" : "bg-card text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 {tag}
@@ -383,23 +383,23 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
       {/* Role list */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-neutral-600">
+          <div className="flex items-center justify-center py-12 text-muted-foreground/60">
             <Loader2 size={20} className="animate-spin mr-2" />
             <span className="text-xs">Loading roles...</span>
           </div>
         ) : roles.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-neutral-600 gap-2">
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/60 gap-2">
             <FileText size={24} />
             <span className="text-xs">No roles found</span>
           </div>
         ) : (
           <div className="py-1">
             {roles.map(role => (
-              <div key={role.id} className="border-b border-neutral-800/30 last:border-b-0">
+              <div key={role.id} className="border-b border-border/30 last:border-b-0">
                 {/* Row */}
                 <div
                   className={`flex items-center px-4 py-2.5 cursor-pointer transition-colors ${
-                    selectionSet.has(role.id) ? "bg-primary/5" : "hover:bg-neutral-800/30"
+                    selectionSet.has(role.id) ? "bg-primary/5" : "hover:bg-card/30"
                   }`}
                   onClick={() => onSelect ? onSelect(role.id) : toggleExpand(role.id)}
                 >
@@ -407,7 +407,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                   {!onSelect && (
                     <button
                       onClick={e => { e.stopPropagation(); toggleExpand(role.id); }}
-                      className="p-0.5 mr-2 text-neutral-600 hover:text-neutral-300 cursor-pointer"
+                      className="p-0.5 mr-2 text-muted-foreground/60 hover:text-foreground/80 cursor-pointer"
                     >
                       {expandedId === role.id
                         ? <ChevronDown size={14} />
@@ -420,8 +420,8 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                   {onSelect && (
                     <div className={`w-4 h-4 mr-2.5 rounded border flex items-center justify-center flex-shrink-0 ${
                       selectionSet.has(role.id)
-                        ? "bg-primary border-primary text-white"
-                        : "border-neutral-600"
+                        ? "bg-primary border-primary text-foreground"
+                        : "border-border"
                     }`}>
                       {selectionSet.has(role.id) && <CheckCircle2 size={12} />}
                     </div>
@@ -430,22 +430,22 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                   {/* Name + description */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-neutral-200 truncate">{role.name}</span>
+                      <span className="text-sm font-medium text-foreground truncate">{role.name}</span>
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border ${statusColor(role.status)}`}>
                         {statusIcon(role.status)}
                         {role.status}
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-500 truncate mt-0.5">{role.description}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{role.description}</p>
                   </div>
 
                   {/* Meta */}
                   <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                     <div className="hidden sm:flex items-center gap-1">
-                      <Tag size={10} className="text-neutral-600" />
-                      <span className="text-[10px] text-neutral-600">{role.tags.slice(0, 2).join(", ")}</span>
+                      <Tag size={10} className="text-muted-foreground/60" />
+                      <span className="text-[10px] text-muted-foreground/60">{role.tags.slice(0, 2).join(", ")}</span>
                     </div>
-                    <span className="text-[10px] text-neutral-600">
+                    <span className="text-[10px] text-muted-foreground/60">
                       v{role.version} · {role.usage_count} uses
                     </span>
                   </div>
@@ -489,15 +489,15 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 {!onSelect && expandedId === role.id && (
                   <div className="px-4 pb-3 pl-10">
                     {loadingDetail ? (
-                      <div className="flex items-center gap-2 py-2 text-neutral-600 text-xs">
+                      <div className="flex items-center gap-2 py-2 text-muted-foreground/60 text-xs">
                         <Loader2 size={12} className="animate-spin" /> Loading...
                       </div>
                     ) : expandedRole ? (
                       <div className="space-y-3 py-2">
                         {/* System prompt */}
                         <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-600 font-medium">System Prompt</span>
-                          <pre className="mt-1 p-2 rounded-md bg-neutral-800/50 border border-neutral-700/50 text-xs text-neutral-400 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">System Prompt</span>
+                          <pre className="mt-1 p-2 rounded-md bg-card/50 border border-border/50 text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
                             {expandedRole.prompts.system}
                           </pre>
                         </div>
@@ -505,11 +505,11 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                         {/* Guidelines */}
                         {expandedRole.prompts.guidelines.length > 0 && (
                           <div>
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-600 font-medium">Guidelines</span>
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Guidelines</span>
                             <ul className="mt-1 space-y-0.5">
                               {expandedRole.prompts.guidelines.map((g, i) => (
-                                <li key={i} className="flex items-start gap-1.5 text-xs text-neutral-400">
-                                  <span className="text-neutral-600 mt-0.5">-</span>
+                                <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                                  <span className="text-muted-foreground/60 mt-0.5">-</span>
                                   {g}
                                 </li>
                               ))}
@@ -519,10 +519,10 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
 
                         {/* Tools */}
                         <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-600 font-medium">Tools</span>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Tools</span>
                           <div className="mt-1 flex flex-wrap gap-1">
                             {expandedRole.tools.map(tool => (
-                              <span key={tool} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-[10px] text-neutral-400 font-mono">
+                              <span key={tool} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
                                 <Wrench size={10} />
                                 {tool}
                               </span>
@@ -531,7 +531,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                         </div>
 
                         {/* Meta footer */}
-                        <div className="flex items-center gap-4 text-[10px] text-neutral-600">
+                        <div className="flex items-center gap-4 text-[10px] text-muted-foreground/60">
                           <span>Author: {expandedRole.author}</span>
                           <span>Created: {new Date(expandedRole.created_at).toLocaleDateString()}</span>
                           <span>Updated: {new Date(expandedRole.updated_at).toLocaleDateString()}</span>
@@ -539,7 +539,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                         </div>
                       </div>
                     ) : (
-                      <div className="text-xs text-neutral-600 py-2">Failed to load role details.</div>
+                      <div className="text-xs text-muted-foreground/60 py-2">Failed to load role details.</div>
                     )}
                   </div>
                 )}

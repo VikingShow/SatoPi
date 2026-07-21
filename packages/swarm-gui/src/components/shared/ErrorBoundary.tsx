@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
     if (this.props.fallback) return this.props.fallback;
     return (
-      <div className="text-xs text-neutral-500 whitespace-pre-wrap break-words border border-neutral-800 rounded px-2 py-1 bg-neutral-900/40">
+      <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words border border-border rounded px-2 py-1 bg-background/40">
         <span className="text-amber-500/80">⚠ Failed to render this message.</span>
         {this.props.fallbackText ? `\n${this.props.fallbackText}` : ""}
       </div>

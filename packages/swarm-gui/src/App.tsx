@@ -12,9 +12,9 @@ const HistoryPage = lazy(() => import("./components/history/HistoryPage"));
 
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center h-full text-neutral-500">
+    <div className="flex items-center justify-center h-full text-muted-foreground">
       <div className="flex flex-col items-center gap-2">
-        <div className="w-5 h-5 border-2 border-neutral-600 border-t-primary rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-spin" />
         <span className="text-xs">Loading...</span>
       </div>
     </div>
@@ -65,7 +65,7 @@ function App() {
     status === "running" ? "text-status-warning" :
     status === "completed" ? "text-status-success" :
     status === "failed" ? "text-status-danger" :
-    "text-neutral-500";
+    "text-muted-foreground";
 
   // Brand-first header: always show "SatoPi" as the product, with the swarm
   // name (from the backend StateTracker) as a secondary identifier
@@ -75,10 +75,10 @@ function App() {
     : "";
 
   return (
-    <div className="flex h-screen bg-background text-neutral-100">
+    <div className="flex h-screen bg-background text-foreground/90">
       <Toaster position="bottom-right" theme="dark" richColors />
       {/* Sidebar */}
-      <aside className="w-14 flex flex-col items-center py-4 gap-2 border-r border-background-border bg-background-card">
+      <aside className="w-14 flex flex-col items-center py-4 gap-2 border-r border-border bg-background-card">
         <div
           className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center mb-4"
           title="SatoPi — Satori, a team of Pi"
@@ -92,7 +92,7 @@ function App() {
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
               page === item.id
                 ? "bg-primary/15 text-primary"
-                : "text-neutral-500 hover:text-neutral-300 hover:bg-background-elevated"
+                : "text-muted-foreground hover:text-foreground/80 hover:bg-background-elevated"
             }`}
             title={item.label}
           >
@@ -110,7 +110,7 @@ function App() {
             setPage("monitor");
           }}
           disabled={newSessionBusy || isRunning}
-          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-neutral-500 hover:text-emerald-400 hover:bg-emerald-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-muted-foreground hover:text-status-success hover:bg-status-success/10 disabled:opacity-30 disabled:cursor-not-allowed"
           title="New Session"
         >
           <PlusCircle size={20} className={newSessionBusy ? "animate-spin" : ""} />
@@ -120,10 +120,10 @@ function App() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="h-12 flex items-center justify-between px-4 border-b border-background-border bg-background-card">
+        <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-background-card">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium tracking-tight">{brandName}</span>
-            <span className="text-neutral-700">/</span>
+            <span className="text-muted-foreground/50">/</span>
             <SessionSwitcher />
             <span className={`text-xs font-mono ${statusColor}`}>
               {status === "running" && <span className="inline-block w-2 h-2 rounded-full bg-status-warning mr-1.5 animate-pulse-ring" />}
@@ -134,8 +134,8 @@ function App() {
             {(() => {
               const conn = {
                 live: { label: "Connected", text: "text-status-success", dot: "bg-status-success animate-pulse-ring" },
-                connecting: { label: "Connecting…", text: "text-neutral-400", dot: "bg-neutral-400 animate-pulse" },
-                reconnecting: { label: "Reconnecting…", text: "text-amber-400", dot: "bg-amber-400 animate-pulse" },
+                connecting: { label: "Connecting…", text: "text-muted-foreground", dot: "bg-muted-foreground animate-pulse" },
+                reconnecting: { label: "Reconnecting…", text: "text-primary", dot: "bg-primary animate-pulse" },
               }[connectionStatus];
               return (
                 <span className={`text-xs ${conn.text}`}>

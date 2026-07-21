@@ -79,7 +79,7 @@ export default function MonitorPage() {
       case "after-loop":
         return "text-purple-400";
       default:
-        return "text-neutral-500";
+        return "text-muted-foreground";
     }
   })();
 
@@ -87,16 +87,16 @@ export default function MonitorPage() {
     <div className="flex flex-col h-full">
       {/* Top bar: status + view mode only.
           Cancel/Stop controls live in the ChatView input bar (state-changing position). */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 bg-neutral-900/50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background/50">
         <div className="flex items-center gap-3">
           <span className={`text-sm font-medium ${statusColor}`}>
             ● {statusLabel}
           </span>
-          <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
+          <div className="flex items-center gap-0.5 bg-card rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode("chat")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "chat" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                  viewMode === "chat" ? "bg-background-elevated text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 <MessageSquare size={12} /> Chat
@@ -104,7 +104,7 @@ export default function MonitorPage() {
               <button
                 onClick={() => setViewMode("topology")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "topology" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                  viewMode === "topology" ? "bg-background-elevated text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 <GitGraph size={12} /> Topology
@@ -112,7 +112,7 @@ export default function MonitorPage() {
               <button
                 onClick={() => setViewMode("timeline")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "timeline" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                  viewMode === "timeline" ? "bg-background-elevated text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 <Clock size={12} /> Timeline
@@ -120,7 +120,7 @@ export default function MonitorPage() {
               <button
                 onClick={() => setViewMode("files")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "files" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                  viewMode === "files" ? "bg-background-elevated text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 <FileText size={12} /> Files
@@ -128,7 +128,7 @@ export default function MonitorPage() {
               <button
                 onClick={() => setViewMode("roles")}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "roles" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+                  viewMode === "roles" ? "bg-background-elevated text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 <Users size={12} /> Roles
@@ -137,20 +137,20 @@ export default function MonitorPage() {
                 <button
                   onClick={() => setViewMode("afterloop")}
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    viewMode === "afterloop" ? "bg-purple-500/20 text-purple-400" : "text-neutral-500 hover:text-neutral-300"
+                    viewMode === "afterloop" ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground hover:text-foreground/80"
                   }`}
                 >
                   <Brain size={12} /> Summary
                 </button>
               )}
             </div>
-          <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
+          <span className="text-xs text-muted-foreground/60">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
           {/* P2-6: Token count + cost estimate */}
           {(swarmState?.totalTokens ?? 0) > 0 && (
-            <span className="flex items-center gap-1 text-xs text-neutral-500" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>
               <Zap size={11} />
               {formatTokens(swarmState!.totalTokens!)}
-              <span className="text-neutral-700">·</span>
+              <span className="text-muted-foreground/50">·</span>
               {estimateCost(swarmState!.totalTokens!)}
             </span>
           )}
@@ -161,16 +161,16 @@ export default function MonitorPage() {
               {(convergenceTrend.latest * 100).toFixed(0)}%
             </span>
           )}
-          <span className="flex items-center gap-1 text-xs text-neutral-600">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/60">
             {isConnected ? (
               <><Wifi size={12} className="text-emerald-400" /> SSE</>
             ) : (
-              <><WifiOff size={12} className="text-neutral-600" /> SSE</>
+              <><WifiOff size={12} className="text-muted-foreground/60" /> SSE</>
             )}
           </span>
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="p-1 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-700 transition-colors cursor-pointer"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground/80 hover:bg-background-elevated transition-colors cursor-pointer"
             title="Toggle theme"
           >
             {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}

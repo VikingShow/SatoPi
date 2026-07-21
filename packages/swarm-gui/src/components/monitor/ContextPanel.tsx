@@ -11,7 +11,7 @@ function WorkerCard({ name, praise, criticism, conflict, status, role }: {
 }) {
   const score = praise - criticism - conflict;
   const scoreColor = score > 0 ? "text-success" : score < 0 ? "text-danger" : "text-fg-muted";
-  const statusDot = status === "completed" ? "bg-success" : status === "running" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-neutral-600";
+  const statusDot = status === "completed" ? "bg-success" : status === "running" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-background-overlay";
 
   return (
     <div className="bg-background-elevated rounded px-2.5 py-2 border border-border">

@@ -24,13 +24,13 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
   }) {
     return (
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-500">{label}</label>
+        <label className="text-xs text-muted-foreground">{label}</label>
         <input
           type="number"
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           min={min} max={max} step={step}
-          className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
+          className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden"
         />
       </div>
     );
@@ -41,7 +41,7 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
   }) {
     return (
       <div className="flex items-center justify-between">
-        <label className="text-xs text-neutral-500">{label}</label>
+        <label className="text-xs text-muted-foreground">{label}</label>
         <button
           onClick={() => onChange(!checked)}
           className={`w-9 h-5 rounded-full transition-colors cursor-pointer ${checked ? "bg-primary" : "bg-background-border"}`}
@@ -57,8 +57,8 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
       {/* Form area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Workers */}
-        <div className="bg-background-card rounded-card border border-background-border p-4">
-          <h3 className="text-sm font-medium text-neutral-200 mb-3">Workers</h3>
+        <div className="bg-background-card rounded-card border border-border p-4">
+          <h3 className="text-sm font-medium text-foreground mb-3">Workers</h3>
           <div className="grid grid-cols-3 gap-3">
             <NumberField label="Initial" value={workers.initial} onChange={(v) => config.updateWorkers({ initial: v })} min={1} max={20} />
             <NumberField label="Min" value={workers.min} onChange={(v) => config.updateWorkers({ min: v })} min={1} max={20} />
@@ -66,11 +66,11 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
             <NumberField label="Max Rounds" value={workers.maxRounds} onChange={(v) => config.updateWorkers({ maxRounds: v })} min={1} max={10} />
             <NumberField label="Convergence Threshold" value={workers.roundsConvergenceThreshold} onChange={(v) => config.updateWorkers({ roundsConvergenceThreshold: v })} min={1} max={10} />
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-neutral-500">Model</label>
+              <label className="text-xs text-muted-foreground">Model</label>
               <select
                 value={workers.model}
                 onChange={(e) => config.updateWorkers({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
+                className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden"
               >
                 {availableModels.length === 0 && <option value={workers.model}>{workers.model}</option>}
                 {availableModels.map((m) => (
@@ -90,16 +90,16 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
         </div>
 
         {/* Cloners */}
-        <div className="bg-background-card rounded-card border border-background-border p-4">
-          <h3 className="text-sm font-medium text-neutral-200 mb-3">Cloners</h3>
+        <div className="bg-background-card rounded-card border border-border p-4">
+          <h3 className="text-sm font-medium text-foreground mb-3">Cloners</h3>
           <div className="grid grid-cols-3 gap-3">
             <NumberField label="Count" value={cloners.count} onChange={(v) => config.updateCloners({ count: v })} min={1} max={10} />
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-neutral-500">Model</label>
+              <label className="text-xs text-muted-foreground">Model</label>
               <select
                 value={cloners.model}
                 onChange={(e) => config.updateCloners({ model: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden"
+                className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden"
               >
                 {availableModels.length === 0 && <option value={cloners.model}>{cloners.model}</option>}
                 {availableModels.map((m) => (
@@ -113,9 +113,9 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-neutral-500">Review Strictness</label>
+              <label className="text-xs text-muted-foreground">Review Strictness</label>
               <select value={cloners.reviewStrictness} onChange={(e) => config.updateCloners({ reviewStrictness: e.target.value })}
-                className="bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden">
+                className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden">
                 <option value="strict">Strict</option>
                 <option value="normal">Normal</option>
                 <option value="lenient">Lenient</option>
@@ -126,15 +126,15 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
 
         {/* Loop + Convergence */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-background-card rounded-card border border-background-border p-4">
-            <h3 className="text-sm font-medium text-neutral-200 mb-3">Loop</h3>
+          <div className="bg-background-card rounded-card border border-border p-4">
+            <h3 className="text-sm font-medium text-foreground mb-3">Loop</h3>
             <div className="space-y-3">
               <NumberField label="Max Iterations" value={loop.maxIterations} onChange={(v) => config.updateLoop({ maxIterations: v })} min={1} max={20} />
               <ToggleField label="Human Escalation" checked={loop.humanEscalation} onChange={(v) => config.updateLoop({ humanEscalation: v })} />
             </div>
           </div>
-          <div className="bg-background-card rounded-card border border-background-border p-4">
-            <h3 className="text-sm font-medium text-neutral-200 mb-3">Convergence</h3>
+          <div className="bg-background-card rounded-card border border-border p-4">
+            <h3 className="text-sm font-medium text-foreground mb-3">Convergence</h3>
             <div className="space-y-3">
               <NumberField label="Jaccard Threshold" value={convergence.threshold} onChange={(v) => config.updateConvergence({ threshold: v })} min={0} max={1} step={0.05} />
               <NumberField label="Approval Ratio" value={convergence.approvalRatio} onChange={(v) => config.updateConvergence({ approvalRatio: v })} min={0} max={1} step={0.05} />
@@ -143,8 +143,8 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
         </div>
 
         {/* Scaling */}
-        <div className="bg-background-card rounded-card border border-background-border p-4">
-          <h3 className="text-sm font-medium text-neutral-200 mb-3">Scaling Policy</h3>
+        <div className="bg-background-card rounded-card border border-border p-4">
+          <h3 className="text-sm font-medium text-foreground mb-3">Scaling Policy</h3>
           <div className="grid grid-cols-2 gap-3">
             <NumberField label="Super-Majority Threshold" value={scaling.superMajorityThreshold} onChange={(v) => config.updateScaling({ superMajorityThreshold: v })} min={0} max={1} step={0.05} />
             <NumberField label="Majority Threshold" value={scaling.majorityThreshold} onChange={(v) => config.updateScaling({ majorityThreshold: v })} min={0} max={1} step={0.05} />
@@ -153,19 +153,19 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
       </div>
 
       {/* YAML preview */}
-      <div className="w-96 flex flex-col border-l border-background-border bg-background-card">
-        <div className="px-3 py-2 border-b border-background-border flex items-center gap-2">
-          <FileText size={14} className="text-neutral-500" />
-          <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">loop.yaml Preview</span>
+      <div className="w-96 flex flex-col border-l border-border bg-background-card">
+        <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+          <FileText size={14} className="text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">loop.yaml Preview</span>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap">{yamlPreview || "# Loading..."}</pre>
+          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">{yamlPreview || "# Loading..."}</pre>
         </div>
-        <div className="px-3 py-2.5 border-t border-background-border flex items-center gap-2">
+        <div className="px-3 py-2.5 border-t border-border flex items-center gap-2">
           <button
             onClick={() => config.saveConfig()}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-              isDirty ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-background-elevated text-neutral-600"
+              isDirty ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-background-elevated text-muted-foreground/60"
             }`}
           >
             <Save size={13} /> Save
