@@ -13,18 +13,20 @@ import type { ActivityEntry } from "./types";
 let activeSession: string | null = null;
 
 // Bypass Vite proxy for SSE in dev — http-proxy buffers streamed responses,
-// which delays or drops real-time events. The backend serves CORS headers
-// so a direct cross-origin EventSource connection works fine.
-const SSE_BASE = "http://127.0.0.1:7878";
+// which delays or drops real-time events. Use the same host as the page so
+// the browser never blocks the connection as private-network access.
+const SSE_PORT = 7878;
 
 function buildSSEUrl(): string {
   const base = activeSession
     ? `/events?session=${encodeURIComponent(activeSession)}`
     : "/events";
   // In production the backend serves static files and SSE on the same origin,
-  // so relative URLs work. In dev (Vite), use the absolute backend URL.
+  // so relative URLs work. In dev (Vite), use the absolute backend URL on the
+  // SAME host as the page so the browser never blocks it as a private-network
+  // request (e.g. page at 21.214.42.15:5173 → backend at 21.214.42.15:7878).
   if (typeof window !== "undefined" && window.location.port !== "7878") {
-    return `${SSE_BASE}${base}`;
+    return `http://${window.location.hostname}:${SSE_PORT}${base}`;
   }
   return base;
 }
