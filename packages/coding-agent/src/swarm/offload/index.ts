@@ -52,4 +52,5 @@ export {
 export {
 	createOffloadHooks,
 	type OffloadHooksConfig,
+	type OffloadHooksResult,
 } from "./offload-hooks";
