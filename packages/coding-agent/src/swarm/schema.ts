@@ -62,6 +62,8 @@ export interface SwarmDefinition {
 // ============================================================================
 
 export interface LoopSwarmConfig {
+	/** Optional model override for socrates / planning agents. */
+	model?: string;
 	/** Maximum review-retry iterations before escalating to human. Default: 5. */
 	maxIterations: number;
 	/** If true, rejected outputs trigger automatic retry without human input. */

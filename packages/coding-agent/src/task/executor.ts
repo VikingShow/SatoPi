@@ -874,6 +874,8 @@ interface SubagentRunMonitor {
 	lastAssistantSalvageText(): string | undefined;
 	/** Final raw output: end-of-run assistant text when available, else accumulated chunks. */
 	rawOutput(): string;
+		/** Final raw thinking: accumulated thinking/reasoning chunks. */
+		rawThinking(): string;
 	scheduleProgress(flush?: boolean): void;
 	/** Stop processing events and clear listeners/timers. Call once the run settled. */
 	finish(): void;

@@ -154,7 +154,6 @@ export class MonitorServer implements ActivityBroadcaster {
 							}, 15_000);
 
 							// Cleanup on disconnect
-							/** @ts-expect-error — lib mismatch between Bun and DOM ReadableStream */
 							req.signal.addEventListener("abort", () => {
 								unsub();
 								gauges.sseSubscribers.dec();

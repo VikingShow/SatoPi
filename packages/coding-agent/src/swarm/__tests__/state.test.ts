@@ -80,7 +80,7 @@ describe("getWorstWorker", () => {
 		const worst = st.getWorstWorker();
 		expect(worst).not.toBeNull();
 		// Both have the same score; either is acceptable
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 
 	it("does NOT return agents outside candidates (regression test for excludeIds bug)", async () => {
@@ -94,7 +94,7 @@ describe("getWorstWorker", () => {
 		// even though it has the lowest score globally.
 		const worst = st.getWorstWorker(["worker-1", "worker-2"]);
 		expect(worst).not.toBe("cloner-1");
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 });
 

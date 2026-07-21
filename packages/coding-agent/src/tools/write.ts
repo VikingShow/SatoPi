@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import * as nodePath from "node:path";
 
 import { formatHashlineHeader, stripHashlinePrefixes } from "@oh-my-pi/hashline";
 import type {
@@ -425,7 +425,7 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 		// crash/disk-full mid-write can't destroy the original archive.
 		const tmpPath = `${finalPath}.tmp-${process.pid}`;
 
-		const parentDir = path.dirname(resolvedArchivePath.absolutePath);
+		const parentDir = nodePath.dirname(resolvedArchivePath.absolutePath);
 		if (parentDir && parentDir !== ".") {
 			await fs.mkdir(parentDir, { recursive: true });
 		}
@@ -974,7 +974,7 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 			// Write allowlist check — restrict writes to the configured paths only.
 			const allowList = this.session.writeAllowList;
 			if (allowList && allowList.length > 0) {
-				const relativeTarget = path.relative(this.session.cwd, absolutePath);
+				const relativeTarget = nodePath.relative(this.session.cwd, absolutePath);
 				const allowed = allowList.some(
 					pattern => relativeTarget === pattern ||
 						relativeTarget.endsWith("/" + pattern) ||

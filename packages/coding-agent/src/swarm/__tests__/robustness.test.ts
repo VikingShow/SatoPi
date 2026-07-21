@@ -113,7 +113,7 @@ describe("retry lifecycle", () => {
 		const worst = st.getWorstWorker(["worker-1", "worker-2"]);
 		expect(worst).not.toBeNull();
 		// All scores are 0, so it's a tie — either is fine
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 });
 

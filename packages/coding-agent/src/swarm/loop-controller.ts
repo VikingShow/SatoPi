@@ -15,7 +15,7 @@ import type { PipelineOptions } from "./pipeline";
 import { invokeHook, type LoopPipelineHooks, type PipelineContext } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
-import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
+import type { AgentToolRestriction, LoopSwarmConfig, SwarmAgent } from "./schema";
 import type { LoopPhase, StateTracker } from "./state";
 import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
 import { computeScaleDelta } from "./worker-scaler";
@@ -603,6 +603,7 @@ export class LoopController {
 						this.#channel,
 						reviewerId,
 						nominationPrompt,
+						iter,
 					);
 
 					if (iterSignal?.aborted) {
@@ -1361,16 +1362,17 @@ export class LoopController {
 		workspace: string,
 		planContent: string | undefined,
 		previousFeedback: string[],
-		modelRegistry?: ModelRegistry,
-		settings?: Settings,
-		signal?: AbortSignal,
+		modelRegistry: ModelRegistry | undefined,
+		settings: Settings | undefined,
+		signal: AbortSignal | undefined,
 		errors: string[] = [],
-		extraContext?: string,
-		roleSuggestions?: Record<string, string>,
-		lockMgr?: RegionLockManager,
-		channel?: WorkerChannel,
-		reviewerId?: string,
-		nominationPrompt?: string,
+		extraContext: string | undefined,
+		roleSuggestions: Record<string, string> | undefined,
+		lockMgr: RegionLockManager | undefined,
+		channel: WorkerChannel | undefined,
+		reviewerId: string | undefined,
+		nominationPrompt: string | undefined,
+		iteration: number,
 	): Promise<SingleResult[]> {
 		const feedbackBlock =
 			previousFeedback.length > 0
@@ -1416,18 +1418,20 @@ export class LoopController {
 				// prefix. timeoutMs:0 disables per-worker timeout — iteration-
 				// level signal handles cancellation. Tool restrictions flow
 				// through SwarmAgent.allowedTools/blockedTools.
-				const swarmAgent = {
+				const swarmAgent: SwarmAgent = {
 					name: id,
 					role: `Loop Engineering Worker ${i + 1}`,
 					task: taskText,
+					reportsTo: [],
+					waitsFor: [],
 					...(agentDef.tools?.length ? { allowedTools: agentDef.tools as string[] } : {}),
 					...(agentDef.blockedTools?.length ? { blockedTools: agentDef.blockedTools as string[] } : {}),
 				};
 
 				return this.#executor.execute(swarmAgent, i, {
 					workspace,
-					swarmName: this.#stateTracker.swarmName,
-					iteration: iterationCounter,
+					swarmName: this.#stateTracker.state.name,
+					iteration,
 					modelRegistry,
 					settings,
 					signal,

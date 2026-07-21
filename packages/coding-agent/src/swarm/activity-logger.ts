@@ -86,6 +86,10 @@ export interface ActivityEntry {
 	errorFlag?: string;
 	recoverable?: boolean;
 	suggestion?: string;
+		/** File-change fields */
+		linesChanged?: number;
+		/** Stream-end fields */
+		thinking?: string;
 }
 
 // ============================================================================

@@ -17,7 +17,6 @@ import type { ExperienceStore } from "../after-loop/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
-import type { SwarmSessionManager } from "../swarm-session-manager";
 import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
 import { SwarmSessionManager } from "../swarm-session-manager";
 
@@ -42,6 +41,7 @@ export interface RunManager {
 
 /** Manages the Before Loop interactive planning phase. */
 export interface BeforeLoopManager {
+		setSessionManager?(sm: SwarmSessionManager): void;
 	start(task: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
@@ -62,6 +62,8 @@ export interface SteeringSink {
 // ============================================================================
 
 export interface ApiRouteContext {
+		/** The session registry (for create/destroy endpoints). */
+		registry: SessionRegistry;
 	/** File-system paths for the resolved session. */
 	paths: {
 		swarmDir: string;
@@ -239,7 +241,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		// Guard: the only valid entry point for starting a run is
 		// POST /before-loop/confirm (via the BeforeLoop flow).
 		return json({ error: "Use the Before Loop flow to start a run. Direct /run/start is not allowed." }, 400);
-		return json(result, result.success ? 200 : 500);
 	},
 
 	"POST/run/stop": async (_req, ctx) => {
@@ -385,7 +386,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 						if (label === "stdout") { try { shell.kill(); } catch {}; controller.close(); }
 					};
 
+					// @ts-expect-error — Bun's ReadableStreamDefaultReader lacks the spec `readMany` method
 					readLoop(stdoutReader, "stdout");
+					// @ts-expect-error — Bun's ReadableStreamDefaultReader lacks the spec `readMany` method
 					readLoop(stderrReader, "stderr");
 				} catch { controller.close(); }
 			},

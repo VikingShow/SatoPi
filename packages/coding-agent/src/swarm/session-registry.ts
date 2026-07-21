@@ -16,7 +16,7 @@ import * as fs from "node:fs/promises";
 import type { StateTracker } from "./state";
 import type { ActivityLogger } from "./activity-logger";
 import type { RunManager, SteeringSink } from "./monitor/api-routes";
-import type { BeforeLoopManager } from "./before-loop-manager";
+import type { BeforeLoopManager } from "./monitor/api-routes";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
@@ -157,7 +157,7 @@ export class SessionRegistry {
 		if (sessionManager) {
 			services.stateTracker.setSessionManager(sessionManager);
 			services.activityLogger.setSessionManager(sessionManager);
-			services.beforeLoopManager.setSessionManager(sessionManager);
+			services.beforeLoopManager.setSessionManager?.(sessionManager);
 
 			// Seed the in-memory StateTracker from the persisted snapshot when
 			// the session.jsonl already existed (e.g. backend restart recovering

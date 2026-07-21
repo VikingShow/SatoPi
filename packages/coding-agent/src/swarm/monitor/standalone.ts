@@ -90,7 +90,6 @@ class SwarmRunManager implements RunManager {
 	#stateTracker: StateTracker;
 	#activityLogger: ActivityLogger;
 	#experienceStore: ExperienceStore;
-		sessionManager?: SwarmSessionManager;
 	#sessionManager: SwarmSessionManager | undefined;
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
@@ -104,6 +103,7 @@ class SwarmRunManager implements RunManager {
 		stateTracker: StateTracker;
 		activityLogger: ActivityLogger;
 		experienceStore: ExperienceStore;
+		sessionManager?: SwarmSessionManager;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;

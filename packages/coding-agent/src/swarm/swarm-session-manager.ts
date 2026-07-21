@@ -128,7 +128,7 @@ export class SwarmSessionManager {
 			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length > 0) {
 				// Open the most recently modified session
-				sessions.sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? ""));
+				sessions.sort((a, b) => ((b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0)));
 				return SwarmSessionManager.open(sessions[0].path, swarmDir);
 			}
 		} catch {
@@ -245,7 +245,7 @@ export class SwarmSessionManager {
 		try {
 			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length === 0) return null;
-			sessions.sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? ""));
+			sessions.sort((a, b) => ((b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0)));
 			return sessions[0].path;
 		} catch {
 			return null;
