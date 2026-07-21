@@ -166,9 +166,9 @@ function normalizePath(pathname: string): string {
 	return pathname;
 }
 
-/** Get the Prometheus exposition format string for /metrics. */
-export function getMetricsString(): string {
-	return registry.metrics();
+/** Get the Prometheus exposition format string for /metrics (async — prom-client v15+). */
+export async function getMetricsString(): Promise<string> {
+	return await registry.metrics();
 }
 
 /** Get the content type for the Prometheus exposition format. */

@@ -106,8 +106,10 @@ export class MonitorServer implements ActivityBroadcaster {
 
 				if (pathname === "/health/ready" && method === "GET") {
 					const checks: Record<string, string> = {};
+					// Verify session registry is functional (not the prom-client registry).
 					try {
-						registry.list(); // touch metrics registry
+						const count = registry.activeCount;
+						void count; // touch — throws only if the Map is broken
 						checks.metrics = "ok";
 					} catch { checks.metrics = "fail"; }
 					checks.sessions = `${registry.activeCount} active`;
@@ -123,7 +125,8 @@ export class MonitorServer implements ActivityBroadcaster {
 					// Update gauges before scraping
 					gauges.activeSessions.set(registry.activeCount);
 					gauges.sseSubscribers.set(bus.subscriberCount);
-					return finalize(new Response(getMetricsString(), {
+					const metricsBody = await getMetricsString();
+					return finalize(new Response(metricsBody, {
 						headers: { "Content-Type": getMetricsContentType() },
 					}));
 				}

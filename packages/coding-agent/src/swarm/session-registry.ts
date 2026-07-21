@@ -187,7 +187,12 @@ export class SessionRegistry {
 			try { await session.sessionManager.flush(); } catch { /* best-effort */ }
 			try { await session.sessionManager.close(); } catch { /* best-effort */ }
 		}
+		// Remove from in-memory registry
 		this.#sessions.delete(name);
+		// Remove the .swarm_{name} directory from disk so GET /api/runs
+		// (which scans the workspace filesystem) does not resurrect it.
+		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
+		try { await fs.rm(swarmDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 	}
 
 	async destroyAll(): Promise<void> {
