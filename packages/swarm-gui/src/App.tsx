@@ -7,6 +7,7 @@ import { useSessionStore } from "./stores/session-store";
 import { useConfigStore } from "./stores/config-store";
 import { useGlobalKeybindings } from "./hooks/use-keybindings";
 import { Button } from "./components/ui/button";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./i18n";
 import MonitorPage from "./components/monitor/MonitorPage";
 import SessionSwitcher from "./components/monitor/SessionSwitcher";
@@ -175,9 +176,11 @@ function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-hidden">
-          {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage onNavigateToMonitor={() => setPage("monitor")} /></Suspense>}
-          {page === "monitor" && <MonitorPage />}
-          {page === "history" && <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>}
+          <ErrorBoundary>
+            {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage onNavigateToMonitor={() => setPage("monitor")} /></Suspense>}
+            {page === "monitor" && <MonitorPage />}
+            {page === "history" && <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>}
+          </ErrorBoundary>
         </main>
       </div>
     </div>
