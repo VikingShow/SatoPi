@@ -6,14 +6,21 @@
  * Global endpoints (/api/runs, /api/models, /api/roles, /api/experience)
  * and static SPA files are served directly.
  *
+ * Observability endpoints:
+ *   GET /metrics       — Prometheus exposition format
+ *   GET /health        — Lightweight liveness probe
+ *   GET /health/ready  — Readiness probe with dependency checks
+ *
  * Only listens on 0.0.0.0.  Never exposed to network.
  */
 
 import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
 import { EventBus } from "./event-bus";
 import { apiRoutes, type ApiRouteContext, buildApiRouteContext } from "./api-routes";
 import type { SessionRegistry } from "../session-registry";
+import { recordHttpRequest, getMetricsString, getMetricsContentType, gauges } from "./metrics";
 
 /** P4-2: Default swarm monitor port. Override with PI_SWARM_PORT env var. */
 const DEFAULT_SWARM_PORT = 7878;
@@ -78,6 +85,48 @@ export class MonitorServer implements ActivityBroadcaster {
 				const url = new URL(req.url);
 				const pathname = url.pathname;
 				const method = req.method;
+				const requestId = randomUUID();
+				const startTime = performance.now();
+
+				// Helper to record metrics after response is sent
+				const finalize = (res: Response): Response => {
+					const duration = performance.now() - startTime;
+					recordHttpRequest(method, pathname, res.status, duration);
+					res.headers.set("X-Request-Id", requestId);
+					return res;
+				};
+
+				// ── Health & Metrics endpoints ─────────────────────────
+				if (pathname === "/health" && method === "GET") {
+					return finalize(new Response(
+						JSON.stringify({ status: "ok", uptime: process.uptime() }),
+						{ headers: { "Content-Type": "application/json" } },
+					));
+				}
+
+				if (pathname === "/health/ready" && method === "GET") {
+					const checks: Record<string, string> = {};
+					try {
+						registry.list(); // touch metrics registry
+						checks.metrics = "ok";
+					} catch { checks.metrics = "fail"; }
+					checks.sessions = `${registry.activeCount} active`;
+					checks.sseSubscribers = `${bus.subscriberCount} connected`;
+					const allOk = Object.values(checks).every(v => v === "ok" || !v.includes("fail"));
+					return finalize(new Response(
+						JSON.stringify({ status: allOk ? "ready" : "degraded", checks }),
+						{ status: allOk ? 200 : 503, headers: { "Content-Type": "application/json" } },
+					));
+				}
+
+				if (pathname === "/metrics" && method === "GET") {
+					// Update gauges before scraping
+					gauges.activeSessions.set(registry.activeCount);
+					gauges.sseSubscribers.set(bus.subscriberCount);
+					return finalize(new Response(getMetricsString(), {
+						headers: { "Content-Type": getMetricsContentType() },
+					}));
+				}
 
 				// ── SSE — per-session ───────────────────────────────────
 				if (pathname === "/events") {
@@ -88,6 +137,7 @@ export class MonitorServer implements ActivityBroadcaster {
 					// set custom headers — so it appends ?lastEventId=. Accept both.
 					const lastEventId =
 						url.searchParams.get("lastEventId") ?? req.headers.get("Last-Event-ID") ?? undefined;
+					gauges.sseSubscribers.inc();
 					const stream = new ReadableStream({
 						start(controller) {
 							controller.enqueue(new TextEncoder().encode(": connected\n\n"));
@@ -104,6 +154,7 @@ export class MonitorServer implements ActivityBroadcaster {
 							/** @ts-expect-error — lib mismatch between Bun and DOM ReadableStream */
 							req.signal.addEventListener("abort", () => {
 								unsub();
+								gauges.sseSubscribers.dec();
 								try { controller.close(); } catch { /* closed */ }
 							clearInterval(keepalive);
 							});
@@ -115,13 +166,15 @@ export class MonitorServer implements ActivityBroadcaster {
 							"Cache-Control": "no-cache",
 							Connection: "keep-alive",
 							"Access-Control-Allow-Origin": "*",
+							"X-Request-Id": requestId,
 						},
 					});
 				}
 
 				// ── Session-scoped endpoints ────────────────────────────
 				if (pathname.startsWith("/api/session/")) {
-					return handleSessionReq(req, pathname, method, registry);
+					const res = await handleSessionReq(req, pathname, method, registry, requestId);
+					return finalize(res);
 				}
 
 				// ── Global endpoints ────────────────────────────────────
@@ -130,7 +183,8 @@ export class MonitorServer implements ActivityBroadcaster {
 				// Exact match
 				if (apiRoutes[routeKey]) {
 					const ctx = buildApiRouteContext(registry);
-					return apiRoutes[routeKey](req, ctx);
+					const res = await apiRoutes[routeKey](req, ctx);
+					return finalize(res);
 				}
 
 				// Pattern: /api/runs/:name/activity or /api/runs/:name
@@ -141,8 +195,9 @@ export class MonitorServer implements ActivityBroadcaster {
 					const key = parts[1] === "activity"
 						? "GET /api/runs/:name/activity"
 						: "GET /api/runs/:name";
-					return apiRoutes[key]?.(req, { ...ctx, params: { name: parts[0] } })
+					const res = await apiRoutes[key]?.(req, { ...ctx, params: { name: parts[0] } })
 						?? new Response("Not found", { status: 404 });
+					return finalize(res);
 				}
 
 				// Pattern: /api/roles/:id, /api/roles/:id/approve, etc.
@@ -155,10 +210,11 @@ export class MonitorServer implements ActivityBroadcaster {
 					if (action === "approve") key = "POST /api/roles/:id/approve";
 					else if (action === "deprecate") key = "POST /api/roles/:id/deprecate";
 					else if (!action) key = `${method} /api/roles/:id`;
-					else return new Response("Not found", { status: 404 });
+					else return finalize(new Response("Not found", { status: 404 }));
 					const ctx = buildApiRouteContext(registry);
-					return apiRoutes[key]?.(req, { ...ctx, params: { id } })
+					const res = await apiRoutes[key]?.(req, { ...ctx, params: { id } })
 						?? new Response("Not found", { status: 404 });
+					return finalize(res);
 				}
 
 				// ── Static SPA ──────────────────────────────────────────
@@ -169,16 +225,16 @@ export class MonitorServer implements ActivityBroadcaster {
 				// Try exact file
 				try {
 					const file = Bun.file(fullPath);
-					if (await file.exists()) return new Response(file);
+					if (await file.exists()) return finalize(new Response(file));
 				} catch { /* dist/ missing — dev mode */ }
 
 				// Fallback to index.html for SPA routing
 				try {
 					const indexFile = Bun.file(path.join(distDir, "index.html"));
-					if (await indexFile.exists()) return new Response(indexFile);
+					if (await indexFile.exists()) return finalize(new Response(indexFile));
 				} catch { /* no dist yet */ }
 
-				return new Response("Not found", { status: 404 });
+				return finalize(new Response("Not found", { status: 404 }));
 			},
 		});
 	}
@@ -186,12 +242,13 @@ export class MonitorServer implements ActivityBroadcaster {
 
 // ── Session-scoped route handler ─────────────────────────────────────────
 
-function handleSessionReq(
+async function handleSessionReq(
 	req: Request,
 	pathname: string,
 	method: string,
 	registry: SessionRegistry,
-): Response {
+	requestId: string,
+): Promise<Response> {
 	// pathname: /api/session/{name}/{rest...}
 	const afterPrefix = pathname.slice("/api/session/".length);
 	const slash = afterPrefix.indexOf("/");
@@ -201,7 +258,7 @@ function handleSessionReq(
 	const session = registry.getSession(sessionName);
 	if (!session) {
 		return new Response(
-			JSON.stringify({ error: `Session "${sessionName}" not found` }),
+			JSON.stringify({ error: { code: 404, message: `Session "${sessionName}" not found`, requestId } }),
 			{ status: 404, headers: { "Content-Type": "application/json" } },
 		);
 	}
@@ -212,5 +269,8 @@ function handleSessionReq(
 	if (apiRoutes[routeKey]) {
 		return apiRoutes[routeKey](req, ctx);
 	}
-	return new Response("Not found", { status: 404 });
+	return new Response(
+		JSON.stringify({ error: { code: 404, message: "Not found", requestId } }),
+		{ status: 404, headers: { "Content-Type": "application/json" } },
+	);
 }
