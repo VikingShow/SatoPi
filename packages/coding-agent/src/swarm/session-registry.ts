@@ -158,6 +158,20 @@ export class SessionRegistry {
 			services.stateTracker.setSessionManager(sessionManager);
 			services.activityLogger.setSessionManager(sessionManager);
 			services.beforeLoopManager.setSessionManager(sessionManager);
+
+			// Seed the in-memory StateTracker from the persisted snapshot when
+			// the session.jsonl already existed (e.g. backend restart recovering
+			// a historical session). Without this, GET /api/runs reports the
+			// persisted status (completed/failed) from readLatestState but the
+			// in-memory StateTracker is still the empty "idle" default — the
+			// session list and the live state disagree, producing a ghost session.
+			const snapshot = await SwarmSessionManager.readLatestState(swarmDir);
+			if (snapshot) {
+				services.stateTracker.updatePipeline(snapshot);
+				logger.info("[SessionRegistry] seeded StateTracker from persisted snapshot", {
+					name, status: snapshot.status, loopPhase: snapshot.loopPhase,
+				});
+			}
 		}
 
 		this.#sessions.set(name, session);

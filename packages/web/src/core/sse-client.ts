@@ -111,12 +111,19 @@ export class SseClient<T = Record<string, unknown>> {
     return this.eventSource?.readyState === 0;
   }
 
+  /**
+   * Dead-man switch: when the EventSource socket is silently torn down by an
+   * intermediate hop (proxy, NAT, browser tab suspend) without firing onerror,
+   * detect the stale socket and quietly reconnect. Does NOT notify UI —
+   * `onerror` is the sole authority for the user-facing connection state,
+   * and a duplicate `notifyConnection(false)` here would race with onerror's
+   * own setTimeout reconnect, causing a "Reconnecting" flash on every recovery.
+   */
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (!this.isConnected) {
         this.stopHeartbeat();
-        this.notifyConnection(false);
         this.eventSource?.close();
         this.eventSource = null;
         if (this.shouldReconnect) {
