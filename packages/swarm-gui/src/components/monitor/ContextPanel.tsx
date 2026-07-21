@@ -39,9 +39,13 @@ export default function ContextPanel() {
   const activities = useSwarmStore((s) => s.activities);
   const [tab, setTab] = useState<Tab>("agents");
 
-  if (!swarmState) return null;
-
-  const agents = Object.entries(swarmState.agents);
+  // Panel visibility MUST be decoupled from swarmState. Previously
+  // `if (!swarmState) return null` bound the entire right-hand panel to a
+  // non-null swarmState, so any transient null (new session, getState()
+  // returning empty, a race during init) made the whole Agents/Tasks/Plan
+  // panel vanish. We now always render the panel shell and derive data
+  // defensively, showing an idle/empty state instead of disappearing.
+  const agents = Object.entries(swarmState?.agents ?? {});
   const workers = agents.filter(([_, a]) => !a.name.startsWith("cloner"));
   const reviewers = agents.filter(([_, a]) => a.name.startsWith("cloner"));
   const lastVerdict = [...activities].reverse().find((a) => a.type === "verdict");
@@ -95,11 +99,19 @@ export default function ContextPanel() {
           <div className="px-3 py-2 border-b border-border">
             <span className="text-[10px] font-medium text-fg-faint uppercase tracking-wider">Agents ({workers.length})</span>
           </div>
-          <div className="p-2 space-y-1">
-            {workers.map(([id, agent]) => (
-              <WorkerCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
-            ))}
-          </div>
+          {workers.length > 0 ? (
+            <div className="p-2 space-y-1">
+              {workers.map(([id, agent]) => (
+                <WorkerCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
+              ))}
+            </div>
+          ) : (
+            <div className="px-3 py-6 flex flex-col items-center gap-1.5 text-center">
+              <Bot size={18} className="text-fg-faint/60" />
+              <span className="text-[11px] text-fg-faint">No active agents yet</span>
+              <span className="text-[10px] text-fg-faint/70">Agents appear here once the swarm starts working.</span>
+            </div>
+          )}
 
           {/* Reviewers */}
           {reviewers.length > 0 && (

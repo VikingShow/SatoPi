@@ -304,6 +304,31 @@ describe("SwarmStore: init() guard and session sync", () => {
     expect(setActiveSSESession).toHaveBeenCalledWith("custom-session-42");
   });
 
+  it("init does NOT overwrite swarmState when getState() resolves null (panel must not vanish)", async () => {
+    // Seed an existing swarmState (panel currently visible).
+    useSwarmStore.setState({
+      swarmState: {
+        name: "test-session",
+        status: "running",
+        loopPhase: "running",
+        agents: { "worker-1": { name: "worker-1", status: "running", role: "worker", praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
+      } as any,
+    });
+    (useSwarmStore.getState() as any).__initRunning = false;
+
+    // Backend hiccup / brand-new session: getState resolves null.
+    (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ running: false });
+
+    await getStore().init();
+
+    // The previous swarmState must be preserved, not clobbered to null.
+    expect(getStore().swarmState).not.toBeNull();
+    expect(getStore().swarmState?.agents["worker-1"]).toBeDefined();
+    // loopPhase falls back gracefully without throwing on state.loopPhase.
+    expect(getStore().loopPhase).toBe("idle");
+  });
+
   it("init falls back to 'SatoPi' when activeSwarm is empty", async () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       name: "SatoPi",

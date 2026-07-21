@@ -105,4 +105,39 @@ describe("SseClient", () => {
     src.readyState = MockEventSource.OPEN;
     expect(client.isConnected).toBe(true);
   });
+
+  // Regression: the setActiveSSESession pattern is disconnect() → connect().
+  // disconnect() sets shouldReconnect=false; connect() MUST re-arm it,
+  // otherwise the client is permanently stuck after the first session switch
+  // and never recovers from a transient onerror ("Reconnecting" forever).
+  it("re-arms auto-reconnect after a disconnect()→connect() cycle", () => {
+    const client = createClient();
+    client.connect();
+    // Simulate setActiveSSESession: tear down, then reconnect.
+    client.disconnect();
+    client.connect();
+    expect(MockEventSource.instances.length).toBe(2);
+
+    // A transient error on the new connection must still schedule a reconnect.
+    const src = MockEventSource.instances[1];
+    src.onerror?.();
+    vi.advanceTimersByTime(1500);
+    expect(MockEventSource.instances.length).toBe(3); // recovered!
+  });
+
+  it("keeps reconnecting across repeated session switches", () => {
+    const client = createClient();
+    // Three consecutive session switches.
+    for (let i = 0; i < 3; i++) {
+      client.disconnect();
+      client.connect();
+    }
+    const last = MockEventSource.instances[MockEventSource.instances.length - 1];
+    last.onerror?.();
+    vi.advanceTimersByTime(1500);
+    // Still reconnects after the last switch.
+    expect(
+      MockEventSource.instances.length,
+    ).toBeGreaterThan(3);
+  });
 });

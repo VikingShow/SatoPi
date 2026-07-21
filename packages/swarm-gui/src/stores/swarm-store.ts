@@ -244,12 +244,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         api.getState(),
         api.getRunStatus(),
       ]);
-      set({
-        swarmState: state,
+      // Null guard: for a brand-new session (or a transient backend hiccup)
+      // getState() may resolve to null/undefined. We must NOT blindly overwrite
+      // swarmState with a falsy value — that is what made the right-hand panel
+      // vanish. Preserve any existing state and only merge when we actually
+      // received one. loopPhase is also read defensively via optional chaining.
+      set((prev) => ({
+        swarmState: state ?? prev.swarmState,
         isRunning: runStatus.running,
-        loopPhase: state.loopPhase ?? (runStatus.running ? "running" : "idle"),
+        loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
         error: null,
-      });
+      }));
 
       // Fetch before-loop state if in a before-loop phase
       const phase = get().loopPhase;

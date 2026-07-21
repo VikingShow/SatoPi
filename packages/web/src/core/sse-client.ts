@@ -26,6 +26,13 @@ export class SseClient<T = Record<string, unknown>> {
   connect(): void {
     if (this.eventSource?.readyState === EventSource.OPEN) return;
 
+    // Re-arm auto-reconnect. A prior disconnect() sets shouldReconnect=false;
+    // an explicit connect() is always an intent to (re)establish a live link,
+    // so we must restore the reconnect intent here — otherwise the very first
+    // disconnect()→connect() cycle permanently disables reconnection and any
+    // later transient onerror leaves the client stuck in "Reconnecting".
+    this.shouldReconnect = true;
+
     this.eventSource = new EventSource(this.url);
 
     this.eventSource.onopen = () => {

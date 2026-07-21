@@ -29,8 +29,20 @@ function buildSSEUrl(): string {
   return base;
 }
 
-/** Update the session name — disconnect old EventSource, update URL, reconnect. */
+/**
+ * Update the session name — disconnect old EventSource, update URL, reconnect.
+ *
+ * Idempotent: this is invoked from multiple call sites (swarm-store.init and
+ * session-store.subscribe) that can fire for the same session in quick
+ * succession. Reconnecting to the exact same session while already live would
+ * needlessly tear down a healthy stream (causing a "Reconnecting" flicker and
+ * a gap in events), so we short-circuit when the target session is unchanged
+ * and the socket is already open.
+ */
 export function setActiveSSESession(name: string | null): void {
+  if (name === activeSession && sseClient.isConnected) {
+    return;
+  }
   activeSession = name;
   sseClient.disconnect();
   sseClient.setUrl(buildSSEUrl());
