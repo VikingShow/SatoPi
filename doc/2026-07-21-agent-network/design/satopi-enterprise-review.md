@@ -229,11 +229,16 @@ packages/
 
 > 验证：前端 57 单测通过（含新增 transport `lastEventId`、`connectionStatus` 回归）；后端 `event-bus.test.ts` 6 用例通过（replay/隔离/过滤/单调 id）。
 
-#### P2（3–5 周）——编排内核重构与流程状态机
-- [ ] 将 `runLoop()` 拆分为 `ConvergenceDetector / BlockageDetector / WorkerScaler / SnapshotManager / VerificationRunner` 等单一职责单元，各自单测。
-- [ ] 引入**显式 LoopPhase 状态机**（XState 风格）统一转移/补偿/审计。
+#### P2（3–5 周）——编排内核重构与流程状态机（分支 `feat/p2-orchestration-statemachine`，进行中）
+- [x] **显式 LoopPhase 状态机**（`swarm-state-machine.ts`）：作为**仲裁层而非驱动层**落地——不反转 `runLoop` 的长跑命令式控制流，仅集中「转移表 + guard 校验 + onEnter 原子广播（StateTracker+ActivityLogger 一步）+ onError 审计 + timed transition」。补全了此前缺失的转移（before-loop-*→idle 取消、paused/blocked→after-loop 中止、after-loop→running 重试、blocked→running 超时自动 continue）。非法转移不抛异常，仅拒绝并审计（契合「优先自治、必要才升级」）。
+- [x] **LoopController 相位改道**：`pause/resume/blocked/unblock` 全部经由 `#setLoopPhase → 状态机`，后端成为 LoopPhase 唯一权威。
+- [x] **前端纯投影**：`swarm-store` 移除本地相位推断补丁（`refreshState` 的 blocked 守卫、`addActivity` 的 blocked/running 特判），改为直接采用后端下发的权威 phase 事件（`AUTHORITATIVE_LOOP_PHASES`）。
+- [x] 单测：`swarm-state-machine.test.ts` 13 用例（合法/非法/幂等/force/timed/错误隔离）全绿；前端 57、后端 state 12、nomination 30、event-bus 6 全绿。
+- [ ] 将 `runLoop()` 进一步拆分为 `ConvergenceDetector / BlockageDetector / WorkerScaler / SnapshotManager` 等单一职责单元，各自单测。
 - [ ] 统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）。
-- [ ] 前端阻塞裁决行动卡片 + plan 编辑闭环 + 流式打断 UI。
+- [ ] 前端阻塞裁决行动卡片（continue/skip/abort + 倒计时）+ plan 编辑闭环 + 流式打断 UI。
+
+> 待办健康度提示：`packages/coding-agent/src/swarm/__tests__/robustness.test.ts` 有 11 个用例因 `RegionLockManager.reset()` 静态方法已移除（RegionLockManager 现为 per-session 实例）而全灭，属**既有陈旧测试**、与本轮改动无关，建议单独修复（更新为实例化 API）。
 
 #### P3（6–10 周）——可靠性与可扩展性对齐分布式
 - [ ] **事件溯源**：状态由 activity 事件流可重放重建，支持进程重启恢复运行态。

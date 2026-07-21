@@ -15,6 +15,23 @@ import { useSessionStore } from "./session-store";
 
 const MAX_ACTIVITIES = 500;
 
+/**
+ * The set of LoopPhase values the backend SwarmStateMachine broadcasts as
+ * authoritative phase events. The frontend adopts these verbatim (pure
+ * projection). Other `phase` events (workers/cloner-review/todo-updated/…)
+ * are sub-events and must NOT be treated as a LoopPhase.
+ */
+const AUTHORITATIVE_LOOP_PHASES = new Set<string>([
+  "idle",
+  "before-loop-dialog",
+  "before-loop-debate",
+  "before-loop-confirm",
+  "running",
+  "paused",
+  "blocked",
+  "after-loop",
+]);
+
 interface SwarmStore {
   swarmState: SwarmState | null;
   activities: ActivityEntry[];
@@ -357,6 +374,25 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         if (entry.type === "phase") {
           const p = entry.phase ?? "";
 
+          // ── Single authority: the backend SwarmStateMachine emits an
+          // authoritative `phase` event for every LoopPhase transition. The
+          // frontend is a PURE PROJECTION — adopt any authoritative phase
+          // directly, with no local inference. Non-LoopPhase phase events
+          // (workers / cloner-review / todo-updated / etc.) are sub-events
+          // handled by their own side-effects below.
+          if (AUTHORITATIVE_LOOP_PHASES.has(p)) {
+            const phase = p as LoopPhase;
+            set((s) => ({
+              loopPhase: phase,
+              // blockerContext is only meaningful while blocked; clear it on
+              // any transition away from "blocked".
+              blockerContext: phase === "blocked" ? s.blockerContext : null,
+            }));
+            if (phase === "blocked") {
+              toast.warning("Swarm Blocked", { description: "The swarm has encountered a blocker and is waiting for your decision." });
+            }
+          }
+
           // Plan updated → increment planVersion so PlanViewer auto-refreshes
           if (p === "plan-updated") {
             set((s) => ({ planVersion: s.planVersion + 1 }));
@@ -370,17 +406,6 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           // After-loop-done → fetch result
           if (p === "after-loop-done") {
             setTimeout(() => get().fetchAfterLoopResult(), 500);
-          }
-
-          // Blockage detected → set blocked phase
-          if (p === "blocked") {
-            set({ loopPhase: "blocked" });
-            toast.warning("Swarm Blocked", { description: "The swarm has encountered a blocker and is waiting for your decision." });
-          }
-
-          // Blocker resolved → back to running
-          if (p === "running" && get().loopPhase === "blocked") {
-            set({ loopPhase: "running", blockerContext: null });
           }
 
           // Refresh before-loop state on relevant phase events
@@ -617,14 +642,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       ]);
       const wasRunning = get().isRunning;
       const nowRunning = runStatus.running;
+      // Backend is the single authority for loopPhase (StateTracker.state.loopPhase
+      // is set atomically by the SwarmStateMachine). Polling adopts it directly —
+      // the previous "keep blocked" guard is no longer needed because the backend
+      // holds "blocked" until the blocker is resolved, so the polled value already
+      // reflects it. Only fall back to a derived phase when the backend has none.
       const polledPhase = state?.loopPhase ?? (nowRunning ? "running" : "idle");
-
-      // Don't overwrite "blocked" phase from polling if we're still blocked
-      // (the backend sets loopPhase="blocked" and keeps it until resolved)
-      const currentPhase = get().loopPhase;
-      const newPhase = (currentPhase === "blocked" && polledPhase === "blocked")
-        ? "blocked"
-        : polledPhase;
 
       set({
         // Guard against null API response — a brand-new session may not
@@ -632,7 +655,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // and cause the right panel (ContextPanel) to disappear.
         swarmState: state || get().swarmState,
         isRunning: nowRunning,
-        loopPhase: newPhase,
+        loopPhase: polledPhase,
         todos: state?.todos ?? [],
         error: null,
       });

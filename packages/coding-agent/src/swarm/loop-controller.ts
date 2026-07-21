@@ -16,7 +16,8 @@ import { invokeHook, type LoopPipelineHooks, type PipelineContext } from "./pipe
 import { RegionLockManager } from "./region-lock";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { AgentToolRestriction, LoopSwarmConfig } from "./schema";
-import type { StateTracker } from "./state";
+import type { LoopPhase, StateTracker } from "./state";
+import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
 import { TaskComplexityAnalyzer } from "./task-analyzer";
 import { TodoTracker } from "./todo-tracker";
 import { VerificationHook, type VerificationResult } from "./verification-hook";
@@ -341,6 +342,16 @@ export class LoopController {
 	/** Context for the current blockage (if any). */
 	#currentBlockerContext: BlockerContext | null = null;
 
+	// ── Explicit phase state machine (arbiter, not driver) ──────────────────
+	/**
+	 * Single authority for LoopPhase. Every loopPhase change routes through
+	 * #setLoopPhase → this machine, which validates the transition and, on
+	 * onEnter, ATOMICALLY updates StateTracker + ActivityLogger. runLoop keeps
+	 * its own await-based suspension (checkPause / blockerResolver); the machine
+	 * only arbitrates and broadcasts the phase.
+	 */
+	readonly #sm: SwarmStateMachine;
+
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
@@ -353,6 +364,35 @@ export class LoopController {
 		if (this.#loopConfig.verification?.commands?.length) {
 			this.#verificationHook = new VerificationHook(options.workspace, this.#activityLogger);
 		}
+		// Seed the machine from the tracker's current phase (defaults to running
+		// context — pause/resume/block operate within an already-running loop).
+		this.#sm = new SwarmStateMachine(this.#stateTracker.state.loopPhase ?? "running", {
+			onEnter: async (phase, ctx) => {
+				// Atomic broadcast: persist state + emit SSE phase event together.
+				const update: Partial<import("./state").SwarmState> = { loopPhase: phase };
+				if (ctx.reason && phase === "blocked") update.roundtablePhase = `Blocked: ${ctx.reason}`;
+				await this.#stateTracker.updatePipeline(update);
+				this.#activityLogger?.logPhase(phase, undefined, ctx.iteration);
+			},
+			onError: (from, to, reason) => {
+				// Never crash on an illegal/failed transition — record for audit.
+				this.#activityLogger?.logPhase("invalid-transition", undefined, undefined);
+				logger.warn("LoopPhase transition rejected", { from, to, reason });
+			},
+		});
+	}
+
+	/**
+	 * The sole entry point for changing loopPhase. Routes through the state
+	 * machine so the transition is validated + broadcast atomically. `force`
+	 * bypasses the table for hard aborts/resets.
+	 */
+	async #setLoopPhase(to: LoopPhase, ctx: PhaseContext = {}, force = false): Promise<void> {
+		if (force) {
+			await this.#sm.force(to, ctx);
+		} else {
+			await this.#sm.transition(to, ctx);
+		}
 	}
 
 	// ── Pause / Resume / Replan API ────────────────────────────────────────
@@ -364,8 +404,7 @@ export class LoopController {
 	pause(): void {
 		if (this.#pauseSignal) return; // already paused
 		this.#pauseSignal = new AbortController();
-		void this.#stateTracker.updatePipeline({ loopPhase: "paused" });
-		this.#activityLogger?.logPhase("paused");
+		void this.#setLoopPhase("paused");
 		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop paused. Awaiting plan update or resume.");
 		logger.info("LoopController paused");
 	}
@@ -376,8 +415,7 @@ export class LoopController {
 	 */
 	resume(): void {
 		if (!this.#pauseSignal) return; // not paused
-		void this.#stateTracker.updatePipeline({ loopPhase: "running" });
-		this.#activityLogger?.logPhase("running");
+		void this.#setLoopPhase("running");
 		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop resumed.");
 		const resolver = this.#pauseResolver;
 		this.#pauseSignal = null;
@@ -1216,9 +1254,9 @@ export class LoopController {
 			reason,
 		};
 
-		// Set loop phase to blocked
-		await this.#stateTracker.updatePipeline({ loopPhase: "blocked", roundtablePhase: `Blocked: ${reason}` });
-		this.#activityLogger?.logPhase("blocked", undefined, iteration + 1);
+		// Set loop phase to blocked (state machine validates + broadcasts atomically;
+		// onEnter derives roundtablePhase from ctx.reason and emits the phase event).
+		await this.#setLoopPhase("blocked", { reason, iteration: iteration + 1 });
 		this.#activityLogger?.logBroadcast(
 			"system",
 			JSON.stringify({
@@ -1248,8 +1286,7 @@ export class LoopController {
 
 		// Restore loop phase to running (unless aborting)
 		if (resolution !== "abort") {
-			await this.#stateTracker.updatePipeline({ loopPhase: "running" });
-			this.#activityLogger?.logPhase("running", undefined, iteration + 1);
+			await this.#setLoopPhase("running", { iteration: iteration + 1 });
 		}
 
 		return resolution;
