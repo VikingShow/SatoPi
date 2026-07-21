@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { parseSwarmYaml, resolveLoopConfig, validateSwarmDefinition } from "../schema";
+import type { AgentToolRestriction } from "../schema";
+
+// parseAgentRestrictions is not exported, but resolveLoopConfig internally calls it.
+// We test write_allowlist parsing by providing it in the raw YAML config passed to
+// parseSwarmYaml and then inspecting the resolved loop config.
 
 describe("schema - loop mode", () => {
 	it("parses a loop mode swarm YAML", () => {
@@ -205,6 +210,96 @@ swarm:
       task: cast spell
 `;
 		expect(() => parseSwarmYaml(yaml)).toThrow("Invalid mode");
+	});
+});
+
+describe("schema - agent_restrictions with write_allowlist", () => {
+	it("parses write_allowlist from agent_restrictions", () => {
+		const raw: Record<string, unknown> = {
+			workers: { initial: 3 },
+			agent_restrictions: {
+				socrates: {
+					allowed: ["read", "write", "grep", "find", "glob"],
+					write_allowlist: ["plan.md"],
+				},
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		const restrictions = config.agentRestrictions;
+		expect(restrictions).toBeDefined();
+		expect(restrictions!.socrates).toBeDefined();
+		expect(restrictions!.socrates.allowed).toEqual(["read", "write", "grep", "find", "glob"]);
+		expect(restrictions!.socrates.write_allowlist).toEqual(["plan.md"]);
+	});
+
+	it("write_allowlist accepts multiple paths", () => {
+		const raw: Record<string, unknown> = {
+			workers: { initial: 3 },
+			agent_restrictions: {
+				socrates: {
+					write_allowlist: ["plan.md", "todo.md", "README.md"],
+				},
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		const restrictions = config.agentRestrictions;
+		expect(restrictions!.socrates.write_allowlist).toEqual([
+			"plan.md",
+			"todo.md",
+			"README.md",
+		]);
+	});
+
+	it("agent_restrictions without write_allowlist still works (backward compat)", () => {
+		const raw: Record<string, unknown> = {
+			workers: { initial: 3 },
+			agent_restrictions: {
+				socrates: {
+					allowed: ["read"],
+				},
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		const restrictions = config.agentRestrictions;
+		expect(restrictions).toBeDefined();
+		expect(restrictions!.socrates.allowed).toEqual(["read"]);
+		expect(restrictions!.socrates.write_allowlist).toBeUndefined();
+	});
+
+	it("agent_restrictions entry with only write_allowlist is included", () => {
+		const raw: Record<string, unknown> = {
+			workers: { initial: 3 },
+			agent_restrictions: {
+				socrates: {
+					write_allowlist: ["plan.md"],
+				},
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		const restrictions = config.agentRestrictions;
+		expect(restrictions).toBeDefined();
+		// write_allowlist alone is enough to include the restriction
+		expect(restrictions!.socrates).toBeDefined();
+		expect(restrictions!.socrates.write_allowlist).toEqual(["plan.md"]);
+	});
+
+	it("agent_restrictions with only write_allowlist and no allowed/blocked is valid", () => {
+		// This tests that the condition in parseAgentRestrictions
+		// (line 451: write_allowlist alone is sufficient)
+		const raw: Record<string, unknown> = {
+			workers: { initial: 3 },
+			agent_restrictions: {
+				socrates: {
+					write_allowlist: ["plan.md"],
+				},
+			},
+		};
+		const config = resolveLoopConfig(raw);
+		const restrictions = config.agentRestrictions;
+		expect(restrictions).toBeDefined();
+		expect(restrictions!.socrates.write_allowlist).toEqual(["plan.md"]);
+		expect(restrictions!.socrates.allowed).toBeUndefined();
+		expect(restrictions!.socrates.blocked).toBeUndefined();
 	});
 });
 
