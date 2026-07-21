@@ -28,7 +28,7 @@ function App() {
   const [hydrated, setHydrated] = useState(false);
   const init = useSwarmStore((s) => s.init);
   const swarmState = useSwarmStore((s) => s.swarmState);
-  const isConnected = useSwarmStore((s) => s.isConnected);
+  const connectionStatus = useSwarmStore((s) => s.connectionStatus);
   const isRunning = useSwarmStore((s) => s.isRunning);
   const newSession = useSessionStore((s) => s.newSession);
   const loadRuns = useSessionStore((s) => s.loadRuns);
@@ -131,10 +131,19 @@ function App() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs ${isConnected ? "text-status-success" : "text-amber-400"}`}>
-              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${isConnected ? "bg-status-success animate-pulse-ring" : "bg-amber-400 animate-pulse"}`} />
-              {isConnected ? "Connected" : "Reconnecting"}
-            </span>
+            {(() => {
+              const conn = {
+                live: { label: "Connected", text: "text-status-success", dot: "bg-status-success animate-pulse-ring" },
+                connecting: { label: "Connecting…", text: "text-neutral-400", dot: "bg-neutral-400 animate-pulse" },
+                reconnecting: { label: "Reconnecting…", text: "text-amber-400", dot: "bg-amber-400 animate-pulse" },
+              }[connectionStatus];
+              return (
+                <span className={`text-xs ${conn.text}`}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${conn.dot}`} />
+                  {conn.label}
+                </span>
+              );
+            })()}
           </div>
         </header>
 

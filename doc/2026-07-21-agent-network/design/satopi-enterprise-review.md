@@ -219,12 +219,15 @@ packages/
 - [x] `init()` 状态空值双保险守卫。
 - [x] 3 个回归单测，全量 54 测试通过。
 
-#### P1（1–2 周）——流式与连接达企业级
-- [ ] **后端 SSE Last-Event-ID 断点续传**：EventBus 加 per-session ring buffer，重连按 id 重放，替代前端 getHistory 兜底。
-- [ ] **前端 token 级批处理**：stream_delta 进 rAF/定时缓冲区合并 flush，降低重渲染频率。
-- [ ] **虚拟列表稳定化**：流式气泡 `measureElement` + `overflow-anchor` 底部吸附。
-- [ ] **连接状态语义细化** + 漏发事件提示；重连 toast 去重。
-- [ ] **消息级 ErrorBoundary**；KaTeX/mermaid 支持（按需）。
+#### P1（1–2 周）——流式与连接达企业级 ✅ 已完成（分支 `feat/p1-streaming-reliability`）
+- [x] **后端 SSE Last-Event-ID 断点续传**：`EventBus` 加 per-session ring buffer（seq 单调递增 + `id:` 帧）；`subscribe(lastEventId)` 重放 seq 超过分；`server.ts` 兼容查询参数 `lastEventId` 与 `Last-Event-ID` 头；传输层 `SseClient` 记录并在重连 URL 追加 `lastEventId`，`setUrl` 时重置以防跨会话串位；前端移除 getHistory 二重适用（避免重复）。
+- [x] **前端 token 级批处理**：`stream_delta` 进 rAF 缓冲，同源合并后每帧 flush 一次，其它事件先 flush 保序 → 重渲染由 O(tokens) 降到 O(frames)。
+- [x] **虚拟列表稳定化**：`measureElement`（既有）+ stick-to-bottom（用户在底部时随流式增长跟随，滚上去看历史则不打扰）。
+- [x] **连接状态语义细化**：`connecting/live/reconnecting` 三态 + 重连 toast 去重（`id:"sse-reconnect"`，仅 live→lost→live 提示）。
+- [x] **消息级 ErrorBoundary**：单条消息渲染失败不再连累整列，降级展示原文。
+- [ ] **KaTeX/mermaid（按需）**：因当前环境离线、缺 `remark-math`/`rehype-katex`/`katex` 依赖未启用，留作后续 `bun add remark-math rehype-katex katex` 后接入。
+
+> 验证：前端 57 单测通过（含新增 transport `lastEventId`、`connectionStatus` 回归）；后端 `event-bus.test.ts` 6 用例通过（replay/隔离/过滤/单调 id）。
 
 #### P2（3–5 周）——编排内核重构与流程状态机
 - [ ] 将 `runLoop()` 拆分为 `ConvergenceDetector / BlockageDetector / WorkerScaler / SnapshotManager / VerificationRunner` 等单一职责单元，各自单测。

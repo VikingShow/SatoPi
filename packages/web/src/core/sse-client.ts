@@ -15,12 +15,28 @@ export class SseClient<T = Record<string, unknown>> {
   private maxReconnectDelay = 30000;
   private shouldReconnect = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Last SSE `id:` seen on the current target. Appended to the reconnect URL
+   * as `lastEventId` so the server can replay events missed during the gap.
+   * Reset on setUrl() because a new target (e.g. a different session) has its
+   * own history and must not resume from an unrelated id.
+   */
+  private lastEventId: string | null = null;
 
   constructor(private url: string) {}
 
   /** Update the target URL (e.g. after session change). Does NOT reconnect. */
   setUrl(url: string): void {
     this.url = url;
+    // New target → forget the previous stream's resume position.
+    this.lastEventId = null;
+  }
+
+  /** Build the effective connect URL, appending the resume cursor when present. */
+  private buildConnectUrl(): string {
+    if (!this.lastEventId) return this.url;
+    const sep = this.url.includes("?") ? "&" : "?";
+    return `${this.url}${sep}lastEventId=${encodeURIComponent(this.lastEventId)}`;
   }
 
   connect(): void {
@@ -33,7 +49,7 @@ export class SseClient<T = Record<string, unknown>> {
     // later transient onerror leaves the client stuck in "Reconnecting".
     this.shouldReconnect = true;
 
-    this.eventSource = new EventSource(this.url);
+    this.eventSource = new EventSource(this.buildConnectUrl());
 
     this.eventSource.onopen = () => {
       this.reconnectDelay = 1000;
@@ -42,6 +58,8 @@ export class SseClient<T = Record<string, unknown>> {
     };
 
     this.eventSource.onmessage = (event) => {
+      // Track the resume cursor for Last-Event-ID gap recovery.
+      if (event.lastEventId) this.lastEventId = event.lastEventId;
       try {
         const entry = JSON.parse(event.data) as T;
         for (const listener of this.listeners) {

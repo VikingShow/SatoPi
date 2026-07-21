@@ -82,14 +82,17 @@ export class MonitorServer implements ActivityBroadcaster {
 				// ── SSE — per-session ───────────────────────────────────
 				if (pathname === "/events") {
 					const sessionName = url.searchParams.get("session") ?? undefined;
-					const lastEventId = req.headers.get("Last-Event-ID") ?? undefined;
+					// Resume support: native EventSource sends Last-Event-ID via
+					// header on its OWN auto-reconnect, but our client performs
+					// manual reconnection (new EventSource each time), which cannot
+					// set custom headers — so it appends ?lastEventId=. Accept both.
+					const lastEventId =
+						url.searchParams.get("lastEventId") ?? req.headers.get("Last-Event-ID") ?? undefined;
 					const stream = new ReadableStream({
 						start(controller) {
-							const handshake = lastEventId
-								? `: connected\nid: ${lastEventId}\n\n`
-								: ": connected\n\n";
-							controller.enqueue(new TextEncoder().encode(handshake));
-							const unsub = bus.subscribe(sessionName, controller);
+							controller.enqueue(new TextEncoder().encode(": connected\n\n"));
+							// subscribe() replays any buffered entries with seq > lastEventId.
+							const unsub = bus.subscribe(sessionName, controller, undefined, lastEventId);
 							
 							// SSE keepalive — prevents browser from closing the
 							// connection during long model thinking phases.

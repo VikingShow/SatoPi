@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 class MockEventSource {
   static instances: MockEventSource[] = [];
   onopen: (() => void) | null = null;
-  onmessage: ((e: { data: string }) => void) | null = null;
+  onmessage: ((e: { data: string; lastEventId?: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   readyState = 0;
   static OPEN = 1;
@@ -123,6 +123,35 @@ describe("SseClient", () => {
     src.onerror?.();
     vi.advanceTimersByTime(1500);
     expect(MockEventSource.instances.length).toBe(3); // recovered!
+  });
+
+  it("appends lastEventId to the reconnect URL for gap replay", () => {
+    const client = createClient();
+    client.connect();
+    const src = MockEventSource.instances[0];
+    src.readyState = MockEventSource.OPEN;
+    // Receive an event carrying an SSE id.
+    src.onmessage?.({ data: JSON.stringify({ ts: 1, type: "phase" }), lastEventId: "42" });
+    // Force a reconnect via error.
+    src.readyState = MockEventSource.CLOSED;
+    src.onerror?.();
+    vi.advanceTimersByTime(1500);
+    const reconnected = MockEventSource.instances[1];
+    expect(reconnected.url).toContain("lastEventId=42");
+  });
+
+  it("resets lastEventId on setUrl (new session must not resume stale id)", () => {
+    const client = createClient();
+    client.connect();
+    const src = MockEventSource.instances[0];
+    src.onmessage?.({ data: JSON.stringify({ ts: 1, type: "phase" }), lastEventId: "42" });
+    // Switch target — should forget the resume cursor.
+    client.setUrl("http://localhost:7878/events?session=new");
+    client.disconnect();
+    client.connect();
+    const fresh = MockEventSource.instances[MockEventSource.instances.length - 1];
+    expect(fresh.url).not.toContain("lastEventId");
+    expect(fresh.url).toContain("session=new");
   });
 
   it("keeps reconnecting across repeated session switches", () => {

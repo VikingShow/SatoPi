@@ -22,6 +22,13 @@ interface SwarmStore {
   messages: Map<string, ChatMessage[]>;
   activeChannelId: string | null;
   isConnected: boolean;
+  /**
+   * Fine-grained connection lifecycle for the header indicator:
+   * - "connecting"   — first attempt, never been live yet
+   * - "live"         — SSE open, receiving events
+   * - "reconnecting" — was live, lost the socket, auto-retrying
+   */
+  connectionStatus: "connecting" | "live" | "reconnecting";
   isRunning: boolean;
   loopPhase: LoopPhase;
   beforeLoopState: BeforeLoopState | null;
@@ -169,6 +176,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   messages: new Map(),
   activeChannelId: "roundtable",
   isConnected: false,
+  connectionStatus: "connecting",
   isRunning: false,
   loopPhase: "idle",
   beforeLoopState: null,
@@ -205,24 +213,26 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // forever — causing the UI to show "Reconnecting" indefinitely.
       // Re-register after setActiveSSESession too, in case disconnect() clears
       // internal listeners.
-      let lastEventTs = 0;
+      // Connection lifecycle. Gap recovery is now handled at the transport
+      // layer via SSE Last-Event-ID replay (the backend EventBus re-sends every
+      // buffered event with seq > the client's last id on reconnect), so we no
+      // longer replay via getHistory here — doing both would double-apply every
+      // missed event since addActivity has no dedup.
+      let hasConnectedOnce = false;
       const onConnChange = (connected: boolean) => {
-        set({ isConnected: connected });
-        if (connected && lastEventTs > 0) {
-          import("../lib/api-client").then(({ api }) => {
-            api.getHistory(lastEventTs)
-              .then(({ entries }) => {
-                const missed = (entries ?? []).filter(
-                  (e: unknown) => (e as { ts: number }).ts > lastEventTs,
-                );
-                for (const e of missed) {
-                  get().addActivity(e as import("../lib/types").ActivityEntry, true);
-                }
-                if (missed.length > 0) {
-                  toast(`Reconnected — loaded ${missed.length} missed events`, { duration: 3000 });
-                }
-              })
-              .catch(() => {});
+        if (connected) {
+          const wasReconnecting = hasConnectedOnce;
+          hasConnectedOnce = true;
+          set({ isConnected: true, connectionStatus: "live" });
+          // Dedup: only toast on an actual reconnect (live→lost→live), not the
+          // very first connect.
+          if (wasReconnecting) {
+            toast.success("Reconnected", { id: "sse-reconnect", description: "Syncing missed events…", duration: 2500 });
+          }
+        } else {
+          set({
+            isConnected: false,
+            connectionStatus: hasConnectedOnce ? "reconnecting" : "connecting",
           });
         }
       };
@@ -232,7 +242,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       // subscriber in session-store.ts already connected (via persist hydration),
       // onConnectionChange may have already fired (or won't fire again since
       // the state didn't change).  We must seed isConnected here.
-      set({ isConnected: sseClient.isConnected });
+      if (sseClient.isConnected) {
+        hasConnectedOnce = true;
+        set({ isConnected: true, connectionStatus: "live" });
+      } else {
+        set({ isConnected: false, connectionStatus: "connecting" });
+      }
 
       setActiveSSESession(sessionName);
 
@@ -292,10 +307,51 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // History might not be available yet
       }
 
+      // ── P1-2: token-level stream_delta batching ──────────────────────
+      // High-frequency stream_delta events (one per token) would each trigger
+      // a full messages-Map rebuild + re-render. We coalesce consecutive
+      // deltas from the same source into a single addActivity call flushed
+      // once per animation frame, cutting re-renders from O(tokens) to O(frames)
+      // while preserving event ordering (any non-delta event flushes first).
+      let deltaBuffer: { from: string; body: string; ts: number } | null = null;
+      let flushHandle: ReturnType<typeof setTimeout> | number | null = null;
+      const raf: (cb: () => void) => number =
+        typeof requestAnimationFrame !== "undefined"
+          ? (cb) => requestAnimationFrame(cb)
+          : (cb) => setTimeout(cb, 16) as unknown as number;
+      const cancelRaf = (h: number) => {
+        if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(h);
+        else clearTimeout(h as unknown as ReturnType<typeof setTimeout>);
+      };
+      const flushDelta = () => {
+        if (flushHandle !== null) { cancelRaf(flushHandle as number); flushHandle = null; }
+        if (deltaBuffer) {
+          const buffered = deltaBuffer;
+          deltaBuffer = null;
+          get().addActivity({ type: "stream_delta", from: buffered.from, body: buffered.body, ts: buffered.ts } as ActivityEntry);
+        }
+      };
+      const scheduleFlush = () => {
+        if (flushHandle === null) {
+          flushHandle = raf(() => { flushHandle = null; flushDelta(); });
+        }
+      };
+
       sseClient.on((entry) => {
-        lastEventTs = Math.max(lastEventTs, entry.ts);
+        set({ isConnected: sseClient.isConnected, connectionStatus: "live" });
+
+        // Fast path: buffer stream_delta, defer the heavy store update.
+        if (entry.type === "stream_delta" && entry.from) {
+          if (deltaBuffer && deltaBuffer.from !== entry.from) flushDelta();
+          if (!deltaBuffer) deltaBuffer = { from: entry.from, body: "", ts: entry.ts };
+          deltaBuffer.body += entry.body ?? "";
+          scheduleFlush();
+          return;
+        }
+
+        // Any non-delta event: flush pending deltas first to preserve ordering.
+        flushDelta();
         get().addActivity(entry);
-        set({ isConnected: sseClient.isConnected });
 
         // Handle phase events for loop phase transitions
         if (entry.type === "phase") {

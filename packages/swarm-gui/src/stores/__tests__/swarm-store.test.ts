@@ -304,6 +304,31 @@ describe("SwarmStore: init() guard and session sync", () => {
     expect(setActiveSSESession).toHaveBeenCalledWith("custom-session-42");
   });
 
+  it("connectionStatus transitions connecting → live → reconnecting → live", async () => {
+    (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      name: "test-session", status: "idle", loopPhase: "idle", agents: {},
+    });
+    (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ running: false });
+
+    await getStore().init();
+    // Before any connection callback fires, we are "connecting".
+    expect(getStore().connectionStatus).toBe("connecting");
+
+    const { sseClient } = await import("../../lib/sse-client");
+    const onConn = (sseClient.onConnectionChange as ReturnType<typeof vi.fn>).mock.calls[0][0] as (c: boolean) => void;
+
+    onConn(true);
+    expect(getStore().connectionStatus).toBe("live");
+    expect(getStore().isConnected).toBe(true);
+
+    onConn(false);
+    expect(getStore().connectionStatus).toBe("reconnecting");
+    expect(getStore().isConnected).toBe(false);
+
+    onConn(true);
+    expect(getStore().connectionStatus).toBe("live");
+  });
+
   it("init does NOT overwrite swarmState when getState() resolves null (panel must not vanish)", async () => {
     // Seed an existing swarmState (panel currently visible).
     useSwarmStore.setState({
