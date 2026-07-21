@@ -3,6 +3,8 @@
 > 审查日期：2026-07-21 ｜ 范围：`packages/swarm-gui`（前端）、`packages/coding-agent/src/swarm`（后端编排）、`packages/web`（pi-web 传输层）
 > 目标：定位两个顽固缺陷的真根因并修复；对前端流式/Markdown、后端 pi-agent 哲学契合度、swarm 流程衔接与交互、agent 工程可靠性/可扩展性做多维度评估；给出对标业界的 P0–P3 分阶段路线图。
 
+> **v2.1 后续审计更新（2026-07-21）**：本文档 §0-5 的评估在代码审计时是准确的。后续对 `packages/swarm-gui/src/` 的逐文件深度审计发现了额外的**集成债务**：shadcn/ui 9 组件已实现但 0 个被业务代码使用；i18n/theme/Monaco/ReactFlow/sonner/keyboard-shortcuts 依赖全部已安装但接入率 ~15%。这些发现已在 §6.2 P3 中补充。关于 `feat/p3-observability-tracing` 分支：经 `git diff` 验证，该分支内容提交 `22d717df8` 与 dev 已合并的 `c339e3587` 树内容完全相同，合并是 no-op，分支名承诺的可观测性工作实际未实现。
+
 ---
 
 ## 0. 结论速览（TL;DR）
@@ -244,12 +246,26 @@ packages/
 - [ ] （剩余）统一 `LoopController` 与 `PipelineController` 编排范式（LoopController 复用 wave/hook 基类）——已通过 executor 对齐大幅收窄差距，完整复用在 P3。
 
 #### P3（6–10 周）——可靠性与可扩展性对齐分布式
+
+> **v2.1 更新**：`feat/p3-observability-tracing` 分支经审计确认为空壳（内容提交与 dev 已合并的 c339e3587 树完全相同）。以下 P3 工作需从头实现。
+
 - [ ] **事件溯源**：状态由 activity 事件流可重放重建，支持进程重启恢复运行态。
 - [ ] **可插拔执行器落地**：基于已有 `AgentExecutor` 接口实现远程/沙箱执行器，验证多机 worker。
 - [ ] **分布式锁**替换进程内 RegionLock（如 Redis/etcd），支撑多实例。
 - [ ] **SSE 背压治理**：慢订阅者缓冲上限 + 丢弃/降采样策略。
 - [ ] **e2e（Playwright）**覆盖：启动→连接→before-loop→流式→切会话→阻塞裁决全链路。
-- [ ] 可观测性：编排级 tracing（OpenTelemetry）+ 指标（轮次耗时、收敛率、崩溃率）。
+- [ ] **可观测性**（v2.1 细化）：
+  - [ ] Prometheus `/metrics` 端点（新增 `prom-client` 依赖）：Counter（swarm_runs_total / agent_spawns_total / tool_calls_total / blocker_events_total）、Histogram（tool_call_duration / iteration_count / roundtable_duration）、Gauge（active_sessions / sse_subscribers）
+  - [ ] 健康检查：`/health`（轻量）+ `/health/ready`（含依赖检查：StateTracker / ExperienceStore / ModelRegistry）
+  - [ ] Request ID 中间件：`crypto.randomUUID()` 注入到每个请求的日志和错误响应中
+  - [ ] Swarm 编排层 OTel spans 扩展：worker spawn / roundtable debate / convergence check（已有 2000+ 行 GenAI telemetry，需补编排层）
+- [ ] **集成债务清偿**（v2.1 新增 — 不属于分布式但属于企业级就绪）：
+  - [ ] shadcn/ui 9 组件接入业务代码（替换原生 HTML）
+  - [ ] 主题 CSS 变量接入所有组件（替换硬编码 `bg-neutral-*` 等 232 处）
+  - [ ] i18n `useTranslation` 接入 15 个组件 + 创建 zh.json
+  - [ ] 键盘快捷键 `useGlobalKeybindings` 挂载到 App.tsx
+  - [ ] 12 个组件补齐 loading/empty/error 三态 + ErrorBoundary 包裹
+  - [ ] 前端组件渲染测试（@testing-library/react 已安装，0 个组件测试）
 
 ---
 
