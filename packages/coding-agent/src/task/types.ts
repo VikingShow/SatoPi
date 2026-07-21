@@ -299,6 +299,8 @@ export interface AgentDefinition {
 	tools?: string[];
 	/** Blacklist — these tools are blocked (config-as-constraint pattern). */
 	blockedTools?: string[];
+	/** Write allowlist — restrict the write tool to only these file paths (relative to workspace root). */
+	writeAllowList?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	thinkingLevel?: ConfiguredThinkingLevel;

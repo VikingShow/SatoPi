@@ -43,11 +43,14 @@ interface ConversationTurn {
 }
 
 /**
- * Default tool restriction for Socrates — read + write_file (for plan.md) + grep + find.
+ * Default tool restriction for Socrates — read + write (for plan.md) + grep + find.
  * No bash/shell execution, no edit. Can be overridden via agent_restrictions.socrates in YAML.
+ * write_allowlist restricts the write tool to only plan.md so Socrates cannot modify
+ * arbitrary workspace files.
  */
 const SOCRATES_DEFAULT_RESTRICTION: AgentToolRestriction = {
-	allowed: ["read", "write_file", "grep", "find", "glob"],
+	allowed: ["read", "write", "grep", "find", "glob"],
+	write_allowlist: ["plan.md"],
 };
 
 /**
@@ -405,6 +408,9 @@ export class BeforeLoopManager {
 			}
 			if (socratesRestriction.blocked && socratesRestriction.blocked.length > 0) {
 				agentDef.blockedTools = socratesRestriction.blocked;
+			}
+			if (socratesRestriction.write_allowlist && socratesRestriction.write_allowlist.length > 0) {
+				agentDef.writeAllowList = socratesRestriction.write_allowlist;
 			}
 
 			const result = await runSubprocess({

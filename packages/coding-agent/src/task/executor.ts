@@ -2461,6 +2461,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,
 				blockedTools,
+				writeAllowList: agent.writeAllowList,
 				outputSchema,
 				requireYieldTool: true,
 				contextFiles: options.contextFiles,

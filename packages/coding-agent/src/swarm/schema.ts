@@ -282,6 +282,8 @@ export interface AgentToolRestriction {
 	allowed?: string[];
 	/** Blacklist — these tools are blocked. */
 	blocked?: string[];
+	/** Write allowlist — restrict the write tool to only these file paths (relative to workspace root). */
+	write_allowlist?: string[];
 }
 
 // ============================================================================
@@ -442,7 +444,10 @@ function parseAgentRestrictions(
 		if (Array.isArray(config.blocked)) {
 			restriction.blocked = (config.blocked as unknown[]).map(String);
 		}
-		if (restriction.allowed || restriction.blocked) {
+		if (Array.isArray(config.write_allowlist)) {
+			restriction.write_allowlist = (config.write_allowlist as unknown[]).map(String);
+		}
+		if (restriction.allowed || restriction.blocked || restriction.write_allowlist) {
 			result[agentName] = restriction;
 		}
 	}

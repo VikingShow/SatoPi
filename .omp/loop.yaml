@@ -26,3 +26,7 @@ swarm:
     count: 4
   # Agents are created dynamically — no preset knights.
   agents: {}
+  agent_restrictions:
+    socrates:
+      allowed: ["read", "write", "grep", "find", "glob"]
+      write_allowlist: ["plan.md"]
