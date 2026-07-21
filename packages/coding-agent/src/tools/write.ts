@@ -970,6 +970,22 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 
 			enforcePlanModeWrite(this.session, path, { op: "create" });
 			const absolutePath = resolvePlanPath(this.session, path);
+
+			// Write allowlist check — restrict writes to the configured paths only.
+			const allowList = this.session.writeAllowList;
+			if (allowList && allowList.length > 0) {
+				const relativeTarget = path.relative(this.session.cwd, absolutePath);
+				const allowed = allowList.some(
+					pattern => relativeTarget === pattern ||
+						relativeTarget.endsWith("/" + pattern) ||
+						relativeTarget.endsWith("\\" + pattern)
+				);
+				if (!allowed) {
+					throw new ToolError(
+						`Write denied: "${relativeTarget}" is not in the write allowlist. Allowed: ${allowList.join(", ")}`,
+					);
+				}
+			}
 			const batchRequest = getLspBatchRequest(context?.toolCall);
 
 			// Check if file exists and is auto-generated before overwriting
