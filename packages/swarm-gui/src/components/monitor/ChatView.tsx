@@ -186,9 +186,17 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         }`}
       >
         {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
-        <ErrorBoundary fallbackText={msg.body}>
-          <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
-        </ErrorBoundary>
+        {msg.streaming && !msg.body ? (
+          <div className="flex items-center gap-1.5 py-0.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "0ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "200ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-neutral-500 animate-pulse" style={{ animationDelay: "400ms" }} />
+          </div>
+        ) : (
+          <ErrorBoundary fallbackText={msg.body}>
+            <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   );

@@ -267,10 +267,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       }
 
       setActiveSSESession(sessionName);
-
-      // Re-register — disconnect() inside setActiveSSESession may have
-      // cleared the internal listener list on the old EventSource.
-      sseClient.onConnectionChange(onConnChange);
+      // SseClient.disconnect() does NOT clear connectionListeners (Set-based,
+      // survives disconnect→connect cycles), so re-registration is unnecessary
+      // and was causing the "Reconnected" toast to fire spuriously: the duplicate
+      // callback on the second invocation saw hasConnectedOnce===true.
 
       const [state, runStatus] = await Promise.all([
         api.getState(),
@@ -524,12 +524,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const messages = new Map(state.messages);
 
       // ── Stream start: create an empty streaming bubble in roundtable ──
-      // During history replay, skip — the downstream broadcast event already
-      // carries the full message body.  Creating a stream bubble during replay
-      // would produce a duplicate alongside the broadcast message.
+      // During history replay, skip — the downstream stream_end event (handled
+      // below) will create the finalised message with the complete body.
       if (entry.type === "stream_start" && entry.from) {
         if (fromHistory) return { activities, channels, messages };
-
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
         msgList.push({
@@ -538,6 +536,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           from: entry.from,
           to: "all",
           body: "",
+          streaming: true as const,
           timestamp: entry.ts,
         } as ChatMessage);
         messages.set("roundtable", msgList);
@@ -567,6 +566,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             from: entry.from,
             to: "all",
             body: entry.body ?? "",
+            streaming: true as const,
             timestamp: entry.ts,
           } as ChatMessage);
         }
@@ -575,31 +575,70 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       }
 
       // ── Stream end: finalise the streaming bubble ──
+      // During history replay: a stream_end carries the completed body and
+      // optional thinking. Broadcast messages capture IRC-style messages,
+      // NOT the full stream output, so we must create the stream message
+      // from the stream_end finalBody. Do NOT blindly attach thinking to a
+      // broadcast — the broadcast may have a different (summary) body.
       if (entry.type === "stream_end" && entry.from) {
-        // During history replay: apply thinking to the most recent broadcast
-        // message from the same source, then skip. Broadcast already carries
-        // the full body text, so stream_start/stream_delta are unnecessary.
-        if (fromHistory && entry.thinking) {
+        const msgId = (entry as any).messageId ?? entry.from;
+        const streamBubbleId = `stream-${String(msgId)}`;
+
+        if (fromHistory) {
           const msgList = [...(messages.get("roundtable") ?? [])];
-          // Walk backwards to find the latest broadcast from the same source
-          for (let i = msgList.length - 1; i >= 0; i--) {
-            if (msgList[i].from === entry.from && !msgList[i].id.startsWith("stream-")) {
-              msgList[i] = { ...msgList[i], thinking: entry.thinking };
+          // Case A: stream_end carries a completed body — create a stream
+          // bubble (stream_start/delta are skipped during replay, so only
+          // stream_end can restore the full message).
+          if (entry.body) {
+            const exists = msgList.some(
+              (m) => m.id === streamBubbleId || (m.from === entry.from && m.id.startsWith("stream-")),
+            );
+            if (!exists) {
+              msgList.push({
+                id: streamBubbleId,
+                channelId: "roundtable",
+                from: entry.from,
+                to: "all",
+                body: entry.body,
+                thinking: entry.thinking,
+                streaming: false as const,
+                timestamp: entry.ts,
+              } as ChatMessage);
               messages.set("roundtable", msgList);
-              break;
+            }
+            return { activities, channels, messages };
+          }
+          // Case B: stream_end has thinking but NO body (legacy log format).
+          // Attach thinking to the most recent non-stream message from the
+          // same source.
+          if (entry.thinking) {
+            for (let i = msgList.length - 1; i >= 0; i--) {
+              if (msgList[i].from === entry.from && !msgList[i].id.startsWith("stream-")) {
+                msgList[i] = { ...msgList[i], thinking: entry.thinking };
+                messages.set("roundtable", msgList);
+                break;
+              }
             }
           }
           return { activities, channels, messages };
         }
-        if (fromHistory) return { activities, channels, messages };
+
+        // Live: prefer delta-accumulated body over stream_end body when the
+        // accumulated text is longer (deltas arrive token-by-token and are
+        // the definitive content; stream_end body can be truncated/malformed
+        // from a race in the backend stream accumulator).
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
-        if (lastMsg && lastMsg.id.startsWith("stream-") && entry.body) {
-          // Replace with a new object so React.memo detects the prop change
+        if (lastMsg && lastMsg.id.startsWith("stream-")) {
+          const finalBody =
+            lastMsg.body && lastMsg.body.length > (entry.body?.length ?? 0)
+              ? lastMsg.body
+              : (entry.body || lastMsg.body);
           msgList[msgList.length - 1] = {
             ...lastMsg,
-            body: entry.body,
-            thinking: entry.thinking || lastMsg.thinking,
+            body: finalBody,
+            thinking: entry.thinking || (lastMsg as any).thinking,
+            streaming: false as const,
           };
         }
         messages.set("roundtable", msgList);

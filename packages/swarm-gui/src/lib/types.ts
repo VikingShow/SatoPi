@@ -160,6 +160,8 @@ export interface ChatMessage extends PiChatMessage {
   threadReplies?: ChatMessage[];
   /** Chain-of-thought reasoning from the model, displayed in a collapsible section. */
   thinking?: string;
+  /** True while a streaming message is still receiving deltas (no body yet → show loading indicator). */
+  streaming?: boolean;
 }
 
 export interface ModelOption {
