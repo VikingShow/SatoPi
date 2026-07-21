@@ -236,7 +236,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (ctx.services.runManager.isRunning) {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
-		const result = await ctx.services.runManager.start();
+		// Guard: the only valid entry point for starting a run is
+		// POST /before-loop/confirm (via the BeforeLoop flow).
+		return json({ error: "Use the Before Loop flow to start a run. Direct /run/start is not allowed." }, 400);
 		return json(result, result.success ? 200 : 500);
 	},
 

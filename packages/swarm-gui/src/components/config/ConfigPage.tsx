@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Save, Play, Square, FileText, ArrowRight } from "lucide-react";
+import { Save, Square, FileText, ArrowRight } from "lucide-react";
 import { useConfigStore } from "../../stores/config-store";
 import { useSwarmStore } from "../../stores/swarm-store";
 
@@ -11,7 +11,6 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
   const config = useConfigStore();
   const { workers, cloners, convergence, scaling, loop, yamlPreview, isDirty, isLoading, availableModels } = config;
   const isRunning = useSwarmStore((s) => s.isRunning);
-  const startRun = useSwarmStore((s) => s.startRun);
   const stopRun = useSwarmStore((s) => s.stopRun);
 
   useEffect(() => {
@@ -185,14 +184,7 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
             >
               <Square size={13} fill="currentColor" /> Stop
             </button>
-          ) : (
-            <button
-              onClick={() => { config.saveConfig(); startRun(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-status-success/20 text-status-success hover:bg-status-success/30 transition-colors cursor-pointer ml-auto"
-            >
-              <Play size={13} fill="currentColor" /> Start Run
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
