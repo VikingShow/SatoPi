@@ -5,6 +5,7 @@ import {
   Trash2, RefreshCw, FileText, Loader2, Save
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "../ui/button";
 import { api } from "../../lib/api-client";
 import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput } from "../../lib/types";
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense, useCallback } from "react";
+import { useEffect, useState, lazy, Suspense, useMemo } from "react";
 import { Settings, Activity, History, PlusCircle, Sparkles, Languages } from "lucide-react";
 import { Toaster } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -42,14 +42,16 @@ function App() {
   const saveConfig = useConfigStore((s) => s.saveConfig);
   const { t, i18n } = useTranslation();
 
-  // Global keyboard shortcuts
-  const keyHandlers = useCallback({
+  // Global keyboard shortcuts — memoized so the identity is stable across
+  // renders.  Exhaustively lists every key the useGlobalKeybindings hook
+  // accesses, directly satisfying the KeyHandler index signature.
+  const keyHandlers = useMemo<Record<string, () => void>>(() => ({
     send: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "send" })),
     escape: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "escape" })),
     save: () => { if (page === "config") saveConfig(); },
     command: () => console.debug("[keybinding] command palette (not yet implemented)"),
     toggleTopology: () => window.dispatchEvent(new CustomEvent("satopi:action", { detail: "toggleTopology" })),
-  }, [page, saveConfig]);
+  }), [page, saveConfig]);
   useGlobalKeybindings(keyHandlers);
 
   // Delay init() until Zustand's persist middleware has rehydrated
