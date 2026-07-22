@@ -223,6 +223,30 @@ function pushUserMessage(
   });
 }
 
+/**
+ * Wait for the SSE client to reach OPEN state, with a configurable timeout.
+ *
+ * Without this guard, the user can click "Send" before the EventSource
+ * handshake completes — the backend then broadcasts events into an
+ * EventBus with no subscriber, and every event is silently lost.
+ * The history replay on page-refresh eventually recovers them, giving
+ * the appearance of "no real-time updates but refresh works."
+ */
+async function waitForSSE(sse: typeof sseClient, timeoutMs: number): Promise<void> {
+	if (sse.isConnected) return;
+	const deadline = Date.now() + timeoutMs;
+	return new Promise((resolve) => {
+		const unsub = sse.onConnectionChange((connected) => {
+			if (connected || Date.now() >= deadline) {
+				unsub();
+				resolve();
+			}
+		});
+		// Safety net: resolve on deadline even if never connected.
+		setTimeout(() => { unsub(); resolve(); }, timeoutMs);
+	});
+}
+
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
   swarmState: null,
   activities: [],
@@ -879,6 +903,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   startPlanning: async (task: string) => {
     // Optimistically add user's message to chat for instant display
     pushUserMessage(set, task);
+    // Ensure SSE is connected BEFORE sending the API request.  If the
+    // EventSource is still connecting (readyState === 0) or the socket
+    // died silently, the backend events would be broadcast into a void
+    // — no subscriber to receive them, silently dropped.  Waiting here
+    // costs at most 2 s but prevents silent event loss.
+    await waitForSSE(sseClient, 2000);
     try {
       const result = await api.startBeforeLoop(task);
       if (result.success) {
@@ -898,6 +928,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   sendBeforeLoopMessage: async (text: string) => {
     // Optimistically add user's message to chat for instant display
     pushUserMessage(set, text);
+    await waitForSSE(sseClient, 2000);
     try {
       const result = await api.sendBeforeLoopMessage(text);
       if (!result.success) {

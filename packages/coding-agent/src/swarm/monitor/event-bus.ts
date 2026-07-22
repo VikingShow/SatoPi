@@ -40,6 +40,13 @@ export class EventBus {
 	readonly #buffers = new Map<string | undefined, BufferedEntry[]>();
 	/** Globally monotonic sequence counter — used as the SSE `id:`. */
 	#seq = 0;
+	/**
+	 * Per-session counter of subscriber drops due to controller errors.
+	 * When non-zero, broadcasts to a named session have lost at least one
+	 * subscriber — a sign that the SSE connection is silently broken.
+	 * Reset to 0 on next successful broadcast for that session.
+	 */
+	readonly #droppedCounts = new Map<string | undefined, number>();
 
 	/**
 	 * Register an SSE subscriber for a specific session.
@@ -87,7 +94,14 @@ export class EventBus {
 	broadcast(sessionName: string, entry: ActivityEntry): void {
 		const seq = ++this.#seq;
 		this.#appendBuffer(sessionName, seq, entry);
-		this.#send(this.#subscribers.get(sessionName), seq, entry);
+		this.#send(this.#subscribers.get(sessionName), seq, entry, sessionName);
+
+		// Once we've successfully reached any subscriber, reset the drop
+		// counter — the connection is healthy again.
+		const set = this.#subscribers.get(sessionName);
+		if (set && set.size > 0) {
+			this.#droppedCounts.set(sessionName, 0);
+		}
 	}
 
 	/**
@@ -114,24 +128,61 @@ export class EventBus {
 		}
 	}
 
-	#send(set: Set<Subscriber> | undefined, seq: number, entry: ActivityEntry): void {
+	#send(
+		set: Set<Subscriber> | undefined,
+		seq: number,
+		entry: ActivityEntry,
+		sessionName?: string,
+	): void {
 		if (!set || set.size === 0) return;
 		for (const sub of set) {
-			this.#sendOne(sub, seq, entry);
+			if (!this.#sendOne(sub, seq, entry)) {
+				// enqueue failed — subscriber was evicted.  If this was a
+				// session-scoped broadcast, bump the drop counter so the
+				// caller can react.
+				if (sessionName !== undefined) {
+					this.#droppedCounts.set(sessionName, (this.#droppedCounts.get(sessionName) ?? 0) + 1);
+				}
+				// Remove from the current set to avoid double-iteration of
+				// the already-dead subscriber.
+				set.delete(sub);
+			}
 		}
 	}
 
-	#sendOne(sub: Subscriber, seq: number, entry: ActivityEntry): void {
-		if (sub.filter && !sub.filter.includes(entry.type)) return;
+	/** @returns false when the subscriber was evicted (controller dead). */
+	#sendOne(sub: Subscriber, seq: number, entry: ActivityEntry): boolean {
+		if (sub.filter && !sub.filter.includes(entry.type)) return true;
 		// SSE frame with an explicit id so clients can resume via Last-Event-ID.
 		const data = `id: ${seq}\ndata: ${JSON.stringify(entry)}\n\n`;
 		const encoded = new TextEncoder().encode(data);
 		try {
 			sub.controller.enqueue(encoded);
 		} catch {
-			// Controller closed — drop this subscriber from its set lazily.
+			// Controller closed — remove this subscriber from its set.
+			// Previously this silently deleted the subscriber from ALL sets
+			// via a global sweep, which leaked dead subscribers and masked
+			// the problem entirely.  Now the caller (#send) handles exact
+			// removal and bumps a drop counter so the broadcast path can
+			// detect silent SSE disconnections.
 			for (const set of this.#subscribers.values()) set.delete(sub);
+			return false;
 		}
+		return true;
+	}
+
+	/**
+	 * How many subscribers have been lost on this session since the last
+	 * successful broadcast.  A non-zero value means the SSE connection is
+	 * silently broken and the frontend is receiving no events.
+	 */
+	getDroppedCount(sessionName: string): number {
+		return this.#droppedCounts.get(sessionName) ?? 0;
+	}
+
+	/** Alias for getDroppedCount used by MonitorServer health endpoint. */
+	droppedCountFor(sessionName: string): number {
+		return this.getDroppedCount(sessionName);
 	}
 
 	/** Close all SSE connections. */

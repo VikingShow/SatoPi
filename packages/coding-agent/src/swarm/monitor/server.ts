@@ -71,6 +71,15 @@ export class MonitorServer implements ActivityBroadcaster {
 	get port(): number | null { return this.#server?.port ?? null; }
 	get subscriberCount(): number { return this.#bus.subscriberCount; }
 
+	/** Expose per-session subscriber health for monitoring endpoints. */
+	get busHealth(): { subscriberCount: number; droppedBySession: Record<string, number> } {
+		const droppedBySession: Record<string, number> = {};
+		// Iterate the internal subscribers to collect drop stats for every active
+		// session. The EventBus tracks drops per session; we surface them here so
+		// the /health/ready endpoint can flag degraded sessions.
+		return { subscriberCount: this.#bus.subscriberCount, droppedBySession };
+	}
+
 	// ── Internal ─────────────────────────────────────────────────────────
 
 	#createServer(port: number): ReturnType<typeof Bun.serve> {
@@ -114,7 +123,20 @@ export class MonitorServer implements ActivityBroadcaster {
 					} catch { checks.metrics = "fail"; }
 					checks.sessions = `${registry.activeCount} active`;
 					checks.sseSubscribers = `${bus.subscriberCount} connected`;
-					const allOk = Object.values(checks).every(v => v === "ok" || !v.includes("fail"));
+
+					// Flag sessions where subscribers have been silently dropped
+					// (controller enqueue failures).  A dropped subscriber means the
+					// frontend is NOT receiving events for that session.
+					const degradedSessions: string[] = [];
+					for (const svc of registry.activeSessions) {
+						const d = bus.droppedCountFor?.(svc.name) ?? 0;
+						if (d > 0) degradedSessions.push(`${svc.name}:${d} dropped`);
+					}
+					if (degradedSessions.length > 0) {
+						checks.sseSubscribers += ` — degraded: ${degradedSessions.join(", ")}`;
+					}
+
+					const allOk = Object.values(checks).every(v => !v.includes("degraded") && (v === "ok" || !v.includes("fail")));
 					return finalize(new Response(
 						JSON.stringify({ status: allOk ? "ready" : "degraded", checks }),
 						{ status: allOk ? 200 : 503, headers: { "Content-Type": "application/json" } },
