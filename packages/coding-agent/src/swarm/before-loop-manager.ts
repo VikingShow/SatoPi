@@ -527,8 +527,6 @@ export class BeforeLoopManager {
 					"Click 'Run Debate' to refine with Cloner Roundtable, or 'Confirm & Start' to begin.",
 				);
 			}
-				);
-			}
 		} catch (err) {
 			throw err;
 		} finally {
