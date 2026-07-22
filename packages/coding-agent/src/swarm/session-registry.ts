@@ -14,7 +14,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { StateTracker } from "./state";
-import type { ActivityLogger } from "./activity-logger";
+import type { ActivityLogger, ActivityBroadcaster } from "./activity-logger";
 import type { RunManager, SteeringSink } from "./monitor/api-routes";
 import type { BeforeLoopManager } from "./monitor/api-routes";
 import type { ExperienceStore } from "./after-loop/experience";
@@ -80,6 +80,8 @@ export class SessionRegistry {
 	readonly #sessions = new Map<string, SessionServices>();
 	#maxConcurrent: number;
 	#factory: SessionFactory;
+	/** Optional SSE broadcaster auto-injected into every new session. */
+	#broadcaster: ActivityBroadcaster | null = null;
 
 	constructor(
 		shared: SharedServices,
@@ -89,6 +91,15 @@ export class SessionRegistry {
 		this.#shared = shared;
 		this.#factory = factory;
 		this.#maxConcurrent = maxConcurrent;
+	}
+
+	/**
+	 * Register an SSE broadcaster.  Once set, every session created via
+	 * createSession() (including those from the REST API) automatically
+	 * gets its ActivityLogger wired to this broadcaster.
+	 */
+	setBroadcaster(broadcaster: ActivityBroadcaster): void {
+		this.#broadcaster = broadcaster;
 	}
 
 	get shared(): SharedServices {
@@ -143,6 +154,13 @@ export class SessionRegistry {
 			logger.info("[SessionRegistry] SwarmSessionManager created", { name, swarmDir });
 		} catch (err) {
 			logger.warn("[SessionRegistry] SwarmSessionManager unavailable — falling back to legacy persistence", { error: String(err) });
+		}
+
+		// Wire the SSE broadcaster to the new session's ActivityLogger.
+		// This covers both startup-created sessions and sessions created
+		// later via the REST API (POST /api/sessions).
+		if (this.#broadcaster) {
+			services.activityLogger.setBroadcaster(this.#broadcaster);
 		}
 
 		const session: SessionServices = {

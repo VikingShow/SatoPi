@@ -17,7 +17,7 @@
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
-import { EventBus } from "./event-bus";
+import { EventBus, type SSEController } from "./event-bus";
 import { apiRoutes, type ApiRouteContext, buildApiRouteContext } from "./api-routes";
 import type { SessionRegistry } from "../session-registry";
 import { recordHttpRequest, getMetricsString, getMetricsContentType, gauges } from "./metrics";
@@ -163,25 +163,75 @@ export class MonitorServer implements ActivityBroadcaster {
 					const lastEventId =
 						url.searchParams.get("lastEventId") ?? req.headers.get("Last-Event-ID") ?? undefined;
 					gauges.sseSubscribers.inc();
+					let cleanup: (() => void) | null = null;
+
 					const stream = new ReadableStream({
 						start(controller) {
 							controller.enqueue(new TextEncoder().encode(": connected\n\n"));
-							// subscribe() replays any buffered entries with seq > lastEventId.
-							const unsub = bus.subscribe(sessionName, controller, undefined, lastEventId);
-							
+
+							// Bridge: EventBus pushes frames here.  The bridge
+							// NEVER calls controller.enqueue() directly — Bun
+							// fails to deliver data enqueued from outside the
+							// stream's closure.  The flushTimer (below) drains
+							// this queue and enqueues to the real controller
+							// from within the same closure as the working
+							// keepalive timer.
+							const msgQueue: Uint8Array[] = [];
+
+							const bridge: SSEController = {
+								enqueue(chunk: Uint8Array) { msgQueue.push(chunk); },
+								close() { try { controller.close(); } catch { /* closed */ } },
+								error(e?: any) { try { controller.error(e); } catch { /* closed */ } },
+								get desiredSize() { return controller.desiredSize; },
+							} as SSEController;
+
+							const unsub = bus.subscribe(sessionName, bridge, undefined, lastEventId);
+
+							// Drain msgQueue every 50ms and enqueue to the
+							// real controller.  Since this runs inside start()'s
+							// closure (same context as keepalive), Bun reliably
+							// delivers the data to the browser.
+							const flushTimer = setInterval(() => {
+								while (msgQueue.length > 0) {
+									try { controller.enqueue(msgQueue.shift()!); } catch { /* closed */ }
+								}
+							}, 50);
+
 							// SSE keepalive — prevents browser from closing the
 							// connection during long model thinking phases.
 							const keepalive = setInterval(() => {
 								try { controller.enqueue(new TextEncoder().encode(": keepalive\n\n")); } catch { /* closed */ }
-							}, 15_000);
+							}, 5_000);
 
-							// Cleanup on disconnect
-							req.signal.addEventListener("abort", () => {
+							cleanup = () => {
+								if (!cleanup) return;
 								unsub();
 								gauges.sseSubscribers.dec();
+								clearInterval(flushTimer);
+								clearInterval(keepalive);
 								try { controller.close(); } catch { /* closed */ }
-							clearInterval(keepalive);
+								cleanup = null;
+							};
+
+							// Cleanup on disconnect (passive abort: network drop, etc.)
+							req.signal.addEventListener("abort", () => cleanup?.());
+						},
+						pull() {
+							// Short-lived self-resolving promise — keeps Bun's
+							// chunked-transfer from closing early (prevents
+							// ERR_INCOMPLETE_CHUNKED_ENCODING) without the
+							// timing races of an externally-resolved promise.
+							// Actual data delivery happens via flushTimer
+							// inside start()'s closure.
+							return new Promise<void>((resolve) => {
+								setTimeout(resolve, 50);
 							});
+						},
+						cancel() {
+							// Consumer (browser) actively disconnected — clean up
+							// subscriptions and timers.  Idempotent via the cleanup
+							// guard to coexist with the abort listener.
+							cleanup?.();
 						},
 					});
 					return new Response(stream, {

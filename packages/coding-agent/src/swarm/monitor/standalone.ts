@@ -320,8 +320,21 @@ async function main() {
 		roleAssetManager,
 	};
 
-	// Create SessionRegistry and default session
+	// Create SessionRegistry.  We delay session creation until AFTER the
+	// MonitorServer is started so the broadcaster can be auto-injected into
+	// every session (including those created later via the REST API).
 	const registry = new SessionRegistry(shared, createSessionServices);
+
+	// Start MonitorServer first — we need the server instance to register
+	// as the broadcaster before any sessions are created.
+	const server = new MonitorServer(registry);
+	const port = server.start(7878);
+
+	// Register broadcaster with the registry.  From this point on, every
+	// createSession() call automatically wires the SSE broadcaster.
+	registry.setBroadcaster(server);
+
+	// Now create sessions — broadcaster is auto-injected into each one.
 	const session = await registry.createSession(swarmName);
 
 	// Discover and restore sessions from previous runs.
@@ -335,13 +348,6 @@ async function main() {
 			logger.info("Restored historical session", { name });
 		}
 	} catch { /* best-effort */ }
-
-	// Start MonitorServer (receives the registry)
-	const server = new MonitorServer(registry);
-	const port = server.start(7878);
-
-	// Wire ActivityLogger → SSE (for real-time GUI updates)
-	session.activityLogger.setBroadcaster(server);
 
 	logger.info([
 		``,
