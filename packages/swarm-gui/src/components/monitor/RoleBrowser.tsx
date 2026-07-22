@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { api } from "../../lib/api-client";
 import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput } from "../../lib/types";
 
@@ -301,8 +302,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => { setShowCreate(!showCreate); if (showCreate) setCreateForm(emptyForm); }}
-            className={showCreate ? "bg-primary/20 text-primary" : ""}
+            onClick={() => { setShowCreate(true); setCreateForm(emptyForm); }}
           >
             <Plus size={12} />
             Create
@@ -318,9 +318,13 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
         </div>
       </div>
 
-      {/* Create form */}
-      {showCreate && (
-        <div className="px-4 py-3 border-b border-border/50 bg-card/30 space-y-2">
+      {/* Create modal */}
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setCreateForm(emptyForm); }}>
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle className="text-base font-medium">Create New Role</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Role ID *</label>
@@ -443,8 +447,9 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               Cancel
             </Button>
           </div>
-        </div>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Search & Filter */}
       <div className="px-4 py-2 space-y-2 border-b border-border/50">
