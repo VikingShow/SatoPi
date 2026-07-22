@@ -22,7 +22,7 @@ function createSharedServices(tmpDir: string): SharedServices {
 	return {
 		workspace: tmpDir,
 		yamlPath,
-		modelRegistry: { getAvailable: () => [], hasConfiguredAuth: () => false } as unknown as SharedServices["modelRegistry"],
+		modelRegistry: { getAvailable: () => [{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek" }], hasConfiguredAuth: () => false } as unknown as SharedServices["modelRegistry"],
 		settings: { get: () => undefined, isConfigured: () => false, override: () => {}, overrideModelRoles: () => {} } as unknown as SharedServices["settings"],
 		experienceStore: { init: async () => {}, close: () => {}, search: () => [], getAggregateStats: () => ({}), getRecentLessons: () => [] } as unknown as SharedServices["experienceStore"],
 		roleAssetManager: { init: async () => {}, seedIfEmpty: async () => 0, list: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), approve: async () => ({}), deprecate: async () => ({}), delete: async () => true, search: async () => [] } as unknown as SharedServices["roleAssetManager"],
@@ -132,8 +132,10 @@ describe("MonitorServer", () => {
 		const session = registry.getSession(swarmName)!;
 		session.activityLogger.setBroadcaster(server);
 
-		// Connect to SSE using fetch (EventSource not available in Bun test env)
-		const res = await fetch(`http://127.0.0.1:${port}/events`);
+		// SSE endpoint routes events per-session via the `?session=` query
+		// parameter. Without it the subscriber joins channel `undefined` and
+		// never receives broadcasts keyed to a named session.
+		const res = await fetch(`http://127.0.0.1:${port}/events?session=${swarmName}`);
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Content-Type")).toBe("text/event-stream");
 
@@ -143,8 +145,10 @@ describe("MonitorServer", () => {
 		const received: ActivityEntry[] = [];
 		const decoder = new TextDecoder();
 
-		// Wait for connection, then emit events
-		await new Promise((r) => setTimeout(r, 500));
+		// Wait for SSE connection handshake, then emit events.
+		// The server sends ": connected\n\n" immediately on subscribe;
+		// we delay to let the ReadableStream.start() complete.
+		await new Promise((r) => setTimeout(r, 200));
 		session.activityLogger.logBroadcast("worker-1", "hello");
 		session.activityLogger.logBroadcast("worker-2", "world");
 
