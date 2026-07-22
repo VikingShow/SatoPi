@@ -320,9 +320,16 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/confirm": async (_req, ctx) => {
+	"POST/before-loop/confirm": async (req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.confirm();
+		const body = (await req.json().catch(() => ({}))) as {
+			workerCount?: number;
+			clonerCount?: number;
+		};
+		const result = await ctx.services.beforeLoopManager.confirm(
+			body.workerCount,
+			body.clonerCount,
+		);
 		return json(result, result.success ? 200 : 500);
 	},
 

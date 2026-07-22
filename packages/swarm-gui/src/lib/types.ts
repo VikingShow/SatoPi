@@ -46,6 +46,10 @@ export interface BeforeLoopState {
   conversationLength: number;
   planReady: boolean;
   busy: boolean;
+  /** Extracted from Socrates recommendation output. */
+  recommendedWorkers?: number;
+  /** Extracted from Socrates recommendation output. */
+  recommendedCloners?: number;
 }
 
 export interface AgentState {
@@ -240,6 +244,9 @@ export interface RoleAsset {
   };
   tools: string[];
   tags: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
   created_at: string;
   updated_at: string;
   usage_count: number;
@@ -269,6 +276,9 @@ export interface RoleCreateInput {
   };
   tools: string[];
   tags: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
 }
 
 export interface RoleUpdateInput {
@@ -280,4 +290,7 @@ export interface RoleUpdateInput {
   };
   tools?: string[];
   tags?: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
 }

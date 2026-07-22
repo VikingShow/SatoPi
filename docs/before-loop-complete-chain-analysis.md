@@ -260,11 +260,11 @@
 
 ### 刷新后行为
 
-- **Channels 和 messages 纯内存存储**（`swarm-store.ts` 中的 `messages` Map 和 `channels` Map）
-- 刷新后：
-  - Roundtable 的历史消息通过 `getHistory()` 回放（broadcast + stream_start/delta/end）
-  - 其他 channel（deliberation、cloner、steering）**不回放**——刷新后丢失
-  - 如果刷新时 swarm 仍在 running，新产生的事件会重新创建这些 channel
+- Channels 和 messages 存储在 `swarm-store.ts` Zustand state（`messages` Map + `channels` Map）中
+- 刷新后 `init()` 调用 `api.getHistory()` → 遍历 entries → `addActivity(entry, true)` → **`deriveChannel()` 会被调用**，所有 channel 类型（roundtable、cloner、deliberation、steering、file）都能重建
+- **实际效果**：刷新后 channel 列表和消息内容**完整恢复**，与刷新前一致
+
+> 注：之前分析中称"非 roundtable channel 刷新后丢失"是**错误的**——`deriveChannel()` 在 `addActivity()` 的 standard message 路径中（line 728）对所有事件类型统一处理，history replay 同样走这个路径。
 
 ### 问题
 
@@ -292,7 +292,6 @@
 | 2 | Worker/cloner 推荐不可见 | 高 | ChatView 中解析并高亮推荐数 + Action Bar 显示实际配置数 |
 | 3 | Debate 阶段无详细进度 | 高 | 轮次指示 + 实时 cloner channel 聚焦 |
 | 4 | Confirm 后 worker 创建无反馈 | 中 | 发 "Creating N workers..." broadcast 事件 |
-| 5 | Channel 刷新后丢失 | 中 | getHistory() 回放扩展 + channel 持久化 |
-| 6 | planReady 依赖 mtime 检测不够可靠 | 低 | 改为 Socrates 显式通知（如 tool call 完成信号） |
-| 7 | 用户消息可能重复 | 低 | SSE echo 去重（对比 optimistic ID） |
+| 5 | planReady 依赖 mtime 检测不够可靠 | 低 | 已有 plan.md 轮询监控（500ms）作为增强 |
+| 6 | 用户消息可能重复 | 低 | SSE echo 去重（对比 optimistic ID） |
 | 8 | plan.md 写入时机依赖 LLM 自觉 | 中 | 添加 before-loop timeout 保底：N 轮对话后强制请求 plan |
