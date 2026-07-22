@@ -38,6 +38,12 @@ export interface RoleAsset {
   /** P0-C: Cloner-specific fields. */
   veto?: boolean;
   weight?: number;
+  /** Named skills to load and inject into the agent's system prompt. */
+  skills?: string[];
+  /** MCP server names whose tools are available to agents using this role. */
+  mcp_servers?: string[];
+  /** Per-role model override (e.g. "deepseek-v4-pro" or "claude-sonnet-4-20250514"). */
+  model?: string;
 }
 
 export interface RoleAssetSummary {
@@ -68,6 +74,9 @@ export interface RoleUpdateInput {
   };
   tools?: string[];
   tags?: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
 }
 
 export interface RoleCreateInput {
@@ -82,6 +91,9 @@ export interface RoleCreateInput {
   };
   tools: string[];
   tags: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
   veto?: boolean;
   weight?: number;
 }
@@ -228,6 +240,9 @@ export class RoleAssetManager {
       },
       tools: input.tools,
       tags: input.tags,
+      skills: input.skills,
+      mcp_servers: input.mcp_servers,
+      model: input.model,
       created_at: now,
       updated_at: now,
       usage_count: 0,
@@ -259,6 +274,9 @@ export class RoleAssetManager {
       },
       tools: input.tools ?? existing.tools,
       tags: input.tags ?? existing.tags,
+      skills: input.skills !== undefined ? input.skills : existing.skills,
+      mcp_servers: input.mcp_servers !== undefined ? input.mcp_servers : existing.mcp_servers,
+      model: input.model !== undefined ? input.model : existing.model,
       updated_at: now,
     };
 
@@ -400,11 +418,26 @@ function serializeRoleYaml(role: RoleAsset): string {
     ...role.tools.map((t) => `  - "${t}"`),
     "tags:",
     ...role.tags.map((t) => `  - "${t}"`),
+  ];
+
+  if (role.skills && role.skills.length > 0) {
+    lines.push("skills:");
+    role.skills.forEach((s) => lines.push(`  - "${s}"`));
+  }
+  if (role.mcp_servers && role.mcp_servers.length > 0) {
+    lines.push("mcp_servers:");
+    role.mcp_servers.forEach((m) => lines.push(`  - "${m}"`));
+  }
+  if (role.model) {
+    lines.push(`model: "${role.model}"`);
+  }
+
+  lines.push(
     `created_at: "${role.created_at}"`,
     `updated_at: "${role.updated_at}"`,
     `usage_count: ${role.usage_count}`,
     `success_rate: ${role.success_rate}`,
-  ];
+  );
 
   return lines.join("\n") + "\n";
 }

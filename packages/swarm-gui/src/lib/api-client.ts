@@ -177,9 +177,11 @@ export const api = {
       method: "POST",
     }),
 
-  confirmBeforeLoop: () =>
+  confirmBeforeLoop: (opts?: { workerCount?: number; clonerCount?: number }) =>
     fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/confirm"), {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workerCount: opts?.workerCount, clonerCount: opts?.clonerCount }),
     }),
 
   cancelBeforeLoop: () =>

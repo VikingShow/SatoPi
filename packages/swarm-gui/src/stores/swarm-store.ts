@@ -907,9 +907,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  confirmAndStart: async () => {
+  confirmAndStart: async (opts?: { workerCount?: number; clonerCount?: number }) => {
     try {
-      const result = await api.confirmBeforeLoop();
+      const result = await api.confirmBeforeLoop(opts);
       if (result.success) {
         set({ loopPhase: "running", isRunning: true, afterLoopResult: null, error: null });
       } else {

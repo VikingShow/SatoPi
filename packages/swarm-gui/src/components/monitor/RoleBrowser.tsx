@@ -39,6 +39,9 @@ interface CreateForm {
   guidelines: string;
   tools: string;
   tags: string;
+  skills: string;
+  mcpServers: string;
+  model: string;
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
 
   const emptyForm: CreateForm = {
     id: "", name: "", description: "", systemPrompt: "",
-    guidelines: "", tools: "", tags: "",
+    guidelines: "", tools: "", tags: "", skills: "", mcpServers: "", model: "",
   };
 
   const fetchRoles = useCallback(async () => {
@@ -186,6 +189,13 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
           .split(/[,\n]/)
           .map(t => t.trim())
           .filter(Boolean),
+        skills: createForm.skills
+          ? createForm.skills.split(/[,\n]/).map(s => s.trim()).filter(Boolean)
+          : undefined,
+        mcp_servers: createForm.mcpServers
+          ? createForm.mcpServers.split(/[,\n]/).map(m => m.trim()).filter(Boolean)
+          : undefined,
+        model: createForm.model.trim() || undefined,
       };
       await api.createRole(input);
       toast.success(`Role "${input.id}" created`);
@@ -308,6 +318,36 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
               value={createForm.tags}
               onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
               placeholder="backend, typescript, api"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Skills (comma separated)</label>
+            <input
+              type="text"
+              value={createForm.skills}
+              onChange={e => setCreateForm(f => ({ ...f, skills: e.target.value }))}
+              placeholder="grill-me, grill-with-docs"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">MCP Servers (comma separated)</label>
+            <input
+              type="text"
+              value={createForm.mcpServers}
+              onChange={e => setCreateForm(f => ({ ...f, mcpServers: e.target.value }))}
+              placeholder="filesystem, github"
+              className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model override</label>
+            <input
+              type="text"
+              value={createForm.model}
+              onChange={e => setCreateForm(f => ({ ...f, model: e.target.value }))}
+              placeholder="leave empty for default"
               className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
             />
           </div>
