@@ -92,6 +92,16 @@ interface SwarmStore {
 
   // Blocker resolution
   resolveBlocker: (decision: BlockerResolution) => Promise<void>;
+
+  /**
+   * Switch the swarm store to a different session.
+   *
+   * Encapsulates the full lifecycle: SSE listener cleanup, state reset,
+   * history replay, and initial state fetch.  The `mode` parameter
+   * determines whether the store connects to SSE ('live') or replays
+   * a historical activity log read-only ('historical').
+   */
+  switchToSession: (name: string, mode: 'live' | 'historical') => Promise<void>;
 }
 
 // ── Helper: optimistically push a user message into the roundtable channel ──
@@ -981,5 +991,255 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       set({ error: String(err) });
       toast.error("Failed", { description: String(err) });
     }
+  },
+
+  // ── Session lifecycle ──
+
+  /**
+   * Switch the swarm store to a different session.
+   *
+   * This is the single entry-point for all session transitions — new
+   * session creation, switching to a historical read-only view, and
+   * returning to the live session.  It replaces the previous pattern of
+   * useSwarmStore.setState({…15 fields…}) + (as any).__initRunning hacks
+   * scattered across session-store.ts.
+   *
+   * SSE listener lifecycle is managed internally: we track the
+   * unsubscribe handle returned by sseClient.on() and tear it down
+   * before creating a new one, eliminating the listener-accumulation
+   * bug that caused duplicate messages on repeated init() calls.
+   */
+  switchToSession: async (name: string, mode) => {
+    // 1. Tear down the existing SSE event listener so it never
+    //    accumulates (old init() pattern leaked one callback per call).
+    const oldUnsub = (get() as any).__sseUnsubscribe as (() => void) | undefined;
+    if (oldUnsub) { oldUnsub(); (get() as any).__sseUnsubscribe = undefined; }
+
+    // 2. Reset in-memory state to a clean slate.
+    // ContextPanel guards on swarmState null, so provide a minimal idle
+    // state so the panel shell stays visible.
+    set({
+      swarmState: { name, status: "idle", mode: "loop", iteration: 0, targetCount: 0, agents: {}, startedAt: Date.now() },
+      activities: [],
+      channels: new Map(),
+      messages: new Map(),
+      activeChannelId: "roundtable",
+      isRunning: false,
+      loopPhase: "idle",
+      beforeLoopState: null,
+      planVersion: 0,
+      todos: [],
+      afterLoopResult: null,
+      blockerContext: null,
+      error: null,
+      convergenceHistory: [],
+      toolCalls: new Map(),
+      fileChanges: [],
+    });
+
+    if (mode === 'historical') {
+      // Read-only: skip SSE, just load and replay the activity log.
+      try {
+        const { entries } = await api.getRunActivity(name);
+        for (const entry of (entries as ActivityEntry[])) {
+          get().addActivity(entry, true);
+        }
+      } catch { /* activity log may not be available */ }
+      return;
+    }
+
+    // 3. 'live' mode — connect SSE, fetch state, replay history.
+    setActiveSSESession(name);
+
+    // Register the SSE event handler through the same closure that init() uses.
+    // We re-create the complete SSE pipeline here rather than calling init()
+    // because init() has a __initRunning guard that would block re-entry.
+    //
+    // Stream-delta batching (RAF coalesce), phase-event dispatching, tool-call
+    // tracking, file-change tracking, convergence tracking, and error-flag
+    // handling are all self-contained in the on() callback — we're registering
+    // a fresh closure that references the live store via get()/set().
+    //
+    // The unsubscription handle is tracked so future switchToSession() calls
+    // clean it up (step 1 above).
+    {
+      // ── stream_delta batching (same RAF coalesce as init()) ──
+      let deltaBuffer: { from: string; body: string; ts: number } | null = null;
+      let flushHandle: ReturnType<typeof setTimeout> | number | null = null;
+      const raf: (cb: () => void) => number =
+        typeof requestAnimationFrame !== "undefined"
+          ? (cb) => requestAnimationFrame(cb)
+          : (cb) => setTimeout(cb, 16) as unknown as number;
+      const cancelRaf = (h: number) => {
+        if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(h as number);
+        else clearTimeout(h as unknown as ReturnType<typeof setTimeout>);
+      };
+      const flushDelta = () => {
+        if (flushHandle !== null) { cancelRaf(flushHandle as number); flushHandle = null; }
+        if (deltaBuffer) {
+          const buffered = deltaBuffer;
+          deltaBuffer = null;
+          get().addActivity({ type: "stream_delta", from: buffered.from, body: buffered.body, ts: buffered.ts } as ActivityEntry);
+        }
+      };
+      const scheduleFlush = () => {
+        if (flushHandle === null) {
+          flushHandle = raf(() => { flushHandle = null; flushDelta(); });
+        }
+      };
+
+      const handler = (entry: ActivityEntry) => {
+        if (!get().isConnected) {
+          set({ isConnected: true, connectionStatus: "live" });
+        }
+
+        if (entry.type === "stream_delta" && entry.from) {
+          if (deltaBuffer && deltaBuffer.from !== entry.from) flushDelta();
+          if (!deltaBuffer) deltaBuffer = { from: entry.from, body: "", ts: entry.ts };
+          deltaBuffer.body += entry.body ?? "";
+          scheduleFlush();
+          return;
+        }
+
+        flushDelta();
+        get().addActivity(entry);
+
+        // Phase transitions (authoritative from SwarmStateMachine)
+        if (entry.type === "phase") {
+          const p = entry.phase ?? "";
+          if (AUTHORITATIVE_LOOP_PHASES.has(p)) {
+            const phase = p as LoopPhase;
+            set((s) => ({
+              loopPhase: phase,
+              blockerContext: phase === "blocked" ? s.blockerContext : null,
+            }));
+            if (phase === "blocked") {
+              toast.warning("Swarm Blocked", { description: "The swarm has encountered a blocker and is waiting for your decision." });
+            }
+          }
+          if (p === "plan-updated") set((s) => ({ planVersion: s.planVersion + 1 }));
+          if (p === "todo-updated") setTimeout(() => get().refreshState(), 100);
+          if (p === "after-loop-done") setTimeout(() => get().fetchAfterLoopResult(), 500);
+          if (p.startsWith("before-loop") || p === "debate-start" || p === "debate-done") {
+            setTimeout(() => get().refreshBeforeLoopState(), 300);
+          }
+        }
+
+        if (entry.type === "broadcast" && entry.from === "socrates") {
+          setTimeout(() => get().refreshBeforeLoopState(), 300);
+        }
+
+        if (entry.type === "stream_end" && entry.from === "socrates" && get().loopPhase.startsWith("before-loop")) {
+          get().refreshBeforeLoopState();
+        }
+
+        if (entry.type === "convergence" && entry.jaccard !== undefined) {
+          set((s) => ({
+            convergenceHistory: [
+              ...s.convergenceHistory,
+              { ts: entry.ts, jaccard: entry.jaccard!, converged: entry.converged ?? false },
+            ].slice(-20),
+          }));
+        }
+
+        if (entry.type === "steering_ack") {
+          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "worker"}`, { duration: 2000 });
+        }
+
+        if (entry.type === "tool_call" && entry.toolName) {
+          if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
+            toast(`${entry.worker ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
+              description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
+              duration: 3000,
+            });
+          }
+          set((s) => {
+            const toolCalls = new Map(s.toolCalls);
+            const agent = entry.worker ?? entry.from ?? "unknown";
+            const agentCalls = [...(toolCalls.get(agent) ?? [])];
+            const call = {
+              ts: entry.ts,
+              tool: entry.toolName,
+              duration: entry.toolDurationMs ?? undefined,
+              exitCode: (entry.toolError ? 1 : 0) as number | undefined,
+            } as { ts: number; tool: string; file?: string; duration?: number; tokens?: number; exitCode?: number };
+            if (entry.file) call.file = entry.file;
+            agentCalls.push(call);
+            if (agentCalls.length > MAX_TOOL_CALLS_PER_AGENT) {
+              agentCalls.splice(0, agentCalls.length - MAX_TOOL_CALLS_PER_AGENT);
+            }
+            toolCalls.set(agent, agentCalls);
+            return { toolCalls };
+          });
+        }
+
+        if (entry.type === "file_change" && entry.file) {
+          set((s) => ({
+            fileChanges: [...s.fileChanges, {
+              ts: entry.ts,
+              agent: entry.worker ?? entry.from ?? "unknown",
+              file: entry.file!,
+              action: entry.action ?? "modified",
+              linesChanged: entry.linesChanged,
+            }].slice(-MAX_FILE_CHANGES),
+          }));
+        }
+
+        if (entry.type === "error_flag" && entry.errorFlag) {
+          const suggestions: Record<string, string> = {
+            ContextOverflow: "Consider using /shake to free context space.",
+            UsageLimit: "API quota exhausted — switch credential or wait.",
+            AuthFailed: "Authentication failed — re-login required.",
+            Transient: "Temporary error — automatic retry in progress.",
+          };
+          const hint = suggestions[entry.errorFlag] ?? entry.suggestion;
+          toast.error(
+            entry.recoverable ? `Recoverable: ${entry.errorFlag}` : `${entry.errorFlag}`,
+            { description: hint ? `${entry.body ?? ""} — ${hint}` : entry.body, duration: 8000 },
+          );
+        }
+
+        if (entry.type === "broadcast" && entry.from === "system" && entry.body) {
+          try {
+            const parsed = JSON.parse(entry.body);
+            if (parsed?.type === "blocker" && parsed?.context) {
+              set({ blockerContext: parsed.context as BlockerContext });
+              toast.error("Blocker Detected", { description: (parsed.context as BlockerContext)?.reason ?? "A blocker requires your attention" });
+            }
+          } catch { /* not a blocker message */ }
+        }
+      };
+
+      (get() as any).__sseUnsubscribe = sseClient.on(handler);
+    }
+
+    // 4. Fetch initial state (async, non-blocking for the caller).
+    try {
+      const [state, runStatus] = await Promise.all([
+        api.getState(),
+        api.getRunStatus(),
+      ]);
+      set((prev) => ({
+        swarmState: state ?? prev.swarmState,
+        isRunning: runStatus.running,
+        loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
+        error: null,
+      }));
+    } catch { /* brand-new session may not have state yet */ }
+
+    // 5. Fetch before-loop / after-loop state if applicable.
+    const phase = get().loopPhase;
+    if (phase.startsWith("before-loop")) {
+      try { set({ beforeLoopState: await api.getBeforeLoopState() }); } catch {}
+    }
+    try { set({ afterLoopResult: await api.getAfterLoopSummary() }); } catch {}
+
+    // 6. Replay history.
+    try {
+      const { entries } = await api.getHistory();
+      for (const entry of (entries as ActivityEntry[])) {
+        get().addActivity(entry, true);
+      }
+    } catch { /* history may not be available */ }
   },
 }));

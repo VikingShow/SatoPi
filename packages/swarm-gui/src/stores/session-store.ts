@@ -88,9 +88,8 @@ export const useSessionStore = create<SessionStore>()(
       nextViewing = null;
       // Switch the api/sse clients to the fallback session.
       setActiveSession(nextActive);
-      setActiveSSESession(nextActive);
-      // Reset swarm store for the fallback session.
-      try { useSwarmStore.getState().init(); } catch {}
+      // switchToSession handles SSE lifecycle + state reset internally.
+      useSwarmStore.getState().switchToSession(nextActive, "live");
     }
     set({ runs: nextRuns, activeSwarm: nextActive, viewingSession: nextViewing });
     import("sonner").then(({ toast }) => toast.success(`Deleted session “${name}”`));
@@ -124,37 +123,14 @@ export const useSessionStore = create<SessionStore>()(
     // Switch the api/sse clients to the new session BEFORE refreshing
     // state, otherwise refreshState() reads from the old session.
     setActiveSession(newName);
-    setActiveSSESession(newName);
 
-    // Reset the swarm store to a clean idle state.
-    // Keep a minimal swarmState so the right panel (ContextPanel) doesn't
-    // disappear — ContextPanel returns null when swarmState is null.
-    useSwarmStore.setState({
-      swarmState: { name: newName, status: "idle", mode: "loop", iteration: 0, targetCount: 0, agents: {}, startedAt: Date.now() },
-      activities: [],
-      channels: new Map(),
-      messages: new Map(),
-      activeChannelId: null,
-      loopPhase: "idle",
-      beforeLoopState: null,
-      planVersion: 0,
-      todos: [],
-      afterLoopResult: null,
-      blockerContext: null,
-      error: null,
-    });
-
-    // Clear the __initRunning guard so init() can execute again when the
-    // user refreshes or navigates back.  Without this, the guard set by
-    // the initial mount prevents init() from re-running.
-    (useSwarmStore.getState() as any).__initRunning = false;
+    // switchToSession handles the full lifecycle: SSE listener cleanup,
+    // state reset, history replay, and initial state fetch.
+    await useSwarmStore.getState().switchToSession(newName, "live");
 
     // Update the session store so the subscribe doesn't revert our sync.
     set({ activeSwarm: newName, viewingSession: null });
 
-    // Refresh state from the new session.
-    const swarmStore = useSwarmStore.getState();
-    await swarmStore.refreshState();
     // Immediately add the new session to the runs list so it appears in the UI
     // (it won't have a .swarm_* directory until the first run, but we show it anyway)
     const currentRuns = get().runs;
@@ -168,48 +144,19 @@ export const useSessionStore = create<SessionStore>()(
 
   switchToSession: async (name: string) => {
     if (name === get().activeSwarm) {
-      // Switching to the active session — reload live state to ensure the
-      // conversation display reflects any new events that arrived while
-      // the user was viewing another session.
+      // Switching to the active session — reload live state.
       set({ viewingSession: null });
-      // init() has a __initRunning guard (set on mount) that blocks re-entry.
-      // Clear it before calling init() so the live history + SSE are reloaded.
-      (useSwarmStore.getState() as any).__initRunning = false;
-      useSwarmStore.getState().init();
+      useSwarmStore.getState().switchToSession(name, "live");
       return;
     }
-    // Load historical activity into a read-only view (without affecting live state)
-    try {
-      const { entries } = await api.getRunActivity(name);
-      const activities = entries as ActivityEntry[];
-      useSwarmStore.setState({
-        activities,
-        channels: new Map(),
-        messages: new Map(),
-        activeChannelId: "roundtable",
-        // Don't change loopPhase — keep showing live status in the header
-        beforeLoopState: null,
-        planVersion: 0,
-        todos: [],
-        afterLoopResult: null,
-        blockerContext: null,
-        error: null,
-        // Repopulate channels/messages from the historical activity
-      });
-      // Replay entries to populate channels and messages
-      for (const entry of activities) {
-        useSwarmStore.getState().addActivity(entry, true);
-      }
-      set({ viewingSession: name });
-    } catch (err) {
-      console.error(`Failed to switch to session ${name}:`, err);
-    }
+    // Historical read-only view — don't touch the SSE connection.
+    set({ viewingSession: name });
+    useSwarmStore.getState().switchToSession(name, "historical");
   },
 
   backToCurrent: () => {
     set({ viewingSession: null });
-    // Re-init to reload live state
-    useSwarmStore.getState().init();
+    useSwarmStore.getState().switchToSession(get().activeSwarm, "live");
   },
 }),
 { name: "satopi-sessions" },

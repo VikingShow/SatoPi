@@ -1,23 +1,19 @@
 /**
- * session-store.test.ts — Tests for session life-cycle and __initRunning guard.
+ * session-store.test.ts — Tests for session life-cycle via switchToSession().
  *
- * Verifies:
- *   - newSession() clears the __initRunning guard in swarm-store
- *   - newSession() resets swarm-store state to idle
- *   - backToCurrent() calls swarm-store.init()
+ * session-store now delegates all swarm-store state transitions to
+ * swarmStore.switchToSession(name, mode).  These tests verify that the
+ * delegations happen with correct arguments.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Track whether init was called
-let initCalled = false;
+// Track switchToSession calls
+let switchToSessionCalls: Array<{ name: string; mode: string }> = [];
 
-// Mock swarm-store
+// Mock swarm-store — expose switchToSession alongside existing fields
 vi.mock("../swarm-store", () => ({
   useSwarmStore: {
-    getState: () => {
-      // Return a mutable proxy so setState() and getState() work
-      return mockSwarmState;
-    },
+    getState: () => mockSwarmState as any,
     setState: (partial: Record<string, unknown>) => {
       Object.assign(mockSwarmState, partial);
     },
@@ -41,91 +37,69 @@ vi.mock("../../lib/sse-client", () => ({
 }));
 
 import { useSessionStore } from "../session-store";
-import { useSwarmStore } from "../swarm-store";
 
 let mockSwarmState: Record<string, unknown> = {};
 
 beforeEach(() => {
-  // Reset session store to default state
-  // Zustand persist middleware may not be active in test, so directly set state
   useSessionStore.setState({
     activeSwarm: "test-session",
     viewingSession: null,
     runs: [],
   });
 
-  // Reset mock swarm state
+  switchToSessionCalls = [];
+
   mockSwarmState = {
     swarmState: { name: "test-session", status: "idle" },
-    activities: [{ ts: 1, type: "phase", phase: "running" }],
+    activities: [],
     channels: new Map(),
     messages: new Map(),
     activeChannelId: "roundtable",
-    loopPhase: "running" as const,
-    beforeLoopState: { phase: "before-loop-dialog" },
-    planVersion: 3,
-    todos: [{ id: "t1", title: "test", status: "pending" }],
-    afterLoopResult: { summary: "done" },
-    blockerContext: { reason: "stuck" },
-    error: "some error",
-    __initRunning: true,
+    loopPhase: "idle" as const,
+    beforeLoopState: null,
+    planVersion: 0,
+    todos: [],
+    afterLoopResult: null,
+    blockerContext: null,
+    error: null,
     init: vi.fn(),
     refreshState: vi.fn().mockResolvedValue(undefined),
     addActivity: vi.fn(),
+    switchToSession: vi.fn().mockImplementation((name: string, mode: string) => {
+      switchToSessionCalls.push({ name, mode });
+      return Promise.resolve();
+    }),
   };
-
-  initCalled = false;
 });
 
 describe("SessionStore: newSession", () => {
-  it("clears __initRunning guard so init() can run after session reset", async () => {
-    // Verify guard is set before newSession
-    expect(mockSwarmState.__initRunning).toBe(true);
-
-    await useSessionStore.getState().newSession();
-
-    // Guard should be cleared
-    expect(mockSwarmState.__initRunning).toBe(false);
-  });
-
-  it("resets swarm-store state to idle", async () => {
-    await useSessionStore.getState().newSession();
-
-    // swarmState is kept as a minimal idle object (not null) so the right
-    // panel (ContextPanel) doesn't disappear during the transition.
-    expect(mockSwarmState.swarmState).not.toBeNull();
-    expect((mockSwarmState.swarmState as { status: string }).status).toBe("idle");
-    expect((mockSwarmState.activities as unknown[]).length).toBe(0);
-    expect(mockSwarmState.loopPhase).toBe("idle");
-    expect(mockSwarmState.beforeLoopState).toBeNull();
-    expect(mockSwarmState.planVersion).toBe(0);
-    expect((mockSwarmState.todos as unknown[]).length).toBe(0);
-    expect(mockSwarmState.afterLoopResult).toBeNull();
-    expect(mockSwarmState.blockerContext).toBeNull();
-    expect(mockSwarmState.error).toBeNull();
+  it("calls swarmStore.switchToSession with generated name and 'live' mode", async () => {
+    const result = await useSessionStore.getState().newSession();
+    expect(switchToSessionCalls.length).toBe(1);
+    expect(switchToSessionCalls[0].mode).toBe("live");
+    expect(switchToSessionCalls[0].name).toBe(result);
+    expect(result).toMatch(/^SatoPi-/);
   });
 
   it("updates activeSwarm to the generated name", async () => {
     const result = await useSessionStore.getState().newSession();
-
-    const state = useSessionStore.getState();
-    expect(state.activeSwarm).toBe(result);
-    expect(state.activeSwarm).toMatch(/^SatoPi-/); // generated format
+    expect(useSessionStore.getState().activeSwarm).toBe(result);
   });
 
   it("clears viewingSession", async () => {
     useSessionStore.setState({ viewingSession: "old-session" });
     await useSessionStore.getState().newSession();
-
     expect(useSessionStore.getState().viewingSession).toBeNull();
   });
 });
 
 describe("SessionStore: backToCurrent", () => {
-  it("clears viewingSession", () => {
+  it("clears viewingSession and calls switchToSession('live')", () => {
     useSessionStore.setState({ viewingSession: "old-session" });
     useSessionStore.getState().backToCurrent();
-
     expect(useSessionStore.getState().viewingSession).toBeNull();
+    expect(switchToSessionCalls.length).toBe(1);
+    expect(switchToSessionCalls[0].mode).toBe("live");
+    expect(switchToSessionCalls[0].name).toBe("test-session");
   });
 });

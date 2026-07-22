@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense, useMemo } from "react";
+import { useEffect, useState, lazy, Suspense, useMemo, useRef } from "react";
 import { Settings, Activity, History, PlusCircle, Sparkles, Languages } from "lucide-react";
 import { Toaster } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -176,12 +176,43 @@ function App() {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-hidden">
+        {/* Page content — layered with opacity.
+             MonitorPage never unmounts (SSE, polling, chat state are preserved).
+             Config/History overlay it when active via z-index + inert isolation. */}
+        <main className="flex-1 relative overflow-hidden">
           <ErrorBoundary>
-            {page === "config" && <Suspense fallback={<PageLoader />}><ConfigPage onNavigateToMonitor={() => setPage("monitor")} /></Suspense>}
-            {page === "monitor" && <MonitorPage />}
-            {page === "history" && <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense>}
+            {/* ── Monitor — always mounted, opacified when another page is active ── */}
+            <div
+              // eslint-disable-next-line react/no-unknown-property
+              inert={page !== "monitor" ? true : undefined}
+              className={`absolute inset-0 flex flex-col transition-opacity duration-150 ease-out ${
+                page === "monitor"
+                  ? "opacity-100 z-10"
+                  : "opacity-0 z-0 pointer-events-none"
+              }`}
+            >
+              <MonitorPage />
+            </div>
+
+            {/* ── Config / History — overlay when active ── */}
+            <div
+              className={`absolute inset-0 flex flex-col transition-opacity duration-150 ease-out ${
+                page !== "monitor"
+                  ? "opacity-100 z-10"
+                  : "opacity-0 z-0 pointer-events-none"
+              }`}
+            >
+              {page === "config" && (
+                <Suspense fallback={<PageLoader />}>
+                  <ConfigPage onNavigateToMonitor={() => setPage("monitor")} />
+                </Suspense>
+              )}
+              {page === "history" && (
+                <Suspense fallback={<PageLoader />}>
+                  <HistoryPage />
+                </Suspense>
+              )}
+            </div>
           </ErrorBoundary>
         </main>
       </div>

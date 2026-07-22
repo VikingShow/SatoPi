@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { remarkTreeToCode } from "../../lib/remark-tree-to-code";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
+import { shallow } from "zustand/shallow";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
@@ -219,24 +220,42 @@ function SystemEvent({ text }: { text: string }) {
 }
 
 export default function ChatView() {
-  const activeId = useSwarmStore((s) => s.activeChannelId);
-  const messages = useSwarmStore((s) => s.messages);
-  const activities = useSwarmStore((s) => s.activities);
-  const loopPhase = useSwarmStore((s) => s.loopPhase);
-  const isRunning = useSwarmStore((s) => s.isRunning);
-  const beforeLoopState = useSwarmStore((s) => s.beforeLoopState);
-  const sendBeforeLoopMessage = useSwarmStore((s) => s.sendBeforeLoopMessage);
+  // ── Group A: high-frequency (1–2×/frame during streaming) ──
+  // messages & activities always change together in addActivity(),
+  // so merging them avoids 2 subscriptions with zero false positives.
+  const { messages, activities } = useSwarmStore((s) => ({
+    messages: s.messages,
+    activities: s.activities,
+  }), shallow);
+
+  // ── Group B: low-frequency + stable method refs ──
+  // 11 fields merged into 1 subscription.  Method references are created
+  // once in zustand's create() so shallow comparison is a no-op on every
+  // token-level store update — only loopPhase / isRunning / beforeLoopState
+  // trigger re-render when they actually change.
+  const {
+    activeChannelId, loopPhase, isRunning, beforeLoopState,
+    sendBeforeLoopMessage, sendSteering, startPlanning,
+    runDebate, confirmAndStart, stopRun, cancelBeforeLoop,
+  } = useSwarmStore((s) => ({
+    activeChannelId: s.activeChannelId,
+    loopPhase: s.loopPhase,
+    isRunning: s.isRunning,
+    beforeLoopState: s.beforeLoopState,
+    sendBeforeLoopMessage: s.sendBeforeLoopMessage,
+    sendSteering: s.sendSteering,
+    startPlanning: s.startPlanning,
+    runDebate: s.runDebate,
+    confirmAndStart: s.confirmAndStart,
+    stopRun: s.stopRun,
+    cancelBeforeLoop: s.cancelBeforeLoop,
+  }), shallow);
+
   const viewingSession = useSessionStore((s) => s.viewingSession);
-  const sendSteering = useSwarmStore((s) => s.sendSteering);
-  const startPlanning = useSwarmStore((s) => s.startPlanning);
-  const runDebate = useSwarmStore((s) => s.runDebate);
-  const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
-  const stopRun = useSwarmStore((s) => s.stopRun);
-  const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
 
-  const channelMessages = messages.get(activeId ?? "roundtable") ?? [];
+  const channelMessages = messages.get(activeChannelId ?? "roundtable") ?? [];
 
   // Interleave system events (verdict, phase, scaling) into chat
   const systemEvents = activities.filter(
