@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { api } from "../../lib/api-client";
-import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput } from "../../lib/types";
+import type { RoleAssetSummary, RoleAsset, RoleStatus, RoleCreateInput, RoleUpdateInput } from "../../lib/types";
 
 // ── Status badge ─────────────────────────────────────────────────────────
 
@@ -640,161 +640,205 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                 {/* Expanded detail / edit form (non-selection mode) */}
                 {!onSelect && expandedId === role.id && (
                   <div className="px-4 pb-3 pl-10">
-                    {loadingDetail ? (
-                      <div className="flex items-center gap-2 py-2 text-muted-foreground/60 text-xs">
-                        <Loader2 size={12} className="animate-spin" /> Loading...
-                      </div>
-                    ) : expandedRole && editingRoleId === role.id ? (
-                      /* Edit form */
-                      <div className="space-y-3 py-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-foreground/80">Editing: {expandedRole.name}</span>
-                          <Button variant="ghost" size="icon-xs" onClick={handleCancelEdit} title="Cancel">
-                            <X size={12} />
-                          </Button>
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Name</label>
-                          <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Description</label>
-                          <input type="text" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">System Prompt</label>
-                          <textarea value={editForm.systemPrompt} onChange={e => setEditForm(f => ({ ...f, systemPrompt: e.target.value }))} rows={4}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Guidelines (one per line)</label>
-                          <textarea value={editForm.guidelines} onChange={e => setEditForm(f => ({ ...f, guidelines: e.target.value }))} rows={3}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools (comma separated)</label>
-                          <input type="text" value={editForm.tools} onChange={e => setEditForm(f => ({ ...f, tools: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tags</label>
-                          <input type="text" value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Skills (comma separated)</label>
-                          <input type="text" value={editForm.skills} onChange={e => setEditForm(f => ({ ...f, skills: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">MCP Servers (comma separated)</label>
-                          <input type="text" value={editForm.mcpServers} onChange={e => setEditForm(f => ({ ...f, mcpServers: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model override</label>
-                          <input type="text" value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
-                            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
-                        </div>
-                        <Button variant="default" size="xs" onClick={handleUpdate} disabled={updating}
-                          className="bg-status-success hover:bg-status-success/80">
-                          {updating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                          Save Changes
-                        </Button>
-                      </div>
-                    ) : expandedRole ? (
-                      /* View-only detail */
-                        {/* System prompt */}
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">System Prompt</span>
-                          <pre className="mt-1 p-2 rounded-md bg-card/50 border border-border/50 text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
-                            {expandedRole.prompts.system}
-                          </pre>
-                        </div>
-
-                        {/* Guidelines */}
-                        {expandedRole.prompts.guidelines.length > 0 && (
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Guidelines</span>
-                            <ul className="mt-1 space-y-0.5">
-                              {expandedRole.prompts.guidelines.map((g, i) => (
-                                <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                                  <span className="text-muted-foreground/60 mt-0.5">-</span>
-                                  {g}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Tools */}
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Tools</span>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {expandedRole.tools.map(tool => (
-                              <span key={tool} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
-                                <Wrench size={10} />
-                                {tool}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Skills */}
-                        {expandedRole.skills && expandedRole.skills.length > 0 && (
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Skills</span>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {expandedRole.skills.map(s => (
-                                <span key={s} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* MCP Servers */}
-                        {expandedRole.mcp_servers && expandedRole.mcp_servers.length > 0 && (
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">MCP Servers</span>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {expandedRole.mcp_servers.map(m => (
-                                <span key={m} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
-                                  {m}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Model */}
-                        {expandedRole.model && (
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Model</span>
-                            <div className="mt-1 text-xs text-muted-foreground font-mono">{expandedRole.model}</div>
-                          </div>
-                        )}
-
-                        {/* Meta footer */}
-                        <div className="flex items-center gap-4 text-[10px] text-muted-foreground/60">
-                          <span>Author: {expandedRole.author}</span>
-                          <span>Created: {new Date(expandedRole.created_at).toLocaleDateString()}</span>
-                          <span>Updated: {new Date(expandedRole.updated_at).toLocaleDateString()}</span>
-                          <span>Success: {(expandedRole.success_rate * 100).toFixed(0)}%</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground/60 py-2">Failed to load role details.</div>
-                    )}
+                    <ExpandedDetail
+                      loading={loadingDetail}
+                      role={expandedRole}
+                      editing={editingRoleId === role.id}
+                      editForm={editForm}
+                      onEditFormChange={setEditForm}
+                      onCancelEdit={handleCancelEdit}
+                      onUpdate={handleUpdate}
+                      updating={updating}
+                    />
                   </div>
                 )}
               </div>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Renders the expanded detail pane: loading spinner, edit form, or view-only detail. */
+function ExpandedDetail({
+  loading,
+  role,
+  editing,
+  editForm,
+  onEditFormChange,
+  onCancelEdit,
+  onUpdate,
+  updating,
+}: {
+  loading: boolean;
+  role: RoleAsset | null;
+  editing: boolean;
+  editForm: CreateForm;
+  onEditFormChange: (f: CreateForm) => void;
+  onCancelEdit: () => void;
+  onUpdate: () => void;
+  updating: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-muted-foreground/60 text-xs">
+        <Loader2 size={12} className="animate-spin" /> Loading...
+      </div>
+    );
+  }
+
+  if (!role) {
+    return <div className="text-xs text-muted-foreground/60 py-2">Failed to load role details.</div>;
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-foreground/80">Editing: {role.name}</span>
+          <Button variant="ghost" size="icon-xs" onClick={onCancelEdit} title="Cancel">
+            <X size={12} />
+          </Button>
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Name</label>
+          <input type="text" value={editForm.name}
+            onChange={e => onEditFormChange({ ...editForm, name: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Description</label>
+          <input type="text" value={editForm.description}
+            onChange={e => onEditFormChange({ ...editForm, description: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">System Prompt</label>
+          <textarea value={editForm.systemPrompt}
+            onChange={e => onEditFormChange({ ...editForm, systemPrompt: e.target.value })} rows={4}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Guidelines (one per line)</label>
+          <textarea value={editForm.guidelines}
+            onChange={e => onEditFormChange({ ...editForm, guidelines: e.target.value })} rows={3}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools (comma separated)</label>
+          <input type="text" value={editForm.tools}
+            onChange={e => onEditFormChange({ ...editForm, tools: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tags</label>
+          <input type="text" value={editForm.tags}
+            onChange={e => onEditFormChange({ ...editForm, tags: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Skills (comma separated)</label>
+          <input type="text" value={editForm.skills}
+            onChange={e => onEditFormChange({ ...editForm, skills: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">MCP Servers (comma separated)</label>
+          <input type="text" value={editForm.mcpServers}
+            onChange={e => onEditFormChange({ ...editForm, mcpServers: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model override</label>
+          <input type="text" value={editForm.model}
+            onChange={e => onEditFormChange({ ...editForm, model: e.target.value })}
+            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+        </div>
+        <Button variant="default" size="xs" onClick={onUpdate} disabled={updating}
+          className="bg-status-success hover:bg-status-success/80">
+          {updating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          Save Changes
+        </Button>
+      </div>
+    );
+  }
+
+  // View-only detail
+  return (
+    <div className="space-y-3 py-2">
+      <div>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">System Prompt</span>
+        <pre className="mt-1 p-2 rounded-md bg-card/50 border border-border/50 text-xs text-muted-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">
+          {role.prompts.system}
+        </pre>
+      </div>
+
+      {role.prompts.guidelines.length > 0 && (
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Guidelines</span>
+          <ul className="mt-1 space-y-0.5">
+            {role.prompts.guidelines.map((g, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <span className="text-muted-foreground/60 mt-0.5">-</span>
+                {g}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Tools</span>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {role.tools.map(tool => (
+            <span key={tool} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
+              <Wrench size={10} />
+              {tool}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {role.skills && role.skills.length > 0 && (
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Skills</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {role.skills.map(s => (
+              <span key={s} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {role.mcp_servers && role.mcp_servers.length > 0 && (
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">MCP Servers</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {role.mcp_servers.map(m => (
+              <span key={m} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-card border border-border text-[10px] text-muted-foreground font-mono">
+                {m}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {role.model && (
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Model</span>
+          <div className="mt-1 text-xs text-muted-foreground font-mono">{role.model}</div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-4 text-[10px] text-muted-foreground/60">
+        <span>Author: {role.author}</span>
+        <span>Created: {new Date(role.created_at).toLocaleDateString()}</span>
+        <span>Updated: {new Date(role.updated_at).toLocaleDateString()}</span>
+        <span>Success: {(role.success_rate * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
