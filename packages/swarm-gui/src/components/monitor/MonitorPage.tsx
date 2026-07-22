@@ -1,5 +1,6 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
+import { shallow } from "zustand/shallow";
 import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain, Clock, FileText, GitBranch, ArrowRightLeft } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,19 +32,24 @@ function estimateCost(tokens: number): string {
 }
 
 export default function MonitorPage() {
-  const swarmState = useSwarmStore((s) => s.swarmState);
-  const isRunning = useSwarmStore((s) => s.isRunning);
-  const isConnected = useSwarmStore((s) => s.isConnected);
-  const loopPhase = useSwarmStore((s) => s.loopPhase);
-  const convergenceHistory = useSwarmStore((s) => s.convergenceHistory);
-  const pauseRun = useSwarmStore((s) => s.pauseRun);
-  const resumeRun = useSwarmStore((s) => s.resumeRun);
+  const {
+    swarmState, isRunning, isConnected, loopPhase,
+    convergenceHistory, pauseRun, resumeRun, afterLoopResult,
+  } = useSwarmStore((s) => ({
+    swarmState: s.swarmState,
+    isRunning: s.isRunning,
+    isConnected: s.isConnected,
+    loopPhase: s.loopPhase,
+    convergenceHistory: s.convergenceHistory,
+    afterLoopResult: s.afterLoopResult,
+    pauseRun: s.pauseRun,
+    resumeRun: s.resumeRun,
+  }), shallow);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "scaling" | "commatrix" | "afterloop">("chat");
 
-  const afterLoopResult = useSwarmStore((s) => s.afterLoopResult);
   const isActive = loopPhase === "running" || loopPhase === "blocked";
 
   // P2-5: Compute convergence trend from the last 3 values.

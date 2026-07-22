@@ -11,9 +11,12 @@ import { toast } from "sonner";
 import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
 import { api, setActiveSession } from "../lib/api-client";
 import { sseClient, setActiveSSESession } from "../lib/sse-client";
+import { deriveChannel } from "../lib/channel-derivation";
 import { useSessionStore } from "./session-store";
 
 const MAX_ACTIVITIES = 500;
+const MAX_FILE_CHANGES = 500;
+const MAX_TOOL_CALLS_PER_AGENT = 200;
 
 /**
  * The set of LoopPhase values the backend SwarmStateMachine broadcasts as
@@ -89,95 +92,6 @@ interface SwarmStore {
 
   // Blocker resolution
   resolveBlocker: (decision: BlockerResolution) => Promise<void>;
-}
-
-function deriveChannel(entry: ActivityEntry, seq: number): { id: string; channel: ChatChannel; message: ChatMessage } | null {
-  const ts = entry.ts;
-  switch (entry.type) {
-    case "broadcast": {
-      const id = "roundtable";
-      return {
-        id,
-        channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body: entry.body ?? "", timestamp: ts },
-      };
-    }
-    case "subgroup": {
-      const id = `subgroup-${entry.to}`;
-      return {
-        id,
-        channel: { id, type: "subgroup", name: `#${entry.to}`, participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
-      };
-    }
-    case "steering": {
-      // Operator steering to "all" → goes to roundtable (main chat)
-      if (entry.from === "operator" && entry.to === "all") {
-        const id = "roundtable";
-        return {
-          id,
-          channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-          message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
-        };
-      }
-      const id = `steering-${entry.from}-${entry.to}`;
-      return {
-        id,
-        channel: { id, type: "steering", name: `${entry.from} -> ${entry.to}`, participants: [entry.from ?? "", entry.to ?? ""], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: entry.to ?? "", body: entry.body ?? "", timestamp: ts },
-      };
-    }
-    // ── Deliberation events → per-round deliberation channels ──
-    case "deliberation_challenge":
-    case "deliberation_rebuttal":
-    case "deliberation_ruling": {
-      const round = entry.round ?? 0;
-      const phase = entry.type === "deliberation_challenge" ? "challenge" : entry.type === "deliberation_rebuttal" ? "rebuttal" : "ruling";
-      const id = `deliberation-r${round}`;
-      return {
-        id,
-        channel: { id, type: "deliberation", name: `Deliberation R${round}`, participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body: `[${phase}] ${entry.body ?? ""}`, timestamp: ts },
-      };
-    }
-
-    // ── Per-cloner individual verdict → dedicated cloner channel ──
-    case "cloner_individual": {
-      const id = `cloner-${entry.from}`;
-      const verdictLabel = entry.passed ? "PASS" : "FAIL";
-      const body = `**${verdictLabel}**${entry.findings?.length ? `\n${(entry.findings as string[]).map((f: string) => `· ${f}`).join("\n")}` : ""}`;
-      return {
-        id,
-        channel: { id, type: "cloner", name: `${entry.from}`, participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body, timestamp: ts },
-      };
-    }
-
-    // ── File coordination → per-file channel ──
-    case "file_coordination": {
-      const file = entry.file ?? "unknown";
-      const id = `file-${file.replace(/[/.]/g, "-")}`;
-      return {
-        id,
-        channel: { id, type: "file", name: file, participants: [], unreadCount: 0, lastMessage: entry.body, lastMessageTime: ts },
-        message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body: entry.body ?? "", timestamp: ts },
-      };
-    }
-
-    // P2-10: Tool calls appear in the roundtable as system-style messages.
-    case "tool_call": {
-      const id = "roundtable";
-      const status = entry.toolError ? "FAILED" : entry.toolDurationMs ? `OK (${(entry.toolDurationMs / 1000).toFixed(1)}s)` : "OK";
-      const body = `🔧 **${entry.toolName}** ${status}${entry.toolError ? ` — ${entry.toolError}` : ""}`;
-      return {
-        id,
-        channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
-        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.worker ?? "agent", to: "all", body, timestamp: ts },
-      };
-    }
-    default:
-      return null;
-  }
 }
 
 // ── Helper: optimistically push a user message into the roundtable channel ──
@@ -454,7 +368,13 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       };
 
       sseClient.on((entry) => {
-        set({ isConnected: sseClient.isConnected, connectionStatus: "live" });
+        // Prevent a full Zustand equality check + selector re-eval on every
+        // token-level stream_delta (20-30/s).  onConnectionChange is the
+        // canonical authority for connection state; this catch-up guard runs
+        // only when a preceding onConnectionChange(true) was missed.
+        if (!get().isConnected) {
+          set({ isConnected: true, connectionStatus: "live" });
+        }
 
         // Fast path: buffer stream_delta, defer the heavy store update.
         if (entry.type === "stream_delta" && entry.from) {
@@ -566,12 +486,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               call.file = entry.file;
             }
             agentCalls.push(call);
+            // Per-agent cap — AgentTimeline only shows recent calls
+            if (agentCalls.length > MAX_TOOL_CALLS_PER_AGENT) {
+              agentCalls.splice(0, agentCalls.length - MAX_TOOL_CALLS_PER_AGENT);
+            }
             toolCalls.set(agent, agentCalls);
             return { toolCalls };
           });
         }
 
-        // Track file_change events for FileChangesPanel
+        // Track file_change events for FileChangesPanel (capped)
         if (entry.type === "file_change" && entry.file) {
           set((s) => ({
             fileChanges: [...s.fileChanges, {
@@ -580,7 +504,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               file: entry.file!,
               action: entry.action ?? "modified",
               linesChanged: entry.linesChanged,
-            }],
+            }].slice(-MAX_FILE_CHANGES),
           }));
         }
 
@@ -613,8 +537,28 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
       });
 
-      // Poll state + run status every 5s
-      setInterval(() => get().refreshState(), 5000);
+      // Poll state + run status every 5s.
+      // Pause polling when the tab is hidden to avoid wasted requests;
+      // SSE stays alive in the background to accumulate events.
+      let pollHandle: ReturnType<typeof setInterval> | null = null;
+      function startPolling() {
+        if (pollHandle !== null) return;
+        pollHandle = setInterval(() => get().refreshState(), 5000);
+      }
+      function stopPolling() {
+        if (pollHandle !== null) { clearInterval(pollHandle); pollHandle = null; }
+      }
+      startPolling();
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            stopPolling();
+          } else {
+            get().refreshState(); // immediate refresh on return
+            startPolling();
+          }
+        });
+      }
     } catch (err) {
       set({ error: String(err) });
     }

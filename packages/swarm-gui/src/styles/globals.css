@@ -143,6 +143,24 @@
   html {
     font-family: var(--font-sans);
   }
+
+  /* ── Button press feedback ──
+     Emil Kowalski: scale(0.97) on :active gives instant physical feedback.
+     Restrict to non-disabled, non-menu-trigger buttons to avoid interfering
+     with Base UI's own popover/dropdown press handling.
+     Source: emil-design-eng SKILL.md §"Buttons must feel responsive" */
+  button:active:not([disabled]):not([aria-haspopup]) {
+    transform: scale(0.97);
+    transition: transform 160ms ease-out;
+  }
+
+  /* ── Smooth theme switching ──
+     Transition the two highest-impact CSS custom properties on :root.
+     background-color and color are inherited; setting the transition on :root
+     avoids a universal * selector and its performance overhead. */
+  :root {
+    transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease;
+  }
 }
 
 /* ==========================================================================
@@ -340,5 +358,35 @@
       transition: transform 0.3s ease;
     }
     .mobile-bottom-sheet.open { transform: translateY(0); }
+  }
+}
+
+/* ==========================================================================
+   Accessibility — reduced motion
+   Apple HIG: reduced motion = gentler feedback, not zero feedback.
+   Nuke all animation/transition durations globally; keep only status
+   indicators (spinner, pulse-ring, dash-flow) at a reduced speed so the
+   user can still see that a process is alive.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Status indicators must remain visible — slow to 2s cycle */
+  .animate-spin,
+  .animate-pulse-ring,
+  .animate-dash-flow {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Theme switching should still be instant for reduced-motion users */
+  :root {
+    transition: none !important;
   }
 }

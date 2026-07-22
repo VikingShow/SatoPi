@@ -13,22 +13,22 @@ import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
-// ── Code block cache ──────────────────────────────────────────────────
-const codeCache = new Map<string, string>();
-function cacheKey(code: string, lang: string) { return `${lang}:${code.slice(0, 200)}`; }
+// ── Code block cache (LRU-bounded, shared module) ──────────────────────
+import { cacheKey, getCachedHtml, setCachedHtml } from "../../lib/code-cache";
 
 // ── Shiki code block renderer with copy button ─────────────────────────
 
 function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
-  const [html, setHtml] = useState<string | null>(() => codeCache.get(cacheKey(code, lang)) ?? null);
+  const [html, setHtml] = useState<string | null>(() => getCachedHtml(cacheKey(code, lang)));
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const ck = cacheKey(code, lang);
-    if (codeCache.has(ck)) { setHtml(codeCache.get(ck)!); return; }
+    const cached = getCachedHtml(ck);
+    if (cached !== null) { setHtml(cached); return; }
     highlightCode(code, lang).then((h) => {
-      if (!cancelled) { codeCache.set(ck, h); setHtml(h); }
+      if (!cancelled) { setCachedHtml(ck, h); setHtml(h); }
     });
     return () => { cancelled = true; };
   }, [code, lang]);
