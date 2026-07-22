@@ -41,7 +41,9 @@ export type ActivityEventType =
 	| "deliberation_rebuttal"
 	| "deliberation_ruling"
 	| "cloner_individual"
-	| "file_coordination";
+	| "file_coordination"
+	| "agent_state"
+	| "pipeline_state";
 
 export interface ActivityEntry {
 	ts: number;
@@ -213,6 +215,38 @@ export class ActivityLogger {
 
 	logCrash(worker: string, error: string): void {
 		this.log({ ts: Date.now(), type: "crash", worker, error });
+	}
+
+	// -- Agent / Pipeline state (P1-1 real-time sync) ---------------------------
+
+	/**
+	 * Pushed immediately after StateTracker.updateAgent() so the frontend
+	 * renders agent status / scores without waiting for the next 5s poll.
+	 */
+	logAgentState(
+		worker: string,
+		fields: { status?: string; iteration?: number; praiseCount?: number; criticismCount?: number; conflictCount?: number; role?: string; modelName?: string },
+	): void {
+		this.log({
+			ts: Date.now(),
+			type: "agent_state",
+			worker,
+			from: worker,
+			...fields,
+		} as ActivityEntry);
+	}
+
+	/**
+	 * Pushed immediately after StateTracker.updatePipeline() so fields like
+	 * loopIteration, roundtablePhase, and todos are reflected in the UI
+	 * without a polling delay.
+	 */
+	logPipelineState(fields: { loopIteration?: number; roundtablePhase?: string; todos?: unknown[]; totalTokens?: number; totalRequests?: number }): void {
+		this.log({
+			ts: Date.now(),
+			type: "pipeline_state",
+			...fields,
+		} as ActivityEntry);
 	}
 
 	// -- Steering Ack (P2-3) -------------------------------------------------

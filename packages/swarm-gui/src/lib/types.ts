@@ -102,7 +102,8 @@ export type ActivityEventType =
   | "tool_call" | "error_flag" | "file_change"
   | "stream_start" | "stream_delta" | "stream_end"
   | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
-  | "cloner_individual" | "file_coordination";
+  | "cloner_individual" | "file_coordination"
+  | "agent_state" | "pipeline_state";
 
 export interface ActivityEntry {
   ts: number;

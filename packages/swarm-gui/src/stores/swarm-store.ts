@@ -518,7 +518,37 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }));
         }
 
-        // P2-11: Error flag — categorized error notification.
+        // P1-1: Real-time agent state — update swarmState.agents without polling.
+        if (entry.type === "agent_state" && entry.worker) {
+          set((s) => {
+            const agents = { ...s.swarmState?.agents };
+            const existing = agents[entry.worker!];
+            if (!existing) return {}; // agent not registered yet
+            const updated = { ...existing };
+            if ((entry as any).status !== undefined) updated.status = (entry as any).status;
+            if ((entry as any).iteration !== undefined) updated.iteration = (entry as any).iteration;
+            if ((entry as any).praiseCount !== undefined) updated.praiseCount = (entry as any).praiseCount;
+            if ((entry as any).criticismCount !== undefined) updated.criticismCount = (entry as any).criticismCount;
+            if ((entry as any).conflictCount !== undefined) updated.conflictCount = (entry as any).conflictCount;
+            if ((entry as any).role !== undefined) updated.role = (entry as any).role;
+            if ((entry as any).modelName !== undefined) updated.modelName = (entry as any).modelName;
+            agents[entry.worker!] = updated;
+            return { swarmState: { ...s.swarmState!, agents } };
+          });
+        }
+
+        // P1-1: Real-time pipeline state — merge loopIteration etc. without polling.
+        if (entry.type === "pipeline_state") {
+          set((s) => {
+            const patch: Partial<typeof s.swarmState> = {};
+            if ((entry as any).loopIteration !== undefined) patch.loopIteration = (entry as any).loopIteration;
+            if ((entry as any).roundtablePhase !== undefined) patch.roundtablePhase = (entry as any).roundtablePhase;
+            if ((entry as any).todos !== undefined) patch.todos = (entry as any).todos;
+            if ((entry as any).totalTokens !== undefined) patch.totalTokens = (entry as any).totalTokens;
+            if ((entry as any).totalRequests !== undefined) patch.totalRequests = (entry as any).totalRequests;
+            return { swarmState: s.swarmState ? { ...s.swarmState, ...patch } : s.swarmState };
+          });
+        }
         if (entry.type === "error_flag" && entry.errorFlag) {
           const suggestions: Record<string, string> = {
             ContextOverflow: "Consider using /shake to free context space.",
@@ -1183,6 +1213,34 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               linesChanged: entry.linesChanged,
             }].slice(-MAX_FILE_CHANGES),
           }));
+        }
+
+        if (entry.type === "agent_state" && entry.worker) {
+          set((s) => {
+            const agents = { ...s.swarmState?.agents };
+            const existing = agents[entry.worker!];
+            if (!existing) return {};
+            const updated = { ...existing };
+            if ((entry as any).status !== undefined) updated.status = (entry as any).status;
+            if ((entry as any).iteration !== undefined) updated.iteration = (entry as any).iteration;
+            if ((entry as any).praiseCount !== undefined) updated.praiseCount = (entry as any).praiseCount;
+            if ((entry as any).criticismCount !== undefined) updated.criticismCount = (entry as any).criticismCount;
+            if ((entry as any).conflictCount !== undefined) updated.conflictCount = (entry as any).conflictCount;
+            if ((entry as any).role !== undefined) updated.role = (entry as any).role;
+            if ((entry as any).modelName !== undefined) updated.modelName = (entry as any).modelName;
+            agents[entry.worker!] = updated;
+            return { swarmState: { ...s.swarmState!, agents } };
+          });
+        }
+
+        if (entry.type === "pipeline_state") {
+          set((s) => {
+            const patch: Partial<typeof s.swarmState> = {};
+            if ((entry as any).loopIteration !== undefined) patch.loopIteration = (entry as any).loopIteration;
+            if ((entry as any).roundtablePhase !== undefined) patch.roundtablePhase = (entry as any).roundtablePhase;
+            if ((entry as any).todos !== undefined) patch.todos = (entry as any).todos;
+            return { swarmState: s.swarmState ? { ...s.swarmState, ...patch } : s.swarmState };
+          });
         }
 
         if (entry.type === "error_flag" && entry.errorFlag) {
