@@ -139,15 +139,17 @@ describe("SwarmStore: SSE streaming (stream_start → stream_delta → stream_en
     expect(msgs[0].id).toBe("stream-worker-7");
   });
 
-  it("stream_start is skipped during history replay (fromHistory=true)", () => {
+  it("stream_start is NOT skipped during history replay (fromHistory=true)", () => {
     const store = getStore();
     store.addActivity(
       { ts: 1000, type: "stream_start", from: "socrates" },
       true, // fromHistory
     );
 
-    const msgs = getStore().messages.get("roundtable");
-    expect(msgs).toBeUndefined(); // no message created
+    const msgs = getStore().messages.get("roundtable")!;
+    expect(msgs.length).toBe(1); // bubble created (same as live)
+    expect(msgs[0].body).toBe("");
+    expect(msgs[0].streaming).toBe(true);
   });
 
   it("stream_delta appends body to the existing stream bubble", () => {
@@ -173,17 +175,21 @@ describe("SwarmStore: SSE streaming (stream_start → stream_delta → stream_en
     expect(msgs[0].body).toBe("hello");
   });
 
-  it("stream_delta is skipped during history replay", () => {
+  it("stream_delta accumulates during history replay (no longer skipped)", () => {
     const store = getStore();
-    // Create a streaming bubble to ensure we test the skip, not the fallback
-    store.addActivity({ ts: 1000, type: "stream_start", from: "socrates" });
+    // Create a streaming bubble to ensure we test accumulation, not fallback
     store.addActivity(
-      { ts: 1001, type: "stream_delta", from: "socrates", body: "ignored" },
+      { ts: 1000, type: "stream_start", from: "socrates" },
+      true, // fromHistory
+    );
+    store.addActivity(
+      { ts: 1001, type: "stream_delta", from: "socrates", body: "accumulated" },
       true, // fromHistory
     );
 
     const msgs = getStore().messages.get("roundtable")!;
-    expect(msgs[0].body).toBe(""); // body was NOT appended
+    expect(msgs.length).toBe(1);
+    expect(msgs[0].body).toBe("accumulated"); // delta was accumulated (same as live)
   });
 
   it("stream_end finalises the streaming bubble with full body", () => {

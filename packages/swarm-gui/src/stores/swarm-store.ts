@@ -292,12 +292,16 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       };
       sseClient.onConnectionChange(onConnChange);
 
-      // Initialize isConnected from the SSE client's current state — if the
-      // subscriber in session-store.ts already connected (via persist hydration),
-      // onConnectionChange may have already fired (or won't fire again since
-      // the state didn't change).  We must seed isConnected here.
+      // Seed isConnected / connectionStatus from the SSE client's current state.
+      // If session-store subscribe already connected before onConnChange was
+      // registered (persist hydration race), we'll miss the initial onopen —
+      // so we must read isConnected here.  Crucially, do NOT set hasConnectedOnce
+      // here: it must be managed exclusively by onConnChange so that the first
+      // genuine connect AFTER listener registration is never treated as a
+      // "reconnect" and does not fire the "Reconnected" toast.  Once onConnChange
+      // fires (true), it bumps hasConnectedOnce to true and subsequent
+      // disconnect→reconnect cycles will toast correctly.
       if (sseClient.isConnected) {
-        hasConnectedOnce = true;
         set({ isConnected: true, connectionStatus: "live" });
       } else {
         set({ isConnected: false, connectionStatus: "connecting" });
@@ -327,15 +331,26 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }));
       } catch (apiErr: any) {
         const msg = String(apiErr?.message ?? apiErr);
-        // If the stored session does not exist on the backend (stale from a
-        // previous failed createSession, or was deleted externally), clean
-        // up localStorage and fall back to the default "SatoPi" session.
+        // If the stored session does not exist on the backend (stale from
+        // backend restart, or request routed to a different backend instance),
+        // fall back to the default "SatoPi" session WITHOUT deleting the
+        // historical session from disk.  Calling deleteSession here would
+        // permanently destroy the .swarm_{name}/ directory — the session
+        // survives the backend restart on disk and can be recovered once
+        // the backend scans its workspace again.
         if (msg.includes("not found") || msg.includes("404")) {
           const { useSessionStore } = await import("./session-store");
           const { setActiveSession } = await import("../lib/api-client");
           const { setActiveSSESession } = await import("../lib/sse-client");
           const staleName = useSessionStore.getState().activeSwarm;
-          useSessionStore.getState().deleteSession(staleName);
+          // Clean up only the frontend-local state (runs list, activeSwarm).
+          // Do NOT call deleteSession — that would invoke DELETE /api/sessions
+          // and remove the .swarm_{name} directory from disk.
+          useSessionStore.setState((s) => ({
+            activeSwarm: "SatoPi",
+            viewingSession: null,
+            runs: s.runs.filter((r) => r.name !== staleName),
+          }));
           const fallback = "SatoPi";
           setActiveSession(fallback);
           setActiveSSESession(fallback);
@@ -590,10 +605,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const messages = new Map(state.messages);
 
       // ── Stream start: create an empty streaming bubble in roundtable ──
-      // During history replay, skip — the downstream stream_end event (handled
-      // below) will create the finalised message with the complete body.
+      // Across both live and history replay, create the placeholder bubble.
+      // During replay the downstream stream_delta events accumulate text,
+      // and stream_end finalises it.  Previously history replay skipped
+      // stream_start (which meant stream_end had nothing to finalise into,
+      // exposing parseSocratesResponse's JSON fallback body).
       if (entry.type === "stream_start" && entry.from) {
-        if (fromHistory) return { activities, channels, messages };
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
         msgList.push({
@@ -610,12 +627,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       }
 
       // ── Streaming delta: append to the last streaming bubble ──
-      // During history replay (fromHistory), skip stream_delta — the
-      // downstream broadcast event already carries the full message body.
+      // During history replay the deltas accumulate just like live so
+      // the stream_end handler can prefer the accumulated (natural-language)
+      // body over the finalBody that may have been post-processed (e.g.
+      // parseSocratesResponse strip-JSON output).
       if (entry.type === "stream_delta" && entry.from) {
-        // During history replay, skip stream_delta — the downstream broadcast
-        // event already carries the full message body (see stream_start note above).
-        if (fromHistory) return { activities, channels, messages };
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
         const lastMsg = msgList[msgList.length - 1];
@@ -652,31 +668,49 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
         if (fromHistory) {
           const msgList = [...(messages.get("roundtable") ?? [])];
-          // Case A: stream_end carries a completed body — create a stream
-          // bubble (stream_start/delta are skipped during replay, so only
-          // stream_end can restore the full message).
-          if (entry.body) {
-            const exists = msgList.some(
-              (m) => m.id === streamBubbleId || (m.from === entry.from && m.id.startsWith("stream-")),
-            );
-            if (!exists) {
-              msgList.push({
-                id: streamBubbleId,
-                channelId: "roundtable",
-                from: entry.from,
-                to: "all",
-                body: entry.body,
-                thinking: entry.thinking,
-                streaming: false as const,
-                timestamp: entry.ts,
-              } as ChatMessage);
-              messages.set("roundtable", msgList);
-            }
+          // Look for an existing stream bubble (created by stream_start
+          // and populated by stream_delta during replay).
+          const existingIdx = msgList.findIndex(
+            (m) => m.id === streamBubbleId || (m.from === entry.from && m.id.startsWith("stream-")),
+          );
+
+          if (existingIdx >= 0) {
+            // Prefer delta-accumulated body when it is longer — same as the
+            // live path.  stream_end body may come from a post-processor
+            // (e.g. parseSocratesResponse) that strips natural language in
+            // favour of a JSON-derived fallback.
+            const accumulated = msgList[existingIdx];
+            const finalBody =
+              accumulated.body && accumulated.body.length > (entry.body?.length ?? 0)
+                ? accumulated.body
+                : (entry.body || accumulated.body);
+            msgList[existingIdx] = {
+              ...accumulated,
+              body: finalBody,
+              thinking: entry.thinking || (accumulated as any).thinking,
+              streaming: false as const,
+            };
+            messages.set("roundtable", msgList);
             return { activities, channels, messages };
           }
-          // Case B: stream_end has thinking but NO body (legacy log format).
-          // Attach thinking to the most recent non-stream message from the
-          // same source.
+
+          // No existing stream bubble — create from stream_end body.
+          if (entry.body) {
+            msgList.push({
+              id: streamBubbleId,
+              channelId: "roundtable",
+              from: entry.from,
+              to: "all",
+              body: entry.body,
+              thinking: entry.thinking,
+              streaming: false as const,
+              timestamp: entry.ts,
+            } as ChatMessage);
+            messages.set("roundtable", msgList);
+            return { activities, channels, messages };
+          }
+
+          // stream_end has thinking but NO body (legacy log format).
           if (entry.thinking) {
             for (let i = msgList.length - 1; i >= 0; i--) {
               if (msgList[i].from === entry.from && !msgList[i].id.startsWith("stream-")) {

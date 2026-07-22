@@ -13,6 +13,7 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { RoleAsset } from "./role-asset";
 import type { ActivityLogger } from "./activity-logger";
 import { guardTaskBudget } from "./context-guard";
+import { streamAgentOutput } from "./streaming";
 
 // ============================================================================
 // Types
@@ -134,38 +135,25 @@ export class ClonerCouncil {
 		const settled = await Promise.allSettled(
 			clonerIds.map((id, i) => {
 				const clonerMsgId = `cloner-review-${id}-${iteration}`;
-				let clonerSentLen = 0;
-				activityLogger?.logStreamStart(clonerMsgId, id);
-				return runSubprocess({
-					cwd: workspace,
-					agent: buildClonerAgent(id, i),
-					task: reviewText,
-					index: i,
-					id: clonerMsgId,
-					modelRegistry,
-					settings,
-					signal,
-					onProgress: (progress) => {
-						const lines = [...(progress.recentOutput ?? [])].reverse();
-						const currentText = lines.join("\n");
-						if (currentText.length > clonerSentLen) {
-							const delta = currentText.slice(clonerSentLen);
-							clonerSentLen = currentText.length;
-							activityLogger?.logStreamDelta(clonerMsgId, id, delta);
-						}
+				return streamAgentOutput(
+					{ activityLogger: activityLogger!, msgId: clonerMsgId, from: id },
+					{
+						cwd: workspace,
+						agent: buildClonerAgent(id, i),
+						task: reviewText,
+						index: i,
+						id: clonerMsgId,
+						modelRegistry,
+						settings,
+						signal,
 					},
-				}).then((r) => {
-					activityLogger?.logStreamEnd(clonerMsgId, id, r.output, r.thinking);
+				).then((r) => {
 					// Emit per-cloner individual verdict for GUI channel routing
 					const verdict = extractVerdict(id, r.output);
 					if (verdict) {
 						activityLogger?.logClonerIndividual(id, verdict.passed, verdict.findings);
 					}
 					return r;
-				}).catch((err) => {
-					const errMsg = err instanceof Error ? err.message : String(err);
-					activityLogger?.logStreamEnd(clonerMsgId, id, `[Error] ${errMsg}`, undefined);
-					throw err;
 				});
 			}),
 		);
@@ -213,34 +201,19 @@ export class ClonerCouncil {
 			const deliberationSettled = await Promise.allSettled(
 				clonerIds.map((id, i) => {
 					const delibMsgId = `cloner-deliberation-${id}-${iteration}`;
-					let delibSentLen = 0;
-					activityLogger?.logStreamStart(delibMsgId, id);
-					return runSubprocess({
-						cwd: workspace,
-						agent: buildClonerAgent(id, i),
-						task: deliberationPrompt,
-						index: i,
-						id: delibMsgId,
-						modelRegistry,
-						settings,
-						signal,
-						onProgress: (progress) => {
-							const lines = [...(progress.recentOutput ?? [])].reverse();
-							const currentText = lines.join("\n");
-							if (currentText.length > delibSentLen) {
-								const delta = currentText.slice(delibSentLen);
-								delibSentLen = currentText.length;
-								activityLogger?.logStreamDelta(delibMsgId, id, delta);
-							}
+					return streamAgentOutput(
+						{ activityLogger: activityLogger!, msgId: delibMsgId, from: id },
+						{
+							cwd: workspace,
+							agent: buildClonerAgent(id, i),
+							task: deliberationPrompt,
+							index: i,
+							id: delibMsgId,
+							modelRegistry,
+							settings,
+							signal,
 						},
-					}).then((r) => {
-						activityLogger?.logStreamEnd(delibMsgId, id, r.output, r.thinking);
-						return r;
-					}).catch((err) => {
-						const errMsg = err instanceof Error ? err.message : String(err);
-						activityLogger?.logStreamEnd(delibMsgId, id, `[Error] ${errMsg}`, undefined);
-						throw err;
-					});
+					);
 				}),
 			);
 			const deliberationResults: SingleResult[] = deliberationSettled.map((s, i) => {

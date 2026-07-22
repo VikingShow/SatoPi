@@ -12,7 +12,6 @@
  */
 
 import * as fs from "node:fs/promises";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { StateTracker, LoopPhase } from "./state";
@@ -21,6 +20,7 @@ import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
 import type { SwarmSessionManager } from "./swarm-session-manager";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
+import { streamAgentOutput } from "./streaming";
 import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
 import SOCRATES_SYSTEM_PROMPT from "./prompts/socrates.hbs" with { type: "text" };
@@ -66,25 +66,28 @@ function parseSocratesResponse(raw: string): string {
 	try {
 		const obj = JSON.parse(trimmed);
 		// Extract human-readable content from common JSON wrapper shapes.
-		// Ordered by conversational relevance: plan (the deliverable),
-		// message (conversation), error (clarification needed), text (generic).
-		if (typeof obj?.plan === "string" && obj.plan.length > 0) {
-			const prefix = obj.status === "ready" ? "[Plan Ready]\n\n" : "";
-			return prefix + obj.plan;
-		}
-		if (typeof obj?.message === "string" && obj.message.length > 0) {
-			return obj.message;
+		// Ordered by conversational relevance.
+		const textKeys = ["plan", "message", "text", "response", "reply", "content", "answer", "summary"];
+		for (const key of textKeys) {
+			if (typeof obj?.[key] === "string" && obj[key].length > 0) {
+				if (key === "plan" && obj.status === "ready") return "[Plan Ready]\n\n" + obj[key];
+				return obj[key];
+			}
 		}
 		if (typeof obj?.error === "string" && obj.error.length > 0) {
 			return obj.error;
 		}
-		if (typeof obj?.text === "string" && obj.text.length > 0) {
-			return obj.text;
+		// questions array (e.g. {"status":"waiting_for_clarification","questions":[...]})
+		if (Array.isArray(obj?.questions) && obj.questions.length > 0) {
+			const qs = obj.questions.filter((q: unknown) => typeof q === "string").join("\n- ");
+			return `Waiting for clarification:\n- ${qs}`;
 		}
-		// Last resort — pretty-print the JSON so it's at least readable.
-		return JSON.stringify(obj, null, 2);
+		// Bare status — short diagnostic, not prettified JSON.
+		if (typeof obj?.status === "string") return `(${obj.status})`;
+		// Last resort: return raw text rather than JSON.stringify — even
+		// unstructured prose is more readable than a formatted JSON blob.
 	} catch {
-		// not JSON — return original
+		// not parseable as JSON — return original
 	}
 	return raw;
 }
@@ -384,10 +387,6 @@ export class BeforeLoopManager {
 	async #runSocrates(): Promise<void> {
 		this.#busy = true;
 		const msgId = `socrates-${Date.now()}`;
-		this.#activityLogger.logStreamStart(msgId, "socrates");
-
-		// Track streaming deltas so the frontend sees output in real-time.
-		let sentLen = 0;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();
@@ -413,38 +412,31 @@ export class BeforeLoopManager {
 				agentDef.writeAllowList = socratesRestriction.write_allowlist;
 			}
 
-			const result = await runSubprocess({
-				cwd: this.#stateTracker.swarmDir,
-				agent: agentDef,
-				task: taskText,
-				index: 0,
-				id: `socrates-${Date.now()}`,
-				modelRegistry: this.#modelRegistry,
-				settings: this.#settings,
-				enableLsp: false,
-				keepAlive: false,
-				modelOverride: loopConfig?.model ?? undefined,
-				onProgress: (progress) => {
-					// recentOutput is reversed (newest first).  Build full
-					// text, then send only characters not yet delivered.
-					const lines = [...(progress.recentOutput ?? [])].reverse();
-					const currentText = lines.join("\n");
-					if (currentText.length > sentLen) {
-						const delta = currentText.slice(sentLen);
-						sentLen = currentText.length;
-						this.#activityLogger.logStreamDelta(msgId, "socrates", delta);
-					}
+			const result = await streamAgentOutput(
+				{
+					activityLogger: this.#activityLogger,
+					msgId,
+					from: "socrates",
+					transformOutput: parseSocratesResponse,
 				},
-			});
+				{
+					cwd: this.#stateTracker.swarmDir,
+					agent: agentDef,
+					task: taskText,
+					index: 0,
+					id: `socrates-${Date.now()}`,
+					modelRegistry: this.#modelRegistry,
+					settings: this.#settings,
+					enableLsp: false,
+					keepAlive: false,
+					modelOverride: loopConfig?.model ?? undefined,
+				},
+			);
 
-			const output = result.output || "(no output)";
-			const displayOutput = parseSocratesResponse(output);
+			const displayOutput = result.output || "(no output)";
 
 			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
-
-			// stream_end finalises the streaming bubble the frontend created on stream_start.
-			this.#activityLogger.logStreamEnd(msgId, "socrates", displayOutput, result.thinking);
 
 			const newMtime = await this.#getPlanMtime();
 			if (newMtime > this.#planMtime) {
@@ -457,8 +449,6 @@ export class BeforeLoopManager {
 				);
 			}
 		} catch (err) {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			this.#activityLogger.logStreamEnd(msgId, "socrates", `[Error] ${errMsg}`);
 			throw err;
 		} finally {
 			this.#busy = false;

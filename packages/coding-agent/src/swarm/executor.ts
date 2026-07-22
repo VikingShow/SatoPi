@@ -24,6 +24,7 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "./schema";
 import type { StateTracker } from "./state";
 import type { ActivityLogger } from "./activity-logger";
+import { createStreamProgressHandler } from "./streaming";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -186,7 +187,6 @@ export async function executeSwarmAgent(
 
 			// SSE streaming: signal the frontend that this agent has started producing output.
 			const streamMsgId = `${agentId}-${Date.now()}`;
-			let _streamSentLen = 0;
 			activityLogger?.logStreamStart(streamMsgId, agent.name);
 
 	try {
@@ -199,17 +199,10 @@ export async function executeSwarmAgent(
 			modelOverride,
 			signal: effectiveSignal,
 			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
-				onProgress: progress => {
-					onProgress?.(agent.name, progress);
-					// SSE streaming: diff recentOutput against already-sent text and emit deltas.
-					const lines = [...(progress.recentOutput ?? [])].reverse();
-					const currentText = lines.join("\n");
-					if (currentText.length > _streamSentLen) {
-						const delta = currentText.slice(_streamSentLen);
-						_streamSentLen = currentText.length;
-						activityLogger?.logStreamDelta(streamMsgId, agent.name, delta);
-					}
-				},
+				onProgress: activityLogger
+					? createStreamProgressHandler(activityLogger, streamMsgId, agent.name,
+						(progress) => onProgress?.(agent.name, progress))
+					: (progress: AgentProgress) => onProgress?.(agent.name, progress),
 			modelRegistry,
 			settings,
 			enableLsp: false,

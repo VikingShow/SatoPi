@@ -9,6 +9,7 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor"; // kept
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ActivityLogger } from "./activity-logger";
+import { streamAgentOutput } from "./streaming";
 import { type AgentExecutor, SubprocessAgentExecutor, type SwarmExecutorOptions } from "./executor";
 import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
@@ -732,18 +733,11 @@ export class LoopController {
 				for (const r of allWorkerResults) {
 					workerOutputMap.set(r.agent, r.output);
 				}
-				lastConflictReport = await this.#fileTracker.endRound(workerOutputMap);
 
-				// Wire stateTracker conflict count for overlap conflicts
-				const overlapConflicts = lastConflictReport.conflicts.filter(c => c.severity === "overlap");
-				for (const c of overlapConflicts) {
-					this.#activityLogger?.logConflict(c.file, c.writers, c.severity);
-					for (const writerId of c.writers) {
-						await this.#stateTracker.incrementConflict(writerId);
-					}
-				}
-
-				// Emit tool_call events for AgentTimeline visualization
+				// Emit tool_call events BEFORE endRound — these power the
+				// AgentTimeline component and must fire regardless of whether
+				// git diff succeeds. endRound failures previously skipped these
+				// events entirely, leaving Timeline blank.
 				for (const r of allWorkerResults) {
 					this.#activityLogger?.logToolCall(
 						r.agent,
@@ -753,6 +747,31 @@ export class LoopController {
 						r.exitCode !== 0 ? `exit ${r.exitCode}` : undefined,
 						r.durationMs ?? undefined,
 					);
+				}
+
+				// endRound with its own error boundary so a git-diff failure
+				// does NOT skip all downstream events (conflict, file_change,
+				// todo-updated, cloner-review, verdict).
+				try {
+					lastConflictReport = await this.#fileTracker.endRound(workerOutputMap);
+				} catch (err) {
+					const errMsg = err instanceof Error ? err.message : String(err);
+					this.#activityLogger?.logPhase("file-track-error", undefined, iter + 1);
+					this.#activityLogger?.logBroadcast(
+						"system",
+						`File tracker error (iteration ${iter + 1}): ${errMsg}`,
+					);
+					logger.warn("FileTracker endRound failed, using empty report", { error: errMsg });
+					lastConflictReport = { changedFiles: [], conflicts: [] };
+				}
+
+				// Wire stateTracker conflict count for overlap conflicts
+				const overlapConflicts = lastConflictReport.conflicts.filter(c => c.severity === "overlap");
+				for (const c of overlapConflicts) {
+					this.#activityLogger?.logConflict(c.file, c.writers, c.severity);
+					for (const writerId of c.writers) {
+						await this.#stateTracker.incrementConflict(writerId);
+					}
 				}
 
 				// Emit file_change events for FileChangesPanel
@@ -944,6 +963,15 @@ export class LoopController {
 					? `Iteration ${iter + 1} timed out after ${this.#loopConfig.iterationTimeoutMs}ms`
 					: `Iteration ${iter + 1} error: ${err instanceof Error ? err.message : String(err)}`;
 				errors.push(message);
+
+				// Notify the frontend so Timeline/Channels don't appear frozen.
+				// Without this, the catch block silently swallows the error and
+				// the GUI sees no post-worker events at all.
+				await this.#stateTracker.updatePipeline({
+					roundtablePhase: isTimeout ? "Timed out" : "Error — retrying",
+				});
+				this.#activityLogger?.logPhase("iteration-error", String(err), iter + 1);
+				this.#activityLogger?.logBroadcast("system", message);
 
 				// Rollback workspace on crash/timeout if configured
 				if (this.#loopConfig.snapshot?.rollbackOnError) {
@@ -1607,23 +1635,23 @@ export class LoopController {
 			const subResults = await Promise.allSettled(
 				workerIds.map((id, i) => {
 					const delibMsgId = `deliberation-${id}-${sub}`;
-					let delibSentLen = 0;
-					this.#activityLogger?.logStreamStart(delibMsgId, id);
-					return runSubprocess({
-						cwd: workspace,
-						agent: (() => {
-							const def: AgentDefinition = {
-								name: id,
-								description: `Deliberation Worker ${i + 1}`,
-								systemPrompt: DELIBERATION_SYSTEM_PROMPT,
-								source: "project" as const,
-							};
-							applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
-							return def;
-						})(),
-						task: [
-							`## ${subLabel} Phase`,
-							sub === 0
+					return streamAgentOutput(
+						{ activityLogger: this.#activityLogger!, msgId: delibMsgId, from: id },
+						{
+							cwd: workspace,
+							agent: (() => {
+								const def: AgentDefinition = {
+									name: id,
+									description: `Deliberation Worker ${i + 1}`,
+									systemPrompt: DELIBERATION_SYSTEM_PROMPT,
+									source: "project" as const,
+								};
+								applyToolRestrictions(def, resolveToolRestrictions(this.#loopConfig, "worker"));
+								return def;
+							})(),
+							task: [
+								`## ${subLabel} Phase`,
+								sub === 0
 								? "Read ALL peer outputs below. For each issue found, send IRC CHALLENGE to the relevant worker."
 								: sub === 1
 									? "Read challenges directed at you. Acknowledge + fix, or explain why you disagree. Update your output."
@@ -1638,22 +1666,6 @@ export class LoopController {
 						settings,
 						signal,
 						beforeToolCall: deliberationHooks.beforeToolCall,
-						onProgress: (progress) => {
-							const lines = [...(progress.recentOutput ?? [])].reverse();
-							const currentText = lines.join("\n");
-							if (currentText.length > delibSentLen) {
-								const delta = currentText.slice(delibSentLen);
-								delibSentLen = currentText.length;
-								this.#activityLogger?.logStreamDelta(delibMsgId, id, delta);
-							}
-						},
-					}).then((r) => {
-						this.#activityLogger?.logStreamEnd(delibMsgId, id, r.output, (r as any).thinking);
-						return r;
-					}).catch((err) => {
-						const errMsg = err instanceof Error ? err.message : String(err);
-						this.#activityLogger?.logStreamEnd(delibMsgId, id, `[Error] ${errMsg}`, undefined);
-						throw err;
 					});
 				}),
 			);
