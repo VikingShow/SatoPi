@@ -12,6 +12,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { StateTracker } from "../state";
+import { SwarmSessionManager } from "../swarm-session-manager";
 
 let tmpDir: string;
 
@@ -79,7 +80,7 @@ describe("getWorstWorker", () => {
 		const worst = st.getWorstWorker();
 		expect(worst).not.toBeNull();
 		// Both have the same score; either is acceptable
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 
 	it("does NOT return agents outside candidates (regression test for excludeIds bug)", async () => {
@@ -93,7 +94,7 @@ describe("getWorstWorker", () => {
 		// even though it has the lowest score globally.
 		const worst = st.getWorstWorker(["worker-1", "worker-2"]);
 		expect(worst).not.toBe("cloner-1");
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 });
 
@@ -191,18 +192,26 @@ describe("resetAgentStatuses", () => {
 		expect(Object.keys(st.state.agents).sort()).toEqual(["worker-1", "worker-2", "worker-3"]);
 	});
 
-	it("persisted state matches in-memory state after reset", async () => {
+	it("persisted state via session.jsonl matches in-memory after reset", async () => {
+		const sm = await SwarmSessionManager.create(tmpDir);
 		const st = new StateTracker(tmpDir, "test");
+		st.setSessionManager(sm);
+
 		await st.init(["worker-1"], 5, "loop");
 		await st.incrementPraise(["worker-1"]);
 		await st.resetAgentStatuses();
+		await sm.flush();
 
-		// Load from disk into a new instance
-		const st2 = new StateTracker(tmpDir, "test");
-		await st2.load();
+		// Read persisted state from session.jsonl
+		const latest = await SwarmSessionManager.readLatestState(tmpDir);
+		expect(latest).not.toBeNull();
+		expect(latest!.agents).toBeDefined();
 
-		expect(st2.state.agents["worker-1"]).toBeDefined();
-		expect(st2.state.agents["worker-1"]!.praiseCount).toBe(0);
-		expect(st2.state.agents["worker-1"]!.status).toBe("pending");
+		const agents = latest!.agents as Record<string, any>;
+		expect(agents["worker-1"]).toBeDefined();
+		expect(agents["worker-1"].praiseCount).toBe(0);
+		expect(agents["worker-1"].status).toBe("pending");
+
+		await sm.close();
 	});
 });

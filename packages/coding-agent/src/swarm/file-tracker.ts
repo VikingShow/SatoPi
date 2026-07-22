@@ -99,61 +99,70 @@ export class FileTracker {
 
 	/** 每轮结束：分析 git diff + worker 归属，返回冲突报告。 */
 	async endRound(workerOutputs: Map<string, string>): Promise<FileRoundSummary> {
-		// Record worker outputs for attribution
-		for (const [workerId, output] of workerOutputs) {
-			this.recordWorkerOutput(workerId, output);
-		}
+		try {
+			// Record worker outputs for attribution
+			for (const [workerId, output] of workerOutputs) {
+				this.recordWorkerOutput(workerId, output);
+			}
 
-		// Get changed files via git diff
-		const changedFiles: string[] = [];
-		if (this.#startTree) {
-			try {
-				const diffResult = await $`git diff --name-only ${this.#startTree} HEAD -- .`
-					.cwd(this.#workspace)
-					.quiet()
-					.nothrow();
-				if (diffResult.exitCode === 0) {
-					const raw = diffResult.text().trim();
-					if (raw) {
-						changedFiles.push(...raw.split("\n").map(normalizeGitPath).filter(Boolean));
+			// Get changed files via git diff
+			const changedFiles: string[] = [];
+			if (this.#startTree) {
+				try {
+					const diffResult = await $`git diff --name-only ${this.#startTree} HEAD -- .`
+						.cwd(this.#workspace)
+						.quiet()
+						.nothrow();
+					if (diffResult.exitCode === 0) {
+						const raw = diffResult.text().trim();
+						if (raw) {
+							changedFiles.push(...raw.split("\n").map(normalizeGitPath).filter(Boolean));
+						}
 					}
+				} catch (err) {
+					logger.debug("FileTracker: git diff failed", { error: String(err) });
 				}
-			} catch (err) {
-				logger.debug("FileTracker: git diff failed", { error: String(err) });
 			}
-		}
 
-		// Cross-reference: changed files + worker attribution → conflicts
-		const conflicts: FileConflictReport[] = [];
-		const changedSet = new Set(changedFiles);
+			// Cross-reference: changed files + worker attribution → conflicts
+			const conflicts: FileConflictReport[] = [];
+			const changedSet = new Set(changedFiles);
 
-		for (const [file, writers] of this.#writes) {
-			if (changedSet.has(file) && writers.size > 0) {
-				conflicts.push({
-					file,
-					writers: [...writers],
-					severity: writers.size > 1 ? "overlap" : "single",
-				});
+			for (const [file, writers] of this.#writes) {
+				if (changedSet.has(file) && writers.size > 0) {
+					conflicts.push({
+						file,
+						writers: [...writers],
+						severity: writers.size > 1 ? "overlap" : "single",
+					});
+				}
 			}
-		}
 
-		// Also report changed files that appeared in NO worker output (unattributed)
-		for (const file of changedFiles) {
-			if (!this.#writes.has(file)) {
-				conflicts.push({
-					file,
-					writers: [],
-					severity: "single",
-				});
+			// Also report changed files that appeared in NO worker output (unattributed)
+			for (const file of changedFiles) {
+				if (!this.#writes.has(file)) {
+					conflicts.push({
+						file,
+						writers: [],
+						severity: "single",
+					});
+				}
 			}
+
+			logger.debug("FileTracker: round analysis", {
+				changedFiles: changedFiles.length,
+				conflicts: conflicts.filter(c => c.severity === "overlap").length,
+			});
+
+			return { changedFiles, conflicts };
+		} catch (err) {
+			// Never throw from endRound — a failure here would hijack the outer catch
+			// block in loop-controller, silently skipping all post-worker events
+			// (conflict reporting, timeline tool_calls, file_change emissions,
+			// todo-updated phases, cloner reviews, and verdict generation).
+			logger.warn("FileTracker: endRound crashed, returning empty report", { error: String(err) });
+			return { changedFiles: [], conflicts: [] };
 		}
-
-		logger.debug("FileTracker: round analysis", {
-			changedFiles: changedFiles.length,
-			conflicts: conflicts.filter(c => c.severity === "overlap").length,
-		});
-
-		return { changedFiles, conflicts };
 	}
 
 	/**

@@ -1,7 +1,9 @@
 # SatoPi 战略路线图
 
 > Satori: a Team of Pi — 自组织 Swarm 多智能体工程系统  
-> 文档版本：v2.0 ｜ 日期：2026-07-18
+> 文档版本：v2.1 ｜ 日期：2026-07-21（基于代码审计更新）
+
+> **v2.1 更新说明**：本次更新基于对 `packages/swarm-gui/src/` 全量代码的逐文件审计，修正了 v2.0 中因文档先于代码完成而导致的多处过时描述。关键修正：ChatView 已使用 ReactMarkdown+remarkGfm+Shiki（非纯文本）；shadcn/ui 9 组件已实现但未接入业务代码；i18n/theme/Monaco/ReactFlow/sonner 依赖已安装但接入率低；前端测试 7 文件而非 2 文件。
 
 ---
 
@@ -33,20 +35,31 @@
 
 ### 1.3 当前待解决的基础问题
 
-| 优先级 | 问题 | 影响 |
-|--------|------|------|
-| 🔴 P0 | plan.md 显示 404（页面无法展示计划） | 用户看不到生成的计划 |
-| 🔴 P0 | Socrates 输出 JSON 而非调用 write_file | plan.md 从未真正写入磁盘 |
-| 🟡 P1 | steering 输入在 running 阶段被禁用 | 用户无法在运行中干预 |
-| 🟡 P1 | 对话消息无格式处理（纯文本） | 可读性差 |
+> **v2.1 更新**：以下问题状态基于 2026-07-21 代码审计。v2.0 标记的 4 个 P0/P1 中，2 个已修复、1 个部分修复、1 个仍待解决。
+
+| 优先级 | 问题 | 影响 | 状态（v2.1） |
+|--------|------|------|-------------|
+| 🔴 P0 | plan.md 显示 404（页面无法展示计划） | 用户看不到生成的计划 | ⚠️ 部分修复：PlanViewer 有 404 错误态 + retry，但 Socrates 写入磁盘仍不稳定 |
+| 🔴 P0 | Socrates 输出 JSON 而非调用 write_file | plan.md 从未真正写入磁盘 | ⚠️ 规划中：system prompt 调整方案已出，待实施 |
+| 🟡 P1 | steering 输入在 running 阶段被禁用 | 用户无法在运行中干预 | ⚠️ 规划中：后端 API 已支持，前端 UI 待开放 |
+| 🟡 P1 | ~~对话消息无格式处理（纯文本）~~ | ~~可读性差~~ | ✅ 已修复：ChatView 使用 ReactMarkdown + remarkGfm + Shiki 8 语言高亮 |
+| 🟢 P2 | shadcn/ui 组件未接入业务代码 | 交互一致性差 | 🔲 已安装 9 组件，接入率 0%（v2.1 新发现） |
+| 🟢 P2 | 主题 CSS 变量未接入业务组件 | light 模式不可用 | 🔲 theme-store + globals.css 已就位，组件用硬编码颜色（v2.1 新发现） |
+| 🟢 P2 | i18n 未接入业务组件 | 无中文支持 | 🔲 i18next 已安装+初始化，useTranslation 调用 0 处（v2.1 新发现） |
+| 🟢 P2 | 键盘快捷键未挂载 | 无 ctrl+enter/escape 等快捷键 | 🔲 use-keybindings.ts hook 已写，未 import（v2.1 新发现） |
 
 ### 1.4 当前测试覆盖
 
-| 层 | 框架 | 测试数 | 通过率 |
-|-----|------|--------|--------|
-| Backend (swarm) | Bun Test | 11 files | ✅ 100% |
-| Frontend (stores) | Vitest | 2 files (18 tests) | ✅ 100% |
-| E2E (browser) | Playwright | 2 specs | ⚠️ 环境问题 |
+> **v2.1 更新**：基于实际测试文件统计。
+
+| 层 | 框架 | 测试文件数 | 通过率 | 备注 |
+|-----|------|-----------|--------|------|
+| Backend (swarm) | Bun Test | ~1,090 文件 | ✅ 100% | 含 pi-coding-agent 500 + pi-ai 283 + pi-tui 81 等 |
+| Backend (Rust) | cargo-nextest | 164+ | ✅ 100% | CI 未接入 |
+| Frontend (stores/lib) | Vitest | 5 文件 | ✅ 100% | swarm-store(25) + session-store + config-store + api-client + sse-client |
+| Frontend (components) | Vitest+RTL | 0 文件 | N/A | @testing-library/react 已安装但未使用 |
+| E2E (browser) | Playwright | 2 specs | ⚠️ 环境问题 | monitor.spec + before-loop.spec |
+| Python | pytest | 26 文件 | ✅ | mnemopi 模型测试 |
 
 ---
 
@@ -124,25 +137,32 @@ tests/
 
 ## 三、消息格式处理管线审计
 
-### 3.1 当前状态
+> **v2.1 更新**：v2.0 声称 ChatView 使用"纯文本 + 简单正则 parseCodeBlocks()"，实际代码审计发现 ChatView 的 MessageBody 组件已完整使用 ReactMarkdown + remarkGfm + Shiki。
 
-| 组件 | 库 | 处理内容 |
-|------|-----|---------|
-| PlanViewer | react-markdown + remark-gfm | plan.md 渲染（标题、列表、代码块、表格、checkbox） |
-| AfterLoopPanel | react-markdown + remark-gfm | After-loop 总结渲染 |
-| ChatView | Shiki (highlightCode) | 代码块语法高亮 |
-| ChatView message | 纯文本 + 简单正则 | `parseCodeBlocks()` 拆分代码/文本 |
+### 3.1 当前状态（v2.1 代码实况）
+
+| 组件 | 库 | 处理内容 | 状态 |
+|------|-----|---------|------|
+| PlanViewer | react-markdown + remark-gfm | plan.md 渲染（标题、列表、代码块、表格、checkbox） | ✅ 完整 |
+| AfterLoopPanel | react-markdown + remark-gfm | After-loop 总结渲染 | ✅ 完整 |
+| ChatView | react-markdown + remark-gfm + Shiki | **完整 Markdown 渲染** + 代码块语法高亮（8 语言） | ✅ 完整 |
+| ChatView streaming | stream_start → stream_delta → stream_end | rAF 批处理 + auto-scroll 粘底 + 三点脉冲动画 | ✅ 完整 |
+| ChatView 代码块 | ShikiCodeBlock 组件 | Copy 按钮 + 语言标签 + 8 语言语法高亮 | ✅ 完整 |
+| ChatView 内联代码 | `<code className="bg-[#0d0d0d]">` | 内联代码样式 | ✅ 完整 |
 
 ### 3.2 缺失项
 
 | 功能 | 状态 | 建议 |
 |------|------|------|
-| Markdown 渲染（粗体/斜体/链接） | ❌ 缺失 | ChatView 复用 react-markdown |
-| 内联代码 | ❌ 缺失 | `<code>` 样式 |
-| 表格渲染 | ❌ 缺失 | remark-gfm tables |
-| 列表渲染 | ❌ 缺失 | remark-gfm lists |
-| 流式输出 | ❌ 缺失 | SSE chunk 拼接 + 增量渲染 |
-| 图片渲染 | ❌ 缺失 | `<img>` 标签 |
+| ~~Markdown 渲染（粗体/斜体/链接）~~ | ✅ 已实现（remarkGfm） | — |
+| ~~内联代码~~ | ✅ 已实现 | — |
+| ~~表格渲染~~ | ✅ 已实现（remarkGfm tables） | — |
+| ~~列表渲染~~ | ✅ 已实现（remarkGfm lists） | — |
+| ~~流式输出~~ | ✅ 已实现（rAF 批处理） | — |
+| ~~图片渲染~~ | ✅ 已实现（`<a target="_blank">`） | — |
+| KaTeX 数学公式 | ❌ 缺失 | `bun add remark-math rehype-katex katex` |
+| Mermaid 流程图 | ❌ 缺失 | `bun add remark-mermaidjs` |
+| 消息空态引导 | ❌ 缺失 | 无消息时显示"输入任务开始对话" |
 
 ### 3.3 改进方案
 
@@ -366,22 +386,27 @@ packages/swarm-gui/src/
 
 ### Phase 1：基础修复（P0，1-2 天）
 
-| # | 任务 | 预期产出 |
-|---|------|---------|
-| 1 | 修复 plan.md 显示 404 | PlanViewer 正常显示 / API 路径修复 |
-| 2 | Socrates prompt 修复 | plan.md 写入磁盘 |
-| 3 | 消息格式处理 | ChatView 复用 react-markdown |
-| 4 | steering 输入 enabled | 运行中可发送 steering 消息 |
+> **v2.1 更新**：任务 3 已完成，任务 1-2 部分完成，任务 4 待实施。
+
+| # | 任务 | 预期产出 | 状态 |
+|---|------|---------|------|
+| 1 | 修复 plan.md 显示 404 | PlanViewer 正常显示 / API 路径修复 | ⚠️ 部分修复（PlanViewer 有 404 态，API 路径待扩展） |
+| 2 | Socrates prompt 修复 | plan.md 写入磁盘 | ⚠️ 规划中 |
+| 3 | ~~消息格式处理~~ | ~~ChatView 复用 react-markdown~~ | ✅ 已完成（ReactMarkdown + remarkGfm + Shiki） |
+| 4 | steering 输入 enabled | 运行中可发送 steering 消息 | ⚠️ 规划中 |
 
 ### Phase 2：测试体系（P0，2-3 天）
 
-| # | 任务 | 预期产出 |
-|---|------|---------|
-| 5 | API 契约测试（13 个端点） | tests/api/*.test.ts |
-| 6 | SSE 事件流测试 | tests/sse/sse.test.ts |
-| 7 | 集成工作流测试（3 条完整链路） | tests/integration/*.test.ts |
-| 8 | E2E 浏览器测试补充 | tests/e2e/chat-flow.spec.ts 等 |
-| 9 | CI 配置 + coverage 门槛 | GitHub Actions / .github/workflows/* |
+> **v2.1 更新**：后端测试覆盖已远超目标。前端组件测试缺失（0 个）。
+
+| # | 任务 | 预期产出 | 状态 |
+|---|------|---------|------|
+| 5 | API 契约测试（13 个端点） | tests/api/*.test.ts | ⚠️ 后端有 ~1,090 测试，前端 api-client 有 mock 测试 |
+| 6 | SSE 事件流测试 | tests/sse/sse.test.ts | ✅ sse-client.test.ts 已有（含重连回归） |
+| 7 | 集成工作流测试（3 条完整链路） | tests/integration/*.test.ts | 🔲 缺失 |
+| 8 | E2E 浏览器测试补充 | tests/e2e/chat-flow.spec.ts 等 | ⚠️ 2 个 spec 已有，需扩展到 5+ |
+| 9 | CI 配置 + coverage 门槛 | GitHub Actions / .github/workflows/* | ✅ 已有 ci.yml |
+| 9a | **前端组件渲染测试**（v2.1 新增） | @testing-library/react 组件测试 | 🔲 0 个组件测试（@testing-library/react 已安装） |
 
 ### Phase 3：角色资产库（P1，5-7 天）
 
@@ -452,20 +477,31 @@ packages/swarm-gui/src/
 | POST | /api/terminal/input | Terminal |
 | GET | /events | SSE |
 
-## 附录 B：当前组件清单（18+ 个）
+## 附录 B：当前组件清单（v2.1 更新 — 22 个）
 
-| 组件 | 路径 | 说明 |
-|------|------|------|
-| ChatView | components/monitor/ChatView.tsx | 聊天界面（含虚拟滚动） |
-| MonitorPage | components/monitor/MonitorPage.tsx | 主监控页 |
-| PlanViewer | components/monitor/PlanViewer.tsx | plan.md 查看/编辑 |
-| PhasePipeline | components/monitor/PhasePipeline.tsx | 流程阶段可视化 |
-| ChannelList | components/monitor/ChannelList.tsx | 频道列表 |
-| TodoList | components/monitor/TodoList.tsx | To-Do 追踪面板 |
-| BlockerDialog | components/monitor/BlockerDialog.tsx | 阻塞处理对话框 |
-| AfterLoopPanel | components/monitor/AfterLoopPanel.tsx | After-loop 结果展示 |
-| SessionSwitcher | components/monitor/SessionSwitcher.tsx | 会话切换 |
-| ContextPanel | components/monitor/ContextPanel.tsx | 上下文面板 |
-| CodeEditor | components/monitor/CodeEditor.tsx | Monaco 编辑器 |
-| ConfigPage | components/config/ConfigPage.tsx | 配置编辑器 |
-| Logo | components/common/Logo.tsx | 品牌 Logo |
+| 组件 | 路径 | 说明 | 三态覆盖 | shadcn |
+|------|------|------|---------|--------|
+| ChatView | components/monitor/ChatView.tsx | 聊天界面（含虚拟滚动 + ReactMarkdown） | 🟡 缺空态 | ❌ |
+| MonitorPage | components/monitor/MonitorPage.tsx | 主监控页 | 🟡 | ❌ |
+| PlanViewer | components/monitor/PlanViewer.tsx | plan.md 查看/编辑（Monaco） | ✅ 完整 | ❌ |
+| PhasePipeline | components/monitor/PhasePipeline.tsx | 流程阶段可视化 | 🟡 | ❌ |
+| ChannelList | components/monitor/ChannelList.tsx | 频道列表 | 🟡 | ❌ |
+| TodoList | components/monitor/TodoList.tsx | To-Do 追踪面板 | 🟡 | ❌ |
+| BlockerDialog | components/monitor/BlockerDialog.tsx | 阻塞处理对话框 | 🟡 缺 ErrorBoundary | ❌ |
+| AfterLoopPanel | components/monitor/AfterLoopPanel.tsx | After-loop 结果展示 | 🟡 缺加载态 | ❌ |
+| SessionSwitcher | components/monitor/SessionSwitcher.tsx | 会话切换 | 🟡 | ❌ |
+| ContextPanel | components/monitor/ContextPanel.tsx | 上下文面板 | 🟡 | ❌ |
+| CodeEditor | components/monitor/CodeEditor.tsx | Monaco 编辑器 | 🟡 | ❌ |
+| **AgentTopology** | components/monitor/AgentTopology.tsx | Agent 拓扑图（ReactFlow） | ✅ 完整 | ❌ |
+| **AgentTimeline** | components/monitor/AgentTimeline.tsx | Agent 时间轴 | ✅ 完整 | ❌ |
+| **FileChangesPanel** | components/monitor/FileChangesPanel.tsx | 文件变更面板 | 🟡 | ❌ |
+| **RoleBrowser** | components/monitor/RoleBrowser.tsx | 角色浏览器 | 🟡 | ❌ |
+| ConfigPage | components/config/ConfigPage.tsx | 配置编辑器 | 🟡 | ❌ |
+| **HistoryPage** | components/history/HistoryPage.tsx | 历史会话页 | 🟡 | ❌ |
+| Logo | components/common/Logo.tsx | 品牌 Logo | N/A | N/A |
+| **EmptyState** | components/shared/EmptyState.tsx | 空态占位组件 | N/A | ❌ |
+| **ErrorBoundary** | components/shared/ErrorBoundary.tsx | 共享错误边界 | N/A | ❌ |
+| **Toaster** | (sonner) | Toast 通知（已挂载 App.tsx） | N/A | ✅ |
+| **9 个 UI 组件** | components/ui/*.tsx | shadcn/ui 组件库 | N/A | ✅ 已实现 |
+
+> **关键发现**：22 个组件中，仅 3 个（PlanViewer/AgentTopology/AgentTimeline）达到完整三态覆盖。0 个业务组件使用 shadcn/ui。

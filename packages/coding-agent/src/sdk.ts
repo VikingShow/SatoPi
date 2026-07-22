@@ -511,6 +511,8 @@ export interface CreateAgentSessionOptions {
 	toolNames?: string[];
 	/** Tool names to block — removed from the available set (config-as-constraint). */
 	blockedTools?: string[];
+	/** Write allowlist — restrict the write tool to only these file paths. */
+	writeAllowList?: string[];
 
 	/** Output schema for structured completion (subagents) */
 	outputSchema?: unknown;
@@ -1573,6 +1575,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				const requestedToolNames = options.toolNames ? normalizeToolNames(options.toolNames) : undefined;
 				return !requestedToolNames || requestedToolNames.includes("edit");
 			},
+			writeAllowList: options.writeAllowList,
 			skipPythonPreflight: options.skipPythonPreflight,
 			contextFiles,
 			workspaceTree: resolvedWorkspaceTree,

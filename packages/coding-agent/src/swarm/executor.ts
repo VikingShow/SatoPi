@@ -11,6 +11,7 @@
  * the pipeline controller.
  */
 import * as path from "node:path";
+import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type {
 	AgentDefinition,
 	AgentProgress,
@@ -22,6 +23,8 @@ import type {
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "./schema";
 import type { StateTracker } from "./state";
+import type { ActivityLogger } from "./activity-logger";
+import { createStreamProgressHandler } from "./streaming";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -69,6 +72,22 @@ export interface SwarmExecutorOptions {
 	 * instead of the default `SubprocessAgentExecutor`.
 	 */
 	executor?: AgentExecutor;
+	/**
+	 * Optional tool hooks passed through to the subprocess's AgentLoopConfig.
+	 * beforeToolCall can block write/edit/bash calls (e.g. deliberation phase).
+	 * afterToolCall is used for lock release coordination.
+	 */
+	toolHooks?: {
+		beforeToolCall?: AgentLoopConfig["beforeToolCall"];
+		afterToolCall?: AgentLoopConfig["afterToolCall"];
+	};
+	/**
+	 * Optional AgentDefinition overrides merged into the built agent def.
+	 * Lets callers supply custom systemPrompt, tools, blockedTools, source, etc.
+	 */
+	agentOverrides?: Partial<AgentDefinition>;
+		/** Optional activity logger for SSE streaming output. */
+		activityLogger?: ActivityLogger;
 }
 
 // ============================================================================
@@ -121,6 +140,9 @@ export async function executeSwarmAgent(
 		stateTracker,
 		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
 		onStarted,
+		toolHooks,
+		agentOverrides,
+			activityLogger,
 	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
@@ -133,15 +155,15 @@ export async function executeSwarmAgent(
 		source: "project" as AgentSource,
 		...(agent.allowedTools ? { tools: agent.allowedTools } : {}),
 		...(agent.blockedTools ? { blockedTools: agent.blockedTools } : {}),
+		// Merge caller-provided AgentDefinition overrides (systemPrompt, tools, blockedTools, source, etc.).
+		...agentOverrides,
 	};
 
 	// Build a per-agent timeout controller and combine with the caller's signal.
 	// The caller can terminate the agent via onStarted's controller.
 	const agentController = new AbortController();
 	const effectiveSignal =
-		signal && timeoutMs > 0
-			? AbortSignal.any([signal, agentController.signal])
-			: signal ?? agentController.signal;
+		signal && timeoutMs > 0 ? AbortSignal.any([signal, agentController.signal]) : (signal ?? agentController.signal);
 
 	// Arm the timeout if enabled.
 	let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -163,6 +185,10 @@ export async function executeSwarmAgent(
 	});
 	await stateTracker.appendLog(agent.name, `Starting iteration ${iteration}`);
 
+			// SSE streaming: signal the frontend that this agent has started producing output.
+			const streamMsgId = `${agentId}-${Date.now()}`;
+			activityLogger?.logStreamStart(streamMsgId, agent.name);
+
 	try {
 		const result = await runSubprocess({
 			cwd: workspace,
@@ -173,12 +199,17 @@ export async function executeSwarmAgent(
 			modelOverride,
 			signal: effectiveSignal,
 			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
-			onProgress: progress => onProgress?.(agent.name, progress),
+				onProgress: activityLogger
+					? createStreamProgressHandler(activityLogger, streamMsgId, agent.name,
+						(progress) => onProgress?.(agent.name, progress))
+					: (progress: AgentProgress) => onProgress?.(agent.name, progress),
 			modelRegistry,
 			settings,
 			enableLsp: false,
 			artifactsDir: path.join(stateTracker.swarmDir, "context"),
 			keepAlive: false,
+			beforeToolCall: toolHooks?.beforeToolCall,
+			afterToolCall: toolHooks?.afterToolCall,
 		});
 
 		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);
@@ -192,6 +223,7 @@ export async function executeSwarmAgent(
 			`Iteration ${iteration} ${status}${result.error ? `: ${result.error}` : ""}`,
 		);
 
+			activityLogger?.logStreamEnd(streamMsgId, agent.name, result.output, result.thinking);
 		return result;
 	} catch (err) {
 		const error = err instanceof Error ? err.message : String(err);
@@ -203,10 +235,8 @@ export async function executeSwarmAgent(
 			completedAt: Date.now(),
 			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 		});
-		await stateTracker.appendLog(
-			agent.name,
-			`Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`,
-		);
+		await stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`);
+			activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
 
 		const failResult: SingleResult = {
 			index,

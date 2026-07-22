@@ -3,7 +3,7 @@
  *
  * Captures all IRC messages, phase transitions, verdicts, file conflicts,
  * scaling events, nominations, and crashes. Each event is:
- *   1. Appended to `.swarm_{name}/activity.jsonl` (permanent history)
+ *   1. Written to session.jsonl via SwarmSessionManager (permanent history)
  *   2. Pushed to MonitorServer via SSE (real-time GUI updates)
  *
  * All write operations are fire-and-forget — they never block the main loop.
@@ -12,9 +12,8 @@
  * route events to the correct SSE subscribers.
  */
 
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import type { ReviewVerdict } from "./roundtable";
+import type { SwarmSessionManager } from "./swarm-session-manager";
 
 // ============================================================================
 // Types
@@ -37,7 +36,12 @@ export type ActivityEventType =
 	| "file_change"
 	| "stream_start"
 	| "stream_delta"
-	| "stream_end";
+	| "stream_end"
+	| "deliberation_challenge"
+	| "deliberation_rebuttal"
+	| "deliberation_ruling"
+	| "cloner_individual"
+	| "file_coordination";
 
 export interface ActivityEntry {
 	ts: number;
@@ -87,6 +91,10 @@ export interface ActivityEntry {
 	errorFlag?: string;
 	recoverable?: boolean;
 	suggestion?: string;
+		/** File-change fields */
+		linesChanged?: number;
+		/** Stream-end fields */
+		thinking?: string;
 }
 
 // ============================================================================
@@ -102,14 +110,21 @@ export interface ActivityBroadcaster {
 // ============================================================================
 
 export class ActivityLogger {
-	readonly #logPath: string;
 	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
 	#writeQueue: Promise<void> = Promise.resolve();
+	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(swarmDir: string, sessionName: string) {
-		this.#logPath = path.join(swarmDir, "activity.jsonl");
 		this.#sessionName = sessionName;
+	}
+
+	/**
+	 * Inject a SwarmSessionManager for session.jsonl persistence.
+	 * Required — without it, events are pushed to SSE only (no durable storage).
+	 */
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
 	}
 
 	/**
@@ -121,14 +136,14 @@ export class ActivityLogger {
 	}
 
 	/**
-	 * Core write method — appends to activity.jsonl and pushes to SSE.
-	 * Serialized via writeQueue to preserve event ordering in the file.
+	 * Core write method — writes to session.jsonl via SwarmSessionManager
+	 * and pushes to SSE. Serialized via writeQueue to preserve event ordering.
 	 * Fire-and-forget: callers never await this.
 	 */
 	private log(entry: ActivityEntry): void {
 		this.#writeQueue = this.#writeQueue
-			.then(() => fs.appendFile(this.#logPath, JSON.stringify(entry) + "\n"))
-			.then(() => {
+			.then(async () => {
+				this.#sessionManager?.logActivity(entry);
 				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
 			.catch(() => {
@@ -241,7 +256,40 @@ export class ActivityLogger {
 	}
 
 	/** End of a streaming response — frontend finalises the bubble. */
-	logStreamEnd(msgId: string, from: string, finalBody: string): void {
-		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody });
+	logStreamEnd(msgId: string, from: string, finalBody: string, thinking?: string): void {
+		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody, thinking });
+	}
+
+	// ── Deliberation events (P2 — GUI channel routing) ──────────────
+
+	/** Worker challenges a peer's output during the deliberation phase. */
+	logDeliberationChallenge(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_challenge", from, body, round });
+	}
+
+	/** Worker rebuts a challenge during the deliberation phase. */
+	logDeliberationRebuttal(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_rebuttal", from, body, round });
+	}
+
+	/** Reviewer issues a ruling during the deliberation resolution sub-round. */
+	logDeliberationRuling(from: string, body: string, round: number): void {
+		this.log({ ts: Date.now(), type: "deliberation_ruling", from, body, round });
+	}
+
+	// ── Cloner individual verdict (P2 — per-cloner insight) ─────────
+
+	/** Emit a single cloner's verdict before aggregation. Enables the
+	 *  frontend to show per-cloner findings in dedicated channels. */
+	logClonerIndividual(clonerId: string, passed: boolean, findings: string[]): void {
+		this.log({ ts: Date.now(), type: "cloner_individual", from: clonerId, passed, findings });
+	}
+
+	// ── File coordination (P2 — file-conflict channel routing) ───────
+
+	/** Emit a file-specific coordination message when workers need to
+	 *  negotiate access to a conflicted file. */
+	logFileCoordination(file: string, from: string, body: string): void {
+		this.log({ ts: Date.now(), type: "file_coordination", file, from, body });
 	}
 }

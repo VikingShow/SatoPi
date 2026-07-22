@@ -22,11 +22,9 @@ let tmpDir: string;
 
 beforeEach(async () => {
 	tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "swarm-robustness-"));
-	RegionLockManager.reset();
 });
 
 afterEach(async () => {
-	RegionLockManager.reset();
 	await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -115,42 +113,58 @@ describe("retry lifecycle", () => {
 		const worst = st.getWorstWorker(["worker-1", "worker-2"]);
 		expect(worst).not.toBeNull();
 		// All scores are 0, so it's a tie — either is fine
-		expect(["worker-1", "worker-2"]).toContain(worst);
+		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});
 });
 
 // ============================================================================
-// RegionLockManager.reset()
+// RegionLockManager — per-session instance isolation
+//
+// RegionLockManager is now a per-session instance (no global singleton /
+// static reset). Isolation therefore comes from constructing a fresh
+// instance per session, and releaseAll() clears a worker's locks on teardown.
 // ============================================================================
 
-describe("RegionLockManager.reset()", () => {
-	it("clears all locks after reset", () => {
-		const mgr = RegionLockManager.create();
+describe("RegionLockManager per-session isolation", () => {
+	it("a fresh instance inherits no locks from another instance", () => {
+		const mgr = new RegionLockManager();
 
 		expect(mgr.tryLock("worker-1", "/src/file-a.ts")).toBe(true);
 		expect(mgr.tryLock("worker-2", "/src/file-b.ts")).toBe(true);
-
-		// Locks are active
+		// Conflicting lock on file-a is blocked within the same instance.
 		expect(mgr.tryLock("worker-3", "/src/file-a.ts")).toBe(false);
 
-		// Reset
-		RegionLockManager.reset();
-
-		// Create a fresh instance — should have no locks
-		const mgr2 = RegionLockManager.create();
+		// A separate session (separate instance) shares no state.
+		const mgr2 = new RegionLockManager();
 		expect(mgr2.tryLock("worker-3", "/src/file-a.ts")).toBe(true);
 		expect(mgr2.tryLock("worker-4", "/src/file-b.ts")).toBe(true);
 	});
 
-	it("reset + create returns a clean singleton", () => {
-		const mgr1 = RegionLockManager.create();
-		mgr1.tryLock("worker-1", "/test.ts");
+	it("releaseAll clears all locks held by a worker", () => {
+		const mgr = new RegionLockManager();
+		mgr.tryLock("worker-1", "/a.ts");
+		mgr.tryLock("worker-1", "/b.ts");
+		mgr.tryLock("worker-2", "/c.ts");
+		expect(mgr.getActiveLocks().length).toBe(3);
 
-		RegionLockManager.reset();
+		mgr.releaseAll("worker-1");
 
-		const mgr2 = RegionLockManager.create();
-		// Same file should now be acquirable
-		expect(mgr2.tryLock("worker-2", "/test.ts")).toBe(true);
+		const remaining = mgr.getActiveLocks();
+		expect(remaining.length).toBe(1);
+		expect(remaining[0]!.workerId).toBe("worker-2");
+		// worker-1's files are now acquirable by others.
+		expect(mgr.tryLock("worker-3", "/a.ts")).toBe(true);
+	});
+
+	it("release only frees a lock held by the requesting worker", () => {
+		const mgr = new RegionLockManager();
+		mgr.tryLock("worker-1", "/shared.ts");
+		// worker-2 cannot release worker-1's lock.
+		mgr.release("worker-2", "/shared.ts");
+		expect(mgr.tryLock("worker-3", "/shared.ts")).toBe(false);
+		// The holder can release it.
+		mgr.release("worker-1", "/shared.ts");
+		expect(mgr.tryLock("worker-3", "/shared.ts")).toBe(true);
 	});
 });
 

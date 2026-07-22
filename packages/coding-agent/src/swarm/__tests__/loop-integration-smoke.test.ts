@@ -83,6 +83,7 @@ async function main() {
 	console.log("[6/6] Phase 2 checks...");
 	// generatePlanningPrompt is async and accepts optional ExperienceStore
 	const prompt = await generatePlanningPrompt({
+			swarmDir: path.join(WORKSPACE, `.swarm_${def.name}`),
 		workspace: WORKSPACE,
 		loopConfig: def.loopConfig!,
 		taskDescription: "test",

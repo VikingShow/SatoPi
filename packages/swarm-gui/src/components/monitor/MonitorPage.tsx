@@ -1,8 +1,9 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useThemeStore } from "../../stores/theme-store";
-import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain, Clock, FileText } from "lucide-react";
+import { Wifi, WifiOff, Loader2, GitGraph, MessageSquare, Users, Sun, Moon, Pause, Play, TrendingUp, TrendingDown, Zap, Brain, Clock, FileText, GitBranch, ArrowRightLeft } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "../ui/button";
 import ChannelList from "./ChannelList";
 import ChatView from "./ChatView";
 import ContextPanel from "./ContextPanel";
@@ -12,6 +13,8 @@ import AgentTopology from "./AgentTopology";
 import AgentTimeline from "./AgentTimeline";
 import FileChangesPanel from "./FileChangesPanel";
 import RoleBrowser from "./RoleBrowser";
+import ScalingHistory from "./ScalingHistory";
+import CommMatrix from "./CommMatrix";
 import AfterLoopPanel from "./AfterLoopPanel";
 
 function formatTokens(n: number): string {
@@ -38,7 +41,7 @@ export default function MonitorPage() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "afterloop">("chat");
+  const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "scaling" | "commatrix" | "afterloop">("chat");
 
   const afterLoopResult = useSwarmStore((s) => s.afterLoopResult);
   const isActive = loopPhase === "running" || loopPhase === "blocked";
@@ -69,17 +72,17 @@ export default function MonitorPage() {
     switch (loopPhase) {
       case "before-loop-dialog":
       case "before-loop-debate":
-        return "text-amber-400";
+        return "text-primary";
       case "before-loop-confirm":
-        return "text-blue-400";
+        return "text-status-info";
       case "running":
-        return "text-emerald-400";
+        return "text-status-success";
       case "blocked":
-        return "text-red-400";
+        return "text-status-danger";
       case "after-loop":
-        return "text-purple-400";
+        return "text-status-accent";
       default:
-        return "text-neutral-500";
+        return "text-muted-foreground";
     }
   })();
 
@@ -87,123 +90,109 @@ export default function MonitorPage() {
     <div className="flex flex-col h-full">
       {/* Top bar: status + view mode only.
           Cancel/Stop controls live in the ChatView input bar (state-changing position). */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 bg-neutral-900/50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background/50">
         <div className="flex items-center gap-3">
           <span className={`text-sm font-medium ${statusColor}`}>
             ● {statusLabel}
           </span>
-          <div className="flex items-center gap-0.5 bg-neutral-800 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode("chat")}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "chat" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
-                }`}
-              >
+          <div className="flex items-center gap-0.5 bg-card rounded-lg p-0.5">
+              <Button variant={viewMode === "chat" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("chat")}>
                 <MessageSquare size={12} /> Chat
-              </button>
-              <button
-                onClick={() => setViewMode("topology")}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "topology" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
-                }`}
-              >
+              </Button>
+              <Button variant={viewMode === "topology" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("topology")}>
                 <GitGraph size={12} /> Topology
-              </button>
-              <button
-                onClick={() => setViewMode("timeline")}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "timeline" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
-                }`}
-              >
+              </Button>
+              <Button variant={viewMode === "timeline" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("timeline")}>
                 <Clock size={12} /> Timeline
-              </button>
-              <button
-                onClick={() => setViewMode("files")}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "files" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
-                }`}
-              >
+              </Button>
+              <Button variant={viewMode === "files" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("files")}>
                 <FileText size={12} /> Files
-              </button>
-              <button
-                onClick={() => setViewMode("roles")}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  viewMode === "roles" ? "bg-neutral-700 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
-                }`}
-              >
+              </Button>
+              <Button variant={viewMode === "roles" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("roles")}>
                 <Users size={12} /> Roles
-              </button>
+              </Button>
+              <Button variant={viewMode === "scaling" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("scaling")}>
+                <GitBranch size={12} /> Scaling
+              </Button>
+              <Button variant={viewMode === "commatrix" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("commatrix")}>
+                <ArrowRightLeft size={12} /> Comm
+              </Button>
               {afterLoopResult && (
-                <button
+                <Button
+                  variant={viewMode === "afterloop" ? "secondary" : "ghost"}
+                  size="xs"
                   onClick={() => setViewMode("afterloop")}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    viewMode === "afterloop" ? "bg-purple-500/20 text-purple-400" : "text-neutral-500 hover:text-neutral-300"
-                  }`}
+                  className={viewMode === "afterloop" ? "text-status-accent" : ""}
                 >
                   <Brain size={12} /> Summary
-                </button>
+                </Button>
               )}
             </div>
-          <span className="text-xs text-neutral-600">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
+          <span className="text-xs text-muted-foreground/60">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
           {/* P2-6: Token count + cost estimate */}
           {(swarmState?.totalTokens ?? 0) > 0 && (
-            <span className="flex items-center gap-1 text-xs text-neutral-500" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>
               <Zap size={11} />
               {formatTokens(swarmState!.totalTokens!)}
-              <span className="text-neutral-700">·</span>
+              <span className="text-muted-foreground/50">·</span>
               {estimateCost(swarmState!.totalTokens!)}
             </span>
           )}
           {/* P2-5: Convergence trend indicator */}
           {convergenceTrend && (
-            <span className={`flex items-center gap-0.5 text-xs ${convergenceTrend.trend === "up" ? "text-emerald-400" : "text-amber-400"}`} title={`Jaccard: ${convergenceTrend.latest.toFixed(3)}`}>
+            <span className={`flex items-center gap-0.5 text-xs ${convergenceTrend.trend === "up" ? "text-status-success" : "text-primary"}`} title={`Jaccard: ${convergenceTrend.latest.toFixed(3)}`}>
               {convergenceTrend.trend === "up" ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
               {(convergenceTrend.latest * 100).toFixed(0)}%
             </span>
           )}
-          <span className="flex items-center gap-1 text-xs text-neutral-600">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/60">
             {isConnected ? (
-              <><Wifi size={12} className="text-emerald-400" /> SSE</>
+              <><Wifi size={12} className="text-status-success" /> SSE</>
             ) : (
-              <><WifiOff size={12} className="text-neutral-600" /> SSE</>
+              <><WifiOff size={12} className="text-muted-foreground/60" /> SSE</>
             )}
           </span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="p-1 rounded-md text-neutral-500 hover:text-neutral-300 hover:bg-neutral-700 transition-colors cursor-pointer"
             title="Toggle theme"
           >
             {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
+          </Button>
         </div>
 
         {/* Right side: pause/resume controls + status indicators */}
         <div className="flex items-center gap-2">
           {/* Pause / Resume — available when running or paused */}
           {loopPhase === "running" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => pauseRun()}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer"
+              className="text-primary border-primary/20 hover:bg-primary/10"
               title="Pause the swarm"
             >
               <Pause size={12} />
               Pause
-            </button>
+            </Button>
           )}
           {loopPhase === "paused" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => resumeRun()}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors cursor-pointer"
+              className="text-status-success border-status-success/20 hover:bg-status-success/10"
               title="Resume the swarm"
             >
               <Play size={12} />
               Resume
-            </button>
+            </Button>
           )}
 
           {/* Debate in progress indicator */}
           {loopPhase === "before-loop-debate" && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-400">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-accent">
               <Loader2 size={14} className="animate-spin" />
               Debating...
             </div>
@@ -211,7 +200,7 @@ export default function MonitorPage() {
 
           {/* After-loop processing indicator */}
           {loopPhase === "after-loop" && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-400">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-accent">
               <Loader2 size={14} className="animate-spin" />
               Processing...
             </div>
@@ -241,6 +230,14 @@ export default function MonitorPage() {
         ) : viewMode === "files" ? (
           <div className="flex-1 relative">
             <FileChangesPanel />
+          </div>
+        ) : viewMode === "scaling" ? (
+          <div className="flex-1 relative">
+            <ScalingHistory />
+          </div>
+        ) : viewMode === "commatrix" ? (
+          <div className="flex-1 relative">
+            <CommMatrix />
           </div>
         ) : viewMode === "afterloop" ? (
           <div className="flex-1 overflow-y-auto p-4">

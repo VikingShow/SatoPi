@@ -3,6 +3,7 @@ import { Clock, TrendingUp, AlertTriangle, Lightbulb } from "lucide-react";
 import { api } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/session-store";
 import type { ActivityEntry } from "../../lib/types";
+import { Button } from "../ui/button";
 
 export default function HistoryPage() {
   const runs = useSessionStore((s) => s.runs);
@@ -18,9 +19,17 @@ export default function HistoryPage() {
   }, [loadRuns]);
 
   useEffect(() => {
-    api.getHistory().then((data) => {
-      setEntries(data.entries as ActivityEntry[]);
-    }).catch(() => {});
+    if (selectedRun) {
+      // Global endpoint — fetches a specific historical run's activity
+      api.getRunActivity(selectedRun).then(({ entries }) => {
+        setEntries(entries as ActivityEntry[]);
+      }).catch(() => {});
+    } else {
+      // Session-scoped — fetches the active session's current history
+      api.getHistory().then((data) => {
+        setEntries(data.entries as ActivityEntry[]);
+      }).catch(() => {});
+    }
   }, [selectedRun]);
 
   const verdicts = entries.filter((e) => e.type === "verdict");
@@ -38,27 +47,28 @@ export default function HistoryPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* Run list */}
-      <div className="w-56 flex flex-col border-r border-background-border bg-background-card">
-        <div className="px-3 py-2 border-b border-background-border">
-          <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Past Runs</span>
+      <div className="w-56 flex flex-col border-r border-border bg-background-card">
+        <div className="px-3 py-2 border-b border-border">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Past Runs</span>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {runs.length === 0 && (
-            <div className="px-3 py-4 text-xs text-neutral-600">No past runs found.</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground/60">No past runs found.</div>
           )}
           {runs.map((run) => (
-            <button
+            <Button
+              variant="ghost"
               key={run.name}
               onClick={() => setSelectedRun(run.name)}
-              className={`w-full px-3 py-2 text-left transition-colors cursor-pointer ${
-                selectedRun === run.name ? "bg-primary/10 text-neutral-100" : "text-neutral-400 hover:bg-background-elevated"
+              className={`w-full px-3 py-2 text-left ${
+                selectedRun === run.name ? "bg-primary/10 text-foreground/90" : "text-muted-foreground hover:bg-background-elevated"
               }`}
             >
               <div className="text-sm truncate">{run.name}</div>
               {run.messageCount > 0 && (
-                <div className="text-[10px] text-neutral-600">{run.messageCount} msgs</div>
+                <div className="text-[10px] text-muted-foreground/60">{run.messageCount} msgs</div>
               )}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -76,21 +86,21 @@ export default function HistoryPage() {
         {/* Verdict cards */}
         {verdicts.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-neutral-200 mb-2">Verdict History</h3>
+            <h3 className="text-sm font-medium text-foreground mb-2">Verdict History</h3>
             <div className="space-y-2">
               {verdicts.map((v, i) => (
-                <div key={i} className="bg-background-card rounded-card border border-background-border p-3">
+                <div key={i} className="bg-background-card rounded-card border border-border p-3">
                   <div className="flex items-center gap-3 mb-1">
                     <span className={`text-sm font-medium ${v.passed ? "text-status-success" : "text-status-danger"}`}>
                       {v.passed ? "PASS" : "FAIL"}
                     </span>
-                    <span className="text-xs text-neutral-500">{v.approval}/{v.total} approved</span>
-                    <span className="text-xs text-neutral-600">{new Date(v.ts).toLocaleTimeString()}</span>
+                    <span className="text-xs text-muted-foreground">{v.approval}/{v.total} approved</span>
+                    <span className="text-xs text-muted-foreground/60">{new Date(v.ts).toLocaleTimeString()}</span>
                   </div>
                   {v.findings && v.findings.length > 0 && (
                     <div className="space-y-0.5">
                       {v.findings.map((f, j) => (
-                        <div key={j} className="text-xs text-neutral-500">{f}</div>
+                        <div key={j} className="text-xs text-muted-foreground">{f}</div>
                       ))}
                     </div>
                   )}
@@ -103,19 +113,19 @@ export default function HistoryPage() {
         {/* Communication matrix */}
         {commMap.size > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-neutral-200 mb-2">Communication Map</h3>
-            <div className="bg-background-card rounded-card border border-background-border p-3">
+            <h3 className="text-sm font-medium text-foreground mb-2">Communication Map</h3>
+            <div className="bg-background-card rounded-card border border-border p-3">
               <div className="space-y-1">
                 {Array.from(commMap.entries()).sort((a, b) => b[1] - a[1]).map(([key, count]) => (
                   <div key={key} className="flex items-center gap-2 text-xs">
-                    <span className="text-neutral-400 w-32 truncate">{key}</span>
+                    <span className="text-muted-foreground w-32 truncate">{key}</span>
                     <div className="flex-1 h-1.5 bg-background-elevated rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary/60 rounded-full"
                         style={{ width: `${(count / Math.max(...commMap.values())) * 100}%` }}
                       />
                     </div>
-                    <span className="text-neutral-500 w-6 text-right">{count}</span>
+                    <span className="text-muted-foreground w-6 text-right">{count}</span>
                   </div>
                 ))}
               </div>
@@ -126,12 +136,12 @@ export default function HistoryPage() {
         {/* Crashes */}
         {crashes.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-neutral-200 mb-2">Crashes</h3>
+            <h3 className="text-sm font-medium text-foreground mb-2">Crashes</h3>
             <div className="space-y-1">
               {crashes.map((c, i) => (
                 <div key={i} className="bg-status-danger/10 border border-status-danger/20 rounded-lg p-2 text-xs">
                   <span className="text-status-danger font-medium">{c.worker}</span>
-                  <span className="text-neutral-500 ml-2">{c.error}</span>
+                  <span className="text-muted-foreground ml-2">{c.error}</span>
                 </div>
               ))}
             </div>
@@ -146,12 +156,12 @@ function StatCard({ icon, label, value, color }: {
   icon: React.ReactNode; label: string; value: number; color: string;
 }) {
   return (
-    <div className="bg-background-card rounded-card border border-background-border p-3">
+    <div className="bg-background-card rounded-card border border-border p-3">
       <div className={`flex items-center gap-1.5 mb-1 ${color}`}>
         {icon}
-        <span className="text-xs text-neutral-500">{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <div className="text-xl font-mono text-neutral-200">{value}</div>
+      <div className="text-xl font-mono text-foreground">{value}</div>
     </div>
   );
 }

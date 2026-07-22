@@ -14,13 +14,18 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { StateTracker } from "./state";
-import type { ActivityLogger } from "./activity-logger";
+import type { ActivityLogger, ActivityBroadcaster } from "./activity-logger";
 import type { RunManager, SteeringSink } from "./monitor/api-routes";
-import type { BeforeLoopManager } from "./before-loop-manager";
+import type { BeforeLoopManager } from "./monitor/api-routes";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { RoleAssetManager } from "./role-asset";
+// NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
+// type — the `import type` above is kept for documentation but the value import
+// is what makes persistence actually work.
+import { SwarmSessionManager } from "./swarm-session-manager";
+import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================
 // Types
@@ -46,6 +51,8 @@ export interface SessionServices {
 	beforeLoopManager: BeforeLoopManager;
 	steeringSink: SteeringSink;
 	abortController: AbortController;
+	/** OH-MY-PI-based session persistence (replaces pipeline.json, activity.jsonl, conversation.json). */
+	sessionManager?: SwarmSessionManager;
 }
 
 export type SessionStatus =
@@ -73,15 +80,26 @@ export class SessionRegistry {
 	readonly #sessions = new Map<string, SessionServices>();
 	#maxConcurrent: number;
 	#factory: SessionFactory;
+	/** Optional SSE broadcaster auto-injected into every new session. */
+	#broadcaster: ActivityBroadcaster | null = null;
 
 	constructor(
 		shared: SharedServices,
 		factory: SessionFactory,
-		maxConcurrent = 3,
+		maxConcurrent = Infinity,
 	) {
 		this.#shared = shared;
 		this.#factory = factory;
 		this.#maxConcurrent = maxConcurrent;
+	}
+
+	/**
+	 * Register an SSE broadcaster.  Once set, every session created via
+	 * createSession() (including those from the REST API) automatically
+	 * gets its ActivityLogger wired to this broadcaster.
+	 */
+	setBroadcaster(broadcaster: ActivityBroadcaster): void {
+		this.#broadcaster = broadcaster;
 	}
 
 	get shared(): SharedServices {
@@ -128,10 +146,51 @@ export class SessionRegistry {
 		const services = await this.#factory(this.#shared, name, swarmDir);
 		const abortController = new AbortController();
 
+		// Create SwarmSessionManager for unified OH-MY-PI persistence.
+		// This replaces pipeline.json, activity.jsonl, and conversation.json.
+		let sessionManager: SwarmSessionManager | undefined;
+		try {
+			sessionManager = await SwarmSessionManager.openOrCreate(swarmDir);
+			logger.info("[SessionRegistry] SwarmSessionManager created", { name, swarmDir });
+		} catch (err) {
+			logger.warn("[SessionRegistry] SwarmSessionManager unavailable — falling back to legacy persistence", { error: String(err) });
+		}
+
+		// Wire the SSE broadcaster to the new session's ActivityLogger.
+		// This covers both startup-created sessions and sessions created
+		// later via the REST API (POST /api/sessions).
+		if (this.#broadcaster) {
+			services.activityLogger.setBroadcaster(this.#broadcaster);
+		}
+
 		const session: SessionServices = {
 			...services,
 			abortController,
+			sessionManager,
 		};
+
+		// Inject SwarmSessionManager into legacy persistence layers (dual-write).
+		// Each service keeps its existing file writes AND additionally writes to
+		// session.jsonl through the SessionManager.
+		if (sessionManager) {
+			services.stateTracker.setSessionManager(sessionManager);
+			services.activityLogger.setSessionManager(sessionManager);
+			services.beforeLoopManager.setSessionManager?.(sessionManager);
+
+			// Seed the in-memory StateTracker from the persisted snapshot when
+			// the session.jsonl already existed (e.g. backend restart recovering
+			// a historical session). Without this, GET /api/runs reports the
+			// persisted status (completed/failed) from readLatestState but the
+			// in-memory StateTracker is still the empty "idle" default — the
+			// session list and the live state disagree, producing a ghost session.
+			const snapshot = await SwarmSessionManager.readLatestState(swarmDir);
+			if (snapshot) {
+				services.stateTracker.updatePipeline(snapshot);
+				logger.info("[SessionRegistry] seeded StateTracker from persisted snapshot", {
+					name, status: snapshot.status, loopPhase: snapshot.loopPhase,
+				});
+			}
+		}
 
 		this.#sessions.set(name, session);
 		return session;
@@ -141,7 +200,17 @@ export class SessionRegistry {
 		const session = this.#sessions.get(name);
 		if (!session) return;
 		session.abortController.abort();
+		// Flush and close SwarmSessionManager before cleanup
+		if (session.sessionManager) {
+			try { await session.sessionManager.flush(); } catch { /* best-effort */ }
+			try { await session.sessionManager.close(); } catch { /* best-effort */ }
+		}
+		// Remove from in-memory registry
 		this.#sessions.delete(name);
+		// Remove the .swarm_{name} directory from disk so GET /api/runs
+		// (which scans the workspace filesystem) does not resurrect it.
+		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
+		try { await fs.rm(swarmDir, { recursive: true, force: true }); } catch { /* best-effort */ }
 	}
 
 	async destroyAll(): Promise<void> {

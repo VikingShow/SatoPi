@@ -23,6 +23,20 @@
 
 **40+** providers · **32** built-in tools · **14** lsp ops · **28** dap ops · **~55k** lines of Rust core.
 
+## Dev
+
+
+  // 后端（端口 7878）：
+  
+  cd /root/workspace/SatoPi/packages/coding-agent
+  bun run src/swarm/monitor/standalone.ts
+
+  // 前端（端口 5173）：
+  
+  cd /root/workspace/SatoPi/packages/swarm-gui
+  npx vite --host 0.0.0.0
+  
+
 ## Install
 
 **macOS · Linux**

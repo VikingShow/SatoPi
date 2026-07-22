@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
+import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import { WorkerChannel } from "../worker-channel";
 
 // ---------------------------------------------------------------------------
@@ -12,7 +13,7 @@ import { WorkerChannel } from "../worker-channel";
 
 describe("WorkerChannel nomination protocol", () => {
 	function createChannel(workerCount: number): WorkerChannel {
-		const bus = new IrcBus({});
+		const bus = new IrcBus(AgentRegistry.global());
 		const workers = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
 		return new WorkerChannel(bus, { workers, cloners: [] });
 	}

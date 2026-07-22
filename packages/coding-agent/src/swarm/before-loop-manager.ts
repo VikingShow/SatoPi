@@ -11,16 +11,16 @@
  * All agent output is pushed to the frontend via ActivityLogger → SSE.
  */
 
-import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { StateTracker, LoopPhase } from "./state";
 import type { ActivityLogger } from "./activity-logger";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
+import type { SwarmSessionManager } from "./swarm-session-manager";
 import { generatePlanningPrompt, runPlanDebate } from "./before-loop";
+import { streamAgentOutput } from "./streaming";
 import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
 import SOCRATES_SYSTEM_PROMPT from "./prompts/socrates.hbs" with { type: "text" };
@@ -43,11 +43,14 @@ interface ConversationTurn {
 }
 
 /**
- * Default tool restriction for Socrates — read + write_file (for plan.md) + grep + find.
+ * Default tool restriction for Socrates — read + write (for plan.md) + grep + find.
  * No bash/shell execution, no edit. Can be overridden via agent_restrictions.socrates in YAML.
+ * write_allowlist restricts the write tool to only plan.md so Socrates cannot modify
+ * arbitrary workspace files.
  */
 const SOCRATES_DEFAULT_RESTRICTION: AgentToolRestriction = {
-	allowed: ["read", "write_file", "grep", "find", "glob"],
+	allowed: ["read", "write", "grep", "find", "glob"],
+	write_allowlist: ["plan.md"],
 };
 
 /**
@@ -62,11 +65,29 @@ function parseSocratesResponse(raw: string): string {
 	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return raw;
 	try {
 		const obj = JSON.parse(trimmed);
-		if (typeof obj?.message === "string" && obj.message.length > 0) {
-			return obj.message;
+		// Extract human-readable content from common JSON wrapper shapes.
+		// Ordered by conversational relevance.
+		const textKeys = ["plan", "message", "text", "response", "reply", "content", "answer", "summary"];
+		for (const key of textKeys) {
+			if (typeof obj?.[key] === "string" && obj[key].length > 0) {
+				if (key === "plan" && obj.status === "ready") return "[Plan Ready]\n\n" + obj[key];
+				return obj[key];
+			}
 		}
+		if (typeof obj?.error === "string" && obj.error.length > 0) {
+			return obj.error;
+		}
+		// questions array (e.g. {"status":"waiting_for_clarification","questions":[...]})
+		if (Array.isArray(obj?.questions) && obj.questions.length > 0) {
+			const qs = obj.questions.filter((q: unknown) => typeof q === "string").join("\n- ");
+			return `Waiting for clarification:\n- ${qs}`;
+		}
+		// Bare status — short diagnostic, not prettified JSON.
+		if (typeof obj?.status === "string") return `(${obj.status})`;
+		// Last resort: return raw text rather than JSON.stringify — even
+		// unstructured prose is more readable than a formatted JSON blob.
 	} catch {
-		// not JSON — return original
+		// not parseable as JSON — return original
 	}
 	return raw;
 }
@@ -87,12 +108,13 @@ export class BeforeLoopManager {
 	#runManager: RunManager;
 
 	#conversation: ConversationTurn[] = [];
-	#conversationPath: string;
 	#taskDescription = "";
 	#phase: LoopPhase = "idle";
 	#busy = false;
 	#planReady = false;
 	#planMtime = 0;
+	/** OH-MY-PI SessionManager for session.jsonl persistence. */
+	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -114,41 +136,15 @@ export class BeforeLoopManager {
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#runManager = opts.runManager;
-		this.#conversationPath = path.join(this.#swarmDir, "conversation.json");
-
-		// Try to restore existing conversation from disk
-		this.#loadConversation().catch(err => {
-			logger.warn("Failed to load conversation history", { error: String(err) });
-		});
 	}
 
 	/**
-	 * Load conversation history from disk (if it exists).
-	 * Called once in constructor to restore state after page refresh / restart.
-	 */
-	async #loadConversation(): Promise<void> {
-		try {
-			const content = await fs.readFile(this.#conversationPath, "utf-8");
-			const parsed = JSON.parse(content) as ConversationTurn[];
-			if (Array.isArray(parsed)) {
-				this.#conversation = parsed;
-			}
-		} catch {
-			// File doesn't exist or is invalid — start with empty conversation
-		}
-	}
-
-	/**
-	 * Persist current conversation to disk as JSON.
-	 * Called after every conversation mutation.
+	 * Persist current conversation snapshot to session.jsonl via
+	 * SwarmSessionManager. Called after every conversation mutation.
 	 */
 	async #saveConversation(): Promise<void> {
 		try {
-			await fs.writeFile(
-				this.#conversationPath,
-				JSON.stringify(this.#conversation, null, 2),
-				"utf-8",
-			);
+			this.#sessionManager?.logConversationSnapshot(this.#conversation);
 		} catch (err) {
 			logger.warn("Failed to save conversation history", { error: String(err) });
 		}
@@ -160,6 +156,14 @@ export class BeforeLoopManager {
 	 */
 	getHistory(): ConversationTurn[] {
 		return [...this.#conversation];
+	}
+
+	/**
+	 * Inject a SwarmSessionManager for dual-write persistence.
+	 * When set, conversation turns are also written to session.jsonl.
+	 */
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
 	}
 
 	get isBusy(): boolean {
@@ -382,14 +386,11 @@ export class BeforeLoopManager {
 
 	async #runSocrates(): Promise<void> {
 		this.#busy = true;
-		this.#activityLogger.logBroadcast("system", "Socrates is thinking...");
+		const msgId = `socrates-${Date.now()}`;
 
 		try {
-			// Build task text from full conversation history
 			const taskText = this.#buildTaskFromHistory();
 
-			// Resolve tool restrictions: use agent_restrictions.socrates from YAML if present,
-			// otherwise fall back to the default read-only planning restriction.
 			const loopConfig = await this.#readLoopConfig();
 			const socratesRestriction = loopConfig?.agentRestrictions?.socrates
 				?? loopConfig?.agentRestrictions?.["*"]
@@ -407,35 +408,36 @@ export class BeforeLoopManager {
 			if (socratesRestriction.blocked && socratesRestriction.blocked.length > 0) {
 				agentDef.blockedTools = socratesRestriction.blocked;
 			}
+			if (socratesRestriction.write_allowlist && socratesRestriction.write_allowlist.length > 0) {
+				agentDef.writeAllowList = socratesRestriction.write_allowlist;
+			}
 
-			const result = await runSubprocess({
-				cwd: this.#stateTracker.swarmDir,
-				agent: agentDef,
-				task: taskText,
-				index: 0,
-				id: `socrates-${Date.now()}`,
-				modelRegistry: this.#modelRegistry,
-				settings: this.#settings,
-				enableLsp: false,
-				keepAlive: false,
-				modelOverride: loopConfig?.model ?? undefined,
-			});
+			const result = await streamAgentOutput(
+				{
+					activityLogger: this.#activityLogger,
+					msgId,
+					from: "socrates",
+					transformOutput: parseSocratesResponse,
+				},
+				{
+					cwd: this.#stateTracker.swarmDir,
+					agent: agentDef,
+					task: taskText,
+					index: 0,
+					id: `socrates-${Date.now()}`,
+					modelRegistry: this.#modelRegistry,
+					settings: this.#settings,
+					enableLsp: false,
+					keepAlive: false,
+					modelOverride: loopConfig?.model ?? undefined,
+				},
+			);
 
-			const output = result.output || "(no output)";
+			const displayOutput = result.output || "(no output)";
 
-			// Strip system-instruction contamination: if Socrates returns a JSON
-			// wrapper like {"status":"...","message":"..."} we extract the
-			// human-readable message field for display.
-			const displayOutput = parseSocratesResponse(output);
-
-			// Add to conversation history
 			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
 
-			// Push Socrates response to frontend via SSE
-			this.#activityLogger.logBroadcast("socrates", displayOutput);
-
-			// Check if plan.md was written or updated during this run
 			const newMtime = await this.#getPlanMtime();
 			if (newMtime > this.#planMtime) {
 				this.#planReady = true;
@@ -447,8 +449,6 @@ export class BeforeLoopManager {
 				);
 			}
 		} catch (err) {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			this.#activityLogger.logBroadcast("system", `[Error] Socrates failed: ${errMsg}`);
 			throw err;
 		} finally {
 			this.#busy = false;

@@ -13,9 +13,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
-import { ChevronDown, History, Play, Check, AlertCircle, Loader2, RotateCcw, Plus, X, FolderOpen } from "lucide-react";
+import { ChevronDown, History, Play, Check, AlertCircle, Loader2, RotateCcw, Plus, X, FolderOpen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { Button } from "../ui/button";
 
 type RunMeta = {
   name: string;
@@ -42,7 +43,7 @@ function timeAgo(iso: string | null): string {
 function StatusBadge({ status }: { status: RunMeta["status"] }) {
   if (status === "running") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
         <Loader2 size={9} className="animate-spin" />
         RUN
       </span>
@@ -50,7 +51,7 @@ function StatusBadge({ status }: { status: RunMeta["status"] }) {
   }
   if (status === "completed") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-status-success">
         <Check size={9} />
         DONE
       </span>
@@ -58,13 +59,13 @@ function StatusBadge({ status }: { status: RunMeta["status"] }) {
   }
   if (status === "failed") {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-medium text-red-400">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-status-danger">
         <AlertCircle size={9} />
         FAIL
       </span>
     );
   }
-  return <span className="text-[10px] font-medium text-neutral-600">IDLE</span>;
+  return <span className="text-[10px] font-medium text-muted-foreground/60">IDLE</span>;
 }
 
 export default function SessionSwitcher() {
@@ -75,6 +76,7 @@ export default function SessionSwitcher() {
   const switchToSession = useSessionStore((s) => s.switchToSession);
   const backToCurrent = useSessionStore((s) => s.backToCurrent);
   const newSession = useSessionStore((s) => s.newSession);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
   const isRunning = useSwarmStore((s) => s.isRunning);
   const swarmState = useSwarmStore((s) => s.swarmState);
   const { t } = useTranslation();
@@ -138,46 +140,46 @@ export default function SessionSwitcher() {
   return (
     <div className="relative" ref={popoverRef}>
       {/* Trigger button — shows current session name */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-sm transition-colors cursor-pointer ${
-          open
-            ? "bg-primary/15 text-primary"
-            : "text-neutral-300 hover:text-neutral-100 hover:bg-background-elevated"
-        }`}
+        className={open ? "bg-primary/15 text-primary" : ""}
         title="Switch session"
       >
         {viewingSession ? (
-          <History size={13} className="text-amber-400" />
+          <History size={13} className="text-primary" />
         ) : (
-          <Play size={13} className="text-emerald-400" />
+          <Play size={13} className="text-status-success" />
         )}
         <span className="font-medium tracking-tight max-w-[180px] truncate">{displayedName}</span>
-        <ChevronDown size={12} className={`text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+        <ChevronDown size={12} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </Button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-lg border border-background-border bg-background-card shadow-2xl shadow-black/40 overflow-hidden">
+        <div className="absolute left-0 top-full mt-1 z-50 w-80 rounded-lg border border-border bg-background-card shadow-2xl shadow-black/40 overflow-hidden">
           {/* Header */}
-          <div className="px-3 py-2 border-b border-background-border flex items-center justify-between bg-background-elevated/30">
-            <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between bg-background-elevated/30">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <FolderOpen size={11} className="text-primary" />
               Sessions ({allRuns.length})
             </span>
             {viewingSession && (
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => { backToCurrent(); setOpen(false); }}
-                className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="text-status-success hover:text-status-success"
               >
                 <RotateCcw size={10} />
                 Back to live
-              </button>
+              </Button>
             )}
           </div>
 
           {/* "Viewing historical" banner */}
           {viewingSession && (
-            <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-[11px] text-amber-300 flex items-center gap-1.5">
+            <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-[11px] text-primary flex items-center gap-1.5">
               <History size={11} />
               Viewing: <span className="font-mono font-medium">{viewingSession}</span>
             </div>
@@ -186,7 +188,7 @@ export default function SessionSwitcher() {
           {/* Session list */}
           <div className="max-h-80 overflow-y-auto">
             {allRuns.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-neutral-600">
+              <div className="px-4 py-6 text-center text-xs text-muted-foreground/60">
                 No sessions yet
               </div>
             ) : (
@@ -194,8 +196,10 @@ export default function SessionSwitcher() {
                 const isActive = run.name === activeSwarm;
                 const isViewing = viewingSession === run.name;
                 return (
-                  <button
+                  <div
                     key={run.name}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => {
                       if (isViewing) {
                         backToCurrent();
@@ -204,54 +208,72 @@ export default function SessionSwitcher() {
                       }
                       setOpen(false);
                     }}
-                    className={`w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-background-border/40 last:border-b-0 ${
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } }}
+                    className={`group w-full px-3 py-2 flex flex-col gap-1 text-left transition-colors cursor-pointer border-b border-border/40 last:border-b-0 ${
                       isViewing
                         ? "bg-primary/10"
                         : isActive
-                        ? "bg-emerald-500/5 hover:bg-emerald-500/10"
+                        ? "bg-status-success/5 hover:bg-status-success/10"
                         : "hover:bg-background-elevated"
                     }`}
                   >
                     <div className="flex items-center gap-2 w-full">
                       {isActive && !isViewing ? (
-                        <Play size={11} className="text-emerald-400 shrink-0" fill="currentColor" />
+                        <Play size={11} className="text-status-success shrink-0" fill="currentColor" />
                       ) : isViewing ? (
-                        <History size={11} className="text-amber-400 shrink-0" />
+                        <History size={11} className="text-primary shrink-0" />
                       ) : (
-                        <FolderOpen size={11} className="text-neutral-500 shrink-0" />
+                        <FolderOpen size={11} className="text-muted-foreground shrink-0" />
                       )}
                       <span className={`text-xs flex-1 truncate font-medium ${
-                        isViewing ? "text-primary" : isActive ? "text-emerald-300" : "text-neutral-200"
+                        isViewing ? "text-primary" : isActive ? "text-status-success" : "text-foreground"
                       }`}>
                         {run.name}
                       </span>
-                      {isViewing && <span className="text-[9px] uppercase tracking-wider text-amber-400 font-bold">VIEW</span>}
-                      {isActive && !isViewing && <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-bold">LIVE</span>}
+                      {isViewing && <span className="text-[9px] uppercase tracking-wider text-primary font-bold">VIEW</span>}
+                      {isActive && !isViewing && <span className="text-[9px] uppercase tracking-wider text-status-success font-bold">LIVE</span>}
+                      {/* Delete — confirmed via native confirm() to avoid accidental data loss */}
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete session "${run.name}"? This cannot be undone.`)) {
+                            deleteSession(run.name);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 ml-auto hover:text-status-danger hover:bg-status-danger/10"
+                        title="Delete session"
+                      >
+                        <Trash2 size={11} />
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between gap-2 pl-5">
                       <StatusBadge status={run.status} />
-                      <span className="text-[10px] text-neutral-600 font-mono">
+                      <span className="text-[10px] text-muted-foreground/60 font-mono">
                         {timeAgo(run.lastActivity)} · {run.messageCount} msgs
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
           </div>
 
           {/* New session action */}
-          <div className="border-t border-background-border p-2 bg-background-elevated/30">
-            <button
+          <div className="border-t border-border p-2 bg-background-elevated/30">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleNew}
               disabled={newBusy || isRunning}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-200 bg-background-card hover:bg-primary/15 hover:text-primary border border-background-border rounded-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full hover:bg-primary/15 hover:text-primary"
               title={isRunning ? "Stop the current run first" : "Start a fresh session"}
             >
               {newBusy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
               New session
               {isRunning && <span className="text-[10px] text-status-warning ml-1">(stop current first)</span>}
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -299,6 +299,8 @@ export interface AgentDefinition {
 	tools?: string[];
 	/** Blacklist — these tools are blocked (config-as-constraint pattern). */
 	blockedTools?: string[];
+	/** Write allowlist — restrict the write tool to only these file paths (relative to workspace root). */
+	writeAllowList?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	thinkingLevel?: ConfiguredThinkingLevel;
@@ -426,6 +428,8 @@ export interface SingleResult {
 	modelOverride?: string | string[];
 	/** Resolved model display string in the form `<provider>/<id>`, optionally suffixed with `:<thinkingLevel>` when the level was set explicitly. Omitted from tool-result JSON when undefined to keep wire payloads small. */
 	resolvedModel?: string;
+	/** Aggregated thinking/reasoning text captured from the model's chain-of-thought. */
+	thinking?: string;
 	error?: string;
 	aborted?: boolean;
 	abortReason?: string;

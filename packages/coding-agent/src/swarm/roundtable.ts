@@ -11,6 +11,9 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import type { RoleAsset } from "./role-asset";
+import type { ActivityLogger } from "./activity-logger";
+import { guardTaskBudget } from "./context-guard";
+import { streamAgentOutput } from "./streaming";
 
 // ============================================================================
 // Types
@@ -52,6 +55,8 @@ export interface ClonerReviewConfig {
 	clonerRoles?: Record<string, RoleAsset>;
 	/** Tool restriction to apply to cloner agents (config-as-constraint). */
 	toolRestriction?: import("./schema").AgentToolRestriction;
+		/** Optional activity logger for SSE streaming output. */
+		activityLogger?: ActivityLogger;
 }
 
 // ============================================================================
@@ -73,7 +78,7 @@ export class ClonerCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles } = config;
+		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles, activityLogger } = config;
 
 		// Build a cloner agent definition with optional tool restrictions applied.
 		const buildClonerAgent = (id: string, i: number): AgentDefinition => {
@@ -111,21 +116,46 @@ export class ClonerCouncil {
 			`- Optionally list \`praised_workers\` and \`criticized_workers\` by worker ID.`,
 			`\nReturn a single JSON line:`,
 			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
-		].join("\n");
+		];
+
+		// Guard: token budget for cloner review (default 128K)
+		const guard = guardTaskBudget(reviewPrompt, undefined, `ClonerCouncil #${iteration}`);
+		if (guard.exceeded) {
+			reviewPrompt.length = 0;
+			reviewPrompt.push(
+				`Review the output from iteration ${iteration + 1}.`,
+				planContent ? `Plan: ${planContent.slice(0, 4000)}...` : "",
+				`Worker Output: ${workerOutput.slice(0, 8000)}...`,
+				`Return JSON: {"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["..."],"worker_count_delta":0,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
+			);
+		}
+
+		const reviewText = reviewPrompt.join("\n");
 
 		const settled = await Promise.allSettled(
-			clonerIds.map((id, i) =>
-				runSubprocess({
-					cwd: workspace,
-					agent: buildClonerAgent(id, i),
-					task: reviewPrompt,
-					index: i,
-					id: `cloner-review-${id}-${iteration}`,
-					modelRegistry,
-					settings,
-					signal,
-				}),
-			),
+			clonerIds.map((id, i) => {
+				const clonerMsgId = `cloner-review-${id}-${iteration}`;
+				return streamAgentOutput(
+					{ activityLogger: activityLogger!, msgId: clonerMsgId, from: id },
+					{
+						cwd: workspace,
+						agent: buildClonerAgent(id, i),
+						task: reviewText,
+						index: i,
+						id: clonerMsgId,
+						modelRegistry,
+						settings,
+						signal,
+					},
+				).then((r) => {
+					// Emit per-cloner individual verdict for GUI channel routing
+					const verdict = extractVerdict(id, r.output);
+					if (verdict) {
+						activityLogger?.logClonerIndividual(id, verdict.passed, verdict.findings);
+					}
+					return r;
+				});
+			}),
 		);
 		const results: SingleResult[] = settled.map((s, i) => {
 			if (s.status === "fulfilled") return s.value;
@@ -169,18 +199,22 @@ export class ClonerCouncil {
 			].join("\n");
 
 			const deliberationSettled = await Promise.allSettled(
-				clonerIds.map((id, i) =>
-					runSubprocess({
-						cwd: workspace,
-						agent: buildClonerAgent(id, i),
-						task: deliberationPrompt,
-						index: i,
-						id: `cloner-deliberation-${id}-${iteration}`,
-						modelRegistry,
-						settings,
-						signal,
-					}),
-				),
+				clonerIds.map((id, i) => {
+					const delibMsgId = `cloner-deliberation-${id}-${iteration}`;
+					return streamAgentOutput(
+						{ activityLogger: activityLogger!, msgId: delibMsgId, from: id },
+						{
+							cwd: workspace,
+							agent: buildClonerAgent(id, i),
+							task: deliberationPrompt,
+							index: i,
+							id: delibMsgId,
+							modelRegistry,
+							settings,
+							signal,
+						},
+					);
+				}),
 			);
 			const deliberationResults: SingleResult[] = deliberationSettled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;
@@ -376,6 +410,23 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 			if (verdict.praisedWorkers) for (const w of verdict.praisedWorkers) praisedWorkers.add(w);
 			if (verdict.criticizedWorkers) for (const w of verdict.criticizedWorkers) criticizedWorkers.add(w);
 		}
+	}
+
+	// When all cloner subprocesses crashed, totalCount is 0. This is a
+	// systemic failure (not normal FAIL), so surface it explicitly so the
+	// LoopController can escalate rather than silently retrying.
+	if (totalCount === 0) {
+		return {
+			passed: false,
+			approvalCount: 0,
+			totalCount: 0,
+			findings: ["[SYSTEM] All cloner subprocesses failed — no review available"],
+			workerCountSuggestions: [],
+			disagreed: false,
+			roleSuggestions: {},
+			praisedWorkers: [],
+			criticizedWorkers: [],
+		};
 	}
 
 	// P0-D: Veto overrides weighted majority.

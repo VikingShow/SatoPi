@@ -1,21 +1,28 @@
 # SatoPi 前端长期战略优化方案
 
 > 制定日期：2026-07-17
+> v2.1 更新日期：2026-07-21（基于代码审计修正过时数据）
 > 目标：将 SatoPi 的 Web 前端从 MVP 阶段升级到业界顶级水平
+
+> **v2.1 更新说明**：v1.0 制定时前端代码量约 1,300 行。截至 2026-07-21，代码已增长到 8,000+ 行、35+ 源文件，且大量依赖已安装（shadcn/ui 9 组件、Monaco、ReactFlow、i18next、next-themes、sonner），但这些依赖在业务组件中的接入率接近 0%。当前的核心问题不是"缺能力"而是"能力已具备但未接入"，即**集成债务**而非开发债务。
 
 ---
 
 ## 一、现状基准
 
-| 维度 | 当前状态 | 目标状态 |
-|------|---------|---------|
-| 前端代码量 | ~1,300 行，13 个源文件 | 15,000-20,000 行，80+ 源文件 |
-| 测试覆盖 | 0% | 80%+（单元 60% + E2E 20% + 视觉回归 10%） |
-| React 版本 | 18.3 | 19.2（对齐上游 omp） |
-| Tailwind | 3.4 + 手写 CSS | 4.3 + shadcn/ui |
-| 组件体系 | 纯手写 | shadcn/ui + Radix + 自定义 |
-| 后端测试 | ✅ 已有 10 个 swarm 测试 | 扩展到 30+ 测试 |
-| 包数量 | swarm-gui + collab-web（分离） | 统一 @oh-my-pi/pi-web（可独立发布的 SDK 包 + 内置 App） |
+> **v2.1 更新**：基于 `packages/swarm-gui/src/` 全量代码统计。
+
+| 维度 | v1.0 基准（2026-07-17） | v2.1 实况（2026-07-21） | 目标状态 |
+|------|------------------------|------------------------|---------|
+| 前端代码量 | ~1,300 行，13 源文件 | **~8,000 行，35+ 源文件** | 15,000-20,000 行，80+ 源文件 |
+| 测试覆盖 | 0% | **5 文件 store/lib 测试（含 25 个 swarm-store 测试）**，0 组件测试 | 80%+（单元 60% + E2E 20% + 视觉回归 10%） |
+| React 版本 | 18.3 | **19.2.7** ✅ 已升级 | 19.2（对齐上游 omp） |
+| Tailwind | 3.4 + 手写 CSS | **4.3.2（CSS-first @theme）** ✅ 已升级 | 4.3 + shadcn/ui |
+| 组件体系 | 纯手写 | **shadcn 4.13.0 已安装，9 个 UI 组件已实现，但 0 个被业务代码使用** | shadcn/ui + 自定义 |
+| 后端测试 | ✅ 已有 10 个 swarm 测试 | **~1,090 个 Bun 测试** | 扩展到 30+ 测试 |
+| 包数量 | swarm-gui + collab-web（分离） | 统一 @oh-my-pi/pi-web（可独立发布的 SDK 包 + 内置 App） | ✅ 已统一 |
+| **依赖安装率** | N/A | **95%**（几乎所有需要的库都已安装） | — |
+| **依赖接入率** | N/A | **~15%**（已安装但未在业务代码中使用） | 90%+ |
 
 ---
 
@@ -52,6 +59,8 @@ TypeScript 5.5 → 7.0      # 对齐上游类型系统
 
 ### 3.2 引入 shadcn/ui 组件库（第 2 周）
 
+> **v2.1 更新**：shadcn 4.13.0 已安装，9 个 UI 组件已实现（button/dialog/dropdown-menu/input/select/switch/scroll-area/textarea/sonner），基于 @base-ui/react（非 Radix）。但 **0 个业务组件使用它们**——所有 MonitorPage 子组件仍使用原生 `<button className="...">` + Tailwind 硬编码。接入工作是当前最高优先级的集成债务。
+
 **目标**：用 shadcn/ui 替换所有手写的按钮、输入框、卡片、对话框。
 
 | 当前手写组件 | 替换为 |
@@ -70,6 +79,8 @@ TypeScript 5.5 → 7.0      # 对齐上游类型系统
 3. 统一 Design Tokens（颜色、字体、圆角、阴影）
 
 ### 3.3 引入代码语法高亮（第 2 周）
+
+> **v2.1 更新**：✅ 已完成。Shiki 已集成到 ChatView 的 ShikiCodeBlock 组件中，支持 8 种语言语法高亮 + Copy 按钮 + 语言标签。PlanViewer 和 AfterLoopPanel 也使用 react-markdown + remark-gfm 渲染。
 
 当前 Markdown 渲染中的代码块无语法高亮：
 
@@ -163,6 +174,8 @@ packages/coding-agent/src/swarm/__tests__/
 
 ### 3.7 键盘快捷键（第 4 周）
 
+> **v2.1 更新**：`use-keybindings.ts` hook 已完整实现（5 组快捷键：ctrl+k/ctrl+enter/ctrl+1-3/escape/ctrl+shift+p），但 **0 个组件 import 它**。挂载到 App.tsx 即可激活。
+
 ```typescript
 // 参考 omp TUI 的键位系统
 const KEYBINDINGS = {
@@ -248,6 +261,8 @@ packages/web/                         # 新包: @oh-my-pi/pi-web
 
 ### 4.2 Agent 拓扑图可视化（第 7-8 周）
 
+> **v2.1 更新**：✅ 已完成。`@xyflow/react` 12.0.0 + `dagre` 0.8.5 已安装，`AgentTopology.tsx` 组件已实现并渲染在 MonitorPage 中。支持节点点击、状态颜色、自动布局。
+
 使用 **React Flow** 或 **Cytoscape.js** 展示 Swarm 运行时的 Agent 关系图。
 
 ```typescript
@@ -282,6 +297,8 @@ interface AgentEdge {
 - Worker 扩缩容动画（节点出现/消失的过渡效果）
 
 ### 4.3 内嵌代码编辑器（第 8-9 周）
+
+> **v2.1 更新**：✅ 依赖已安装。`@monaco-editor/react` 4.6.0 已集成到 PlanViewer.tsx（plan.md 编辑）和 CodeEditor.tsx。但 CodeEditor 有 textarea fallback，Monaco 的 Diff 模式和 LSP 诊断尚未使用。
 
 **Monaco Editor 集成**：
 
@@ -322,6 +339,8 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 
 ### 4.5 通知系统（第 10 周）
 
+> **v2.1 更新**：✅ sonner 2.0.7 已安装，`Toaster` 已在 App.tsx 中渲染，`use-notifications.ts` hook 存在。session-store 中有 `toastOnce` 去重逻辑。桌面通知和音效尚未实现。
+
 ```typescript
 // 三层通知
 interface NotificationSystem {
@@ -349,6 +368,8 @@ interface NotificationSystem {
 
 ### 4.6 主题系统（第 10-11 周）
 
+> **v2.1 更新**：`next-themes` 0.4.6 已安装，`theme-store.ts` 完整支持 dark/light/system + localStorage 持久化，`globals.css` 有完整的 `@theme` + `:root` + `[data-theme="light"]` 三层 CSS 变量体系。主题切换按钮已在 MonitorPage 渲染。**但**：业务组件使用硬编码颜色（`bg-neutral-900` 等），不引用 CSS 变量，切到 light 模式会导致显示异常。主题系统完成度约 30%（壳在，内容未接）。
+
 ```css
 /* Design Tokens → CSS Custom Properties */
 :root {
@@ -367,6 +388,8 @@ interface NotificationSystem {
 **通过 CSS 变量实现**，不引入 CSS-in-JS 运行时。参考 omp TUI 的既有多主题设计。
 
 ### 4.7 国际化 i18n（第 11 周）
+
+> **v2.1 更新**：`i18next` 23.12.0 + `react-i18next` 15.0.0 已安装，`i18n/index.ts` 已初始化（含 common/swarm/config 三组英文字典）。但 **0 个组件使用 `useTranslation`**，所有 UI 文案硬编码英文。需要：提取 en.json、创建 zh.json、在 15 个组件中接入 `useTranslation`。
 
 使用 **i18next** + **react-i18next**：
 
@@ -609,24 +632,27 @@ packages/coding-agent/src/swarm/__tests__/
 
 ### 总投入估算
 
-| 阶段 | 人月 | 产出 |
-|------|------|------|
-| Phase 1 | 2-3 人月 | 现代化基础 + 测试体系 |
-| Phase 2 | 4-5 人月 | 统一架构 + 核心功能 |
-| Phase 3 | 5-6 人月 | 业界顶级体验 |
-| **总计** | **11-14 人月** | |
+> **v2.1 更新**：v1.0 估算 11-14 人月，但当时假设所有依赖都需要从零安装。实际审计发现 95% 依赖已安装，剩余工作是"接入"而非"开发"，实际约需 2-3 人周完成集成债务（shadcn 接入 + 主题变量 + i18n + 键盘 + 三态），再加 2-3 人周补测试。
+
+| 阶段 | v1.0 估算 | v2.1 修正 | 说明 |
+|------|----------|----------|------|
+| Phase 1 | 2-3 人月 | **0.5 人月** | 依赖已安装，仅需接入 shadcn + 修复 EmptyState + 挂载 keybindings |
+| Phase 2 | 4-5 人月 | **1-1.5 人月** | Monaco/ReactFlow/i18n/theme/sonner 已安装，仅需接入业务组件 |
+| Phase 3 | 5-6 人月 | 5-6 人月 | 多人协作、时间轴、Plugin 系统确实需要从头开发 |
+| **总计** | **11-14 人月** | **7-8 人月** | 节省约 40% |
 
 ---
 
 ## 十、成功指标
 
-| KPI | 当前值 | Phase 1 目标 | Phase 2 目标 | Phase 3 目标 |
-|-----|--------|-------------|-------------|-------------|
-| 前端代码行数 | 1,300 | 5,000 | 12,000 | 20,000 |
-| 测试覆盖率 | 0% | 40% | 70% | 85% |
-| Lighthouse Performance | N/A | 90+ | 95+ | 98+ |
-| Lighthouse Accessibility | N/A | 80+ | 90+ | 95+ (WCAG AA) |
-| 首屏加载 (KB) | ~150KB | ~180KB | ~250KB (懒加载) | ~220KB |
-| 支持语言数 | 1 (en) | 1 | 2 (en, zh) | 4+ |
-| 端到端测试用例 | 0 | 5 | 15 | 30 |
-| 社区贡献者 | 1 | 2-3 | 5+ | 10+ |
+| KPI | v1.0 当前值 | v2.1 实际值 | Phase 1 目标 | Phase 2 目标 | Phase 3 目标 |
+|-----|------------|------------|-------------|-------------|-------------|
+| 前端代码行数 | 1,300 | **~8,000** | 10,000 | 15,000 | 20,000 |
+| 测试覆盖率 | 0% | **~15%（仅 store/lib）** | 40% | 70% | 85% |
+| Lighthouse Performance | N/A | N/A | 90+ | 95+ | 98+ |
+| Lighthouse Accessibility | N/A | **~20（无 aria/role/键盘）** | 80+ | 90+ | 95+ (WCAG AA) |
+| 首屏加载 (KB) | ~150KB | ~200KB（含 Monaco/ReactFlow） | ~180KB | ~250KB (懒加载) | ~220KB |
+| 支持语言数 | 1 (en) | **1 (en，i18n 已安装未接入)** | 1 | 2 (en, zh) | 4+ |
+| 端到端测试用例 | 0 | **2** | 5 | 15 | 30 |
+| 依赖接入率 | N/A | **~15%** | 60% | 85% | 95%+ |
+| 社区贡献者 | 1 | 1 | 2-3 | 5+ | 10+ |

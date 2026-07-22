@@ -48,11 +48,11 @@ export function CodeEditor({
   };
 
   return (
-    <div className="rounded-lg overflow-hidden border border-neutral-800">
+    <div className="rounded-lg overflow-hidden border border-border">
       <Suspense
         fallback={
-          <div className="flex items-center justify-center bg-[#1e1e1e]" style={{ height }}>
-            <Loader2 size={20} className="animate-spin text-neutral-500" />
+          <div className="flex items-center justify-center bg-background-elevated" style={{ height }}>
+            <Loader2 size={20} className="animate-spin text-muted-foreground" />
           </div>
         }
       >
@@ -74,8 +74,8 @@ export function CodeEditor({
             theme: "vs-dark",
           }}
           loading={
-            <div className="flex items-center justify-center bg-[#1e1e1e]" style={{ height }}>
-              <Loader2 size={20} className="animate-spin text-neutral-500" />
+            <div className="flex items-center justify-center bg-background-elevated" style={{ height }}>
+              <Loader2 size={20} className="animate-spin text-muted-foreground" />
             </div>
           }
         />
@@ -103,11 +103,11 @@ export function DiffViewer({
   const lang = language ?? (path ? detectLanguage(path) : "plaintext");
 
   return (
-    <div className="rounded-lg overflow-hidden border border-neutral-800 bg-[#1e1e1e]">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700 text-xs text-neutral-400">
+    <div className="rounded-lg overflow-hidden border border-border bg-background-elevated">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border text-xs text-muted-foreground">
         <span>Diff View</span>
-        {path && <span className="font-mono text-neutral-500">{path}</span>}
-        <span className="text-neutral-500">
+        {path && <span className="font-mono text-muted-foreground">{path}</span>}
+        <span className="text-muted-foreground">
           <span className="text-red-400">{countLines(original)}</span>
           {" → "}
           <span className="text-emerald-400">{countLines(modified)}</span>
@@ -117,7 +117,7 @@ export function DiffViewer({
       <Suspense
         fallback={
           <div className="flex items-center justify-center" style={{ height }}>
-            <Loader2 size={20} className="animate-spin text-neutral-500" />
+            <Loader2 size={20} className="animate-spin text-muted-foreground" />
           </div>
         }
       >

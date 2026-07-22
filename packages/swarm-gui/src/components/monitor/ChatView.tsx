@@ -1,22 +1,27 @@
-import { useRef, useEffect, useState, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, Brain, ChevronDown, Copy } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkTreeToCode } from "../../lib/remark-tree-to-code";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
 import type { ChatMessage, LoopPhase } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
+import { ErrorBoundary } from "../shared/ErrorBoundary";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 
 // ── Code block cache ──────────────────────────────────────────────────
 const codeCache = new Map<string, string>();
 function cacheKey(code: string, lang: string) { return `${lang}:${code.slice(0, 200)}`; }
 
-// ── Shiki code block renderer ──────────────────────────────────────────
+// ── Shiki code block renderer with copy button ─────────────────────────
 
 function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
   const [html, setHtml] = useState<string | null>(() => codeCache.get(cacheKey(code, lang)) ?? null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,19 +33,47 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
     return () => { cancelled = true; };
   }, [code, lang]);
 
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard denied */ }
+  }, [code]);
+
+  const header = (
+    <div className="flex items-center justify-between px-3 py-1.5 bg-background border-b border-border rounded-t-lg">
+      <span className="text-[11px] text-muted-foreground font-mono">{lang || "text"}</span>
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={handleCopy}
+      >
+        {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </Button>
+    </div>
+  );
+
   if (html === null) {
     return (
-      <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-3 overflow-x-auto my-1 text-xs font-mono">
-        <code>{code}</code>
-      </pre>
+      <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
+        {header}
+        <pre className="p-3 overflow-x-auto text-xs font-mono bg-background">
+          <code>{code}</code>
+        </pre>
+      </div>
     );
   }
 
   return (
-    <div
-      className="shiki-wrapper my-1 rounded-lg overflow-hidden border border-[#1a1a1a] text-xs [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:overflow-x-auto"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
+      {header}
+      <div
+        className="shiki-wrapper text-xs [&_pre]:bg-background! [&_pre]:p-3 [&_pre]:overflow-x-auto"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
   );
 }
 
@@ -59,36 +92,68 @@ function MessageBody({ body }: { body: string }) {
       [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
       [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
       [&_li]:my-0.5
-      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2
+      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-border [&_h1]:pb-1
       [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
       [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
-      [&_blockquote]:border-l-2 [&_blockquote]:border-neutral-600 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-neutral-400 [&_blockquote]:italic
-      [&_strong]:font-bold [&_strong]:text-neutral-100
+      [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_blockquote]:bg-card/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
+      [&_strong]:font-bold [&_strong]:text-foreground/90
       [&_em]:italic
-      [&_del]:line-through [&_del]:text-neutral-500
-      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2
-      [&_code]:bg-[#0d0d0d] [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
-      [&_table]:w-full [&_table]:my-1 [&_table]:text-xs [&_table]:border-collapse
-      [&_th]:border [&_th]:border-[#1a1a1a] [&_th]:px-2 [&_th]:py-1 [&_th]:bg-[#0d0d0d] [&_th]:font-semibold [&_th]:text-left
-      [&_td]:border [&_td]:border-[#1a1a1a] [&_td]:px-2 [&_td]:py-1
-      [&_hr]:border-neutral-700 [&_hr]:my-2
+      [&_del]:line-through [&_del]:text-muted-foreground
+      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-primary/80
+      [&_code]:bg-background [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+      [&_table]:w-full [&_table]:my-1.5 [&_table]:text-xs [&_table]:border-collapse
+      [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-background [&_th]:font-semibold [&_th]:text-left
+      [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1
+      [&_hr]:border-border [&_hr]:my-2
+      [&_img]:rounded-lg [&_img]:max-w-full
     ">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkTreeToCode]}
         components={{
           code: ({ className, children, ...props }) => {
-            // Only use custom code renderer for block code (has className with language-)
             if (className) {
               return <CodeRenderer className={className}>{children}</CodeRenderer>;
             }
-            // Inline code
-            return <code className="bg-[#0d0d0d] text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+            return <code className="bg-background text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
           },
           pre: ({ children }) => <>{children}</>,
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          ),
         }}
       >
         {body}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+// ── Thinking block ── collapsible chain-of-thought section ─────────────
+
+function ThinkingBlock({ thinking }: { thinking: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-1.5">
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={() => setOpen(!open)}
+        className="select-none"
+      >
+        <Brain size={11} />
+        <span>Thinking</span>
+        <ChevronDown
+          size={10}
+          className={`transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+        />
+      </Button>
+      {open && (
+        <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap border-l-2 border-border/60 pl-2.5 py-1 max-h-48 overflow-y-auto leading-relaxed">
+          {thinking}
+        </div>
+      )}
     </div>
   );
 }
@@ -104,10 +169,10 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div className="flex items-center gap-1.5 px-1">
         <span className={`text-xs font-medium ${
           isSocrates ? "text-primary" :
-          isSystem ? "text-neutral-500" :
-          "text-neutral-300"
+          isSystem ? "text-muted-foreground" :
+          "text-foreground/80"
         }`}>{msg.from}</span>
-        <span className="text-xs text-neutral-600">
+        <span className="text-xs text-muted-foreground/60">
           {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
         {isSteering && <Megaphone size={11} className="text-status-accent" />}
@@ -115,17 +180,28 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div
         className={`max-w-[75%] rounded-xl px-3 py-1.5 text-sm ${
           isSteering
-            ? "bg-status-accent/15 border border-status-accent/30 text-neutral-200"
+            ? "bg-status-accent/15 border border-status-accent/30 text-foreground"
             : isSystem
-            ? "bg-neutral-800/50 text-neutral-400 italic text-xs"
+            ? "bg-card/50 text-muted-foreground italic text-xs"
             : isOperator
-            ? "bg-primary/20 text-neutral-100"
+            ? "bg-primary/20 text-foreground/90"
             : isSocrates
-            ? "bg-primary/10 border border-primary/20 text-neutral-100"
-            : "bg-background-elevated text-neutral-200"
+            ? "bg-primary/10 border border-primary/20 text-foreground/90"
+            : "bg-background-elevated text-foreground"
         }`}
       >
-        <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+        {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
+        {msg.streaming && !msg.body ? (
+          <div className="flex items-center gap-1.5 py-0.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "0ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "200ms" }} />
+            <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "400ms" }} />
+          </div>
+        ) : (
+          <ErrorBoundary fallbackText={msg.body}>
+            <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   );
@@ -137,7 +213,7 @@ const MemoMessageBubble = memo(MessageBubble);
 function SystemEvent({ text }: { text: string }) {
   return (
     <div className="flex items-center justify-center py-1">
-      <span className="text-xs text-neutral-600 bg-background-elevated px-2 py-0.5 rounded-full">{text}</span>
+      <span className="text-xs text-muted-foreground/60 bg-background-elevated px-2 py-0.5 rounded-full">{text}</span>
     </div>
   );
 }
@@ -157,18 +233,8 @@ export default function ChatView() {
   const confirmAndStart = useSwarmStore((s) => s.confirmAndStart);
   const stopRun = useSwarmStore((s) => s.stopRun);
   const cancelBeforeLoop = useSwarmStore((s) => s.cancelBeforeLoop);
-  const loadBeforeLoopHistory = useSwarmStore((s) => s.loadBeforeLoopHistory);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
-  // P2-2: Before-loop history state.
-  const [historyEntries, setHistoryEntries] = useState<Array<{ role: string; content: string }>>([]);
-  const [showHistory, setShowHistory] = useState(false);
-
-  useEffect(() => {
-    if (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") {
-      loadBeforeLoopHistory().then(h => { if (h.length > 0) { setHistoryEntries(h); setShowHistory(true); } });
-    }
-  }, [loopPhase, loadBeforeLoopHistory]);
 
   const channelMessages = messages.get(activeId ?? "roundtable") ?? [];
 
@@ -215,18 +281,36 @@ export default function ChatView() {
     overscan: 5,
   });
 
-  // Auto-scroll to bottom: reset prevLenRef when session changes so we always
-  // scroll to bottom when entering a new session or switching to a historical one.
-  const prevLenRef = useRef(displayMessages.length);
+  // ── P1-3: stick-to-bottom during streaming ────────────────────────────
+  // The last bubble grows token-by-token WITHOUT changing displayMessages.length,
+  // so a length-only effect would not follow the stream. We track whether the
+  // user is pinned near the bottom; if so we follow both new messages and the
+  // growing body of the last one. If the user scrolls up to read history, we
+  // stop auto-scrolling so we don't yank them back down.
+  const stickRef = useRef(true);
+  const handleScroll = useCallback(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // Body length of the last message — changes on every flushed stream batch.
+  const lastBodyLen = channelMessages.length > 0
+    ? channelMessages[channelMessages.length - 1].body.length
+    : 0;
+
+  // Reset stick + force scroll when switching sessions.
   useEffect(() => {
-    prevLenRef.current = -1; // force scroll-to-bottom on next render
+    stickRef.current = true;
   }, [viewingSession]);
+
   useEffect(() => {
-    if (displayMessages.length > prevLenRef.current) {
-      virtualizer.scrollToIndex(displayMessages.length - 1, { behavior: "smooth" });
+    if (displayMessages.length === 0) return;
+    if (stickRef.current) {
+      // Instant align to end — smooth behavior janks during rapid streaming.
+      virtualizer.scrollToIndex(displayMessages.length - 1, { align: "end" });
     }
-    prevLenRef.current = displayMessages.length;
-  }, [displayMessages.length, virtualizer]);
+  }, [displayMessages.length, lastBodyLen, viewingSession, virtualizer]);
 
   function getSystemText(a: typeof activities[0]): string {
     switch (a.type) {
@@ -282,28 +366,29 @@ export default function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
-      {/* P2-2: Before-loop conversation history */}
-      {historyEntries.length > 0 && showHistory && (
-        <div className="px-4 pt-2">
-          <button
-            onClick={() => setShowHistory(false)}
-            className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300 mb-1 cursor-pointer"
-          >
-            <ChevronDown size={12} /> Previous planning conversation ({historyEntries.length} turns) — click to hide
-          </button>
-          <div className="space-y-1 max-h-48 overflow-y-auto bg-neutral-900/30 rounded-lg p-2 border border-neutral-800/50">
-            {historyEntries.map((entry, i) => (
-              <div key={i} className={`text-xs px-2 py-1 rounded ${entry.role === "user" ? "text-neutral-400" : "text-primary/70"}`}>
-                <span className="font-medium">{entry.role === "user" ? "You" : "Socrates"}:</span>{" "}
-                {entry.content.slice(0, 300)}{entry.content.length > 300 ? "…" : ""}
-              </div>
-            ))}
+      {/* ── Streaming indicator bar (always visible during active run) ── */}
+      {loopPhase === "running" && isRunning && (
+        <div className="shrink-0 flex items-center justify-between gap-3 border-b border-emerald-500/20 bg-emerald-950/30 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse-ring" />
+            <span className="text-xs font-medium text-emerald-300/90">Swarm is working</span>
+            <span className="text-[10px] text-emerald-400/60 hidden sm:inline">
+              Press Stop to interrupt at the next iteration boundary.
+            </span>
           </div>
+          <Button
+            variant="destructive"
+            size="xs"
+            onClick={() => stopRun()}
+          >
+            <Square size={12} fill="currentColor" />
+            Stop Swarm
+          </Button>
         </div>
       )}
 
       {/* Messages — virtualized for performance */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto px-4 py-3">
+      <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-3">
         {displayMessages.length === 0 && (
           <>
             {isIdle ? (
@@ -364,20 +449,24 @@ export default function ChatView() {
               {loopPhase === "before-loop-confirm" ? "Debate complete — plan refined" : "Plan draft ready"}
             </span>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="default"
+                size="xs"
                 onClick={() => runDebate()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-500 rounded-md transition-colors cursor-pointer"
+                className="bg-status-accent hover:bg-status-accent/80"
               >
                 <Swords size={12} />
                 {loopPhase === "before-loop-confirm" ? "Run Debate Again" : "Run Debate"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
+                size="xs"
                 onClick={() => confirmAndStart()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-md transition-colors cursor-pointer"
+                className="bg-status-success hover:bg-status-success/80"
               >
                 <Check size={12} />
                 Confirm & Start
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -388,9 +477,9 @@ export default function ChatView() {
             - before-loop-dialog / before-loop-confirm (idle) → Cancel planning
             - running → Stop Swarm (red)
         */}
-      <div className="border-t border-background-border px-4 py-2.5 bg-background-card">
+      <div className="border-t border-border px-4 py-2.5 bg-background-card">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-xs text-neutral-500 px-2 py-1 rounded-md bg-background-elevated">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground px-2 py-1 rounded-md bg-background-elevated">
             {isIdle ? (
               <>
                 <Shield size={12} />
@@ -413,43 +502,47 @@ export default function ChatView() {
               </>
             )}
           </div>
-          <input
+          <Input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={!canSend || isBusy}
             placeholder={placeholder}
-            className="flex-1 bg-background-elevated text-neutral-200 text-sm px-3 py-1.5 rounded-lg border border-background-border focus:border-primary/50 focus:outline-hidden disabled:opacity-50"
+            className="flex-1"
           />
           {/* Right-side action button — morphs by phase */}
           {loopPhase === "running" && isRunning ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => stopRun()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
               title="Stop the running swarm"
             >
               <Square size={14} fill="currentColor" />
               <span>Stop</span>
-            </button>
+            </Button>
           ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => cancelBeforeLoop()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-200 bg-neutral-700 hover:bg-neutral-600 rounded-lg transition-colors cursor-pointer"
               title="Cancel Before Loop planning"
             >
               <X size={14} />
               <span>Cancel</span>
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleSend}
               disabled={!canSend || isBusy || !inputText.trim()}
-              className="p-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              className="bg-primary/20 hover:bg-primary/30 text-primary"
               title="Send message"
             >
               {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </button>
+            </Button>
           )}
         </div>
       </div>

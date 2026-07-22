@@ -585,7 +585,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       ],
       pool: "workers",
       tags: ["devops", "ci-cd", "docker", "infrastructure", "deployment"],
-      pool: "workers",
     },
 
     // ── P0-C: Cloner review roles ──────────────────────────────────────
