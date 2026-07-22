@@ -168,6 +168,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateForm>({ ...emptyForm });
   const [updating, setUpdating] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   const roleToForm = (role: RoleAsset): CreateForm => ({
     id: role.id,
@@ -183,24 +184,29 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
   });
 
   const handleStartEdit = () => {
-    if (!expandedRole) return;
-    setEditingRoleId(expandedRole.id);
-    setEditForm(roleToForm(expandedRole));
+    if (expandedRole) {
+      setEditingRoleId(expandedRole.id);
+      setEditForm(roleToForm(expandedRole));
+      setShowEditDialog(true);
+    }
   };
+
+  // When a role finishes loading and we've queued editing, open the edit dialog.
+  const [queuedEditId, setQueuedEditId] = useState<string | null>(null);
+  useEffect(() => {
+    if (queuedEditId && expandedRole && expandedRole.id === queuedEditId && !showEditDialog) {
+      setEditingRoleId(expandedRole.id);
+      setEditForm(roleToForm(expandedRole));
+      setShowEditDialog(true);
+      setQueuedEditId(null);
+    }
+  }, [queuedEditId, expandedRole, showEditDialog]);
 
   const handleCancelEdit = () => {
     setEditingRoleId(null);
     setEditForm({ ...emptyForm });
+    setShowEditDialog(false);
   };
-
-  // When a role is expanded for editing, populate the edit form after it loads.
-  useEffect(() => {
-    if (editingRoleId && expandedRole && expandedRole.id === editingRoleId && editForm.id !== editingRoleId) {
-      setEditForm(roleToForm(expandedRole));
-    }
-    // roleToForm is a pure transformation, no need for deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingRoleId, expandedRole, editForm.id]);
 
   const handleUpdate = async () => {
     if (!editingRoleId) return;
@@ -230,7 +236,9 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
       const updated = await api.updateRole(editingRoleId, input);
       setExpandedRole(updated);
       toast.success(`Role "${editingRoleId}" updated`);
-      handleCancelEdit();
+      setShowEditDialog(false);
+      setEditingRoleId(null);
+      setEditForm({ ...emptyForm });
       fetchRoles();
     } catch (err) {
       toast.error(`Failed to update: ${String(err)}`);
@@ -452,6 +460,81 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
         </DialogContent>
       </Dialog>
 
+      {/* Edit modal */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => { if (!open) handleCancelEdit(); }}>
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto" showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle className="text-base font-medium">
+              Edit Role: {expandedRole?.name ?? editingRoleId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Name</label>
+              <input type="text" value={editForm.name}
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Description</label>
+              <input type="text" value={editForm.description}
+                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">System Prompt</label>
+              <textarea value={editForm.systemPrompt}
+                onChange={e => setEditForm(f => ({ ...f, systemPrompt: e.target.value }))} rows={5}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Guidelines (one per line)</label>
+              <textarea value={editForm.guidelines}
+                onChange={e => setEditForm(f => ({ ...f, guidelines: e.target.value }))} rows={3}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools (comma separated)</label>
+              <input type="text" value={editForm.tools}
+                onChange={e => setEditForm(f => ({ ...f, tools: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tags</label>
+              <input type="text" value={editForm.tags}
+                onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Skills (comma separated)</label>
+              <input type="text" value={editForm.skills}
+                onChange={e => setEditForm(f => ({ ...f, skills: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">MCP Servers (comma separated)</label>
+              <input type="text" value={editForm.mcpServers}
+                onChange={e => setEditForm(f => ({ ...f, mcpServers: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model override</label>
+              <input type="text" value={editForm.model}
+                onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))}
+                className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Button variant="default" size="sm" onClick={handleUpdate} disabled={updating}
+                className="bg-status-success hover:bg-status-success/80">
+                {updating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                {updating ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleCancelEdit}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Search & Filter */}
       <div className="px-4 py-2 space-y-2 border-b border-border/50">
         <div className="flex items-center gap-2">
@@ -612,7 +695,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                         size="icon-xs"
                         onClick={() => {
                           if (expandedId !== role.id) {
-                            setEditingRoleId(role.id); // mark for edit after expand loads
+                            setQueuedEditId(role.id);
                             toggleExpand(role.id);
                           } else {
                             handleStartEdit();
@@ -644,12 +727,6 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                     <ExpandedDetail
                       loading={loadingDetail}
                       role={expandedRole}
-                      editing={editingRoleId === role.id}
-                      editForm={editForm}
-                      onEditFormChange={setEditForm}
-                      onCancelEdit={handleCancelEdit}
-                      onUpdate={handleUpdate}
-                      updating={updating}
                     />
                   </div>
                 )}
@@ -662,25 +739,13 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
   );
 }
 
-/** Renders the expanded detail pane: loading spinner, edit form, or view-only detail. */
+/** Renders the expanded detail pane: loading spinner or view-only detail. */
 function ExpandedDetail({
   loading,
   role,
-  editing,
-  editForm,
-  onEditFormChange,
-  onCancelEdit,
-  onUpdate,
-  updating,
 }: {
   loading: boolean;
   role: RoleAsset | null;
-  editing: boolean;
-  editForm: CreateForm;
-  onEditFormChange: (f: CreateForm) => void;
-  onCancelEdit: () => void;
-  onUpdate: () => void;
-  updating: boolean;
 }) {
   if (loading) {
     return (
@@ -692,78 +757,6 @@ function ExpandedDetail({
 
   if (!role) {
     return <div className="text-xs text-muted-foreground/60 py-2">Failed to load role details.</div>;
-  }
-
-  if (editing) {
-    return (
-      <div className="space-y-3 py-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-foreground/80">Editing: {role.name}</span>
-          <Button variant="ghost" size="icon-xs" onClick={onCancelEdit} title="Cancel">
-            <X size={12} />
-          </Button>
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Name</label>
-          <input type="text" value={editForm.name}
-            onChange={e => onEditFormChange({ ...editForm, name: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Description</label>
-          <input type="text" value={editForm.description}
-            onChange={e => onEditFormChange({ ...editForm, description: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">System Prompt</label>
-          <textarea value={editForm.systemPrompt}
-            onChange={e => onEditFormChange({ ...editForm, systemPrompt: e.target.value })} rows={4}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Guidelines (one per line)</label>
-          <textarea value={editForm.guidelines}
-            onChange={e => onEditFormChange({ ...editForm, guidelines: e.target.value })} rows={3}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground font-mono focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools (comma separated)</label>
-          <input type="text" value={editForm.tools}
-            onChange={e => onEditFormChange({ ...editForm, tools: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tags</label>
-          <input type="text" value={editForm.tags}
-            onChange={e => onEditFormChange({ ...editForm, tags: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Skills (comma separated)</label>
-          <input type="text" value={editForm.skills}
-            onChange={e => onEditFormChange({ ...editForm, skills: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">MCP Servers (comma separated)</label>
-          <input type="text" value={editForm.mcpServers}
-            onChange={e => onEditFormChange({ ...editForm, mcpServers: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <div>
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Model override</label>
-          <input type="text" value={editForm.model}
-            onChange={e => onEditFormChange({ ...editForm, model: e.target.value })}
-            className="w-full px-2 py-1 text-xs bg-background-elevated border border-border rounded text-foreground focus:outline-none focus:border-primary/50" />
-        </div>
-        <Button variant="default" size="xs" onClick={onUpdate} disabled={updating}
-          className="bg-status-success hover:bg-status-success/80">
-          {updating ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          Save Changes
-        </Button>
-      </div>
-    );
   }
 
   // View-only detail
