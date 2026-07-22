@@ -183,24 +183,22 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
     model: role.model ?? "",
   });
 
-  const handleStartEdit = () => {
-    if (expandedRole) {
-      setEditingRoleId(expandedRole.id);
-      setEditForm(roleToForm(expandedRole));
-      setShowEditDialog(true);
+  // Load role data and open edit dialog directly (without expanding card).
+  const handleEditClick = async (roleId: string) => {
+    setActionBusy(roleId);
+    try {
+      const role = await api.getRole(roleId);
+      if (role) {
+        setEditingRoleId(role.id);
+        setEditForm(roleToForm(role));
+        setShowEditDialog(true);
+      }
+    } catch (err) {
+      toast.error(`Failed to load role: ${String(err)}`);
+    } finally {
+      setActionBusy(null);
     }
   };
-
-  // When a role finishes loading and we've queued editing, open the edit dialog.
-  const [queuedEditId, setQueuedEditId] = useState<string | null>(null);
-  useEffect(() => {
-    if (queuedEditId && expandedRole && expandedRole.id === queuedEditId && !showEditDialog) {
-      setEditingRoleId(expandedRole.id);
-      setEditForm(roleToForm(expandedRole));
-      setShowEditDialog(true);
-      setQueuedEditId(null);
-    }
-  }, [queuedEditId, expandedRole, showEditDialog]);
 
   const handleCancelEdit = () => {
     setEditingRoleId(null);
@@ -693,14 +691,7 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        onClick={() => {
-                          if (expandedId !== role.id) {
-                            setQueuedEditId(role.id);
-                            toggleExpand(role.id);
-                          } else {
-                            handleStartEdit();
-                          }
-                        }}
+                        onClick={() => handleEditClick(role.id)}
                         disabled={actionBusy === role.id}
                         className="text-muted-foreground/60 hover:text-foreground/80"
                         title="Edit"
