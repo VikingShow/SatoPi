@@ -370,23 +370,23 @@ export class BeforeLoopManager {
 		);
 
 		// Update loop.yaml with user-specified counts before starting.
-		// Uses targeted string replacement to avoid needing a YAML serializer.
+		// Uses Bun.YAML round-trip so the full config structure is preserved
+		// regardless of field ordering, comments, or indentation style.
 		if (workerCount != null || clonerCount != null) {
 			try {
-				let content = await fs.readFile(this.#yamlPath, "utf-8");
-				if (workerCount != null) {
-					content = content.replace(
-						/(workers:\s*\n(?:\s+.*\n)*?\s+initial:\s*)\d+/,
-						`$1${workerCount}`,
-					);
+				const config = Bun.YAML.parse(await fs.readFile(this.#yamlPath, "utf-8")) as Record<string, unknown>;
+				const swarm = config.swarm as Record<string, unknown> | undefined;
+				if (swarm) {
+					if (workerCount != null) {
+						const workers = swarm.workers as Record<string, unknown> | undefined;
+						if (workers) workers.initial = workerCount;
+					}
+					if (clonerCount != null) {
+						const cloners = swarm.cloners as Record<string, unknown> | undefined;
+						if (cloners) cloners.count = clonerCount;
+					}
 				}
-				if (clonerCount != null) {
-					content = content.replace(
-						/(cloners:\s*\n(?:\s+.*\n)*?\s+count:\s*)\d+/,
-						`$1${clonerCount}`,
-					);
-				}
-				await fs.writeFile(this.#yamlPath, content, "utf-8");
+				await fs.writeFile(this.#yamlPath, Bun.YAML.stringify(config), "utf-8");
 			} catch (err) {
 				logger.warn("Failed to update loop.yaml counts", { error: String(err) });
 				// Continue anyway — counts are advisory.
@@ -432,6 +432,7 @@ export class BeforeLoopManager {
 	async #runSocrates(): Promise<void> {
 		this.#busy = true;
 		const msgId = `socrates-${Date.now()}`;
+		let planPoll: ReturnType<typeof setInterval> | undefined;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();
@@ -463,7 +464,7 @@ export class BeforeLoopManager {
 			// the plan is being written — no reliance on LLM text signals.
 			const planPath = getSessionPlanPath(this.#swarmDir);
 			let planFileDetected = false;
-			const planPoll = setInterval(() => {
+			planPoll = setInterval(() => {
 				try {
 					const file = Bun.file(planPath);
 					if (file.size > 0 && !planFileDetected) {
@@ -497,8 +498,6 @@ export class BeforeLoopManager {
 				},
 			);
 
-			clearInterval(planPoll);
-
 			const displayOutput = result.output || "(no output)";
 
 			// Parse worker/cloner recommendations from Socrates output.
@@ -530,6 +529,7 @@ export class BeforeLoopManager {
 		} catch (err) {
 			throw err;
 		} finally {
+			if (planPoll) clearInterval(planPoll);
 			this.#busy = false;
 		}
 	}

@@ -18,6 +18,47 @@ const MAX_ACTIVITIES = 500;
 const MAX_FILE_CHANGES = 500;
 const MAX_TOOL_CALLS_PER_AGENT = 200;
 
+// -- Agent / pipeline state event apply helpers --------------------------
+// Extracted so the live-SSE handler and the history-replay handler share
+// the same logic — no drift between the two code paths.
+
+function applyAgentStateEntry(
+	entry: ActivityEntry,
+	agents: Record<string, NonNullable<SwarmState["agents"]>[string]> | undefined,
+): Record<string, NonNullable<SwarmState["agents"]>[string]> | null {
+	if (!agents) return null;
+	const existing = agents[entry.worker!];
+	if (!existing) return null;
+	const updated = { ...existing };
+	const e = entry as unknown as Record<string, unknown>;
+	if (e.status !== undefined) updated.status = e.status as NonNullable<SwarmState["agents"]>[string]["status"];
+	if (e.iteration !== undefined) updated.iteration = e.iteration as number;
+	if (e.praiseCount !== undefined) updated.praiseCount = e.praiseCount as number;
+	if (e.criticismCount !== undefined) updated.criticismCount = e.criticismCount as number;
+	if (e.conflictCount !== undefined) updated.conflictCount = e.conflictCount as number;
+	if (e.role !== undefined) updated.role = e.role as typeof updated.role;
+	if (e.modelName !== undefined) updated.modelName = e.modelName as string;
+	const next = { ...agents };
+	next[entry.worker!] = updated;
+	return next;
+}
+
+function applyPipelineStateEntry(
+	entry: ActivityEntry,
+	swarmState: SwarmState | null,
+): SwarmState | null {
+	if (!swarmState) return null;
+	const e = entry as unknown as Record<string, unknown>;
+	const patch: Partial<SwarmState> = {};
+	if (e.loopIteration !== undefined) patch.loopIteration = e.loopIteration as number;
+	if (e.roundtablePhase !== undefined) patch.roundtablePhase = e.roundtablePhase as string;
+	if (e.todos !== undefined) patch.todos = e.todos as SwarmState["todos"];
+	if (e.totalTokens !== undefined) patch.totalTokens = e.totalTokens as number;
+	if (e.totalRequests !== undefined) patch.totalRequests = e.totalRequests as number;
+	if (Object.keys(patch).length === 0) return null;
+	return { ...swarmState, ...patch };
+}
+
 /**
  * The set of LoopPhase values the backend SwarmStateMachine broadcasts as
  * authoritative phase events. The frontend adopts these verbatim (pure
@@ -521,18 +562,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // P1-1: Real-time agent state — update swarmState.agents without polling.
         if (entry.type === "agent_state" && entry.worker) {
           set((s) => {
-            const agents = { ...s.swarmState?.agents };
-            const existing = agents[entry.worker!];
-            if (!existing) return {}; // agent not registered yet
-            const updated = { ...existing };
-            if ((entry as any).status !== undefined) updated.status = (entry as any).status;
-            if ((entry as any).iteration !== undefined) updated.iteration = (entry as any).iteration;
-            if ((entry as any).praiseCount !== undefined) updated.praiseCount = (entry as any).praiseCount;
-            if ((entry as any).criticismCount !== undefined) updated.criticismCount = (entry as any).criticismCount;
-            if ((entry as any).conflictCount !== undefined) updated.conflictCount = (entry as any).conflictCount;
-            if ((entry as any).role !== undefined) updated.role = (entry as any).role;
-            if ((entry as any).modelName !== undefined) updated.modelName = (entry as any).modelName;
-            agents[entry.worker!] = updated;
+            const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
+            if (!agents) return {};
             return { swarmState: { ...s.swarmState!, agents } };
           });
         }
@@ -540,13 +571,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // P1-1: Real-time pipeline state — merge loopIteration etc. without polling.
         if (entry.type === "pipeline_state") {
           set((s) => {
-            const patch: Partial<typeof s.swarmState> = {};
-            if ((entry as any).loopIteration !== undefined) patch.loopIteration = (entry as any).loopIteration;
-            if ((entry as any).roundtablePhase !== undefined) patch.roundtablePhase = (entry as any).roundtablePhase;
-            if ((entry as any).todos !== undefined) patch.todos = (entry as any).todos;
-            if ((entry as any).totalTokens !== undefined) patch.totalTokens = (entry as any).totalTokens;
-            if ((entry as any).totalRequests !== undefined) patch.totalRequests = (entry as any).totalRequests;
-            return { swarmState: s.swarmState ? { ...s.swarmState, ...patch } : s.swarmState };
+            const next = applyPipelineStateEntry(entry, s.swarmState);
+            if (!next) return {};
+            return { swarmState: next };
           });
         }
         if (entry.type === "error_flag" && entry.errorFlag) {
@@ -1217,29 +1244,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
         if (entry.type === "agent_state" && entry.worker) {
           set((s) => {
-            const agents = { ...s.swarmState?.agents };
-            const existing = agents[entry.worker!];
-            if (!existing) return {};
-            const updated = { ...existing };
-            if ((entry as any).status !== undefined) updated.status = (entry as any).status;
-            if ((entry as any).iteration !== undefined) updated.iteration = (entry as any).iteration;
-            if ((entry as any).praiseCount !== undefined) updated.praiseCount = (entry as any).praiseCount;
-            if ((entry as any).criticismCount !== undefined) updated.criticismCount = (entry as any).criticismCount;
-            if ((entry as any).conflictCount !== undefined) updated.conflictCount = (entry as any).conflictCount;
-            if ((entry as any).role !== undefined) updated.role = (entry as any).role;
-            if ((entry as any).modelName !== undefined) updated.modelName = (entry as any).modelName;
-            agents[entry.worker!] = updated;
+            const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
+            if (!agents) return {};
             return { swarmState: { ...s.swarmState!, agents } };
           });
         }
 
         if (entry.type === "pipeline_state") {
           set((s) => {
-            const patch: Partial<typeof s.swarmState> = {};
-            if ((entry as any).loopIteration !== undefined) patch.loopIteration = (entry as any).loopIteration;
-            if ((entry as any).roundtablePhase !== undefined) patch.roundtablePhase = (entry as any).roundtablePhase;
-            if ((entry as any).todos !== undefined) patch.todos = (entry as any).todos;
-            return { swarmState: s.swarmState ? { ...s.swarmState, ...patch } : s.swarmState };
+            const next = applyPipelineStateEntry(entry, s.swarmState);
+            if (!next) return {};
+            return { swarmState: next };
           });
         }
 

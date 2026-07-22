@@ -338,8 +338,8 @@ export class StateTracker {
 			if (update.loopIteration !== undefined) payload.loopIteration = update.loopIteration;
 			if (update.roundtablePhase !== undefined) payload.roundtablePhase = update.roundtablePhase;
 			if (update.todos !== undefined) payload.todos = update.todos;
-			if ((update as Record<string, unknown>).totalTokens !== undefined) payload.totalTokens = (update as Record<string, unknown>).totalTokens;
-			if ((update as Record<string, unknown>).totalRequests !== undefined) payload.totalRequests = (update as Record<string, unknown>).totalRequests;
+			if (update.totalTokens !== undefined) payload.totalTokens = update.totalTokens;
+			if (update.totalRequests !== undefined) payload.totalRequests = update.totalRequests;
 			this.#onStateChange(payload as { type: "agent_state" | "pipeline_state"; [key: string]: unknown });
 		}
 	}

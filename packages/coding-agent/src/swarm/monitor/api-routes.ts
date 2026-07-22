@@ -45,7 +45,7 @@ export interface BeforeLoopManager {
 	start(task: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
-	confirm(): Promise<{ success: boolean; error?: string }>;
+	confirm(workerCount?: number, clonerCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
 	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;

@@ -249,8 +249,8 @@ async function createSessionServices(
 
 	// Wire real-time state change notifications — every updateAgent /
 	// updatePipeline call is pushed to SSE so the frontend reflects
-	// agent status / scores / loop iteration / todos without a 5s
-	// polling delay.
+	// agent status / scores / loop iteration / todos / token usage
+	// without a 5s polling delay.
 	stateTracker.setStateChangeNotifier((event) => {
 		if (event.type === "agent_state") {
 			activityLogger.logAgentState(event.worker as string, {
@@ -267,6 +267,8 @@ async function createSessionServices(
 				loopIteration: event.loopIteration as number | undefined,
 				roundtablePhase: event.roundtablePhase as string | undefined,
 				todos: event.todos as unknown[] | undefined,
+				totalTokens: event.totalTokens as number | undefined,
+				totalRequests: event.totalRequests as number | undefined,
 			});
 		}
 	});
