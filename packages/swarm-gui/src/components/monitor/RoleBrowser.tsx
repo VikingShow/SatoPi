@@ -103,14 +103,6 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
     fetchRoles();
   }, [fetchRoles]);
 
-  // When a role is expanded and we've queued editing, populate the edit form.
-  useEffect(() => {
-    if (editingRoleId && expandedRole && expandedRole.id === editingRoleId && editForm.id !== editingRoleId) {
-      setEditForm(roleToForm(expandedRole));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingRoleId, expandedRole]);
-
   // Expand/collapse role detail
   const toggleExpand = async (id: string) => {
     if (expandedId === id) {
@@ -200,6 +192,15 @@ export default function RoleBrowser({ onSelect, selectedIds }: RoleBrowserProps)
     setEditingRoleId(null);
     setEditForm({ ...emptyForm });
   };
+
+  // When a role is expanded for editing, populate the edit form after it loads.
+  useEffect(() => {
+    if (editingRoleId && expandedRole && expandedRole.id === editingRoleId && editForm.id !== editingRoleId) {
+      setEditForm(roleToForm(expandedRole));
+    }
+    // roleToForm is a pure transformation, no need for deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingRoleId, expandedRole, editForm.id]);
 
   const handleUpdate = async () => {
     if (!editingRoleId) return;
