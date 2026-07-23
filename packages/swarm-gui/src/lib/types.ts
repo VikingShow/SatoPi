@@ -50,7 +50,6 @@ export interface ScriptState {
   selectedAgentId?: string;
   /** Extracted from planner recommendation output. */
   recommendedAgents?: number;
-  /** Extracted from planner recommendation output. */
   estimatedAgentHours?: number;
   /** Estimated agent-hours for the plan. */
   estimatedAgentHours?: number;

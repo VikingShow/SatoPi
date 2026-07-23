@@ -52,7 +52,6 @@ export interface ScriptManager {
 		planReady: boolean; busy: boolean;
 		selectedAgentId?: string; recommendedAgents?: number;
 		estimatedAgentHours?: number; estimatedAgentHours?: number;
-	};
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
 	readonly isBusy: boolean;
 }

@@ -201,8 +201,8 @@ export class ActivityLogger {
 
 	// -- Scaling --------------------------------------------------------------
 
-	logScaling(action: "add" | "remove", worker: string, reason: string): void {
-		this.log({ ts: Date.now(), type: "scaling", action, worker, reason });
+	logScaling(action: "add" | "remove", agent: string, reason: string): void {
+		this.log({ ts: Date.now(), type: "scaling", action, agent, reason });
 	}
 
 	// -- Nomination -----------------------------------------------------------
@@ -213,8 +213,8 @@ export class ActivityLogger {
 
 	// -- Crash ----------------------------------------------------------------
 
-	logCrash(worker: string, error: string): void {
-		this.log({ ts: Date.now(), type: "crash", worker, error });
+	logCrash(agent: string, error: string): void {
+		this.log({ ts: Date.now(), type: "crash", agent, error });
 	}
 
 	// -- Agent / Pipeline state (P1-1 real-time sync) ---------------------------
