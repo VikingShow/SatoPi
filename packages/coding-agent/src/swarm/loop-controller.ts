@@ -1090,7 +1090,7 @@ export class LoopController {
 				// Pure decision extracted to worker-scaler.ts (unit-tested).
 				const delta = computeScaleDelta({
 					suggestions,
-					reviewerCount: reviewerIds.length,
+					voterCount: reviewerIds.length,
 					currentAgentCount,
 					min,
 				});
@@ -1099,7 +1099,7 @@ export class LoopController {
 					const addCount = Math.min(delta, max - currentAgentCount);
 					for (let i = 0; i < addCount; i++) {
 						const newId = `agent-${agentIds.length + 1}`;
-						this.#channel.addAgentb(newId);
+						this.#channel.addAgent(newId);
 						await this.#stateTracker.registerAgent(newId, this.#loopConfig.model);
 						agentIds.push(newId);
 						currentAgentCount++;
@@ -1113,7 +1113,7 @@ export class LoopController {
 						const removed = worst ?? agentIds[agentIds.length - 1];
 						const idx = agentIds.indexOf(removed);
 						if (idx >= 0) agentIds.splice(idx, 1);
-						this.#channel.removeAgentb(removed);
+						this.#channel.removeAgent(removed);
 						await this.#stateTracker.unregisterAgent(removed);
 						this.#activityLogger?.logScaling("remove", removed, `cloner suggestion ${delta}`);
 						currentAgentCount--;

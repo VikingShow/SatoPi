@@ -95,7 +95,6 @@ export async function runCurtainPipeline(
 		// Thread A: Reporter agent
 		runReporterAgent(workspace, result, { modelRegistry, settings, activityLogger, roleAssetManager }),
 		// Thread B: Reflection pipeline
-		runReflectionPipeline(result, { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId }),
 	]);
 
 	// ── Merge results ──
@@ -154,7 +153,6 @@ export async function runCurtainPipeline(
 			finalStatus: extraction.stats.finalStatus,
 			reviewApprovalRatio: extraction.stats.reviewApprovalRatio,
 			agentCount: extraction.stats.agentCount,
-			reviewerCount: extraction.stats.reviewerCount,
 		},
 	};
 
@@ -261,7 +259,7 @@ async function runReflectionPipeline(
 		runId: string;
 	},
 ): Promise<ReflectionResult> {
-	const { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId } = opts;
+	const { agentCount, experienceStore, modelRegistry, settings, runId } = opts;
 
 	// Extract lessons
 	const extraction = extractLessons(result, agentCount, reviewerCount);

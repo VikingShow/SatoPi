@@ -770,7 +770,7 @@ export class ExperienceStore {
 				finalStatus: "completed",
 				reviewApprovalRatio: 1,
 				agentCount: 0,
-				reviewerCount: 0,
+				
 				taskDescription: "principle-generation",
 			},
 		};

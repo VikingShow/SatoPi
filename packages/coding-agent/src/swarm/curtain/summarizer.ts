@@ -28,7 +28,6 @@ export interface SummaryData {
 	status: string;
 	iterations: number;
 	agentCount: number;
-	reviewerCount: number;
 	reviewApprovalRatio: number;
 	topFindings: string[];
 	keyInsights: string[];
@@ -72,7 +71,6 @@ export function generateRunSummary(runId: string, result: ExtractionResult): Run
 		status: stats.finalStatus,
 		iterations: stats.totalIterations,
 		agentCount: stats.agentCount,
-		reviewerCount: stats.reviewerCount,
 		reviewApprovalRatio: stats.reviewApprovalRatio,
 		topFindings,
 		keyInsights,
