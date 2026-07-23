@@ -300,4 +300,39 @@ export class SwarmSessionManager {
 		const entries = await SwarmSessionManager.readActivityEntries(swarmDir);
 		return entries.length;
 	}
+
+	// -- Session tree (fork / branch / tree navigation) -------------------------
+
+	/**
+	 * Fork the current session into a new file.
+	 * The new session inherits all entries and records the parent session ID.
+	 */
+	async fork(): Promise<{ oldSessionFile: string; newSessionFile: string } | undefined> {
+		return this.#session.fork();
+	}
+
+	/** Return the session tree structure (entries with parentId → tree). */
+	getTree(): Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }> {
+		return this.#session.getTree() as Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }>;
+	}
+
+	/** Return the full branch path from root to leaf. */
+	getBranch(leafId?: string): Array<Record<string, unknown>> {
+		return this.#session.getBranch(leafId) as Array<Record<string, unknown>>;
+	}
+
+	/** Get the session header including parentSession information. */
+	getHeader(): Record<string, unknown> | null {
+		return (this.#session as any).getHeader?.() ?? null;
+	}
+
+	/** Get the current session file path. */
+	getSessionFile(): string | undefined {
+		return (this.#session as any).getSessionFile?.();
+	}
+
+	/** Create a standalone session file from a specific branch point. */
+	createBranchedSession(leafId: string): string | undefined {
+		return this.#session.createBranchedSession(leafId);
+	}
 }

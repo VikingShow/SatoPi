@@ -206,6 +206,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ entries });
 	},
 
+
+		// -- Session tree (session-scoped) ------------------------------------
+		"GET/tree": async (_req, ctx) => {
+			if (!ctx.services.sessionManager) return json({ error: "Session manager not available" }, 503);
+			const tree = ctx.services.sessionManager.getTree();
+			return json({ tree });
+		},
+
 	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md -----------
 	"GET/plan": async (_req, ctx) => {
 		const planPath = path.join(ctx.paths.swarmDir, ".omp", "plan.md");
@@ -612,6 +620,18 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: String(err) }, 500);
 		}
 	},
+
+		// -- Session fork (global) ----------------------------------------------
+		"POST /api/sessions/fork": async (req, ctx) => {
+			try {
+				const body = (await req.json()) as { parent: string; name: string };
+				if (!body.parent || !body.name) return json({ error: "parent and name are required" }, 400);
+				const session = await ctx.registry.forkSession(body.parent, body.name);
+				return json({ name: session.name, parent: body.parent }, 201);
+			} catch (err) {
+				return json({ error: String(err) }, 500);
+			}
+		},
 	// -- Runs (list all sessions) ----------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
 		try {

@@ -58,6 +58,17 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  /** Fork an existing session. Parent must exist. */
+  forkSession: (parent: string, name: string) =>
+    fetchJson<{ name: string; parent: string }>("/api/sessions/fork", {
+      method: "POST",
+      body: JSON.stringify({ parent, name }),
+    }),
+
+  /** Get the session entry tree (for tree visualization). */
+  getSessionTree: () =>
+    fetchJson<{ tree: unknown[] }>(sessionUrl("/tree")),
+
   getState: () => fetchJson<SwarmState>(sessionUrl("/state")),
 
   getConfig: () => fetchJson<{ yaml: string; error?: string }>(sessionUrl("/config")),

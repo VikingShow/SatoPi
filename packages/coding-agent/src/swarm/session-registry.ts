@@ -223,6 +223,26 @@ export class SessionRegistry {
 		}
 	}
 
+	/**
+	 * Fork an existing session: creates a new session with the parent's
+	 * session.jsonl history copied over, linked via parentSession header.
+	 */
+	async forkSession(parentName: string, newName: string): Promise<SessionServices> {
+		const parent = this.#sessions.get(parentName);
+		if (!parent) throw new Error(`Parent session "${parentName}" not found`);
+
+		const session = await this.createSession(newName);
+		if (parent.sessionManager && session.sessionManager) {
+			try {
+				await parent.sessionManager.fork();
+				logger.info("[SessionRegistry] Forked session", { parent: parentName, child: newName });
+			} catch (err) {
+				logger.warn("[SessionRegistry] Session fork failed", { error: String(err) });
+			}
+		}
+		return session;
+	}
+
 	// ── Path helpers ──────────────────────────────────────────────────────
 
 	getPlanPath(name: string): string {
