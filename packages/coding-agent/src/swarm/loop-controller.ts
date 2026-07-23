@@ -15,11 +15,11 @@ import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
 import { invokeHook, type LoopPipelineHooks, type PipelineContext } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
-import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
+import { ReviewCouncil, type ReviewVerdict } from "./review-council";
 import type { AgentToolRestriction, LoopSwarmConfig, SwarmAgent } from "./schema";
 import type { Chapter, StateTracker } from "./state";
 import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
-import { computeScaleDelta } from "./worker-scaler";
+import { computeScaleDelta } from "./agent-scaler";
 import { evaluateBlockage } from "./blockage";
 import {
 	type RoundSummaryData,
@@ -35,7 +35,7 @@ import { TaskComplexityAnalyzer } from "./task-analyzer";
 export type { RoundSummaryData };
 import { TodoTracker } from "./todo-tracker";
 import { VerificationHook, type VerificationResult } from "./verification-hook";
-import { type Nomination, WorkerChannel } from "./worker-channel";
+import { type Nomination, AgentChannel } from "./agent-channel";
 
 // ============================================================================
 // Types
@@ -133,7 +133,7 @@ You collaborate with other Workers to complete a task defined in a plan that wil
 
 MECHANISM:
 - A plan.md containing the goal, constraints, and acceptance criteria is broadcast.
-- You and other Workers negotiate via group chat (WorkerChannel) how to divide the work.
+- You and other Workers negotiate via group chat (AgentChannel) how to divide the work.
   No one assigns tasks to you — you self-organize through open discussion.
 - You can broadcast to all Workers, create sub-groups, and elect roles (reviewer, integrator, etc.).
 - After each round, you receive prior rounds' outputs for cross-examination.
@@ -266,7 +266,7 @@ export class LoopController {
 	readonly #ircBus: IrcBus;
 	readonly #clonerId: string;
 	readonly #stateTracker: StateTracker;
-	#channel?: WorkerChannel;
+	#channel?: AgentChannel;
 	#fileTracker: FileTracker = new FileTracker();
 	readonly #activityLogger?: ActivityLogger;
 	#verificationHook: VerificationHook | null = null;
@@ -487,7 +487,7 @@ export class LoopController {
 			await this.#stateTracker.registerAgent(id, this.#loopConfig.model);
 		}
 
-		this.#channel = new WorkerChannel(
+		this.#channel = new AgentChannel(
 			this.#ircBus,
 			{
 				workers: workerIds,
@@ -1416,7 +1416,7 @@ export class LoopController {
 		extraContext: string | undefined,
 		roleSuggestions: Record<string, string> | undefined,
 		lockMgr: RegionLockManager | undefined,
-		channel: WorkerChannel | undefined,
+		channel: AgentChannel | undefined,
 		reviewerId: string | undefined,
 		nominationPrompt: string | undefined,
 		iteration: number,
@@ -1436,7 +1436,7 @@ export class LoopController {
 				const workerHooks = hooks?.(id);
 				const isReviewer = reviewerId !== undefined && id === reviewerId;
 				const systemPrompt = isReviewer
-					? `${WORKER_SYSTEM_PROMPT}\n${WorkerChannel.buildReviewerPrompt()}`
+					? `${WORKER_SYSTEM_PROMPT}\n${AgentChannel.buildReviewerPrompt()}`
 					: WORKER_SYSTEM_PROMPT;
 
 				const agentDef: AgentDefinition = {
@@ -1532,7 +1532,7 @@ export class LoopController {
 	// -------------------------------------------------------------------
 	// Build per-worker lock hooks for tier 1 (intent broadcast) + tier 2 (function-level lock)
 	// -------------------------------------------------------------------
-	#buildLockHooks(workerId: string, lockMgr: RegionLockManager, channel: WorkerChannel) {
+	#buildLockHooks(workerId: string, lockMgr: RegionLockManager, channel: AgentChannel) {
 		/** Tool names that modify files — intercepted for lock coordination. */
 		const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
 
@@ -1714,7 +1714,7 @@ export class LoopController {
 	}
 
 	// -------------------------------------------------------------------
-	// Run cloner review via ClonerCouncil
+	// Run cloner review via ReviewCouncil
 	// -------------------------------------------------------------------
 	async #runClonerReview(
 		clonerIds: string[],
@@ -1727,7 +1727,7 @@ export class LoopController {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const council = new ClonerCouncil();
+		const council = new ReviewCouncil();
 		return council.review(
 			{
 				clonerIds,

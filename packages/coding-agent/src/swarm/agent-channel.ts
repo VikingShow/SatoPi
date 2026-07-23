@@ -1,13 +1,13 @@
 /**
- * WorkerChannel — Worker 群聊通信层。
+ * AgentChannel — Agent 群聊通信层。
  *
  * 基于 IrcBus 封装，提供：
- * - broadcast: 向全体 worker 广播（秘密抄送全体 cloner）
- * - sub-group: worker 之间拉小群协商
- * - interrupt: cloner 接入指导特定 worker
- * - monitoring: cloner 订阅所有 worker 消息流
+ * - broadcast: 向全体 agent 广播（秘密抄送全体 reviewer）
+ * - sub-group: agent 之间拉小群协商
+ * - interrupt: reviewer 接入指导特定 agent
+ * - monitoring: reviewer 订阅所有 agent 消息流
  *
- * Worker 不知道 cloner 的存在 —— 所有 cloner 消息通过 suppressRelay 秘密送达。
+ * Agent 不知道 reviewer 的存在 —— 所有 reviewer 消息通过 suppressRelay 秘密送达。
  */
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
@@ -17,17 +17,17 @@ import type { ActivityLogger } from "./activity-logger";
 // Types
 // ============================================================================
 
-export interface WorkerMessage {
+export interface AgentMessage {
 	from: string;
 	body: string;
 	timestamp: number;
 }
 
-export interface WorkerChannelConfig {
-	/** Initial worker agent IDs. */
-	workers: string[];
-	/** Cloner agent IDs (secret subscribers). */
-	cloners: string[];
+export interface AgentChannelConfig {
+	/** Initial agent agent IDs. */
+	agents: string[];
+	/** Reviewer agent IDs (secret subscribers). */
+	reviewers: string[];
 }
 
 // ============================================================================
@@ -42,7 +42,7 @@ export interface Nomination {
 }
 
 export interface NominationResult {
-	/** Elected worker ID, or null if no consensus. */
+	/** Elected agent ID, or null if no consensus. */
 	elected: string | null;
 	/** All nominations cast, grouped by nominee. */
 	votes: Record<string, string[]>;
@@ -50,37 +50,37 @@ export interface NominationResult {
 }
 
 // ============================================================================
-export class WorkerChannel {
+export class AgentChannel {
 	readonly #ircBus: IrcBus;
-	readonly #workers = new Set<string>();
-	readonly #cloners = new Set<string>();
+	readonly #agents = new Set<string>();
+	readonly #reviewers = new Set<string>();
 	readonly #groups = new Map<string, Set<string>>();
 	#nominationRound = 0;
 	#nominations: Nomination[] = [];
 	readonly #activityLogger?: ActivityLogger;
 
-	constructor(ircBus: IrcBus, config: WorkerChannelConfig, activityLogger?: ActivityLogger) {
+	constructor(ircBus: IrcBus, config: AgentChannelConfig, activityLogger?: ActivityLogger) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
-		for (const w of config.workers) this.#workers.add(w);
-		for (const c of config.cloners) this.#cloners.add(c);
+		for (const w of config.agents) this.#agents.add(w);
+		for (const c of config.reviewers) this.#reviewers.add(c);
 	}
 
 	// -- lifecycle -------------------------------------------------------
 
-	get workers(): ReadonlySet<string> {
-		return this.#workers;
+	get agents(): ReadonlySet<string> {
+		return this.#agents;
 	}
-	get cloners(): ReadonlySet<string> {
-		return this.#cloners;
-	}
-
-	addWorker(agentId: string): void {
-		this.#workers.add(agentId);
+	get reviewers(): ReadonlySet<string> {
+		return this.#reviewers;
 	}
 
-	removeWorker(agentId: string): void {
-		this.#workers.delete(agentId);
+	addAgent(agentId: string): void {
+		this.#agents.add(agentId);
+	}
+
+	removeAgent(agentId: string): void {
+		this.#agents.delete(agentId);
 		// Remove from all subgroups
 		for (const [, members] of this.#groups) {
 			members.delete(agentId);
@@ -90,35 +90,35 @@ export class WorkerChannel {
 	// -- messaging -------------------------------------------------------
 
 	/**
-	 * Broadcast to ALL workers (visible) + secret-CC all cloners.
-	 * Workers see the message as coming from `from`, addressed to the worker group.
-	 * Cloners receive a copy silently.
+	 * Broadcast to ALL agents (visible) + secret-CC all reviewers.
+	 * Agents see the message as coming from `from`, addressed to the agent group.
+	 * Reviewers receive a copy silently.
 	 */
 	async broadcast(from: string, body: string): Promise<void> {
 		this.#activityLogger?.logBroadcast(from, body);
-		const workerList = [...this.#workers];
+		const agentList = [...this.#agents];
 
-		// Send to all workers in parallel
-		await Promise.all(workerList.map(to => this.#ircBus.send({ from, to, body })));
+		// Send to all agents in parallel
+		await Promise.all(agentList.map(to => this.#ircBus.send({ from, to, body })));
 
-		// Secret CC to cloners — suppressed from UI relay
-		await Promise.all([...this.#cloners].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
+		// Secret CC to reviewers — suppressed from UI relay
+		await Promise.all([...this.#reviewers].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
 	}
 
 	// -- sub-groups ------------------------------------------------------
 
 	/**
 	 * Create a named sub-group.
-	 * Members are worker IDs; cloners automatically monitor all sub-groups.
+	 * Members are agent IDs; reviewers automatically monitor all sub-groups.
 	 */
 	createSubGroup(name: string, members: string[]): void {
-		// Validate members are workers
-		const valid = members.filter(m => this.#workers.has(m));
+		// Validate members are agents
+		const valid = members.filter(m => this.#agents.has(m));
 		this.#groups.set(name, new Set(valid));
 	}
 
 	/**
-	 * Send to a named sub-group. Members + all cloners receive it.
+	 * Send to a named sub-group. Members + all reviewers receive it.
 	 */
 	async sendToSubGroup(groupName: string, from: string, body: string): Promise<void> {
 		this.#activityLogger?.logSubGroup(groupName, from, body);
@@ -128,31 +128,31 @@ export class WorkerChannel {
 		const memberList = [...members];
 		await Promise.all(memberList.map(to => this.#ircBus.send({ from, to, body })));
 
-		// Cloners monitor all sub-groups
-		await Promise.all([...this.#cloners].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
+		// Reviewers monitor all sub-groups
+		await Promise.all([...this.#reviewers].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
 	}
 
-	addToSubGroup(groupName: string, workerId: string): void {
-		if (!this.#workers.has(workerId)) return;
+	addToSubGroup(groupName: string, agentId: string): void {
+		if (!this.#agents.has(agentId)) return;
 		const group = this.#groups.get(groupName);
-		if (group) group.add(workerId);
+		if (group) group.add(agentId);
 	}
 
-	removeFromSubGroup(groupName: string, workerId: string): void {
-		this.#groups.get(groupName)?.delete(workerId);
+	removeFromSubGroup(groupName: string, agentId: string): void {
+		this.#groups.get(groupName)?.delete(agentId);
 	}
 
-	// -- cloner interrupt ------------------------------------------------
+	// -- reviewer interrupt ------------------------------------------------
 
 	/**
-	 * Cloner 介入指导一个 worker（steering）。
-	 * Worker 收到高优先级消息，调整方向但不停止。
+	 * Reviewer 介入指导一个 agent（steering）。
+	 * Agent 收到高优先级消息，调整方向但不停止。
 	 */
-	async interrupt(clonerId: string, workerId: string, reason: string): Promise<void> {
-		this.#activityLogger?.logSteering(clonerId, workerId, reason);
+	async interrupt(clonerId: string, agentId: string, reason: string): Promise<void> {
+		this.#activityLogger?.logSteering(clonerId, agentId, reason);
 		await this.#ircBus.send({
 			from: clonerId,
-			to: workerId,
+			to: agentId,
 			body: `[CLONER STEERING] ${reason}`,
 		});
 	}
@@ -160,7 +160,7 @@ export class WorkerChannel {
 	async broadcastSteering(clonerId: string, body: string): Promise<void> {
 		this.#activityLogger?.logSteering(clonerId, "all", body);
 		await Promise.all(
-			[...this.#workers].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
+			[...this.#agents].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
 		);
 	}
 
@@ -168,7 +168,7 @@ export class WorkerChannel {
 
 	/**
 	 * Start a new nomination round. Clears any previous nomination state.
-	 * Workers are expected to produce `## Nomination` sections in their output
+	 * Agents are expected to produce `## Nomination` sections in their output
 	 * for this round; those are collected and fed to {@link tally}.
 	 */
 	startNomination(round: number): void {
@@ -176,20 +176,20 @@ export class WorkerChannel {
 		this.#nominations = [];
 	}
 
-	/** Record a nomination from a worker. Self-nominations are ignored. */
+	/** Record a nomination from a agent. Self-nominations are ignored. */
 	processNomination(nominator: string, nominee: string): void {
 		if (nominator === nominee) return;
-		if (!this.#workers.has(nominator)) return;
-		if (!this.#workers.has(nominee)) return;
+		if (!this.#agents.has(nominator)) return;
+		if (!this.#agents.has(nominee)) return;
 		this.#nominations.push({ nominator, nominee });
 	}
 
 	/**
-	 * Build a nomination prompt for workers at the start of a round.
-	 * Injected into the worker task before execution begins.
+	 * Build a nomination prompt for agents at the start of a round.
+	 * Injected into the agent task before execution begins.
 	 */
 	buildNominationPrompt(): string {
-		const workerList = [...this.#workers].join(", ");
+		const agentList = [...this.#agents].join(", ");
 		return [
 			`## Reviewer Election (Round ${this.#nominationRound})`,
 			``,
@@ -197,21 +197,21 @@ export class WorkerChannel {
 			``,
 			`\`\`\``,
 			`## Nomination`,
-			`nominated: <worker-id>`,
+			`nominated: <agent-id>`,
 			`reason: <one sentence explaining why>`,
 			`\`\`\``,
 			``,
-			`Available workers: ${workerList}`,
-			`You may nominate any worker (including yourself).`,
-			`The worker with the most nominations becomes the Reviewer for this round.`,
+			`Available agents: ${agentList}`,
+			`You may nominate any agent (including yourself).`,
+			`The agent with the most nominations becomes the Reviewer for this round.`,
 			`The Reviewer will NOT write code — they review all outputs and produce a Round Summary.`,
-			`Choose the worker best suited to assess this round's work against the plan's acceptance criteria.`,
+			`Choose the agent best suited to assess this round's work against the plan's acceptance criteria.`,
 		].join("\n");
 	}
 
 	/**
 	 * Tally nominations and elect a reviewer.
-	 * Returns the elected worker ID, or null if no nominations were cast.
+	 * Returns the elected agent ID, or null if no nominations were cast.
 	 * Ties are broken by choosing the first nominee to reach the highest count.
 	 */
 	tally(): NominationResult {
@@ -248,17 +248,17 @@ export class WorkerChannel {
 			``,
 			`## REVIEWER ROLE`,
 			``,
-			`You have been ELECTED as the Reviewer for this round. Your role is DIFFERENT from other workers:`,
+			`You have been ELECTED as the Reviewer for this round. Your role is DIFFERENT from other agents:`,
 			``,
 			`WHAT YOU DO:`,
-			`- Read EVERY worker's output (use read tool on workspace files they produced)`,
+			`- Read EVERY agent's output (use read tool on workspace files they produced)`,
 			`- Assess each output against plan.md acceptance criteria`,
-			`- Identify conflicts between workers (same file, contradicting logic)`,
-			`- P0-5: CHECK whether each worker ran tests. If a worker claims completion`,
+			`- Identify conflicts between agents (same file, contradicting logic)`,
+			`- P0-5: CHECK whether each agent ran tests. If a agent claims completion`,
 			`  but no test results are in their Round Summary, flag it as a "major" issue.`,
 			`  If tests were run but some failed, flag as "blocker" (must be fixed before PASS).`,
-`- P0-E: CHECK each worker "MISSING" field. If empty, "N/A", or vague (less than one specific gap), flag as "major". Finding no gaps on a complex task is superficial review.`,
-`- P0-E: If a worker identified a REAL gap the plan missed, note as praise-worthy proactive discovery.`,
+`- P0-E: CHECK each agent "MISSING" field. If empty, "N/A", or vague (less than one specific gap), flag as "major". Finding no gaps on a complex task is superficial review.`,
+`- P0-E: If a agent identified a REAL gap the plan missed, note as praise-worthy proactive discovery.`,
 			`- Produce a structured Round Summary (format below)`,
 			``,
 			`WHAT YOU DO NOT DO:`,
@@ -271,15 +271,15 @@ export class WorkerChannel {
 			`\`\`\`json`,
 			`{`,
 			`  "round": <number>,`,
-			`  "reviewer": "<your-worker-id>",`,
+			`  "reviewer": "<your-agent-id>",`,
 			`  "accomplished": {`,
-			`    "worker-1": "one-line summary of what they did",`,
-			`    "worker-2": "one-line summary of what they did"`,
+			`    "agent-1": "one-line summary of what they did",`,
+			`    "agent-2": "one-line summary of what they did"`,
 			`  },`,
 			`  "issues": [`,
 			`    {`,
 			`      "severity": "blocker|major|minor",`,
-			`      "workers": ["worker-1"],`,
+			`      "agents": ["agent-1"],`,
 			`      "file": "path/to/file",`,
 			`      "description": "what's wrong",`,
 			`      "resolution": "your ruling or suggested fix"`,
@@ -287,7 +287,7 @@ export class WorkerChannel {
 			`  ],`,
 			`  "remaining": ["task A", "task B"],`,
 			`  "recommended_division": {`,
-			`    "worker-1": "suggested next task"`,
+			`    "agent-1": "suggested next task"`,
 			`  },`,
 			`  "convergence_opinion": "converging|diverging|stalled"`,
 			`}`,

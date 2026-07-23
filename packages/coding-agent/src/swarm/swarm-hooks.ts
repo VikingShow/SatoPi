@@ -20,7 +20,7 @@
 import { logger } from "@oh-my-pi/pi-utils";
 import type { LoopPipelineHooks, PipelineContext } from "./pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "./roundtable";
+import type { ReviewVerdict } from "./review-council";
 import type { ProfileRegistry } from "./agent-profile";
 import type { MarkEnvironment } from "./mark-environment";
 

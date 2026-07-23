@@ -4,18 +4,18 @@
 import { describe, expect, it } from "bun:test";
 import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { WorkerChannel } from "../worker-channel";
+import { AgentChannel } from "../agent-channel";
 
 // ---------------------------------------------------------------------------
 // extractRoundSummary + parseNomination are not exported — test via behavior
-// of the WorkerChannel and the inline helpers.
+// of the AgentChannel and the inline helpers.
 // ---------------------------------------------------------------------------
 
-describe("WorkerChannel nomination protocol", () => {
-	function createChannel(workerCount: number): WorkerChannel {
+describe("AgentChannel nomination protocol", () => {
+	function createChannel(workerCount: number): AgentChannel {
 		const bus = new IrcBus(AgentRegistry.global());
 		const workers = Array.from({ length: workerCount }, (_, i) => `worker-${i + 1}`);
-		return new WorkerChannel(bus, { workers, cloners: [] });
+		return new AgentChannel(bus, { workers, cloners: [] });
 	}
 
 	it("startNomination clears previous state", () => {
@@ -104,7 +104,7 @@ describe("WorkerChannel nomination protocol", () => {
 	});
 
 	it("buildReviewerPrompt is a non-empty static string", () => {
-		const prompt = WorkerChannel.buildReviewerPrompt();
+		const prompt = AgentChannel.buildReviewerPrompt();
 		expect(prompt.length).toBeGreaterThan(100);
 		expect(prompt).toContain("REVIEWER ROLE");
 		expect(prompt).toContain("Round Summary");

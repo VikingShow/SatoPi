@@ -9,7 +9,7 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../roundtable";
+import type { ReviewVerdict } from "../review-council";
 import { WorkerSummarizer, type SummarizeOutput } from "./worker-summarizer";
 import {
 	Deduplicator,

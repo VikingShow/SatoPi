@@ -10,7 +10,7 @@ import { ExperienceStore, extractLessons } from "../after-loop";
 import { generatePlanningPrompt } from "../script-planner";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "../dag";
 import { LoopController } from "../loop-controller";
-import { ClonerCouncil } from "../roundtable";
+import { ReviewCouncil } from "../review-council";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
 import { StateTracker } from "../state";
 
@@ -92,8 +92,8 @@ async function main() {
 	// Verify after-loop exports are importable
 	console.log(`  ✓  ExperienceStore: ${typeof ExperienceStore === "function" ? "class" : "?"}`);
 	console.log(`  ✓  extractLessons: ${typeof extractLessons === "function" ? "function" : "?"}`);
-	// Verify review methods exist on ClonerCouncil
-	console.log(`  ✓  ClonerCouncil: ${typeof ClonerCouncil === "function" ? "class" : "?"}`);
+	// Verify review methods exist on ReviewCouncil
+	console.log(`  ✓  ReviewCouncil: ${typeof ReviewCouncil === "function" ? "class" : "?"}`);
 	console.log();
 
 	// Summary

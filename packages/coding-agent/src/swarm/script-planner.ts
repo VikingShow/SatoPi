@@ -264,7 +264,7 @@ export async function listArchivedPlans(workspace: string): Promise<string[]> {
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import { ClonerRoundtable } from "./cloner-roundtable";
+import { DebateRoundtable } from "./debate-roundtable";
 
 export interface PlanDebateResult {
 	/** Whether the debate produced a refined plan. */
@@ -284,7 +284,7 @@ export interface PlanDebateResult {
  *
  * @param draftPlan — the current plan.md content
  * @param swarmDir — per-session swarm directory (where plan.md will be written)
- * @param workspace — workspace root (passed through to ClonerRoundtable for agent cwd)
+ * @param workspace — workspace root (passed through to DebateRoundtable for agent cwd)
  * @param loopConfig — the loop configuration
  */
 export async function runPlanDebate(
@@ -302,7 +302,7 @@ export async function runPlanDebate(
 		return { refined: false, planContent: draftPlan, converged: false };
 	}
 
-	const table = new ClonerRoundtable({
+	const table = new DebateRoundtable({
 		clonerCount: debateConfig.clonerCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,

@@ -1,9 +1,9 @@
 /**
- * ClonerRoundtable — 多轮 Cloner 计划辩论。
+ * DebateRoundtable — 多轮 Agent 计划辩论。
  *
- * After Socrates produces a draft plan.md, 2-3 cloner instances debate it
- * over multiple rounds. Each cloner independently critiques the plan, then
- * cloners see each other's critiques and refine their positions. The roundtable
+ * After Socrates produces a draft plan.md, 2-3 agent instances debate it
+ * over multiple rounds. Each agent independently critiques the plan, then
+ * agents see each other's critiques and refine their positions. The roundtable
  * converges when plan text similarity (Jaccard) stabilizes for N consecutive
  * rounds, or when max rounds is reached.
  *
@@ -25,15 +25,15 @@ import type { AgentToolRestriction } from "./schema";
 export interface DebateRound {
 	/** Round number (1-indexed). */
 	round: number;
-	/** Cloner outputs for this round. */
+	/** Agent outputs for this round. */
 	outputs: string[];
 	/** Jaccard similarity vs previous round (null for round 1). */
 	similarity: number | null;
 }
 
-export interface ClonerRoundtableConfig {
-	/** Number of cloner instances in the debate. */
-	clonerCount: number;
+export interface DebateRoundtableConfig {
+	/** Number of agent instances in the debate. */
+	agentCount: number;
 	/** Maximum debate rounds. */
 	maxRounds: number;
 	/**
@@ -41,11 +41,11 @@ export interface ClonerRoundtableConfig {
 	 * convergence. Default: 2.
 	 */
 	convergenceThreshold: number;
-	/** Tool restriction to apply to cloner agents (config-as-constraint). */
+	/** Tool restriction to apply to agent agents (config-as-constraint). */
 	toolRestriction?: AgentToolRestriction;
 }
 
-export interface ClonerRoundtableResult {
+export interface DebateRoundtableResult {
 	/** Whether the debate converged. */
 	converged: boolean;
 	/** The final refined plan text. */
@@ -78,16 +78,16 @@ function textSimilarity(a: string, b: string): number {
 }
 
 // ============================================================================
-// ClonerRoundtable
+// DebateRoundtable
 // ============================================================================
 
-export class ClonerRoundtable {
-	readonly #config: Required<Omit<ClonerRoundtableConfig, "toolRestriction">>;
+export class DebateRoundtable {
+	readonly #config: Required<Omit<DebateRoundtableConfig, "toolRestriction">>;
 	readonly #toolRestriction?: AgentToolRestriction;
 
-	constructor(config: ClonerRoundtableConfig) {
+	constructor(config: DebateRoundtableConfig) {
 		this.#config = {
-			clonerCount: config.clonerCount,
+			agentCount: config.agentCount,
 			maxRounds: config.maxRounds,
 			convergenceThreshold: config.convergenceThreshold,
 		};
@@ -106,8 +106,8 @@ export class ClonerRoundtable {
 		modelRegistry?: ModelRegistry,
 		settings?: Settings,
 		signal?: AbortSignal,
-	): Promise<ClonerRoundtableResult> {
-		const { clonerCount, maxRounds, convergenceThreshold } = this.#config;
+	): Promise<DebateRoundtableResult> {
+		const { agentCount, maxRounds, convergenceThreshold } = this.#config;
 		const rounds: DebateRound[] = [];
 		let previousOutputs: string[] = [];
 		let convergenceStreak = 0;
@@ -121,16 +121,16 @@ export class ClonerRoundtable {
 				? this.#buildRound1Prompt(draftPlan)
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
-		// Spawn cloners in parallel for this round
+		// Spawn agents in parallel for this round
 		const settled = await Promise.allSettled(
-			Array.from({ length: clonerCount }, (_, i) =>
+			Array.from({ length: agentCount }, (_, i) =>
 				runSubprocess({
 					cwd: workspace,
 					agent: (() => {
 						const def: AgentDefinition = {
-							name: `debate-cloner-${i + 1}`,
-							description: `Plan debate cloner ${i + 1}`,
-							systemPrompt: this.#debateClonerSystemPrompt(),
+							name: `debate-agent-${i + 1}`,
+							description: `Plan debate agent ${i + 1}`,
+							systemPrompt: this.#debateAgentSystemPrompt(),
 							source: "project" as const,
 						};
 						if (this.#toolRestriction) {
@@ -158,7 +158,7 @@ export class ClonerRoundtable {
 				return {
 					index: i,
 					id: `plan-debate-r${round}-c${i + 1}`,
-					agent: `debate-cloner-${i + 1}`,
+					agent: `debate-agent-${i + 1}`,
 					agentSource: "project" as const,
 					task: "",
 					exitCode: 1,
@@ -176,7 +176,7 @@ export class ClonerRoundtable {
 				lastRoundOutputs.length > 0 ? this.#computeRoundSimilarity(lastRoundOutputs, outputs) : null;
 
 			rounds.push({ round, outputs, similarity });
-			logger.debug("ClonerRoundtable round completed", {
+			logger.debug("DebateRoundtable round completed", {
 				round,
 				similarity,
 				outputLengths: outputs.map(o => o.length),
@@ -186,7 +186,7 @@ export class ClonerRoundtable {
 			if (similarity !== null && similarity >= 0.85) {
 				convergenceStreak++;
 				if (convergenceStreak >= convergenceThreshold) {
-					logger.info("ClonerRoundtable converged", {
+					logger.info("DebateRoundtable converged", {
 						round,
 						similarity,
 						convergenceStreak,
@@ -220,9 +220,9 @@ export class ClonerRoundtable {
 	// Private helpers
 	// ============================================================================
 
-	#debateClonerSystemPrompt(): string {
+	#debateAgentSystemPrompt(): string {
 		return [
-			`You are a Cloner in the Loop Engineering system — a peer discussant`,
+			`You are a Agent in the Loop Engineering system — a peer discussant`,
 			`who participates in plan debates to refine task plans before execution.`,
 			``,
 			`Your role in this debate:`,
@@ -262,7 +262,7 @@ export class ClonerRoundtable {
 
 	#buildRefinePrompt(plan: string, peerOutputs: string[]): string {
 		const peerSummary = peerOutputs
-			.map((o, i) => `### Cloner ${i + 1}\n\n${this.#truncateOutput(o)}`)
+			.map((o, i) => `### Agent ${i + 1}\n\n${this.#truncateOutput(o)}`)
 			.join("\n\n---\n\n");
 
 		return [
@@ -291,9 +291,9 @@ export class ClonerRoundtable {
 	}
 
 	#extractPlanContent(result: SingleResult): string {
-		// The cloner should output markdown directly — strip any JSON/chat framing
+		// The agent should output markdown directly — strip any JSON/chat framing
 		const output = result.output.trim();
-		// Skip crashed cloners — return empty so they don't pollute the debate
+		// Skip crashed agents — return empty so they don't pollute the debate
 		if (output.startsWith("[CRASHED]")) return "";
 		// Try to strip a leading JSON verdict line
 		const jsonLineEnd = output.indexOf("\n");

@@ -349,7 +349,7 @@ function handleSessionMessage(session: JsSession, msg: WorkerOutbound): void {
 			settlePending(session, msg);
 			return;
 		case "log":
-			logWorkerMessage(msg);
+			logAgentMessage(msg);
 			return;
 		case "ready":
 		case "init-failed":
@@ -461,7 +461,7 @@ function toErrorPayload(error: unknown): RunErrorPayload {
 	return { message: String(error) };
 }
 
-function logWorkerMessage(msg: Extract<WorkerOutbound, { type: "log" }>): void {
+function logAgentMessage(msg: Extract<WorkerOutbound, { type: "log" }>): void {
 	if (msg.level === "debug") logger.debug(msg.msg, msg.meta);
 	else if (msg.level === "warn") logger.warn(msg.msg, msg.meta);
 	else logger.error(msg.msg, msg.meta);

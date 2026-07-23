@@ -9,7 +9,7 @@
  *  - jaccardSimilarity / findingsSimilarity: measure how much two rounds'
  *    findings overlap (the fallback convergence signal when no reviewer JSON).
  */
-import type { Nomination } from "./worker-channel";
+import type { Nomination } from "./agent-channel";
 
 /** Structured round summary produced by the elected reviewer. */
 export interface RoundSummaryData {

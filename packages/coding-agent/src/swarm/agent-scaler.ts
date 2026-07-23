@@ -1,16 +1,16 @@
 /**
- * WorkerScaler — pure decision logic for dynamic worker-count scaling (GAP 2).
+ * AgentScaler — pure decision logic for dynamic agent-count scaling (GAP 2).
  *
  * Extracted from LoopController.runLoop so the voting/median math can be unit
  * tested in isolation. This module is intentionally SIDE-EFFECT FREE: it only
- * computes a signed delta from cloner suggestions. The controller remains
+ * computes a signed delta from voter suggestions. The controller remains
  * responsible for the actual roster mutation (add/remove workers) and for
  * clamping the delta to [min, max] while spawning/despawning.
  *
  * Decision rules (unchanged from the original inline logic):
- *  1. Gate: only consider scaling when at least ceil(clonerCount / 2) cloners
+ *  1. Gate: only consider scaling when at least ceil(voterCount / 2) voters
  *     submitted a suggestion.
- *  2. Fast scaling: a super-majority (>= ceil(2/3 * clonerCount)) in one
+ *  2. Fast scaling: a super-majority (>= ceil(2/3 * voterCount)) in one
  *     direction AND |medianDelta| >= 2 → jump by the median delta.
  *  3. Conservative up: simple majority of up-votes → +1.
  *  4. Conservative down: simple majority of down-votes AND above min → -1.
@@ -18,10 +18,10 @@
  */
 
 export interface ScaleDeltaParams {
-	/** Per-cloner suggested worker-count deltas (may be empty). */
+	/** Per-voter suggested agent-count deltas (may be empty). */
 	suggestions: number[];
-	/** Number of cloners eligible to vote. */
-	clonerCount: number;
+	/** Number of voters eligible to vote. */
+	voterCount: number;
 	/** Current number of active workers. */
 	currentWorkerCount: number;
 	/** Minimum allowed workers. */
@@ -29,21 +29,21 @@ export interface ScaleDeltaParams {
 }
 
 /**
- * Compute the signed worker-count delta from cloner suggestions.
+ * Compute the signed agent-count delta from voter suggestions.
  * Returns 0 when no scaling should occur. Does NOT clamp to max — the caller
  * clamps against `max - currentWorkerCount` when adding, and against
  * `currentWorkerCount - min` when removing.
  */
 export function computeScaleDelta(params: ScaleDeltaParams): number {
-	const { suggestions, clonerCount, currentWorkerCount, min } = params;
+	const { suggestions, voterCount, currentWorkerCount, min } = params;
 
-	// Gate: not enough cloners voted.
-	if (suggestions.length < Math.ceil(clonerCount / 2)) return 0;
+	// Gate: not enough voters voted.
+	if (suggestions.length < Math.ceil(voterCount / 2)) return 0;
 
 	const upVotes = suggestions.filter((d) => d > 0).length;
 	const downVotes = suggestions.filter((d) => d < 0).length;
-	const superMajority = Math.ceil((clonerCount * 2) / 3);
-	const majority = Math.ceil(clonerCount / 2);
+	const superMajority = Math.ceil((voterCount * 2) / 3);
+	const majority = Math.ceil(voterCount / 2);
 
 	// Median of a sorted COPY (never mutate the caller's array).
 	const sorted = [...suggestions].sort((a, b) => a - b);

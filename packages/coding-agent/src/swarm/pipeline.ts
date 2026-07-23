@@ -9,7 +9,7 @@
 import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { AgentExecutor } from "./executor";
 import { executeSwarmAgent } from "./executor";
-import type { ReviewVerdict } from "./roundtable";
+import type { ReviewVerdict } from "./review-council";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
 

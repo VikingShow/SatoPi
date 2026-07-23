@@ -12,7 +12,7 @@
  * route events to the correct SSE subscribers.
  */
 
-import type { ReviewVerdict } from "./roundtable";
+import type { ReviewVerdict } from "./review-council";
 import type { SwarmSessionManager } from "./swarm-session-manager";
 
 // ============================================================================

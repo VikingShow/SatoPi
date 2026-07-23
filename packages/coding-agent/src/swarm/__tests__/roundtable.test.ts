@@ -1,5 +1,5 @@
 /**
- * Unit tests for ClonerCouncil roundtable functions.
+ * Unit tests for ReviewCouncil roundtable functions.
  *
  * Tests:
  *   - extractVerdict: JSON parsing, heuristic fallback, edge cases
@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "bun:test";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import { extractVerdict, tallyVerdicts } from "../roundtable";
+import { extractVerdict, tallyVerdicts } from "../review-council";
 
 // ============================================================================
 // extractVerdict

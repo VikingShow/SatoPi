@@ -1,5 +1,5 @@
 /**
- * ClonerCouncil — Cloner 圆桌审查（P0-D: 加权投票 + 否决权）。
+ * ReviewCouncil — Cloner 圆桌审查（P0-D: 加权投票 + 否决权）。
  *
  * 每位 Cloner 可分配审查角色（guardian/adversarial/security/performance/architecture）。
  * adversarial 和 security 拥有否决权（单个 FAIL 可推翻全部 PASS）。
@@ -36,7 +36,7 @@ export interface ReviewVerdict {
 	criticizedWorkers: string[];
 }
 
-export interface ClonerReviewConfig {
+export interface ReviewConfig {
 	/** Cloner agent IDs. */
 	clonerIds: string[];
 	/** Workspace directory. */
@@ -60,10 +60,10 @@ export interface ClonerReviewConfig {
 }
 
 // ============================================================================
-// ClonerCouncil
+// ReviewCouncil
 // ============================================================================
 
-export class ClonerCouncil {
+export class ReviewCouncil {
 	/**
 	 * Run a full review cycle:
 	 * 1. Spawn cloner subprocesses in parallel
@@ -73,7 +73,7 @@ export class ClonerCouncil {
 	 * 5. Optionally run deliberation cross-examination round.
 	 */
 	async review(
-		config: ClonerReviewConfig,
+		config: ReviewConfig,
 		modelRegistry?: ModelRegistry,
 		settings?: Settings,
 		signal?: AbortSignal,
@@ -119,7 +119,7 @@ export class ClonerCouncil {
 		];
 
 		// Guard: token budget for cloner review (default 128K)
-		const guard = guardTaskBudget(reviewPrompt, undefined, `ClonerCouncil #${iteration}`);
+		const guard = guardTaskBudget(reviewPrompt, undefined, `ReviewCouncil #${iteration}`);
 		if (guard.exceeded) {
 			reviewPrompt.length = 0;
 			reviewPrompt.push(

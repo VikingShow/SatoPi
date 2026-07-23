@@ -6,7 +6,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ReviewVerdict } from "../roundtable";
+import type { ReviewVerdict } from "../review-council";
 
 // ============================================================================
 // Types

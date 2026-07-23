@@ -15,7 +15,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { StateTracker } from "../state";
 import { RegionLockManager } from "../region-lock";
-import { extractVerdict, tallyVerdicts } from "../roundtable";
+import { extractVerdict, tallyVerdicts } from "../review-council";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 
 let tmpDir: string;

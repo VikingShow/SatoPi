@@ -5,7 +5,7 @@
  * 交叉比对 worker 输出来归属每个文件的写者。多 worker 碰同一文件 → 冲突报告。
  *
  * 不提供实时锁——冲突报告注入下一轮 roundtable prompt，worker 通过
- * WorkerChannel IRC 自行协商。
+ * AgentChannel IRC 自行协商。
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
