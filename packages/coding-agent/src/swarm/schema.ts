@@ -344,7 +344,7 @@ export interface OffloadConfig {
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
-	const agentsRaw = (raw.agents as Record<string, unknown>) ?? (raw.workers as Record<string, unknown>) ?? {};
+	const agentsRaw = (raw.stage as Record<string, unknown>) ?? (raw.agents as Record<string, unknown>) ?? (raw.workers as Record<string, unknown>) ?? {};
 	const agentInitial = (agentsRaw.initial as number) ?? 5;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,

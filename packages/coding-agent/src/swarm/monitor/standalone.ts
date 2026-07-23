@@ -63,9 +63,10 @@ const DEFAULT_YAML = `swarm:
   name: SatoPi
   mode: loop
   workspace: .
+  agents: {}
   target_count: 1
   max_iterations: 10
-  agents:
+  stage:
     initial: 3
     min: 1
     max: 10
