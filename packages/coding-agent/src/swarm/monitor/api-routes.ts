@@ -45,7 +45,7 @@ export interface BeforeLoopManager {
 	start(task: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
-	confirm(): Promise<{ success: boolean; error?: string }>;
+	confirm(workerCount?: number, clonerCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
 	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
@@ -320,9 +320,16 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/confirm": async (_req, ctx) => {
+	"POST/before-loop/confirm": async (req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.confirm();
+		const body = (await req.json().catch(() => ({}))) as {
+			workerCount?: number;
+			clonerCount?: number;
+		};
+		const result = await ctx.services.beforeLoopManager.confirm(
+			body.workerCount,
+			body.clonerCount,
+		);
 		return json(result, result.success ? 200 : 500);
 	},
 

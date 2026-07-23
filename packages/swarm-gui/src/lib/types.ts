@@ -46,6 +46,10 @@ export interface BeforeLoopState {
   conversationLength: number;
   planReady: boolean;
   busy: boolean;
+  /** Extracted from Socrates recommendation output. */
+  recommendedWorkers?: number;
+  /** Extracted from Socrates recommendation output. */
+  recommendedCloners?: number;
 }
 
 export interface AgentState {
@@ -102,7 +106,8 @@ export type ActivityEventType =
   | "tool_call" | "error_flag" | "file_change"
   | "stream_start" | "stream_delta" | "stream_end"
   | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
-  | "cloner_individual" | "file_coordination";
+  | "cloner_individual" | "file_coordination"
+  | "agent_state" | "pipeline_state";
 
 export interface ActivityEntry {
   ts: number;
@@ -239,6 +244,9 @@ export interface RoleAsset {
   };
   tools: string[];
   tags: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
   created_at: string;
   updated_at: string;
   usage_count: number;
@@ -268,6 +276,9 @@ export interface RoleCreateInput {
   };
   tools: string[];
   tags: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
 }
 
 export interface RoleUpdateInput {
@@ -279,4 +290,7 @@ export interface RoleUpdateInput {
   };
   tools?: string[];
   tags?: string[];
+  skills?: string[];
+  mcp_servers?: string[];
+  model?: string;
 }

@@ -247,6 +247,32 @@ async function createSessionServices(
 	const stateTracker = new StateTracker(shared.workspace, name);
 	const activityLogger = new ActivityLogger(swarmDir, name);
 
+	// Wire real-time state change notifications — every updateAgent /
+	// updatePipeline call is pushed to SSE so the frontend reflects
+	// agent status / scores / loop iteration / todos / token usage
+	// without a 5s polling delay.
+	stateTracker.setStateChangeNotifier((event) => {
+		if (event.type === "agent_state") {
+			activityLogger.logAgentState(event.worker as string, {
+				status: event.status as string | undefined,
+				iteration: event.iteration as number | undefined,
+				praiseCount: event.praiseCount as number | undefined,
+				criticismCount: event.criticismCount as number | undefined,
+				conflictCount: event.conflictCount as number | undefined,
+				role: event.role as string | undefined,
+				modelName: event.modelName as string | undefined,
+			});
+		} else {
+			activityLogger.logPipelineState({
+				loopIteration: event.loopIteration as number | undefined,
+				roundtablePhase: event.roundtablePhase as string | undefined,
+				todos: event.todos as unknown[] | undefined,
+				totalTokens: event.totalTokens as number | undefined,
+				totalRequests: event.totalRequests as number | undefined,
+			});
+		}
+	});
+
 	const runManager = new SwarmRunManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,

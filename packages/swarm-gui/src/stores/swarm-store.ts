@@ -18,6 +18,47 @@ const MAX_ACTIVITIES = 500;
 const MAX_FILE_CHANGES = 500;
 const MAX_TOOL_CALLS_PER_AGENT = 200;
 
+// -- Agent / pipeline state event apply helpers --------------------------
+// Extracted so the live-SSE handler and the history-replay handler share
+// the same logic — no drift between the two code paths.
+
+function applyAgentStateEntry(
+	entry: ActivityEntry,
+	agents: Record<string, NonNullable<SwarmState["agents"]>[string]> | undefined,
+): Record<string, NonNullable<SwarmState["agents"]>[string]> | null {
+	if (!agents) return null;
+	const existing = agents[entry.worker!];
+	if (!existing) return null;
+	const updated = { ...existing };
+	const e = entry as unknown as Record<string, unknown>;
+	if (e.status !== undefined) updated.status = e.status as NonNullable<SwarmState["agents"]>[string]["status"];
+	if (e.iteration !== undefined) updated.iteration = e.iteration as number;
+	if (e.praiseCount !== undefined) updated.praiseCount = e.praiseCount as number;
+	if (e.criticismCount !== undefined) updated.criticismCount = e.criticismCount as number;
+	if (e.conflictCount !== undefined) updated.conflictCount = e.conflictCount as number;
+	if (e.role !== undefined) updated.role = e.role as typeof updated.role;
+	if (e.modelName !== undefined) updated.modelName = e.modelName as string;
+	const next = { ...agents };
+	next[entry.worker!] = updated;
+	return next;
+}
+
+function applyPipelineStateEntry(
+	entry: ActivityEntry,
+	swarmState: SwarmState | null,
+): SwarmState | null {
+	if (!swarmState) return null;
+	const e = entry as unknown as Record<string, unknown>;
+	const patch: Partial<SwarmState> = {};
+	if (e.loopIteration !== undefined) patch.loopIteration = e.loopIteration as number;
+	if (e.roundtablePhase !== undefined) patch.roundtablePhase = e.roundtablePhase as string;
+	if (e.todos !== undefined) patch.todos = e.todos as SwarmState["todos"];
+	if (e.totalTokens !== undefined) patch.totalTokens = e.totalTokens as number;
+	if (e.totalRequests !== undefined) patch.totalRequests = e.totalRequests as number;
+	if (Object.keys(patch).length === 0) return null;
+	return { ...swarmState, ...patch };
+}
+
 /**
  * The set of LoopPhase values the backend SwarmStateMachine broadcasts as
  * authoritative phase events. The frontend adopts these verbatim (pure
@@ -518,7 +559,23 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }));
         }
 
-        // P2-11: Error flag — categorized error notification.
+        // P1-1: Real-time agent state — update swarmState.agents without polling.
+        if (entry.type === "agent_state" && entry.worker) {
+          set((s) => {
+            const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
+            if (!agents) return {};
+            return { swarmState: { ...s.swarmState!, agents } };
+          });
+        }
+
+        // P1-1: Real-time pipeline state — merge loopIteration etc. without polling.
+        if (entry.type === "pipeline_state") {
+          set((s) => {
+            const next = applyPipelineStateEntry(entry, s.swarmState);
+            if (!next) return {};
+            return { swarmState: next };
+          });
+        }
         if (entry.type === "error_flag" && entry.errorFlag) {
           const suggestions: Record<string, string> = {
             ContextOverflow: "Consider using /shake to free context space.",
@@ -907,9 +964,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  confirmAndStart: async () => {
+  confirmAndStart: async (opts?: { workerCount?: number; clonerCount?: number }) => {
     try {
-      const result = await api.confirmBeforeLoop();
+      const result = await api.confirmBeforeLoop(opts);
       if (result.success) {
         set({ loopPhase: "running", isRunning: true, afterLoopResult: null, error: null });
       } else {
@@ -1183,6 +1240,22 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               linesChanged: entry.linesChanged,
             }].slice(-MAX_FILE_CHANGES),
           }));
+        }
+
+        if (entry.type === "agent_state" && entry.worker) {
+          set((s) => {
+            const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
+            if (!agents) return {};
+            return { swarmState: { ...s.swarmState!, agents } };
+          });
+        }
+
+        if (entry.type === "pipeline_state") {
+          set((s) => {
+            const next = applyPipelineStateEntry(entry, s.swarmState);
+            if (!next) return {};
+            return { swarmState: next };
+          });
         }
 
         if (entry.type === "error_flag" && entry.errorFlag) {

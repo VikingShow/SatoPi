@@ -35,6 +35,10 @@ export interface BeforeLoopState {
 	conversationLength: number;
 	planReady: boolean;
 	busy: boolean;
+	/** Extracted from Socrates recommendation line. */
+	recommendedWorkers?: number;
+	/** Extracted from Socrates recommendation line. */
+	recommendedCloners?: number;
 }
 
 interface ConversationTurn {
@@ -113,6 +117,10 @@ export class BeforeLoopManager {
 	#busy = false;
 	#planReady = false;
 	#planMtime = 0;
+	/** @see BeforeLoopState.recommendedWorkers */
+	#recommendedWorkers: number | undefined;
+	/** @see BeforeLoopState.recommendedCloners */
+	#recommendedCloners: number | undefined;
 	/** OH-MY-PI SessionManager for session.jsonl persistence. */
 	#sessionManager: SwarmSessionManager | null = null;
 
@@ -177,6 +185,8 @@ export class BeforeLoopManager {
 			conversationLength: this.#conversation.length,
 			planReady: this.#planReady,
 			busy: this.#busy,
+			recommendedWorkers: this.#recommendedWorkers,
+			recommendedCloners: this.#recommendedCloners,
 		};
 	}
 
@@ -202,6 +212,8 @@ export class BeforeLoopManager {
 		this.#taskDescription = task;
 		this.#conversation = [];
 		this.#planReady = false;
+		this.#recommendedWorkers = undefined;
+		this.#recommendedCloners = undefined;
 		this.#phase = "before-loop-dialog";
 		await this.#setPhase("before-loop-dialog");
 
@@ -250,13 +262,13 @@ export class BeforeLoopManager {
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
 
-		// Snapshot plan mtime
+		// Snapshot plan mtime for change detection after Socrates run.
 		this.#planMtime = await this.#getPlanMtime();
 
 		// Spawn Socrates in background
 		this.#runSocrates().catch(err => {
 			logger.error("Socrates run failed", { error: String(err) });
-			this.#activityLogger.logBroadcast("system", `[Error] Socrates failed: ${String(err)}`);
+			this.#activityLogger.logBroadcast("system", `Socrates error: ${String(err)}`);
 			this.#busy = false;
 		});
 
@@ -339,7 +351,10 @@ export class BeforeLoopManager {
 	// Stage 4: Confirm — stamp plan.md and start the loop
 	// ────────────────────────────────────────────────────────────────────────
 
-	async confirm(): Promise<{ success: boolean; error?: string }> {
+	async confirm(
+		workerCount?: number,
+		clonerCount?: number,
+	): Promise<{ success: boolean; error?: string }> {
 		if (this.#busy) {
 			return { success: false, error: "Socrates or debate is still running. Please wait." };
 		}
@@ -347,7 +362,37 @@ export class BeforeLoopManager {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
 		}
 
-		this.#activityLogger.logBroadcast("system", "Plan confirmed. Starting Loop Engineering...");
+		this.#activityLogger.logBroadcast(
+			"system",
+			workerCount != null || clonerCount != null
+				? `Plan confirmed. Creating team (${workerCount ?? "?"} workers, ${clonerCount ?? "?"} cloners)...`
+				: "Plan confirmed. Starting Loop Engineering...",
+		);
+
+		// Update loop.yaml with user-specified counts before starting.
+		// Uses Bun.YAML round-trip so the full config structure is preserved
+		// regardless of field ordering, comments, or indentation style.
+		if (workerCount != null || clonerCount != null) {
+			try {
+				const config = Bun.YAML.parse(await fs.readFile(this.#yamlPath, "utf-8")) as Record<string, unknown>;
+				const swarm = config.swarm as Record<string, unknown> | undefined;
+				if (swarm) {
+					if (workerCount != null) {
+						const workers = swarm.workers as Record<string, unknown> | undefined;
+						if (workers) workers.initial = workerCount;
+					}
+					if (clonerCount != null) {
+						const cloners = swarm.cloners as Record<string, unknown> | undefined;
+						if (cloners) cloners.count = clonerCount;
+					}
+				}
+				await fs.writeFile(this.#yamlPath, Bun.YAML.stringify(config), "utf-8");
+			} catch (err) {
+				logger.warn("Failed to update loop.yaml counts", { error: String(err) });
+				// Continue anyway — counts are advisory.
+			}
+		}
+
 		this.#phase = "running";
 		await this.#setPhase("running");
 
@@ -358,7 +403,7 @@ export class BeforeLoopManager {
 			// Revert phase on failure
 			this.#phase = "before-loop-confirm";
 			await this.#setPhase("before-loop-confirm");
-			this.#activityLogger.logBroadcast("system", `[Error] Failed to start loop: ${result.error}`);
+			this.#activityLogger.logBroadcast("system", `Failed to start loop: ${result.error}`);
 		}
 
 		return result;
@@ -387,6 +432,7 @@ export class BeforeLoopManager {
 	async #runSocrates(): Promise<void> {
 		this.#busy = true;
 		const msgId = `socrates-${Date.now()}`;
+		let planPoll: ReturnType<typeof setInterval> | undefined;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();
@@ -412,6 +458,25 @@ export class BeforeLoopManager {
 				agentDef.writeAllowList = socratesRestriction.write_allowlist;
 			}
 
+			// Monitor plan.md writes in real-time during Socrates execution.
+			// Polls every 500ms using Bun's native file API. When the file
+			// first appears or grows, broadcasts progress so the user knows
+			// the plan is being written — no reliance on LLM text signals.
+			const planPath = getSessionPlanPath(this.#swarmDir);
+			let planFileDetected = false;
+			planPoll = setInterval(() => {
+				try {
+					const file = Bun.file(planPath);
+					if (file.size > 0 && !planFileDetected) {
+						planFileDetected = true;
+						this.#activityLogger.logBroadcast(
+							"system",
+							"Writing plan.md... The draft will appear in the Plan panel (right sidebar) when complete.",
+						);
+					}
+				} catch { /* file not yet created */ }
+			}, 500);
+
 			const result = await streamAgentOutput(
 				{
 					activityLogger: this.#activityLogger,
@@ -435,6 +500,17 @@ export class BeforeLoopManager {
 
 			const displayOutput = result.output || "(no output)";
 
+			// Parse worker/cloner recommendations from Socrates output.
+			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*workers?,?\s*(\d+)\s*cloners?/i);
+			if (recMatch) {
+				this.#recommendedWorkers = parseInt(recMatch[1], 10);
+				this.#recommendedCloners = parseInt(recMatch[2], 10);
+				logger.info("[BeforeLoop] parsed worker/cloner recommendation", {
+					workers: this.#recommendedWorkers,
+					cloners: this.#recommendedCloners,
+				});
+			}
+
 			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
 
@@ -442,15 +518,18 @@ export class BeforeLoopManager {
 			if (newMtime > this.#planMtime) {
 				this.#planReady = true;
 				this.#planMtime = newMtime;
+				// Event-driven plan-ready: phase change triggers Action Bar in ChatView.
 				this.#activityLogger.logPhase("plan-updated");
 				this.#activityLogger.logBroadcast(
 					"system",
-					"Draft plan.md is ready. Click 'Run Debate' to refine it, or 'Confirm & Start' to proceed.",
+					"Plan draft is ready. Open the Plan panel (right sidebar) to review. " +
+					"Click 'Run Debate' to refine with Cloner Roundtable, or 'Confirm & Start' to begin.",
 				);
 			}
 		} catch (err) {
 			throw err;
 		} finally {
+			if (planPoll) clearInterval(planPoll);
 			this.#busy = false;
 		}
 	}

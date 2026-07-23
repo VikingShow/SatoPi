@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Swords, Check, CheckCircle2, Square, X, Sparkles, Bot, Brain, ChevronDown, Copy } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,6 +13,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { ActionBar } from "./ActionBar";
 
 // ── Code block cache (LRU-bounded, shared module) ──────────────────────
 import { cacheKey, getCachedHtml, setCachedHtml } from "../../lib/code-cache";
@@ -461,34 +462,13 @@ export default function ChatView() {
 
       {/* Context Action Bar — appears when plan is ready or debate is done */}
       {((loopPhase === "before-loop-dialog" && planReady) || loopPhase === "before-loop-confirm") && !isBusy && (
-        <div className="border-t border-purple-800/40 px-4 py-2 bg-linear-to-r from-purple-950/30 to-blue-950/30">
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-purple-300">
-              <CheckCircle2 size={12} />
-              {loopPhase === "before-loop-confirm" ? "Debate complete — plan refined" : "Plan draft ready"}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="default"
-                size="xs"
-                onClick={() => runDebate()}
-                className="bg-status-accent hover:bg-status-accent/80"
-              >
-                <Swords size={12} />
-                {loopPhase === "before-loop-confirm" ? "Run Debate Again" : "Run Debate"}
-              </Button>
-              <Button
-                variant="default"
-                size="xs"
-                onClick={() => confirmAndStart()}
-                className="bg-status-success hover:bg-status-success/80"
-              >
-                <Check size={12} />
-                Confirm & Start
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ActionBar
+          phase={loopPhase}
+          recommendedWorkers={beforeLoopState?.recommendedWorkers}
+          recommendedCloners={beforeLoopState?.recommendedCloners}
+          onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, clonerCount: cc })}
+          onDebate={runDebate}
+        />
       )}
 
       {/* Input bar — right-side button morphs based on loop phase:

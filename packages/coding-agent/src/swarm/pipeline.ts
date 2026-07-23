@@ -251,7 +251,12 @@ export class PipelineController {
 			}
 
 			const status = errors.length > 0 ? ("failed" as const) : ("completed" as const);
-			await this.#stateTracker.updatePipeline({ status, completedAt: Date.now() });
+			await this.#stateTracker.updatePipeline({
+				status,
+				completedAt: Date.now(),
+				totalTokens: pipelineCtx.totalTokens,
+				totalRequests: pipelineCtx.totalRequests,
+			});
 			await this.#stateTracker.appendOrchestratorLog(`Pipeline ${status} (${errors.length} errors)`);
 
 			// P1-6: afterPipeline hook.

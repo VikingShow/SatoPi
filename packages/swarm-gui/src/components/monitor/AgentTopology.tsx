@@ -36,16 +36,22 @@ const STATUS_COLORS: Record<string, string> = {
   waiting: "#A3A3A3",
 };
 
-// ── Layout engine (dagre) ───────────────────────────────────────
+// ── Layout engine (dagre) — dynamic node sizing ──────────────────
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 dagreGraph.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 100 });
+
+/** Rough heuristic: ~7.5px per char + padding for icon/badge. */
+function estimateNodeSize(label: string): { width: number; height: number } {
+  const minW = 140, maxW = 280, charW = 7.5, pad = 44;
+  return { width: Math.max(minW, Math.min(maxW, Math.round(label.length * charW + pad))), height: 80 };
+}
 
 function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   dagreGraph.nodes().forEach((n) => dagreGraph.removeNode(n));
 
   for (const node of nodes) {
-    dagreGraph.setNode(node.id, { width: 180, height: 80 });
+    dagreGraph.setNode(node.id, estimateNodeSize((node.data as { label: string }).label));
   }
   for (const edge of edges) {
     dagreGraph.setEdge(edge.source, edge.target);
@@ -56,9 +62,10 @@ function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((node) => {
     const pos = dagreGraph.node(node.id);
     if (!pos) return node;
+    const s = estimateNodeSize((node.data as { label: string }).label);
     return {
       ...node,
-      position: { x: pos.x - 90, y: pos.y - 40 },
+      position: { x: pos.x - s.width / 2, y: pos.y - s.height / 2 },
       sourcePosition: Position.Bottom,
       targetPosition: Position.Top,
     };
@@ -72,7 +79,7 @@ function AgentNode({ data }: { data: { label: string; agentType: string; status:
 
   return (
     <div
-      className="px-3 py-2 rounded-xl border shadow-lg min-w-[160px]"
+      className="px-3 py-2 rounded-xl border shadow-lg min-w-[140px]"
       style={{
         background: "linear-gradient(135deg, #141414 0%, #1a1a1a 100%)",
         borderColor: color,
@@ -81,7 +88,7 @@ function AgentNode({ data }: { data: { label: string; agentType: string; status:
     >
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
-        <span className="text-xs font-semibold text-foreground">{data.label}</span>
+        <span className="text-xs font-semibold text-foreground truncate">{data.label}</span>
       </div>
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <span className="uppercase tracking-wider" style={{ color }}>{data.agentType}</span>
@@ -121,12 +128,12 @@ export default function AgentTopology() {
     }));
   }, [agents]);
 
-  // Build edges from recent message activities
+  // Build edges from all message activities (not just last 50).
+  // Dedup by source→target so long-running swarms retain full topology.
   const rawEdges: Edge[] = useMemo(() => {
     const edges = new Map<string, Edge>();
-    const recent = activities.slice(-50);
 
-    for (const a of recent) {
+    for (const a of activities) {
       if (a.type !== "broadcast" && a.type !== "steering") continue;
       const src = (a as unknown as { from?: string }).from;
       const tgt = (a as unknown as { to?: string }).to;
