@@ -311,7 +311,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	// -- After Loop results ----------------------------------------------
-	"GET/after-loop/summary": (_req, ctx) => {
+	"GET/curtain/summary": (_req, ctx) => {
 		const result = ctx.services.runManager?.getLastAfterLoopResult?.();
 		if (!result) return json({ error: "No After Loop result available yet" });
 		return json(result);
@@ -401,7 +401,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		// -- Applaud (Curtain phase confirmation) ------------------------------
 		"POST/curtain/applaud": async (_req, ctx) => {
 			if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
-			// Applaud transitions the session from Curtain to Idle
 			await ctx.stateTracker.updatePipeline({ phase: "idle", status: "completed" });
 			ctx.services.sessionManager?.logPhase("idle");
 			return json({ success: true, message: "Bravo! The curtain has fallen." });

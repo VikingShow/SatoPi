@@ -873,7 +873,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   fetchCurtainResult: async () => {
     try {
       const result = await api.getCurtainSummary();
-      set({ curtainResult: result, phase: "idle" });
+      // Stay in "curtain" phase — user must click Applaud to transition to idle
+      set({ curtainResult: result });
     } catch {
       // 404 is expected when no curtain result is available
     }
