@@ -61,13 +61,13 @@ export function deriveChannel(
     }
 
     // ── Per-cloner individual verdict → dedicated cloner channel ──
-    case "cloner_individual": {
+    case "reviewer_individual": {
       const id = `agent-${entry.from}`;
       const verdictLabel = entry.passed ? "PASS" : "FAIL";
       const body = `**${verdictLabel}**${entry.findings?.length ? `\n${(entry.findings as string[]).map((f: string) => `· ${f}`).join("\n")}` : ""}`;
       return {
         id,
-        channel: { id, type: "cloner", name: `${entry.from}`, participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
+        channel: { id, type: "reviewer", name: `${entry.from}`, participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
         message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body, timestamp: ts },
       };
     }

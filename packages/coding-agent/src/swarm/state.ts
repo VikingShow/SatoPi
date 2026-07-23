@@ -210,7 +210,7 @@ export class StateTracker {
 		if (this.#onStateChange) {
 			this.#onStateChange({
 				type: "agent_state",
-				worker: name,
+				agent: name,
 				from: name,
 				...update,
 			});
@@ -228,7 +228,7 @@ export class StateTracker {
 			for (const id of agentIds) {
 				const agent = this.#state.agents[id];
 				if (agent) {
-					this.#onStateChange({ type: "agent_state", worker: id, from: id, praiseCount: agent.praiseCount });
+					this.#onStateChange({ type: "agent_state", agent: id, from: id, praiseCount: agent.praiseCount });
 				}
 			}
 		}
@@ -245,7 +245,7 @@ export class StateTracker {
 			for (const id of agentIds) {
 				const agent = this.#state.agents[id];
 				if (agent) {
-					this.#onStateChange({ type: "agent_state", worker: id, from: id, criticismCount: agent.criticismCount });
+					this.#onStateChange({ type: "agent_state", agent: id, from: id, criticismCount: agent.criticismCount });
 				}
 			}
 		}

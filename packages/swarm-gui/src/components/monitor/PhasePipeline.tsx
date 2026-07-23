@@ -32,7 +32,7 @@ const STEPS: Step[] = [
     key: "working", label: "Work",
     internalPhases: ["stage", "paused"],  // paused is running suspended
     subStepPatterns: [
-      { match: "Workers executing", label: "Working" },
+      { match: "Agents working", label: "Working" },
       { match: "Debate: challenging", label: "Challenging" },
       { match: "Debate: rebuttal", label: "Rebuttal" },
       { match: "Debate: resolution", label: "Resolution" },

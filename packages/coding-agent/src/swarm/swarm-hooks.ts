@@ -241,7 +241,7 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
  * 通用 Agent ID 模式：字母开头，包含至少一个连字符/下划线/数字
  * （避免匹配 FAIL/BUG/ERROR 等纯字母英文词汇）。
  *
- * 匹配示例: worker-1, reviewer_01, agent-architect, cloner-v3
+ * 匹配示例: agent-1, agent-2, planner, reviewer
  * 不匹配:   FAIL, PASS, bug, error, critical, major
  */
 const AGENT_ID_RE = /\b([a-z][a-z0-9_-]*(?:[0-9_-])[a-z0-9_-]{0,31})\b/i;
@@ -272,7 +272,7 @@ const CRITICIZE_KEYWORDS = [
  * 从 Cloner findings 中提取结构化标签 + 关键字匹配的 Agent ID。
  *
  * 分为两层：
- * 1. 结构化标签（高置信度）— `[PRAISE:worker-1]` 直接提取
+ * 1. 结构化标签（高置信度）— `[PRAISE:agent-1]` 直接提取
  * 2. 关键字 + 邻近 Agent ID（中置信度）— "worker-3 produced broken output"
  */
 function extractStructuredAgents(

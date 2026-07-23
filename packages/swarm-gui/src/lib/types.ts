@@ -122,7 +122,7 @@ export type ActivityEventType =
   | "tool_call" | "error_flag" | "file_change"
   | "stream_start" | "stream_delta" | "stream_end"
   | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
-  | "cloner_individual" | "file_coordination"
+  | "reviewer_individual" | "file_coordination"
   | "agent_state" | "pipeline_state";
 
 export interface ActivityEntry {
@@ -148,7 +148,7 @@ export interface ActivityEntry {
   writers?: string[];
   severity?: string;
   action?: string;
-  worker?: string;
+  agent?: string;
   reason?: string;
   elected?: string | null;
   votes?: Record<string, string[]>;

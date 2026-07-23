@@ -6,7 +6,7 @@ import TodoList from "./TodoList";
 import AfterLoopPanel from "./CurtainPanel";
 import { Button } from "../ui/button";
 
-function WorkerCard({ name, praise, criticism, conflict, status, role }: {
+function AgentCard({ name, praise, criticism, conflict, status, role }: {
   name: string; praise: number; criticism: number; conflict: number;
   status: string; role?: string;
 }) {
@@ -92,8 +92,8 @@ export default function ContextPanel() {
   // panel vanish. We now always render the panel shell and derive data
   // defensively, showing an idle/empty state instead of disappearing.
   const agents = Object.entries(swarmState?.agents ?? {});
-  const workers = agents.filter(([_, a]) => !a.name.startsWith("cloner"));
-  const reviewers = agents.filter(([_, a]) => a.name.startsWith("cloner"));
+  const developers = agents.filter(([_, a]) => a.role !== "reviewer" || !a.name.includes("-r"));
+  const reviewers = agents.filter(([_, a]) => a.role === "reviewer" || a.name.includes("-r"));
   const lastVerdict = [...activities].reverse().find((a) => a.type === "verdict");
   const conflicts = activities.filter((a) => a.type === "conflict");
 
@@ -149,7 +149,7 @@ export default function ContextPanel() {
           {workers.length > 0 ? (
             <div className="p-2 space-y-1">
               {workers.map(([id, agent]) => (
-                <WorkerCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
+                <AgentCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
               ))}
             </div>
           ) : (
@@ -168,7 +168,7 @@ export default function ContextPanel() {
               </div>
               <div className="p-2 space-y-1">
                 {reviewers.map(([id, agent]) => (
-                  <WorkerCard key={id} name={agent.name} praise={0} criticism={0} conflict={0} status={agent.status} />
+                  <AgentCard key={id} name={agent.name} praise={0} criticism={0} conflict={0} status={agent.status} />
                 ))}
               </div>
             </>

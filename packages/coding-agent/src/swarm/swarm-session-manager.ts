@@ -34,7 +34,7 @@
  * ```typescript
  * const sm = await SwarmSessionManager.create(swarmDir);
  * sm.logSwarmState({ status: "running", iteration: 1 });
- * sm.logActivity({ ts, type: "broadcast", from: "worker-1", body: "..." });
+ * sm.logActivity({ ts, type: "broadcast", from: "agent-1", body: "..." });
  * sm.logPhase("running");
  * sm.appendConversationTurn("user", "hello");
  * ```

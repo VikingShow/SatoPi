@@ -162,7 +162,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
-  const isSteering = msg.body.startsWith("[CLONER STEERING]");
+  const isSteering = msg.body.startsWith("[AGENT STEERING]");
   const isOperator = msg.from === "operator";
   const isSystem = msg.from === "system";
   const isSocrates = msg.from === "socrates";
@@ -202,7 +202,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           </div>
         ) : (
           <ErrorBoundary fallbackText={msg.body}>
-            <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+            <MessageBody body={isSteering ? msg.body.replace("[AGENT STEERING] ", "") : msg.body} />
           </ErrorBoundary>
         )}
       </div>

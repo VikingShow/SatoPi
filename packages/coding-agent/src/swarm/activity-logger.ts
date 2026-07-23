@@ -40,7 +40,7 @@ export type ActivityEventType =
 	| "deliberation_challenge"
 	| "deliberation_rebuttal"
 	| "deliberation_ruling"
-	| "cloner_individual"
+	| "reviewer_individual"
 	| "file_coordination"
 	| "agent_state"
 	| "pipeline_state";
@@ -73,7 +73,7 @@ export interface ActivityEntry {
 	severity?: string;
 	/** Scaling-specific fields */
 	action?: string;
-	worker?: string;
+	agent?: string;
 	reason?: string;
 	/** Nomination-specific fields */
 	elected?: string | null;
@@ -260,21 +260,21 @@ export class ActivityLogger {
 
 	/** Logged when a swarm agent executes a tool. */
 	logToolCall(agentName: string, toolName: string, input?: string, output?: string, error?: string, durationMs?: number): void {
-		this.log({ ts: Date.now(), type: "tool_call", worker: agentName, toolName, toolInput: input, toolOutput: output, toolError: error, toolDurationMs: durationMs });
+		this.log({ ts: Date.now(), type: "tool_call", agent: agentName, toolName, toolInput: input, toolOutput: output, toolError: error, toolDurationMs: durationMs });
 	}
 
 	// -- Error Flag (P2-11) --------------------------------------------------
 
 	/** Logged when a provider-level error is classified with a bit flag. */
 	logProviderError(agentName: string, errorFlag: string, message: string, recoverable: boolean, suggestion?: string): void {
-		this.log({ ts: Date.now(), type: "error_flag", worker: agentName, errorFlag, body: message, recoverable, suggestion });
+		this.log({ ts: Date.now(), type: "error_flag", agent: agentName, errorFlag, body: message, recoverable, suggestion });
 	}
 
 	// -- File Change ---------------------------------------------------------
 
 	/** Logged when a worker agent creates, modifies, or deletes a file. */
 	logFileChange(agentName: string, file: string, action: "created" | "modified" | "deleted", linesChanged?: number): void {
-		this.log({ ts: Date.now(), type: "file_change", worker: agentName, file, action, linesChanged });
+		this.log({ ts: Date.now(), type: "file_change", agent: agentName, file, action, linesChanged });
 	}
 
 	// -- Streaming Delta (P3-1) ----------------------------------------------
@@ -315,8 +315,8 @@ export class ActivityLogger {
 
 	/** Emit a single cloner's verdict before aggregation. Enables the
 	 *  frontend to show per-cloner findings in dedicated channels. */
-	logClonerIndividual(reviewerId: string, passed: boolean, findings: string[]): void {
-		this.log({ ts: Date.now(), type: "cloner_individual", from: reviewerId, passed, findings });
+	logReviewerIndividual(reviewerId: string, passed: boolean, findings: string[]): void {
+		this.log({ ts: Date.now(), type: "reviewer_individual", from: reviewerId, passed, findings });
 	}
 
 	// ── File coordination (P2 — file-conflict channel routing) ───────

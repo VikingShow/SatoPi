@@ -63,7 +63,6 @@ const DEFAULT_YAML = `swarm:
   name: SatoPi
   mode: loop
   workspace: .
-  agents: {}
   target_count: 1
   max_iterations: 10
   agents:
@@ -71,11 +70,10 @@ const DEFAULT_YAML = `swarm:
     min: 1
     max: 10
     auto: false
-  reviewers:
-    count: 2
+    reviewers: 2
   plan_debate:
     enabled: true
-    reviewer_count: 2
+    agent_count: 2
     max_rounds: 2
     convergence_threshold: 0.7
 `;
@@ -315,7 +313,7 @@ async function createSessionServices(
 	// without a 5s polling delay.
 	stateTracker.setStateChangeNotifier((event) => {
 		if (event.type === "agent_state") {
-			activityLogger.logAgentState(event.worker as string, {
+			activityLogger.logAgentState(event.agent as string, {
 				status: event.status as string | undefined,
 				iteration: event.iteration as number | undefined,
 				praiseCount: event.praiseCount as number | undefined,

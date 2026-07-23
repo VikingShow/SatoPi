@@ -80,7 +80,7 @@ export interface LoopOptions extends PipelineOptions {
 	hooks?: LoopPipelineHooks;
 	/**
 	 * P7: Per-agent context provider callback.
-	 * Called for each Worker before execution. Return value is appended
+	 * Called for each agent before execution. Return value is appended
 	 * to the agent's task prompt. Return null/empty to skip injection.
 	 */
 	getAgentContext?: (agentId: string) => string | null;
@@ -128,17 +128,17 @@ export type BlockerResolution = "continue" | "skip" | "abort";
 // Prompts
 // ============================================================================
 const AGENT_SYSTEM_PROMPT = `\
-You are a Worker in the Loop Engineering system — part of a self-organizing swarm.
-You collaborate with other Workers to complete a task defined in a plan that will be provided.
+You are an Agent in the SatoPi system — part of a self-organizing swarm.
+You collaborate with other agents to complete a task defined in a plan that will be provided.
 
 MECHANISM:
 - A plan.md containing the goal, constraints, and acceptance criteria is broadcast.
-- You and other Workers negotiate via group chat (AgentChannel) how to divide the work.
+- You and other agents negotiate via group chat (AgentChannel) how to divide the work.
   No one assigns tasks to you — you self-organize through open discussion.
-- You can broadcast to all Workers, create sub-groups, and elect roles (reviewer, integrator, etc.).
+- You can broadcast to all agents, create sub-groups, and elect roles (reviewer, integrator, etc.).
 - After each round, you receive prior rounds' outputs for cross-examination.
 - The swarm runs multiple rounds per iteration — review peers' work, spot issues, refine together.
-- Workers can declare convergence via IRC when the output stabilizes.
+- Agents can declare convergence via IRC when the output stabilizes.
 
 FILE EDITING PROTOCOL (critical):
 - The system enforces region-level locking on files. When you use edit, write, or bash
@@ -157,17 +157,17 @@ PEER REVIEW (critical):
 - Flag gaps, contradictions, and quality issues you find in your peers' work.
 - If you see duplicated effort, coordinate to merge.
 - If a peer's output is wrong or substandard, say so — be direct, not polite.
-- This internal review is your primary quality mechanism. Cloners are latent guardians
+- This internal review is your primary quality mechanism. Reviewers are latent guardians
   who only intervene when the swarm cannot resolve its own disagreements.
 
 YOUR CAPABILITIES:
 - Full tool access: read, write, edit, bash, grep, glob, web_search, browser
-- Communicate with other Workers via irc (use \`irc send\` with to:"worker:*" for broadcast)
+- Communicate with other agents via irc (use \`irc send\` with to:"agent:*" for broadcast)
 - Write output to the workspace directory
 
 BEHAVIOR:
 - Proactively negotiate — don't wait to be told what to do.
-- If another Worker is duplicating your work, coordinate with them.
+- If another agent is duplicating your work, coordinate with them.
 - If you're blocked, broadcast for help.
 - Before finishing a round, self-audit your output against the plan's acceptance criteria.
 - Record what you did and what you learned.
@@ -474,8 +474,8 @@ export class LoopController {
 		const reviewerCount = this.#loopConfig.agents.reviewers;
 
 		// Initialize worker and cloner IDs
-		for (let i = 0; i < initialWorkerCount; i++) agentIds.push(`worker-${i + 1}`);
-		reviewerIds = Array.from({ length: reviewerCount }, (_, i) => `cloner-${i + 1}`);
+		for (let i = 0; i < initialWorkerCount; i++) agentIds.push(`agent-${i + 1}`);
+		reviewerIds = Array.from({ length: reviewerCount }, (_, i) => `agent-r${i + 1}`);
 
 		// Register initial workers and cloners to StateTracker so that
 		// subsequent updateAgent / incrementPraise / etc. calls don't
@@ -545,7 +545,7 @@ export class LoopController {
 			for (const id of agentIds) {
 				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 			}
-			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
+			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Agents working" });
 			this.#activityLogger?.logPhase("workers", undefined, iter + 1);
 			options.onProgress?.({
 				iteration: iter,
@@ -856,14 +856,14 @@ export class LoopController {
 				// Workers did not converge — escalate to latent cloner review
 				await this.#channel.broadcast(
 					this.#reviewerId,
-					`Swarm did not converge internally. Escalating to Cloner review (iteration ${iter + 1}).`,
+					`Swarm did not converge internally. Escalating to review (iteration ${iter + 1}).`,
 				);
 
 				// Progress: cloners reviewing
 				for (const id of reviewerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
-				await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
+				await this.#stateTracker.updatePipeline({ roundtablePhase: "Reviewers reviewing (escalation)" });
 				this.#activityLogger?.logPhase("cloner-review", undefined, iter + 1);
 				options.onProgress?.({
 					iteration: iter,
@@ -1098,7 +1098,7 @@ export class LoopController {
 				if (delta > 0) {
 					const addCount = Math.min(delta, max - currentAgentCount);
 					for (let i = 0; i < addCount; i++) {
-						const newId = `worker-${agentIds.length + 1}`;
+						const newId = `agent-${agentIds.length + 1}`;
 						this.#channel.addAgentb(newId);
 						await this.#stateTracker.registerAgent(newId, this.#loopConfig.model);
 						agentIds.push(newId);
@@ -1455,7 +1455,7 @@ export class LoopController {
 					planContent ? `\n## Plan\n\n${planContent}` : "",
 					feedbackBlock,
 					roleSuggestions?.[id]
-						? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
+						? `\n## Role\n\nreview suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
 						: "",
 					nominationPrompt ?? "",
 					// P7: Per-agent context injection (Profile + Stigmergy).
@@ -1515,7 +1515,7 @@ export class LoopController {
 			this.#activityLogger?.logCrash(agentIds[i], errMsg);
 			return {
 				index: i,
-				id: `worker-${agentIds[i]}`,
+				id: agentIds[i],
 				agent: agentIds[i],
 				agentSource: "project" as const,
 				task: "",

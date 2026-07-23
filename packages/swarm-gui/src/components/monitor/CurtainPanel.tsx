@@ -75,11 +75,11 @@ export default function CurtainPanel() {
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Workers</div>
-              <div className="text-foreground font-mono">{safeRunStats.agentCount}</div>
+              <div className="text-foreground font-mono">{safeRunStats.reviewerCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Reviewers</div>
-              <div className="text-foreground font-mono">{safeRunStats.agentCount}</div>
+              <div className="text-foreground font-mono">{safeRunStats.reviewerCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Approval</div>

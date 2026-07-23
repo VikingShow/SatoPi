@@ -112,7 +112,7 @@ export class ReviewCouncil {
 			`\n## Worker Output Summary\n\n${agentOutput}\n`,
 			`\n## Instructions`,
 			`- Optionally suggest \`agent_count_delta\`: signed integer adjustment to worker count (+2 to add 2, -1 to remove 1).`,
-			`- After Round 1+, optionally suggest \`role_suggestions\`: {"worker-1": "implementer", "worker-2": "reviewer", ...}.`,
+			`- After Round 1+, optionally suggest \`role_suggestions\`: {"agent-1": "developer", "agent-2": "reviewer", ...}.`,
 			`- Optionally list \`praised_workers\` and \`criticized_workers\` by worker ID.`,
 			`\nReturn a single JSON line:`,
 			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"agent_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
