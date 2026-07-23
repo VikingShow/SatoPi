@@ -24,7 +24,7 @@ import type { RoleAssetManager } from "./role-asset";
 import { generatePlanningPrompt, runPlanDebate } from "./script-planner";
 import { streamAgentOutput } from "./streaming";
 import { getSessionPlanPath } from "./plan-paths";
-import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig, type AgentToolRestriction } from "./schema";
+import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "./schema";
 
 // ============================================================================
 // Types
@@ -36,13 +36,8 @@ export interface ScriptState {
 	conversationLength: number;
 	planReady: boolean;
 	busy: boolean;
-	/** The agent selected for planning. */
 	selectedAgentId?: string;
-	/** Extracted from planner recommendation line. */
 	recommendedAgents?: number;
-	/** Extracted from planner recommendation line. */
-	estimatedAgentHours?: number;
-	/** Estimated agent-hours from the plan. */
 	estimatedAgentHours?: number;
 }
 
@@ -77,8 +72,6 @@ export class ScriptManager {
 	#selectedAgentId: string | undefined;
 	#recommendedAgents: number | undefined;
 	#estimatedAgentHours: number | undefined;
-	#estimatedAgentHours: number | undefined;
-	/** OH-MY-PI SessionManager for session.jsonl persistence. */
 	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(opts: {
@@ -108,24 +101,13 @@ export class ScriptManager {
 	}
 
 	async #saveConversation(): Promise<void> {
-		try {
-			this.#sessionManager?.logConversationSnapshot(this.#conversation);
-		} catch (err) {
-			logger.warn("Failed to save conversation history", { error: String(err) });
-		}
+		try { this.#sessionManager?.logConversationSnapshot(this.#conversation); }
+		catch (err) { logger.warn("Failed to save conversation history", { error: String(err) }); }
 	}
 
-	getHistory(): ConversationTurn[] {
-		return [...this.#conversation];
-	}
-
-	setSessionManager(sm: SwarmSessionManager): void {
-		this.#sessionManager = sm;
-	}
-
-	get isBusy(): boolean {
-		return this.#busy;
-	}
+	getHistory(): ConversationTurn[] { return [...this.#conversation]; }
+	setSessionManager(sm: SwarmSessionManager): void { this.#sessionManager = sm; }
+	get isBusy(): boolean { return this.#busy; }
 
 	getState(): ScriptState {
 		return {
@@ -137,33 +119,23 @@ export class ScriptManager {
 			selectedAgentId: this.#selectedAgentId,
 			recommendedAgents: this.#recommendedAgents,
 			estimatedAgentHours: this.#estimatedAgentHours,
-			estimatedAgentHours: this.#estimatedAgentHours,
 		};
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Stage 1: Start — user picks an agent, provides task, planning begins
-	// ────────────────────────────────────────────────────────────────────────
-
 	async start(task: string, agentId?: string): Promise<{ success: boolean; error?: string }> {
-		if (this.#busy) {
-			return { success: false, error: "An agent is still thinking. Please wait." };
-		}
+		if (this.#busy) return { success: false, error: "An agent is still thinking. Please wait." };
 		if (this.#phase !== "idle" && this.#phase !== "curtain") {
 			return { success: false, error: `Script phase already in progress (phase: ${this.#phase})` };
 		}
 
 		const loopConfig = await this.#readLoopConfig();
-		if (!loopConfig) {
-			return { success: false, error: "Failed to parse loop.yaml" };
-		}
+		if (!loopConfig) return { success: false, error: "Failed to parse loop.yaml" };
 
 		this.#taskDescription = task;
 		this.#conversation = [];
 		this.#planReady = false;
 		this.#selectedAgentId = agentId;
 		this.#recommendedAgents = undefined;
-		this.#estimatedAgentHours = undefined;
 		this.#estimatedAgentHours = undefined;
 		this.#phase = "script";
 		await this.#setPhase("script");
@@ -178,10 +150,8 @@ export class ScriptManager {
 
 		this.#conversation.push({ role: "user", content: task });
 		await this.#saveConversation();
-
 		this.#planMtime = await this.#getPlanMtime();
 
-		// Spawn the selected agent in background
 		this.#runPlannerAgent().catch(err => {
 			logger.error("Planner agent run failed", { error: String(err) });
 			this.#activityLogger.logBroadcast("system", `[Error] Planner failed: ${String(err)}`);
@@ -191,22 +161,14 @@ export class ScriptManager {
 		return { success: true };
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Stage 2: SendMessage — user sends a follow-up, planner responds
-	// ────────────────────────────────────────────────────────────────────────
-
 	async sendMessage(text: string): Promise<{ success: boolean; error?: string }> {
-		if (this.#busy) {
-			return { success: false, error: "The planner is still thinking. Please wait." };
-		}
+		if (this.#busy) return { success: false, error: "The planner is still thinking. Please wait." };
 		if (this.#phase !== "script") {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
-
 		this.#activityLogger.logBroadcast("operator", text);
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
-
 		this.#planMtime = await this.#getPlanMtime();
 
 		this.#runPlannerAgent().catch(err => {
@@ -214,18 +176,11 @@ export class ScriptManager {
 			this.#activityLogger.logBroadcast("system", `Planner error: ${String(err)}`);
 			this.#busy = false;
 		});
-
 		return { success: true };
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Stage 3: RunDebate — multiple agents debate the draft plan
-	// ────────────────────────────────────────────────────────────────────────
-
 	async runDebate(): Promise<{ success: boolean; error?: string }> {
-		if (this.#busy) {
-			return { success: false, error: "The planner is still thinking. Please wait." };
-		}
+		if (this.#busy) return { success: false, error: "The planner is still thinking. Please wait." };
 		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot run debate in phase: ${this.#phase}` };
 		}
@@ -237,43 +192,26 @@ export class ScriptManager {
 
 		const planPath = getSessionPlanPath(this.#swarmDir);
 		let draftPlan: string;
-		try {
-			draftPlan = await Bun.file(planPath).text();
-		} catch {
-			return { success: false, error: "No plan.md found. Ask the planner to generate one first." };
-		}
+		try { draftPlan = await Bun.file(planPath).text(); }
+		catch { return { success: false, error: "No plan.md found. Ask the planner to generate one first." }; }
 
 		const loopConfig = await this.#readLoopConfig();
-		if (!loopConfig) {
-			return { success: false, error: "Failed to parse loop.yaml" };
-		}
+		if (!loopConfig) return { success: false, error: "Failed to parse loop.yaml" };
 
 		this.#busy = true;
-
 		(async () => {
 			try {
-				this.#activityLogger.logBroadcast(
-					"system",
-					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
-				);
+				this.#activityLogger.logBroadcast("system",
+					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`);
 
-				const result = await runPlanDebate(
-					draftPlan,
-					this.#swarmDir,
-					this.#workspace,
-					loopConfig,
-					this.#modelRegistry,
-					this.#settings,
-				);
+				const result = await runPlanDebate(draftPlan, this.#swarmDir, this.#workspace, loopConfig,
+					this.#modelRegistry, this.#settings);
 
 				this.#activityLogger.logPhase("plan-updated");
 				this.#planReady = true;
-
 				this.#activityLogger.logPhase("debate-done");
-				this.#activityLogger.logBroadcast(
-					"system",
-					`Plan debate ${result.converged ? "converged" : "completed"} (${result.refined ? "refined" : "unchanged"}). Review the plan and click "Confirm & Start" to begin.`,
-				);
+				this.#activityLogger.logBroadcast("system",
+					`Plan debate ${result.converged ? "converged" : "completed"} (${result.refined ? "refined" : "unchanged"}). Review the plan and click "Confirm & Start" to begin.`);
 
 				this.#phase = "script-confirm";
 				await this.#setPhase("script-confirm");
@@ -282,54 +220,32 @@ export class ScriptManager {
 				this.#activityLogger.logBroadcast("system", `[Error] Debate failed: ${String(err)}`);
 				this.#phase = "script";
 				await this.#setPhase("script");
-			} finally {
-				this.#busy = false;
-			}
+			} finally { this.#busy = false; }
 		})();
 
 		return { success: true };
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Stage 4: Confirm — enter Stage phase
-	//
-	// Agent count is determined automatically by StageController based on
-	// plan complexity analysis — no need for manual worker/cloner counts.
-	// ────────────────────────────────────────────────────────────────────────
-
 	async confirm(): Promise<{ success: boolean; error?: string }> {
-		if (this.#busy) {
-			return { success: false, error: "Planner or debate is still running. Please wait." };
-		}
+		if (this.#busy) return { success: false, error: "Planner or debate is still running. Please wait." };
 		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
 		}
 
-		const estimated = this.#estimatedAgentHours
-			? ` (estimated ${this.#estimatedAgentHours} agent-hours)`
-			: "";
-		this.#activityLogger.logBroadcast(
-			"system",
-			`Plan confirmed. Starting Stage execution${estimated}...`,
-		);
+		const estimated = this.#estimatedAgentHours ? ` (estimated ${this.#estimatedAgentHours} agent-hours)` : "";
+		this.#activityLogger.logBroadcast("system", `Plan confirmed. Starting Stage execution${estimated}...`);
 
 		this.#phase = "stage";
 		await this.#setPhase("stage");
 
 		const result = await this.#runManager.start();
-
 		if (!result.success) {
 			this.#phase = "script-confirm";
 			await this.#setPhase("script-confirm");
 			this.#activityLogger.logBroadcast("system", `Failed to start stage: ${result.error}`);
 		}
-
 		return result;
 	}
-
-	// ────────────────────────────────────────────────────────────────────────
-	// Cancel — abort script and return to idle
-	// ────────────────────────────────────────────────────────────────────────
 
 	async cancel(): Promise<{ success: boolean; error?: string }> {
 		this.#conversation = [];
@@ -344,10 +260,6 @@ export class ScriptManager {
 		return { success: true };
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: run planner agent with role-based prompt + profile injection
-	// ────────────────────────────────────────────────────────────────────────
-
 	async #runPlannerAgent(): Promise<void> {
 		this.#busy = true;
 		const msgId = `planner-${Date.now()}`;
@@ -356,8 +268,6 @@ export class ScriptManager {
 		try {
 			const taskText = this.#buildTaskFromHistory();
 			const loopConfig = await this.#readLoopConfig();
-
-			// Resolve the planner role from RoleAssetManager, or use default
 			const plannerRole = await this.#resolvePlannerRole();
 			const systemPrompt = this.#buildPlannerSystemPrompt(plannerRole);
 
@@ -367,13 +277,8 @@ export class ScriptManager {
 				systemPrompt,
 				source: "project" as AgentSource,
 			};
+			if (plannerRole?.tools && plannerRole.tools.length > 0) agentDef.tools = plannerRole.tools;
 
-			// Apply tool restrictions
-			if (plannerRole?.tools && plannerRole.tools.length > 0) {
-				agentDef.tools = plannerRole.tools;
-			}
-
-			// Monitor plan.md writes in real-time
 			const planPath = getSessionPlanPath(this.#swarmDir);
 			let planFileDetected = false;
 			planPoll = setInterval(() => {
@@ -381,48 +286,25 @@ export class ScriptManager {
 					const file = Bun.file(planPath);
 					if (file.size > 0 && !planFileDetected) {
 						planFileDetected = true;
-						this.#activityLogger.logBroadcast(
-							"system",
-							"Writing plan.md... The draft will appear in the Plan panel when complete.",
-						);
+						this.#activityLogger.logBroadcast("system",
+							"Writing plan.md... The draft will appear in the Plan panel when complete.");
 					}
 				} catch { /* file not yet created */ }
 			}, 500);
 
 			const result = await streamAgentOutput(
-				{
-					activityLogger: this.#activityLogger,
-					msgId,
-					from: this.#selectedAgentId ?? "planner",
-					transformOutput: parsePlannerResponse,
-				},
-				{
-					cwd: this.#stateTracker.swarmDir,
-					agent: agentDef,
-					task: taskText,
-					index: 0,
-					id: `planner-${Date.now()}`,
-					modelRegistry: this.#modelRegistry,
-					settings: this.#settings,
-					enableLsp: false,
-					keepAlive: false,
-					modelOverride: loopConfig?.model ?? undefined,
-				},
-			);
+				{ activityLogger: this.#activityLogger, msgId, from: this.#selectedAgentId ?? "planner",
+					transformOutput: parsePlannerResponse },
+				{ cwd: this.#stateTracker.swarmDir, agent: agentDef, task: taskText, index: 0,
+					id: `planner-${Date.now()}`, modelRegistry: this.#modelRegistry, settings: this.#settings,
+					enableLsp: false, keepAlive: false, modelOverride: loopConfig?.model ?? undefined });
 
 			const displayOutput = result.output || "(no output)";
 
-			// Parse recommendations from planner output
-			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*workers?,?\s*(\d+)\s*cloners?/i);
-			if (recMatch) {
-				this.#recommendedAgents = parseInt(recMatch[1], 10);
-				this.#estimatedAgentHours = parseInt(recMatch[2], 10);
-			}
-			// Parse agent-hour estimate
+			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*agents?/i);
+			if (recMatch) this.#recommendedAgents = parseInt(recMatch[1], 10);
 			const hrsMatch = displayOutput.match(/Estimated:\s*(\d+(?:\.\d+)?)\s*agent[- ]hours?/i);
-			if (hrsMatch) {
-				this.#estimatedAgentHours = parseFloat(hrsMatch[1]);
-			}
+			if (hrsMatch) this.#estimatedAgentHours = parseFloat(hrsMatch[1]);
 
 			this.#conversation.push({ role: "assistant", content: displayOutput });
 			await this.#saveConversation();
@@ -432,131 +314,65 @@ export class ScriptManager {
 				this.#planReady = true;
 				this.#planMtime = newMtime;
 				this.#activityLogger.logPhase("plan-updated");
-				this.#activityLogger.logBroadcast(
-					"system",
+				this.#activityLogger.logBroadcast("system",
 					"Plan draft is ready. Open the Plan panel to review. " +
-					"Click 'Run Debate' to refine with agent roundtable, or 'Confirm & Start' to begin.",
-				);
+					"Click 'Run Debate' to refine with agent roundtable, or 'Confirm & Start' to begin.");
 			}
-		} catch (err) {
-			throw err;
-		} finally {
-			if (planPoll) clearInterval(planPoll);
-			this.#busy = false;
-		}
+		} catch (err) { throw err; }
+		finally { if (planPoll) clearInterval(planPoll); this.#busy = false; }
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: resolve planner role from RoleAssetManager
-	// ────────────────────────────────────────────────────────────────────────
-
-	async #resolvePlannerRole(): Promise<{
-		system: string;
-		guidelines: string[];
-		tools?: string[];
-	} | null> {
+	async #resolvePlannerRole(): Promise<{ system: string; guidelines: string[]; tools?: string[] } | null> {
 		try {
 			const role = await this.#roleAssetManager?.get("planner");
-			if (role && role.status === "approved") {
-				return { system: role.prompts.system, guidelines: role.prompts.guidelines, tools: role.tools };
-			}
+			if (role && role.status === "approved") return { system: role.prompts.system, guidelines: role.prompts.guidelines, tools: role.tools };
 		} catch { /* role not found */ }
 		return null;
 	}
 
-	/**
-	 * Build the planner system prompt, injecting profile context if available.
-	 */
 	#buildPlannerSystemPrompt(role: { system: string; guidelines: string[]; tools?: string[] } | null): string {
 		const parts: string[] = [];
-
-		if (role) {
-			parts.push(role.system);
-		} else {
-			// Fallback: generic planner prompt
-			parts.push(
-				"You are a Planner agent in the SatoPi system. Your role is to help the user clarify their goals and produce a comprehensive, executable plan.",
-			);
-		}
-
-		// Inject agent profile context
+		if (role) parts.push(role.system);
+		else parts.push("You are a Planner agent in the SatoPi system. Help the user clarify goals and produce a comprehensive, executable plan.");
 		if (this.#selectedAgentId && this.#profileRegistry) {
 			const profileCtx = this.#profileRegistry.getPromptContext(this.#selectedAgentId);
-			if (profileCtx) {
-				parts.push("");
-				parts.push(profileCtx);
-			}
+			if (profileCtx) { parts.push(""); parts.push(profileCtx); }
 		}
-
 		return parts.join("\n");
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: build task text from conversation history
-	// ────────────────────────────────────────────────────────────────────────
-
 	#buildTaskFromHistory(): string {
-		if (this.#conversation.length === 0) {
-			return "No conversation yet.";
-		}
-
+		if (this.#conversation.length === 0) return "No conversation yet.";
 		const parts = this.#conversation.map(turn => {
 			const label = turn.role === "user" ? "Human" : "Assistant (You)";
 			return `### ${label}\n\n${turn.content}`;
 		});
-
 		return [
-			"## Conversation History",
-			"",
+			"## Conversation History", "",
 			"Below is the full conversation so far. Respond to the LATEST Human message.",
-			"If you now have enough information, write the plan to .omp/plan.md and summarize it.",
-			"",
+			"If you now have enough information, write the plan to .omp/plan.md and summarize it.", "",
 			parts.join("\n\n---\n\n"),
 		].join("\n");
 	}
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Internal: helpers
-	// ────────────────────────────────────────────────────────────────────────
-
-	async #setPhase(phase: Chapter): Promise<void> {
-		await this.#stateTracker.updatePipeline({ phase });
-	}
+	async #setPhase(phase: Chapter): Promise<void> { await this.#stateTracker.updatePipeline({ phase }); }
 
 	async #readLoopConfig(): Promise<LoopSwarmConfig | null> {
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
 			const def = parseSwarmYaml(content);
 			const errors = validateSwarmDefinition(def);
-			if (errors.length > 0) {
-				logger.error("YAML validation errors", { errors });
-				return null;
-			}
+			if (errors.length > 0) { logger.error("YAML validation errors", { errors }); return null; }
 			return def.loopConfig ?? null;
-		} catch (err) {
-			logger.error("Failed to read loop config", { error: String(err) });
-			return null;
-		}
+		} catch (err) { logger.error("Failed to read loop config", { error: String(err) }); return null; }
 	}
 
 	async #getPlanMtime(): Promise<number> {
-		try {
-			const stat = await fs.stat(getSessionPlanPath(this.#swarmDir));
-			return stat.mtimeMs;
-		} catch {
-			return 0;
-		}
+		try { const stat = await fs.stat(getSessionPlanPath(this.#swarmDir)); return stat.mtimeMs; }
+		catch { return 0; }
 	}
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Extract human-readable message from a planner response. Handles both
- * plain text and JSON-wrapped responses (e.g. {"status":"ready","plan":"..."}).
- */
 function parsePlannerResponse(raw: string): string {
 	const trimmed = raw.trim();
 	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return raw;

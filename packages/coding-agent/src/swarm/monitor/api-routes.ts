@@ -397,14 +397,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const resolved = ctx.services.runManager.resolveBlocker(body.decision as "continue" | "skip" | "abort");
 		if (!resolved) return json({ error: "No active blockage to resolve" }, 409);
 		return json({ success: true });
+	},
 
-		// -- Applaud (Curtain phase confirmation) ------------------------------
-		"POST/curtain/applaud": async (_req, ctx) => {
-			if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
-			await ctx.stateTracker.updatePipeline({ phase: "idle", status: "completed" });
-			ctx.services.sessionManager?.logPhase("idle");
-			return json({ success: true, message: "Bravo! The curtain has fallen." });
-		},
+	// -- Applaud (Curtain phase confirmation) ------------------------------
+	"POST/curtain/applaud": async (_req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
+		await ctx.stateTracker.updatePipeline({ phase: "idle", status: "completed" });
+		ctx.services.sessionManager?.logPhase("idle");
+		return json({ success: true, message: "Bravo! The curtain has fallen." });
 	},
 
 	// -- Terminal (xterm.js) ---------------------------------------------
