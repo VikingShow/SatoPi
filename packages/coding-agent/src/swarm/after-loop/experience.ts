@@ -687,7 +687,7 @@ export class ExperienceStore {
 					/ MAX(1, COUNT(*)) as completion_rate,
 				CAST(SUM(CASE WHEN json_extract(stats_json, '$.finalStatus') = 'escalated' THEN 1 ELSE 0 END) AS REAL)
 					/ MAX(1, COUNT(*)) as escalation_rate,
-				AVG(json_extract(stats_json, '$.clonerApprovalRatio')) as avg_approval_ratio
+				AVG(json_extract(stats_json, '$.reviewApprovalRatio')) as avg_approval_ratio
 			FROM lessons
 			WHERE tags NOT LIKE '%principle%'
 		`);
@@ -768,7 +768,7 @@ export class ExperienceStore {
 			stats: {
 				totalIterations: 0,
 				finalStatus: "completed",
-				clonerApprovalRatio: 1,
+				reviewApprovalRatio: 1,
 				agentCount: 0,
 				reviewerCount: 0,
 				taskDescription: "principle-generation",

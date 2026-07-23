@@ -423,7 +423,7 @@ async function bridgeToExperienceStore(
 		const stats: LoopRunStats = {
 			totalIterations: meta.iteration ?? 0,
 			finalStatus: avgScore >= 7 ? "completed" : avgScore >= 4 ? "converged_partial" : "converged_failed",
-			clonerApprovalRatio: avgScore / 10,
+			reviewApprovalRatio: avgScore / 10,
 			agentCount: meta.agentCount,
 			reviewerCount: meta.reviewerCount,
 			taskDescription: meta.taskDescription,
@@ -473,7 +473,7 @@ async function bridgeSessionSummary(
 	const stats: LoopRunStats = {
 		totalIterations: 0,
 		finalStatus: meta.status as LoopRunStats["finalStatus"],
-		clonerApprovalRatio: avgScore / 10,
+		reviewApprovalRatio: avgScore / 10,
 		agentCount: 0,
 		reviewerCount: meta.totalClonerTasks,
 		taskDescription: `Offload session: ${meta.swarmDir}`,

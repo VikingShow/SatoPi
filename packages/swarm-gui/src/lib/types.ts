@@ -220,8 +220,7 @@ export interface CurtainResult {
   stats: {
     totalIterations: number;
     finalStatus: string;
-    clonerApprovalRatio: number;
-    reviewerCount: number;
+    reviewApprovalRatio: number;
     agentCount: number;
   };
 }

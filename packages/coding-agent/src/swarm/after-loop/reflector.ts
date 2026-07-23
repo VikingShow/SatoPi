@@ -196,7 +196,7 @@ function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult)
 		`- Iterations: ${result.iterations}`,
 		`- Workers: ${stats.agentCount}`,
 		`- Cloners: ${stats.reviewerCount}`,
-		`- Cloner approval ratio: ${stats.clonerApprovalRatio}`,
+		`- Cloner approval ratio: ${stats.reviewApprovalRatio}`,
 	];
 
 	if (result.errors.length > 0) {

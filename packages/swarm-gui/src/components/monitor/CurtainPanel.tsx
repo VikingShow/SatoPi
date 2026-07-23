@@ -41,7 +41,7 @@ export default function CurtainPanel() {
 
   const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = curtainResult;
   const safeLessons = lessons ?? [];
-  const safeRunStats = runStats ?? { agentCount: 0, reviewerCount: 0, clonerApprovalRatio: 0 };
+  const safeRunStats = runStats ?? { agentCount: 0, reviewApprovalRatio: 0 };
   const statusIcon = status === "completed" ? CheckCircle : status === "escalated" ? AlertTriangle : AlertOctagon;
   const StatusIcon = statusIcon;
   const statusColor = status === "completed" ? "text-status-success" : status === "escalated" ? "text-status-warning" : "text-status-danger";
@@ -83,7 +83,7 @@ export default function CurtainPanel() {
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Approval</div>
-              <div className="text-foreground font-mono">{Math.round((safeRunStats.clonerApprovalRatio ?? 0) * 100)}%</div>
+              <div className="text-foreground font-mono">{Math.round((safeRunStats.reviewApprovalRatio ?? 0) * 100)}%</div>
             </div>
           </div>
 

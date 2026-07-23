@@ -43,9 +43,8 @@ export interface ExtractionResult {
 export interface LoopRunStats {
 	totalIterations: number;
 	finalStatus: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
-	clonerApprovalRatio: number;
+	reviewApprovalRatio: number;
 	agentCount: number;
-	reviewerCount: number;
 	taskDescription?: string;
 }
 
@@ -53,7 +52,6 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
-export function extractLessons(result: LoopResult, agentCount: number, reviewerCount: number): ExtractionResult {
 	const lessons: ExtractedLesson[] = [];
 
 	// 1. Status-based insight
@@ -128,7 +126,7 @@ export function extractLessons(result: LoopResult, agentCount: number, reviewerC
 	const stats: LoopRunStats = {
 		totalIterations: result.iterations,
 		finalStatus: result.status,
-		clonerApprovalRatio: Math.round(approvalRatio * 100) / 100,
+		reviewApprovalRatio: Math.round(approvalRatio * 100) / 100,
 		agentCount,
 		reviewerCount,
 	};

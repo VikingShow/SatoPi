@@ -56,9 +56,9 @@ export interface CurtainResultData {
 	stats: {
 		totalIterations: number;
 		finalStatus: string;
-		clonerApprovalRatio: number;
+		reviewApprovalRatio: number;
 		agentCount: number;
-		reviewerCount: number;
+		
 	};
 }
 
@@ -87,8 +87,8 @@ export async function runCurtainPipeline(
 
 	// Agent counts
 	const agents = stateTracker.state.agents;
-	const agentCount = Object.values(agents).filter(a => a.name.startsWith("worker")).length;
-	const reviewerCount = Object.values(agents).filter(a => a.name.startsWith("cloner")).length;
+		const agentCount = Object.keys(agents).length;
+		const reviewerCount = Object.values(agents).filter(a => a.role === "reviewer").length;
 
 	// ── Run reporter + reflection in parallel ──
 	const [reporterSummary, extraction] = await Promise.all([
@@ -152,7 +152,7 @@ export async function runCurtainPipeline(
 		stats: {
 			totalIterations: extraction.stats.totalIterations,
 			finalStatus: extraction.stats.finalStatus,
-			clonerApprovalRatio: extraction.stats.clonerApprovalRatio,
+			reviewApprovalRatio: extraction.stats.reviewApprovalRatio,
 			agentCount: extraction.stats.agentCount,
 			reviewerCount: extraction.stats.reviewerCount,
 		},
@@ -242,9 +242,9 @@ interface ReflectionResult {
 	stats: {
 		totalIterations: number;
 		finalStatus: string;
-		clonerApprovalRatio: number;
+		reviewApprovalRatio: number;
 		agentCount: number;
-		reviewerCount: number;
+		
 	};
 	reflectionSummary: string;
 	deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null;
@@ -254,7 +254,7 @@ async function runReflectionPipeline(
 	result: LoopResult,
 	opts: {
 		agentCount: number;
-		reviewerCount: number;
+		
 		experienceStore: ExperienceStore;
 		modelRegistry: ModelRegistry;
 		settings: Settings;

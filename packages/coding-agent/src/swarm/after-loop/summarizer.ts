@@ -29,7 +29,7 @@ export interface SummaryData {
 	iterations: number;
 	agentCount: number;
 	reviewerCount: number;
-	clonerApprovalRatio: number;
+	reviewApprovalRatio: number;
 	topFindings: string[];
 	keyInsights: string[];
 	warnings: string[];
@@ -73,7 +73,7 @@ export function generateRunSummary(runId: string, result: ExtractionResult): Run
 		iterations: stats.totalIterations,
 		agentCount: stats.agentCount,
 		reviewerCount: stats.reviewerCount,
-		clonerApprovalRatio: stats.clonerApprovalRatio,
+		reviewApprovalRatio: stats.reviewApprovalRatio,
 		topFindings,
 		keyInsights,
 		warnings,
@@ -102,8 +102,8 @@ function generateMarkdownSummary(data: SummaryData, totalLessons: number): strin
 		`| Status | ${statusEmoji} ${data.status} |`,
 		`| Iterations | ${data.iterations} |`,
 		`| Workers | ${data.agentCount} |`,
-		`| Cloners | ${data.reviewerCount} |`,
-		`| Cloner Approval Ratio | ${Math.round(data.clonerApprovalRatio * 100)}% |`,
+		`| Reviewers | ${data.reviewerCount} |`,
+		`| Review Approval | ${Math.round(data.reviewApprovalRatio * 100)}% |`,
 		`| Lessons Extracted | ${totalLessons} |`,
 		``,
 	];
@@ -147,7 +147,7 @@ function generateMarkdownSummary(data: SummaryData, totalLessons: number): strin
 }
 
 function formatApprovalTrend(data: SummaryData): string {
-	const ratio = data.clonerApprovalRatio;
+	const ratio = data.reviewApprovalRatio;
 	if (ratio >= 0.9) return `Strong consensus (${Math.round(ratio * 100)}% approval)`;
 	if (ratio >= 0.7) return `Moderate agreement (${Math.round(ratio * 100)}% approval)`;
 	if (ratio >= 0.5) return `Narrow majority (${Math.round(ratio * 100)}% approval)`;
