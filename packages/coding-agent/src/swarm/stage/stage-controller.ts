@@ -124,9 +124,41 @@ export class StageController {
 			});
 		}
 
+		const required = recommendation.workers;
+		const registry = this.#opts.profileRegistry;
+
+		// If not enough agents available, create new ones to meet the requirement
+		if (selectedAgents.length < required) {
+			const missing = required - selectedAgents.length;
+			for (let i = 0; i < missing; i++) {
+				const id = `agent-auto-${registry.list().length + 1}`;
+				const profile = registry.createProfile({
+					profileId: id,
+					name: id,
+					archetype: "worker",
+					description: "Auto-created for Stage execution",
+				});
+				selectedAgents.push({
+					profileId: id,
+					name: profile.identity.name,
+					archetype: profile.identity.archetype,
+					score: profile.credit.score,
+					creditScore: profile.credit.score,
+					domainMatch: 0.5,
+					successRate: profile.credit.successRate,
+					recencyBonus: 1,
+					preferredRoles: profile.stats.preferredRoles,
+				});
+			}
+			activityLogger.logBroadcast("system", `Auto-created ${missing} new agent(s) to reach required count of ${required}`);
+		}
+
 		if (selectedAgents.length === 0) {
 			return { status: "failed", agentResults: new Map(), errors: ["No agents available"], agents: [], taskProgress: { total: 0, completed: 0 } };
 		}
+
+		// Save profiles immediately so they persist across restarts
+		await registry.save(this.#opts.workspace).catch(() => {});
 
 		activityLogger.logBroadcast("system", `Selected ${selectedAgents.length} agents: ${selectedAgents.map(a => a.name).join(", ")}`);
 
