@@ -1,0 +1,7 @@
+{
+  "category": "feature",
+  "difficulty": "medium",
+  "difficulty_score": 2,
+  "file_path": "src/user-api.ts",
+  "tags": ["api", "pagination", "feature", "typescript"]
+}

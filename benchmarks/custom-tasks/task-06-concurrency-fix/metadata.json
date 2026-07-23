@@ -1,0 +1,7 @@
+{
+  "category": "concurrency",
+  "difficulty": "hard",
+  "difficulty_score": 3,
+  "file_path": "src/event-processor.ts",
+  "tags": ["concurrency", "race-condition", "typescript", "async"]
+}

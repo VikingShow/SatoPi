@@ -1,0 +1,7 @@
+{
+  "category": "api-change",
+  "difficulty": "medium",
+  "difficulty_score": 2,
+  "file_path": "src/scheduler.ts",
+  "tags": ["api", "enum", "typescript", "interface"]
+}

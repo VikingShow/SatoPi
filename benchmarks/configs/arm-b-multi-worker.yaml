@@ -1,0 +1,28 @@
+# Arm B: Multiple workers, no deliberation, no cloner
+# Tests whether parallel workers alone improve outcomes vs single agent
+
+swarm:
+  name: ablation-multi-worker
+  workspace: ..
+  mode: loop
+
+  max_iterations: 3
+  auto_retry: false
+  human_escalation: false
+
+  workers:
+    initial: 3
+    min: 3
+    max: 3
+    max_rounds: 1
+    rounds_convergence_threshold: 1
+
+  plan_debate:
+    enabled: false
+
+  cloners:
+    count: 0
+
+  agents: {}
+
+  agent_restrictions: {}

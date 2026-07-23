@@ -1,0 +1,7 @@
+{
+  "category": "test-generation",
+  "difficulty": "medium",
+  "difficulty_score": 2,
+  "file_path": "src/transformer.ts",
+  "tags": ["testing", "unit-tests", "typescript", "quality"]
+}

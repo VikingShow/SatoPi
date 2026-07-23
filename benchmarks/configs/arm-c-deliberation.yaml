@@ -1,0 +1,31 @@
+# Arm C: Workers with deliberation (peer debate), no cloner
+# Tests whether internal worker debate improves output quality
+
+swarm:
+  name: ablation-deliberation
+  workspace: ..
+  mode: loop
+
+  max_iterations: 3
+  auto_retry: false
+  human_escalation: false
+
+  workers:
+    initial: 3
+    min: 3
+    max: 3
+    max_rounds: 5
+    rounds_convergence_threshold: 3
+
+  plan_debate:
+    enabled: true
+    cloner_count: 0
+    max_rounds: 3
+    convergence_threshold: 2
+
+  cloners:
+    count: 0
+
+  agents: {}
+
+  agent_restrictions: {}

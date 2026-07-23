@@ -1,0 +1,31 @@
+{
+  "armLabel": "arm-a-baseline",
+  "total": 1,
+  "pass": 0,
+  "fail": 1,
+  "error": 0,
+  "passRate": 0,
+  "totalDurationMs": 300564,
+  "totalTokIn": 0,
+  "totalTokOut": 0,
+  "totalTokCache": 0,
+  "totalCostUsd": 0,
+  "avgIndentScore": 0,
+  "results": [
+    {
+      "taskId": "task-01-single-file-bug-fix",
+      "status": "fail",
+      "verificationResult": {
+        "success": false,
+        "error": "Unexpected files: .git/COMMIT_EDITMSG, .git/HEAD, .git/config, .git/description, .git/hooks/applypatch-msg.sample, .git/hooks/commit-msg.sample, .git/hooks/fsmonitor-watchman.sample, .git/hooks/post-update.sample, .git/hooks/pre-applypatch.sample, .git/hooks/pre-commit.sample, .git/hooks/pre-merge-commit.sample, .git/hooks/pre-push.sample, .git/hooks/pre-rebase.sample, .git/hooks/pre-receive.sample, .git/hooks/prepare-commit-msg.sample, .git/hooks/push-to-checkout.sample, .git/hooks/sendemail-validate.sample, .git/hooks/update.sample, .git/index, .git/info/exclude, .git/logs/HEAD, .git/logs/refs/heads/master, .git/objects/12/a3179217ef6c9a80379f8f38bf67f7e96b04ef, .git/objects/72/48770a7db13a5b32d8b136d95e0f269a76e183, .git/objects/c8/77d7579e7b3ce7e044d43da211992659e245ce, .git/objects/e4/d32a8a7be54f44a863c9d5327018d9acebcbaa, .git/refs/heads/master, .swarm_ablation-baseline/context/swarm-ablation-baseline-worker-1-0.jsonl, .swarm_ablation-baseline/context/swarm-ablation-baseline-worker-1-0.md, .swarm_ablation-baseline/logs/worker-1.log",
+        "duration": 4
+      },
+      "durationMs": 300564,
+      "iterations": 1,
+      "tokIn": 0,
+      "tokOut": 0,
+      "tokCache": 0,
+      "costUsd": 0
+    }
+  ]
+}

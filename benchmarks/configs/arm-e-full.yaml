@@ -1,0 +1,32 @@
+# Arm E: Full swarm with dynamic worker scaling
+# Tests whether auto-scaling workers based on task complexity improves efficiency
+
+swarm:
+  name: ablation-full
+  workspace: ..
+  mode: loop
+
+  max_iterations: 3
+  auto_retry: false
+  human_escalation: false
+
+  workers:
+    initial: 2
+    auto: true
+    min: 1
+    max: 6
+    max_rounds: 5
+    rounds_convergence_threshold: 3
+
+  plan_debate:
+    enabled: true
+    cloner_count: 0
+    max_rounds: 3
+    convergence_threshold: 2
+
+  cloners:
+    count: 2
+
+  agents: {}
+
+  agent_restrictions: {}
