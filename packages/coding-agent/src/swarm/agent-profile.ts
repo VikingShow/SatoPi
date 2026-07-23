@@ -116,6 +116,10 @@ export class ProfileRegistry {
 	readonly #profiles = new Map<string, AgentProfile>();
 	/** Per-profile 版本号，用于缓存失效 */
 	readonly #versions = new Map<string, number>();
+	/** 信用排名缓存 — profileIds 列表 hash → 缓存结果 */
+	#creditRankCache: { key: string; text: string; ttl: number } | null = null;
+	/** 排名缓存有效期 (ms) */
+	static readonly #RANK_CACHE_TTL = 2000;
 
 	// ── Create ────────────────────────────────────────────────────────
 
@@ -379,6 +383,17 @@ export class ProfileRegistry {
 	 * 为 prompt 注入当前 swarm 中所有 Agent 的信用排名摘要。
 	 */
 	getSwarmCreditSummary(profileIds: string[]): string {
+		// 缓存 key = sorted profileIds + per-profile version (版本感知)
+		const cacheKey = profileIds.slice().sort().join(",") + "|" +
+			profileIds.map(id => `${id}:${this.#versions.get(id) ?? 0}`).join(",");
+
+		const now = Date.now();
+		if (this.#creditRankCache &&
+			this.#creditRankCache.key === cacheKey &&
+			this.#creditRankCache.ttl > now) {
+			return this.#creditRankCache.text;
+		}
+
 		const entries = profileIds
 			.map(id => ({ id, p: this.#profiles.get(id) }))
 			.filter((e): e is { id: string; p: AgentProfile } => !!e.p)
@@ -393,7 +408,17 @@ export class ProfileRegistry {
 			lines.push(`  ${i + 1}. ${icon} ${e.id} — ${e.p.credit.score}/100 (${e.p.identity.archetype})`);
 		}
 		lines.push("</swarm_credit_ranking>");
-		return lines.join("\n");
+
+		const text = lines.join("\n");
+		this.#creditRankCache = { key: cacheKey, text, ttl: now + ProfileRegistry.#RANK_CACHE_TTL };
+		return text;
+	}
+
+	/**
+	 * 清空排名缓存（被 credit mutation 自动调用）。
+	 */
+	invalidateRankCache(): void {
+		this.#creditRankCache = null;
 	}
 
 	// ── Internal ──────────────────────────────────────────────────────

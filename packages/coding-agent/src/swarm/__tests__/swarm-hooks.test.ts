@@ -252,8 +252,119 @@ describe("createSwarmHooks", () => {
 
 	// ── beforePipeline ────────────────────────────────────────────────
 
+	// ── Structured tags in cloner findings ────────────────────────────
+
+	test("afterClonerReview — structured [PRAISE:id] tag", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-architect", "worker-builder"], emptyCtx());
+
+		await hooks.afterClonerReview!(1, {
+			passed: true,
+			approvalCount: 2,
+			totalCount: 2,
+			findings: [
+				"[PRAISE:worker-architect] Excellent architecture design",
+				"worker-builder output is acceptable",
+			],
+		}, emptyCtx());
+
+		const w1 = profileRegistry.get("worker-architect")!;
+		expect(w1.credit.praiseCount).toBe(1);
+		expect(w1.credit.score).toBe(55); // 50 + 5
+	});
+
+	test("afterClonerReview — structured [CRITICIZE:id] tag", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-builder"], emptyCtx());
+
+		await hooks.afterClonerReview!(1, {
+			passed: false,
+			approvalCount: 0,
+			totalCount: 2,
+			findings: [
+				"[CRITICIZE:worker-builder] output does not compile",
+			],
+		}, emptyCtx());
+
+		const w = profileRegistry.get("worker-builder")!;
+		expect(w.credit.criticismCount).toBe(1);
+		expect(w.credit.score).toBeLessThanOrEqual(45); // 50 - 5
+	});
+
+	test("afterClonerReview — structured [FAIL:id] tag records violation", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-builder"], emptyCtx());
+
+		await hooks.afterClonerReview!(1, {
+			passed: false,
+			approvalCount: 0,
+			totalCount: 2,
+			findings: [
+				"[FAIL:worker-builder] critical: security vulnerability",
+			],
+		}, emptyCtx());
+
+		const w = profileRegistry.get("worker-builder")!;
+		expect(w.credit.violationCount).toBeGreaterThanOrEqual(1);
+	});
+
+	test("afterClonerReview — structured tags handle comma-separated IDs", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
+
+		await hooks.afterClonerReview!(1, {
+			passed: true,
+			approvalCount: 3,
+			totalCount: 3,
+			findings: [
+				"[PRAISE:worker-1, worker-2] Great teamwork",
+				"[CRITICIZE:worker-3] missed edge cases",
+			],
+		}, emptyCtx());
+
+		expect(profileRegistry.get("worker-1")!.credit.praiseCount).toBe(1);
+		expect(profileRegistry.get("worker-2")!.credit.praiseCount).toBe(1);
+		expect(profileRegistry.get("worker-3")!.credit.criticismCount).toBe(1);
+	});
+
+	// ── Generic agent ID patterns ─────────────────────────────────────
+
+	test("afterClonerReview — matches non-worker-prefixed agent IDs", async () => {
+		// Create profiles with non-standard IDs
+		profileRegistry.createProfile({ profileId: "reviewer-01", name: "Reviewer", archetype: "reviewer" });
+		// Register through hooks
+		await hooks.beforeWorkerRound!(1, ["reviewer-01"], emptyCtx());
+
+		await hooks.afterClonerReview!(1, {
+			passed: true,
+			approvalCount: 1,
+			totalCount: 1,
+			findings: ["[PRAISE:reviewer-01] thorough review"],
+		}, emptyCtx());
+
+		expect(profileRegistry.get("reviewer-01")!.credit.praiseCount).toBe(1);
+	});
+
+	// ── Credit ranking cache ──────────────────────────────────────────
+
+	test("context.getSwarmCreditSummary — cache hit returns same result", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		profileRegistry.recordTaskCompleted("worker-1", true);
+
+		const s1 = context.getSwarmCreditSummary();
+		const s2 = context.getSwarmCreditSummary();
+		expect(s1).toBe(s2); // cache hit — same string reference
+	});
+
+	test("context.getSwarmCreditSummary — cache invalidates on mutation", async () => {
+		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		profileRegistry.recordTaskCompleted("worker-1", true);
+
+		const s1 = context.getSwarmCreditSummary();
+		profileRegistry.recordTaskCompleted("worker-2", true); // bump version
+		const s2 = context.getSwarmCreditSummary();
+		expect(s2).not.toBe(s1); // cache miss due to version change
+	});
+
+	// ── beforePipeline ────────────────────────────────────────────────
+
 	test("beforePipeline — runs without error", async () => {
-		// Just ensure it doesn't throw
 		await expect(hooks.beforePipeline!(emptyCtx())).resolves.toBeUndefined();
 	});
 });

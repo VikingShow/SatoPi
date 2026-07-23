@@ -235,4 +235,39 @@ describe("MarkEnvironment", () => {
 		expect(env.queryMarks()).toHaveLength(0);
 		expect(env.getSummary().total).toBe(0);
 	});
+
+	// ── Serialization ─────────────────────────────────────────────────
+
+	test("serialize → deserialize restores marks correctly", () => {
+		env.placeMark({ markId: "m1", type: "lock", agentId: "w1", path: "/src/a.ts", message: "a", priority: "high", tags: ["urgent"] });
+		env.placeMark({ markId: "m2", type: "warning", agentId: "w2", message: "watch out", priority: "critical" });
+		env.acknowledge("m1", "w3");
+		env.acknowledge("m2", "w1");
+
+		const snapshot = env.serialize();
+		expect(snapshot.marks).toHaveLength(2);
+
+		const env2 = new MarkEnvironment();
+		env2.deserialize(snapshot);
+		expect(env2.queryMarks()).toHaveLength(2);
+		expect(env2.getSummary().total).toBe(2);
+
+		const locks = env2.getPathLocks("/src/a.ts");
+		expect(locks).toHaveLength(1);
+		expect(locks[0].markId).toBe("m1");
+		expect(locks[0].acknowledged.has("w3")).toBe(true);
+	});
+
+	test("serialize → deserialize skips expired marks", async () => {
+		env.placeMark({ markId: "alive", type: "signal", agentId: "w1", message: "alive", ttlMs: 60000 });
+		env.placeMark({ markId: "dead", type: "signal", agentId: "w2", message: "dead", ttlMs: 5 });
+
+		await Bun.sleep(10);
+		const snapshot = env.serialize();
+
+		const env2 = new MarkEnvironment();
+		env2.deserialize(snapshot);
+		expect(env2.queryMarks()).toHaveLength(1);
+		expect(env2.queryMarks()[0].markId).toBe("alive");
+	});
 });

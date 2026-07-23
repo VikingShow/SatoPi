@@ -234,52 +234,126 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 }
 
 // ============================================================================
-// Heuristic helpers (simple keyword-based — Cloner findings are human text)
+// Cloner review extraction — hybrid structured + heuristic
 // ============================================================================
 
-/** 从 Cloner findings 中提取被赞扬的 Agent ID */
+/**
+ * 通用 Agent ID 模式：字母开头，包含至少一个连字符/下划线/数字
+ * （避免匹配 FAIL/BUG/ERROR 等纯字母英文词汇）。
+ *
+ * 匹配示例: worker-1, reviewer_01, agent-architect, cloner-v3
+ * 不匹配:   FAIL, PASS, bug, error, critical, major
+ */
+const AGENT_ID_RE = /\b([a-z][a-z0-9_-]*(?:[0-9_-])[a-z0-9_-]{0,31})\b/i;
+
+/**
+ * Cloner 可在 findings 中使用结构化标签，格式：
+ *   [PRAISE:agent-id]    — 明确赞扬
+ *   [CRITICIZE:agent-id] — 明确批评
+ *   [FAIL:agent-id]      — 严重问题
+ *   [PASS:agent-id]      — 通过
+ *
+ * 标签不区分大小写。这些标签比关键字启发式具有更高的置信度。
+ */
+const STRUCTURED_RE = /\[(PRAISE|CRITICIZE|FAIL|PASS):\s*([^\]]+)\]/gi;
+
+/** 赞扬关键字 */
+const PRAISE_KEYWORDS = [
+	"praise", "good", "excellent", "well done", "approved",
+	"well-done", "great", "outstanding", "superb", "exceeds",
+];
+/** 批评关键字 */
+const CRITICIZE_KEYWORDS = [
+	"issue", "fail", "error", "bug", "wrong", "incorrect",
+	"reject", "broken", "missing", "incomplete", "flaw",
+];
+
+/**
+ * 从 Cloner findings 中提取结构化标签 + 关键字匹配的 Agent ID。
+ *
+ * 分为两层：
+ * 1. 结构化标签（高置信度）— `[PRAISE:worker-1]` 直接提取
+ * 2. 关键字 + 邻近 Agent ID（中置信度）— "worker-3 produced broken output"
+ */
+function extractStructuredAgents(
+	findings: string[],
+): { praised: string[]; criticized: string[]; structured: boolean } {
+	const praised = new Set<string>();
+	const criticized = new Set<string>();
+
+	for (const finding of findings) {
+		// ── Layer 1: 结构化标签 ──────────────────────────────────
+		STRUCTURED_RE.lastIndex = 0;
+		let match: RegExpExecArray | null;
+		while ((match = STRUCTURED_RE.exec(finding)) !== null) {
+			const label = match[1].toUpperCase();
+			// 标签内可能包含多个逗号分隔的 ID
+			const ids = match[2]
+				.split(/[,\s]+/)
+				.map(s => s.trim())
+				.filter(s => s.length > 0 && /^[a-z][a-z0-9_-]+$/i.test(s));
+
+			for (const id of ids) {
+				if (label === "PRAISE" || label === "PASS") praised.add(id);
+				else criticized.add(id);
+			}
+		}
+
+		// ── Layer 2: 关键字 + 邻近 Agent ID ─────────────────────
+		// 只在结构化标签未匹配时才用关键字补充
+		const lower = finding.toLowerCase();
+
+		// 先收集该 finding 中所有 Agent ID
+		const allIds = (finding.match(new RegExp(AGENT_ID_RE.source, "gi")) ?? [])
+			.map(s => s.toLowerCase()) as string[];
+
+		if (allIds.length === 0) continue;
+
+		// 关键字判断方向
+		const isPraise = PRAISE_KEYWORDS.some(k => lower.includes(k));
+		const isCriticize = CRITICIZE_KEYWORDS.some(k => lower.includes(k));
+
+		// 如果同时包含赞扬和批评关键字，以强信号为准
+		// (criticize 信号比 praise 信号更明确有具体问题)
+		if (isCriticize && !isPraise) {
+			for (const id of allIds) {
+				if (!praised.has(id)) criticized.add(id);
+			}
+		} else if (isPraise && !isCriticize) {
+			for (const id of allIds) {
+				if (!criticized.has(id)) praised.add(id);
+			}
+		}
+		// 如果同时包含 praise 和 criticize，不做判断（歧义）
+	}
+
+	return {
+		praised: [...praised],
+		criticized: [...criticized],
+		structured: true, // always try structured first
+	};
+}
+
+/** 从 Cloner findings 中提取被赞扬的 Agent ID（兼容旧接口） */
 function extractPraisedAgents(findings: string[]): string[] {
-	const praised: string[] = [];
-	for (const finding of findings) {
-		const lower = finding.toLowerCase();
-		if (
-			lower.includes("praise") ||
-			lower.includes("good") ||
-			lower.includes("excellent") ||
-			lower.includes("well done") ||
-			lower.includes("approved")
-		) {
-			// 尝试提取 Worker ID（格式：word characters / hyphens）
-			const match = finding.match(/\b(worker-[a-zA-Z0-9-]+)\b/);
-			if (match) praised.push(match[1]);
-		}
-	}
-	return praised;
+	return extractStructuredAgents(findings).praised;
 }
 
-/** 从 Cloner findings 中提取被批评的 Agent ID */
+/** 从 Cloner findings 中提取被批评的 Agent ID（兼容旧接口） */
 function extractCriticizedAgents(findings: string[]): string[] {
-	const criticized: string[] = [];
-	for (const finding of findings) {
-		const lower = finding.toLowerCase();
-		if (
-			lower.includes("issue") ||
-			lower.includes("fail") ||
-			lower.includes("error") ||
-			lower.includes("bug") ||
-			lower.includes("wrong") ||
-			lower.includes("incorrect") ||
-			lower.includes("reject")
-		) {
-			const match = finding.match(/\b(worker-[a-zA-Z0-9-]+)\b/);
-			if (match) criticized.push(match[1]);
-		}
-	}
-	return criticized;
+	return extractStructuredAgents(findings).criticized;
 }
 
-/** 从 Cloner finding 文本中提取指涉的 Agent ID */
+/** 从 Cloner finding 文本中提取指涉的 Agent ID（优先结构化标签） */
 function extractAgentFromFinding(finding: string): string | null {
-	const match = finding.match(/\b(worker-[a-zA-Z0-9-]+)\b/);
+	// 先尝试结构化标签
+	STRUCTURED_RE.lastIndex = 0;
+	const structured = STRUCTURED_RE.exec(finding);
+	if (structured) {
+		const ids = structured[2].split(/[,\s]+/).filter(s => s.trim()).map(s => s.trim());
+		return ids[0] ?? null;
+	}
+	// Fallback: 通用 Agent ID 匹配
+	const match = finding.match(AGENT_ID_RE);
 	return match ? match[1] : null;
 }

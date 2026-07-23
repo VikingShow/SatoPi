@@ -20,6 +20,26 @@
 export type MarkType = "lock" | "claim" | "signal" | "artifact" | "warning";
 export type MarkPriority = "low" | "medium" | "high" | "critical";
 
+/** 可序列化的 Mark（Set → 数组） */
+export interface SerializedMark {
+	markId: string;
+	type: string;
+	agentId: string;
+	path?: string;
+	message: string;
+	priority: string;
+	createdAt: number;
+	expiresAt: number;
+	acknowledged: string[];
+	tags: string[];
+}
+
+/** MarkEnvironment 快照，用于持久化/恢复 */
+export interface MarkEnvironmentSnapshot {
+	marks: SerializedMark[];
+	serializedAt: number;
+}
+
 /**
  * 一个不可变的环境信号。
  * 一旦创建，内容不可修改。只能由创建者 forceRemove 或自然过期移除。
@@ -313,6 +333,61 @@ export class MarkEnvironment {
 		this.#ownerIndex.clear();
 		this.#agentIndex.clear();
 		this.#pathIndex.clear();
+	}
+
+	// ── Serialization ────────────────────────────────────────────────
+
+	/**
+	 * 序列化为纯 JSON（去循环引用，丢失 Set → 数组）。
+	 * 可用于 session.jsonl 持久化，session 重启后通过 deserialize() 恢复。
+	 */
+	serialize(): MarkEnvironmentSnapshot {
+		const marks: SerializedMark[] = [];
+		for (const m of this.#marks.values()) {
+			marks.push({
+				markId: m.markId,
+				type: m.type,
+				agentId: m.agentId,
+				path: m.path,
+				message: m.message,
+				priority: m.priority,
+				createdAt: m.createdAt,
+				expiresAt: m.expiresAt,
+				acknowledged: [...m.acknowledged],
+				tags: m.tags,
+			});
+		}
+		return { marks, serializedAt: Date.now() };
+	}
+
+	/**
+	 * 从快照恢复 MarkEnvironment。
+	 * 自动跳过已过期的 Marks。
+	 */
+	deserialize(snapshot: MarkEnvironmentSnapshot): void {
+		this.clear();
+		const now = Date.now();
+
+		for (const sm of snapshot.marks) {
+			// 跳过已过期的
+			if (sm.expiresAt > 0 && sm.expiresAt <= now) continue;
+
+			this.#marks.set(sm.markId, {
+				markId: sm.markId,
+				type: sm.type as MarkType,
+				agentId: sm.agentId,
+				path: sm.path,
+				message: sm.message,
+				priority: sm.priority as MarkPriority,
+				createdAt: sm.createdAt,
+				expiresAt: sm.expiresAt,
+				acknowledged: new Set(sm.acknowledged),
+				tags: sm.tags,
+			});
+			this.#ownerIndex.set(sm.markId, sm.agentId);
+			this.#addToIndex(this.#agentIndex, sm.agentId, sm.markId);
+			if (sm.path) this.#addToIndex(this.#pathIndex, sm.path, sm.markId);
+		}
 	}
 
 	// ── Internal ──────────────────────────────────────────────────────
