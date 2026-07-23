@@ -22,7 +22,6 @@ import { useSwarmStore } from "../../stores/swarm-store";
 // ── Agent colors ────────────────────────────────────────────────
 const AGENT_COLORS: Record<string, string> = {
   developer: "#10B981",
-  reviewer: "#8B5CF6",
   reviewer: "#F59E0B",
   socrates: "#3B82F6",
 };
@@ -118,7 +117,7 @@ export default function AgentTopology() {
       type: "agentNode",
       data: {
         label: name,
-        agentType: agent.role === "reviewer" ? "reviewer" : name.includes("-r") ? "reviewer" : role === "reviewer" ? "reviewer" : "developer",
+        agentType: agent.role === "reviewer" ? "reviewer" : agent.role === "reviewer" || name.includes("-r") ? "reviewer" : "agent",
         status: agent.status,
         model: (agent as unknown as { modelName?: string }).modelName,
         iteration: agent.iteration ?? 0,

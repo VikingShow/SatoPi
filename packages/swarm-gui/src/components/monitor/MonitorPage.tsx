@@ -134,7 +134,7 @@ export default function MonitorPage() {
                 </Button>
               )}
             </div>
-          <span className="text-xs text-muted-foreground/60">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} workers</span>
+          <span className="text-xs text-muted-foreground/60">|| {swarmState?.agents ? Object.keys(swarmState.agents).length : 0} agents</span>
           {/* P2-6: Token count + cost estimate */}
           {(swarmState?.totalTokens ?? 0) > 0 && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title={`${formatTokens(swarmState!.totalTokens!)} tokens · ${swarmState!.totalRequests ?? 0} requests · est. cost ${estimateCost(swarmState!.totalTokens!)}`}>

@@ -68,7 +68,7 @@ export default function PhasePipeline() {
   function getSubStep(step: Step): string | null {
     if (!step.subStepPatterns || step.subStepPatterns.length === 0) return null;
     for (const p of step.subStepPatterns) {
-      if (phase.includes(p.match)) return p.label;
+      if (subPhase.includes(p.match)) return p.label;
     }
     return null;
   }
@@ -88,9 +88,9 @@ export default function PhasePipeline() {
 
     // In Running phase, check roundtablePhase for Review step
     if (phase === "stage") {
-      if (phase.includes("Reviewers reviewing") && step.key === "reviewing") return "active";
-      if (phase.includes("After Loop") && step.key === "summary") return "active";
-      if (phase.includes("After Loop completed")) {
+      if (subPhase.includes("Reviewers reviewing") && step.key === "reviewing") return "active";
+      if (subPhase.includes("After Loop") && step.key === "summary") return "active";
+      if (subPhase.includes("After Loop completed")) {
         if (step.key === "summary") return "done";
         if (index < STEPS.findIndex((s) => s.key === "summary")) return "done";
       }
