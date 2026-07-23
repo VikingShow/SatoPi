@@ -44,6 +44,10 @@ export interface TaskComplexityRecommendation {
 	rationale: string;
 	/** Where the recommendation came from. */
 	source: "rules" | "llm" | "fallback";
+	/** Estimated total agent-hours for the full plan. */
+	estimatedAgentHours: number;
+	/** Breakdown by role in agent-hours. */
+	roleBreakdown: { develop: number; test: number; review: number };
 }
 
 // ============================================================================
@@ -96,6 +100,44 @@ function extractSignals(planContent: string): TaskComplexitySignals {
 	const crossPackage = pkgs.size > 1;
 
 	return { parallelism, codeSurface, safetyCritical, crossLanguage, crossPackage };
+}
+
+// ============================================================================
+// Agent-hour estimation
+// ============================================================================
+
+/**
+ * Estimate agent-hours from task complexity signals.
+ *
+ * Formula:
+ *   base = (parallelism * 0.5) + (codeSurface * 0.25)
+ *   multiplier = safetyCritical ? 1.5 : 1.0
+ *              * crossPackage ? 1.3 : 1.0
+ *              * crossLanguage ? 1.2 : 1.0
+ *   total = base * multiplier
+ *
+ * Role breakdown (as % of total):
+ *   develop: 55%, test: 25%, review: 20%
+ */
+function estimateAgentHours(signals: TaskComplexitySignals): {
+	total: number;
+	breakdown: { develop: number; test: number; review: number };
+} {
+	const base = signals.parallelism * 0.5 + signals.codeSurface * 0.25;
+	let multiplier = 1.0;
+	if (signals.safetyCritical) multiplier *= 1.5;
+	if (signals.crossPackage) multiplier *= 1.3;
+	if (signals.crossLanguage) multiplier *= 1.2;
+	const total = Math.round(base * multiplier * 10) / 10; // round to 1 decimal
+
+	return {
+		total,
+		breakdown: {
+			develop: Math.round(total * 0.55 * 10) / 10,
+			test: Math.round(total * 0.25 * 10) / 10,
+			review: Math.round(total * 0.20 * 10) / 10,
+		},
+	};
 }
 
 // ============================================================================
@@ -156,10 +198,14 @@ function recommendFromSignals(
 	if (configMaxRounds > 0) maxRounds = Math.min(maxRounds, configMaxRounds);
 	roundsConvergenceThreshold = Math.max(1, Math.min(roundsConvergenceThreshold, maxRounds > 0 ? maxRounds : 10));
 
+	// Agent-hour estimation
+	const hours = estimateAgentHours(signals);
+
 	const parts: string[] = [
 		`complexity=${complexity}`,
 		`parallelism=${signals.parallelism}`,
 		`codeSurface=${signals.codeSurface}`,
+		`estimatedAgentHours=${hours.total}`,
 	];
 	if (signals.safetyCritical) parts.push("safety-critical");
 	if (signals.crossPackage) parts.push("cross-package");
@@ -174,6 +220,8 @@ function recommendFromSignals(
 		safetyCritical: signals.safetyCritical,
 		rationale: parts.join(", "),
 		source: "rules",
+		estimatedAgentHours: hours.total,
+		roleBreakdown: hours.breakdown,
 	};
 }
 
@@ -194,6 +242,8 @@ export class TaskComplexityAnalyzer {
 				safetyCritical: false,
 				rationale: "empty plan — using config defaults",
 				source: "fallback",
+				estimatedAgentHours: 0,
+				roleBreakdown: { develop: 0, test: 0, review: 0 },
 			};
 		}
 
