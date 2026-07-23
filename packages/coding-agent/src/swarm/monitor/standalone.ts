@@ -31,7 +31,7 @@ import type { LoopSwarmConfig } from "../schema";
 import type { SwarmSessionManager } from "../swarm-session-manager";
 import { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
-import { runAfterLoopPipeline } from "./after-loop-runner";
+import { runCurtainPipeline } from "./curtain-runner";
 import {
 	SessionRegistry,
 	type SharedServices,
@@ -197,7 +197,7 @@ class SwarmRunManager implements RunManager {
 				stage.run().then(async (result) => {
 					logger.info("[RunManager] Stage finished", { status: result.status });
 					if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
-					await this.#runAfterLoopPipeline({
+					await this.#runCurtainPipeline({
 						status: result.status === "completed" ? "completed" : "failed",
 						iterations: 1,
 						reviewVerdicts: [],
@@ -234,7 +234,7 @@ class SwarmRunManager implements RunManager {
 				}).then(async (result) => {
 					logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
 					if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
-					await this.#runAfterLoopPipeline(result);
+					await this.#runCurtainPipeline(result);
 				}).catch((err) => {
 					logger.error("[RunManager] Loop failed", { error: String(err) });
 				}).finally(() => {
@@ -281,8 +281,8 @@ class SwarmRunManager implements RunManager {
 		return this.#loopController?.resolveBlocker(decision) ?? false;
 	}
 
-	async #runAfterLoopPipeline(result: LoopResult): Promise<void> {
-		const result_ = await runAfterLoopPipeline(result, {
+	async #runCurtainPipeline(result: LoopResult): Promise<void> {
+		const result_ = await runCurtainPipeline(result, {
 			workspace: this.#workspace,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
@@ -290,8 +290,8 @@ class SwarmRunManager implements RunManager {
 			loopConfig: this.#loopConfig,
 			modelRegistry: this.#modelRegistry,
 			settings: this.#settings,
-			loopController: this.#loopController!,
-			abortController: this.#abortController,
+			roleAssetManager: this.#roleAssetManager,
+			profileRegistry: this.#profileRegistry,
 		});
 		if (result_) this.#lastAfterLoopResult = result_;
 	}

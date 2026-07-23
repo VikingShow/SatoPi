@@ -167,6 +167,11 @@ export default function CurtainPanel() {
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{summaryMarkdown}</ReactMarkdown>
             </div>
           </details>
+
+          {/* Applaud button */}
+          <div className="pt-2">
+            <ApplaudButton />
+          </div>
         </div>
       )}
     </div>
@@ -201,5 +206,39 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
       <span className="text-muted-foreground/60">{label}: </span>
       <span className="text-foreground font-mono">{value}</span>
     </div>
+  );
+}
+
+function ApplaudButton() {
+  const [applauded, setApplauded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleApplaud() {
+    setLoading(true);
+    try {
+      await api.applaud();
+      setApplauded(true);
+    } catch { /* best-effort */ }
+    finally { setLoading(false); }
+  }
+
+  if (applauded) {
+    return (
+      <div className="text-center text-xs text-status-success py-1">
+        Bravo! The curtain has fallen.
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handleApplaud}
+      disabled={loading}
+      className="w-full text-xs gap-1.5 hover:bg-amber-500/10 hover:text-amber-400"
+    >
+      {loading ? "..." : "👏 Applaud"}
+    </Button>
   );
 }

@@ -208,6 +208,13 @@ export const api = {
       body: JSON.stringify({ decision }),
     }),
 
+  // -- Curtain (session-scoped) ----------------------------------------------
+
+  applaud: () =>
+    fetchJson<{ success: boolean; message?: string }>(sessionUrl("/curtain/applaud"), {
+      method: "POST",
+    }),
+
   // -- Role Asset Library (global) ------------------------------------------
 
   getRoles: (status?: RoleStatus) => {
