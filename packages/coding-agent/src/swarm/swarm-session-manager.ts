@@ -45,7 +45,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { ActivityEntry, ActivityEventType } from "./activity-logger";
-import type { LoopPhase, PipelineStatus, SwarmState, AgentState } from "./state";
+import type { Chapter, PipelineStatus, SwarmState, AgentState } from "./state";
 
 // ============================================================================
 // Custom entry type tags
@@ -152,7 +152,7 @@ export class SwarmSessionManager {
 			mode: state.mode,
 			iteration: state.iteration,
 			agents: state.agents,
-			loopPhase: state.loopPhase,
+			phase: state.phase,
 			todos: state.todos,
 		});
 	}
@@ -179,7 +179,7 @@ export class SwarmSessionManager {
 	// -- Phase Transition -----------------------------------------------------
 
 	/** Log a loop phase transition. */
-	logPhase(phase: LoopPhase): void {
+	logPhase(phase: Chapter): void {
 		this.#session.appendCustomEntry(CTX.PHASE, { ts: Date.now(), phase });
 	}
 

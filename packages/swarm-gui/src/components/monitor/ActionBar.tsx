@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Swords, Check, CheckCircle2 } from "lucide-react";
 import { Button } from "../ui/button";
-import type { LoopPhase } from "../../lib/types";
+import type { Chapter } from "../../lib/types";
 
 export interface ActionBarProps {
-  phase: LoopPhase;
+  phase: Chapter;
   recommendedWorkers?: number;
   recommendedCloners?: number;
   onConfirm: (workerCount: number, clonerCount: number) => void;
@@ -27,7 +27,7 @@ export function ActionBar({
     if (recommendedCloners != null) setClonerCount(recommendedCloners);
   }, [recommendedWorkers, recommendedCloners]);
 
-  const isDebateDone = phase === "before-loop-confirm";
+  const isDebateDone = phase === "script-confirm";
 
   return (
     <div className="border-t border-purple-800/40 px-4 py-2.5 bg-linear-to-r from-purple-950/30 to-blue-950/30">

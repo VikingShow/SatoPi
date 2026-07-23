@@ -12,7 +12,7 @@ import { Button } from "../ui/button";
 
 export default function PlanViewer() {
   const planVersion = useSwarmStore((s) => s.planVersion);
-  const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const phase = useSwarmStore((s) => s.phase);
   const pauseRun = useSwarmStore((s) => s.pauseRun);
   const resumeRun = useSwarmStore((s) => s.resumeRun);
   const [content, setContent] = useState("");
@@ -83,7 +83,7 @@ export default function PlanViewer() {
   // resume after saving so the fresh plan is picked up cleanly next iteration.
   function EditLifecycleBanner() {
     if (mode !== "edit") return null;
-    if (loopPhase === "running") {
+    if (phase === "stage") {
       return (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-amber-500/25 bg-amber-950/20 px-3 py-2">
           <span className="text-[11px] text-amber-300/90">
@@ -100,7 +100,7 @@ export default function PlanViewer() {
         </div>
       );
     }
-    if (loopPhase === "paused") {
+    if (phase === "paused") {
       return (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-emerald-500/25 bg-emerald-950/20 px-3 py-2">
           <span className="text-[11px] text-emerald-300/90">

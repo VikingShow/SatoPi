@@ -7,7 +7,7 @@ import { remarkTreeToCode } from "../../lib/remark-tree-to-code";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
 import { shallow } from "zustand/shallow";
-import type { ChatMessage, LoopPhase } from "../../lib/types";
+import type { ChatMessage, Chapter } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
@@ -232,24 +232,24 @@ export default function ChatView() {
   // ── Group B: low-frequency + stable method refs ──
   // 11 fields merged into 1 subscription.  Method references are created
   // once in zustand's create() so shallow comparison is a no-op on every
-  // token-level store update — only loopPhase / isRunning / beforeLoopState
+  // token-level store update — only phase / isRunning / scriptState
   // trigger re-render when they actually change.
   const {
-    activeChannelId, loopPhase, isRunning, beforeLoopState,
-    sendBeforeLoopMessage, sendSteering, startPlanning,
-    runDebate, confirmAndStart, stopRun, cancelBeforeLoop,
+    activeChannelId, phase, isRunning, scriptState,
+    sendScriptMessage, sendSteering, startPlanning,
+    runDebate, confirmAndStart, stopRun, cancelScript,
   } = useSwarmStore((s) => ({
     activeChannelId: s.activeChannelId,
-    loopPhase: s.loopPhase,
+    phase: s.phase,
     isRunning: s.isRunning,
-    beforeLoopState: s.beforeLoopState,
-    sendBeforeLoopMessage: s.sendBeforeLoopMessage,
+    scriptState: s.scriptState,
+    sendScriptMessage: s.sendScriptMessage,
     sendSteering: s.sendSteering,
     startPlanning: s.startPlanning,
     runDebate: s.runDebate,
     confirmAndStart: s.confirmAndStart,
     stopRun: s.stopRun,
-    cancelBeforeLoop: s.cancelBeforeLoop,
+    cancelScript: s.cancelScript,
   }), shallow);
 
   const viewingSession = useSessionStore((s) => s.viewingSession);
@@ -343,14 +343,14 @@ export default function ChatView() {
     }
   }
 
-  // Determine input behavior based on loopPhase
-  const isIdle = loopPhase === "idle";
-  const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
-  const isBeforeLoopConfirm = loopPhase === "before-loop-confirm";
-  const isLoopRunning = loopPhase === "running";
+  // Determine input behavior based on phase
+  const isIdle = phase === "idle";
+  const isBeforeLoopDialog = phase === "script";
+  const isBeforeLoopConfirm = phase === "script-confirm";
+  const isLoopRunning = phase === "stage";
   const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
-  const isBusy = beforeLoopState?.busy ?? false;
-  const planReady = beforeLoopState?.planReady ?? false;
+  const isBusy = scriptState?.busy ?? false;
+  const planReady = scriptState?.planReady ?? false;
 
   const placeholder = isIdle
     ? "Describe your task..."
@@ -369,7 +369,7 @@ export default function ChatView() {
     if (isIdle) {
       startPlanning(text);
     } else if (isBeforeLoopDialog) {
-      sendBeforeLoopMessage(text);
+      sendScriptMessage(text);
     } else if (isLoopRunning) {
       sendSteering(text);
     }
@@ -387,7 +387,7 @@ export default function ChatView() {
   return (
     <div className="flex-1 flex flex-col bg-background">
       {/* ── Streaming indicator bar (always visible during active run) ── */}
-      {loopPhase === "running" && isRunning && (
+      {phase === "stage" && isRunning && (
         <div className="shrink-0 flex items-center justify-between gap-3 border-b border-emerald-500/20 bg-emerald-950/30 px-4 py-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse-ring" />
@@ -461,19 +461,19 @@ export default function ChatView() {
       </div>
 
       {/* Context Action Bar — appears when plan is ready or debate is done */}
-      {((loopPhase === "before-loop-dialog" && planReady) || loopPhase === "before-loop-confirm") && !isBusy && (
+      {((phase === "script" && planReady) || phase === "script-confirm") && !isBusy && (
         <ActionBar
-          phase={loopPhase}
-          recommendedWorkers={beforeLoopState?.recommendedWorkers}
-          recommendedCloners={beforeLoopState?.recommendedCloners}
+          phase={phase}
+          recommendedWorkers={scriptState?.recommendedWorkers}
+          recommendedCloners={scriptState?.recommendedCloners}
           onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, clonerCount: cc })}
           onDebate={runDebate}
         />
       )}
 
       {/* Input bar — right-side button morphs based on loop phase:
-            - idle / before-loop-confirm (with text) → Send
-            - before-loop-dialog / before-loop-confirm (idle) → Cancel planning
+            - idle / script-confirm (with text) → Send
+            - script / script-confirm (idle) → Cancel planning
             - running → Stop Swarm (red)
         */}
       <div className="border-t border-border px-4 py-2.5 bg-background-card">
@@ -511,7 +511,7 @@ export default function ChatView() {
             className="flex-1"
           />
           {/* Right-side action button — morphs by phase */}
-          {loopPhase === "running" && isRunning ? (
+          {phase === "stage" && isRunning ? (
             <Button
               variant="destructive"
               size="sm"
@@ -521,11 +521,11 @@ export default function ChatView() {
               <Square size={14} fill="currentColor" />
               <span>Stop</span>
             </Button>
-          ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
+          ) : (phase === "script" || phase === "script-confirm") && !isBusy ? (
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => cancelBeforeLoop()}
+              onClick={() => cancelScript()}
               title="Cancel Before Loop planning"
             >
               <X size={14} />

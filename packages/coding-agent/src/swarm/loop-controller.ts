@@ -17,7 +17,7 @@ import { invokeHook, type LoopPipelineHooks, type PipelineContext } from "./pipe
 import { RegionLockManager } from "./region-lock";
 import { ClonerCouncil, type ReviewVerdict } from "./roundtable";
 import type { AgentToolRestriction, LoopSwarmConfig, SwarmAgent } from "./schema";
-import type { LoopPhase, StateTracker } from "./state";
+import type { Chapter, StateTracker } from "./state";
 import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
 import { computeScaleDelta } from "./worker-scaler";
 import { evaluateBlockage } from "./blockage";
@@ -300,8 +300,8 @@ export class LoopController {
 
 	// ── Explicit phase state machine (arbiter, not driver) ──────────────────
 	/**
-	 * Single authority for LoopPhase. Every loopPhase change routes through
-	 * #setLoopPhase → this machine, which validates the transition and, on
+	 * Single authority for Chapter. Every phase change routes through
+	 * #setChapter → this machine, which validates the transition and, on
 	 * onEnter, ATOMICALLY updates StateTracker + ActivityLogger. runLoop keeps
 	 * its own await-based suspension (checkPause / blockerResolver); the machine
 	 * only arbitrates and broadcasts the phase.
@@ -322,10 +322,10 @@ export class LoopController {
 		}
 		// Seed the machine from the tracker's current phase (defaults to running
 		// context — pause/resume/block operate within an already-running loop).
-		this.#sm = new SwarmStateMachine(this.#stateTracker.state.loopPhase ?? "running", {
+		this.#sm = new SwarmStateMachine(this.#stateTracker.state.phase ?? "stage", {
 			onEnter: async (phase, ctx) => {
 				// Atomic broadcast: persist state + emit SSE phase event together.
-				const update: Partial<import("./state").SwarmState> = { loopPhase: phase };
+				const update: Partial<import("./state").SwarmState> = { phase: phase };
 				if (ctx.reason && phase === "blocked") update.roundtablePhase = `Blocked: ${ctx.reason}`;
 				await this.#stateTracker.updatePipeline(update);
 				this.#activityLogger?.logPhase(phase, undefined, ctx.iteration);
@@ -333,17 +333,17 @@ export class LoopController {
 			onError: (from, to, reason) => {
 				// Never crash on an illegal/failed transition — record for audit.
 				this.#activityLogger?.logPhase("invalid-transition", undefined, undefined);
-				logger.warn("LoopPhase transition rejected", { from, to, reason });
+				logger.warn("Chapter transition rejected", { from, to, reason });
 			},
 		});
 	}
 
 	/**
-	 * The sole entry point for changing loopPhase. Routes through the state
+	 * The sole entry point for changing phase. Routes through the state
 	 * machine so the transition is validated + broadcast atomically. `force`
 	 * bypasses the table for hard aborts/resets.
 	 */
-	async #setLoopPhase(to: LoopPhase, ctx: PhaseContext = {}, force = false): Promise<void> {
+	async #setChapter(to: Chapter, ctx: PhaseContext = {}, force = false): Promise<void> {
 		if (force) {
 			await this.#sm.force(to, ctx);
 		} else {
@@ -360,7 +360,7 @@ export class LoopController {
 	pause(): void {
 		if (this.#pauseSignal) return; // already paused
 		this.#pauseSignal = new AbortController();
-		void this.#setLoopPhase("paused");
+		void this.#setChapter("paused");
 		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop paused. Awaiting plan update or resume.");
 		logger.info("LoopController paused");
 	}
@@ -371,7 +371,7 @@ export class LoopController {
 	 */
 	resume(): void {
 		if (!this.#pauseSignal) return; // not paused
-		void this.#setLoopPhase("running");
+		void this.#setChapter("stage");
 		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop resumed.");
 		const resolver = this.#pauseResolver;
 		this.#pauseSignal = null;
@@ -409,7 +409,13 @@ export class LoopController {
 		});
 	}
 
-	async runLoop(options: Omit<PipelineOptions, "hooks"> & { hooks?: LoopPipelineHooks; planContent?: string }): Promise<LoopResult> {
+	async runLoop(
+		options: Omit<PipelineOptions, "hooks"> & {
+			hooks?: LoopPipelineHooks;
+			planContent?: string;
+			getAgentContext?: (agentId: string) => string | null;
+		},
+	): Promise<LoopResult> {
 		const verdicts: ReviewVerdict[] = [];
 		const errors: string[] = [];
 		const clonerFeedbackHistory: string[] = [];
@@ -475,10 +481,10 @@ export class LoopController {
 		// subsequent updateAgent / incrementPraise / etc. calls don't
 		// silently no-op (state.ts:127 `if (!agent) return`).
 		for (const id of workerIds) {
-			await this.#stateTracker.registerAgent(id, this.#loopConfig.workers.model);
+			await this.#stateTracker.registerAgent(id, this.#loopConfig.model);
 		}
 		for (const id of clonerIds) {
-			await this.#stateTracker.registerAgent(id, this.#loopConfig.cloners.model);
+			await this.#stateTracker.registerAgent(id, this.#loopConfig.model);
 		}
 
 		this.#channel = new WorkerChannel(
@@ -977,7 +983,7 @@ export class LoopController {
 				await this.#stateTracker.updatePipeline({
 					roundtablePhase: isTimeout ? "Timed out" : "Error — retrying",
 				});
-				this.#activityLogger?.logPhase("iteration-error", String(err), iter + 1);
+				this.#activityLogger?.logPhase("iteration-error", undefined, iter + 1);
 				this.#activityLogger?.logBroadcast("system", message);
 
 				// Rollback workspace on crash/timeout if configured
@@ -1094,7 +1100,7 @@ export class LoopController {
 					for (let i = 0; i < addCount; i++) {
 						const newId = `worker-${workerIds.length + 1}`;
 						this.#channel.addWorker(newId);
-						await this.#stateTracker.registerAgent(newId, this.#loopConfig.workers.model);
+						await this.#stateTracker.registerAgent(newId, this.#loopConfig.model);
 						workerIds.push(newId);
 						currentWorkerCount++;
 						this.#activityLogger?.logScaling("add", newId, `cloner suggestion +${delta}`);
@@ -1184,7 +1190,7 @@ export class LoopController {
 	 * 2. The same worker crashes 3+ times across iterations (deadlock).
 	 *
 	 * When a blockage is detected:
-	 * - Sets loopPhase to "blocked" via stateTracker.
+	 * - Sets phase to "blocked" via stateTracker.
 	 * - Broadcasts blocker context via ActivityLogger → SSE.
 	 * - Awaits user resolution via a Promise (continue / skip / abort).
 	 *
@@ -1224,7 +1230,7 @@ export class LoopController {
 
 		// Set loop phase to blocked (state machine validates + broadcasts atomically;
 		// onEnter derives roundtablePhase from ctx.reason and emits the phase event).
-		await this.#setLoopPhase("blocked", { reason, iteration: iteration + 1 });
+		await this.#setChapter("blocked", { reason, iteration: iteration + 1 });
 		this.#activityLogger?.logBroadcast(
 			"system",
 			JSON.stringify({
@@ -1253,7 +1259,7 @@ export class LoopController {
 
 		// Restore loop phase to running (unless aborting)
 		if (resolution !== "abort") {
-			await this.#setLoopPhase("running", { iteration: iteration + 1 });
+			await this.#setChapter("stage", { iteration: iteration + 1 });
 		}
 
 		return resolution;

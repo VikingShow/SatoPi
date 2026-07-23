@@ -143,7 +143,7 @@ class SwarmRunManager implements RunManager {
 			if (!def.loopConfig) return { success: false, error: "Swarm is not in loop mode" };
 
 			this.#loopConfig = def.loopConfig;
-			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
+			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
 			// Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md
@@ -163,7 +163,7 @@ class SwarmRunManager implements RunManager {
 
 			const agentNames = [...def.agents.keys()];
 			await this.#stateTracker.init(agentNames, def.targetCount, def.mode);
-			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
+			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 
 			this.#loopController = createLoopController(this.#stateTracker, {
 				loopConfig: def.loopConfig,

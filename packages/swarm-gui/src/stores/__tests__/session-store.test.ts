@@ -24,7 +24,7 @@ vi.mock("../swarm-store", () => ({
 vi.mock("../../lib/api-client", () => ({
   api: {
     getRuns: vi.fn().mockResolvedValue({ runs: [] }),
-    cancelBeforeLoop: vi.fn().mockResolvedValue({ success: true }),
+    cancelScript: vi.fn().mockResolvedValue({ success: true }),
     stopRun: vi.fn().mockResolvedValue({ success: true }),
     createSession: vi.fn().mockResolvedValue({ success: true }),
   },
@@ -55,11 +55,11 @@ beforeEach(() => {
     channels: new Map(),
     messages: new Map(),
     activeChannelId: "roundtable",
-    loopPhase: "idle" as const,
-    beforeLoopState: null,
+    phase: "idle" as const,
+    scriptState: null,
     planVersion: 0,
     todos: [],
-    afterLoopResult: null,
+    curtainResult: null,
     blockerContext: null,
     error: null,
     init: vi.fn(),

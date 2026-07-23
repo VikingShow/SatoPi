@@ -2,7 +2,7 @@
  * swarm-store.test.ts — Tests for Zustand swarm-state store.
  *
  * Tests key actions: message handling, phase transitions, todo updates,
- * and before-loop state management. Mocks api and sseClient dependencies.
+ * and script state management. Mocks api and sseClient dependencies.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -19,16 +19,16 @@ vi.mock("../session-store", () => ({
 vi.mock("../../lib/api-client", () => ({
   api: {
     getState: vi.fn(),
-    startBeforeLoop: vi.fn(),
-    sendBeforeLoopMessage: vi.fn(),
+    startScript: vi.fn(),
+    sendBeforeScriptMessage: vi.fn(),
     runDebate: vi.fn(),
-    confirmBeforeLoop: vi.fn(),
-    cancelBeforeLoop: vi.fn(),
-    getBeforeLoopState: vi.fn(),
+    confirmBeforeScript: vi.fn(),
+    cancelScript: vi.fn(),
+    getBeforeScriptState: vi.fn(),
     sendSteering: vi.fn(),
     stopRun: vi.fn(),
     getAfterLoopSummary: vi.fn(),
-    getBeforeLoopHistory: vi.fn(),
+    getBeforeScriptHistory: vi.fn(),
     getHistory: vi.fn(),
     getRunStatus: vi.fn(),
   },
@@ -63,11 +63,11 @@ beforeEach(() => {
     activeChannelId: "roundtable",
     isConnected: false,
     isRunning: false,
-    loopPhase: "idle",
-    beforeLoopState: null,
+    phase: "idle",
+    scriptState: null,
     planVersion: 0,
     todos: [],
-    afterLoopResult: null,
+    curtainResult: null,
     blockerContext: null,
     error: null,
   });
@@ -77,8 +77,8 @@ beforeEach(() => {
 });
 
 describe("SwarmStore: initial state", () => {
-  it("starts with idle loopPhase", () => {
-    expect(getStore().loopPhase).toBe("idle");
+  it("starts with idle phase", () => {
+    expect(getStore().phase).toBe("idle");
   });
 
   it("has empty messages map", () => {
@@ -93,15 +93,15 @@ describe("SwarmStore: initial state", () => {
 describe("SwarmStore: message management", () => {
   it("addActivity appends to activities array", () => {
     const store = getStore();
-    store.addActivity({ ts: Date.now(), type: "phase", phase: "running" });
+    store.addActivity({ ts: Date.now(), type: "phase", phase: "stage" });
     expect(getStore().activities.length).toBe(1);
-    expect(getStore().activities[0].phase).toBe("running");
+    expect(getStore().activities[0].phase).toBe("stage");
   });
 
   it("addActivity trims to MAX_ACTIVITIES limit", () => {
     const store = getStore();
     for (let i = 0; i < 510; i++) {
-      store.addActivity({ ts: Date.now() + i, type: "phase", phase: "running" });
+      store.addActivity({ ts: Date.now() + i, type: "phase", phase: "stage" });
     }
     expect(getStore().activities.length).toBeLessThanOrEqual(500);
   });
@@ -255,7 +255,7 @@ describe("SwarmStore: init() guard and session sync", () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       name: "test-session",
       status: "idle",
-      loopPhase: "idle",
+      phase: "idle",
       agents: {},
     });
     (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -274,7 +274,7 @@ describe("SwarmStore: init() guard and session sync", () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValue({
       name: "test-session",
       status: "idle",
-      loopPhase: "idle",
+      phase: "idle",
       agents: {},
     });
     (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -294,7 +294,7 @@ describe("SwarmStore: init() guard and session sync", () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       name: "test-session",
       status: "idle",
-      loopPhase: "idle",
+      phase: "idle",
       agents: {},
     });
     (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -312,7 +312,7 @@ describe("SwarmStore: init() guard and session sync", () => {
 
   it("connectionStatus transitions connecting → live → reconnecting → live", async () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      name: "test-session", status: "idle", loopPhase: "idle", agents: {},
+      name: "test-session", status: "idle", phase: "idle", agents: {},
     });
     (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ running: false });
 
@@ -340,9 +340,9 @@ describe("SwarmStore: init() guard and session sync", () => {
     useSwarmStore.setState({
       swarmState: {
         name: "test-session",
-        status: "running",
-        loopPhase: "running",
-        agents: { "worker-1": { name: "worker-1", status: "running", role: "worker", praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
+        status: "stage",
+        phase: "stage",
+        agents: { "worker-1": { name: "worker-1", status: "stage", role: "worker", praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
       } as any,
     });
     (useSwarmStore.getState() as any).__initRunning = false;
@@ -356,15 +356,15 @@ describe("SwarmStore: init() guard and session sync", () => {
     // The previous swarmState must be preserved, not clobbered to null.
     expect(getStore().swarmState).not.toBeNull();
     expect(getStore().swarmState?.agents["worker-1"]).toBeDefined();
-    // loopPhase falls back gracefully without throwing on state.loopPhase.
-    expect(getStore().loopPhase).toBe("idle");
+    // phase falls back gracefully without throwing on state.phase.
+    expect(getStore().phase).toBe("idle");
   });
 
   it("init falls back to 'SatoPi' when activeSwarm is empty", async () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       name: "SatoPi",
       status: "idle",
-      loopPhase: "idle",
+      phase: "idle",
       agents: {},
     });
     (api.getRunStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -385,8 +385,8 @@ describe("SwarmStore: phase transitions", () => {
   it("refreshState fetches state from API", async () => {
     (api.getState as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       name: "test",
-      status: "running",
-      loopPhase: "running",
+      status: "stage",
+      phase: "stage",
       agents: [],
     });
     await getStore().refreshState();
@@ -398,19 +398,19 @@ describe("SwarmStore: phase transitions", () => {
   });
 });
 
-describe("SwarmStore: before-loop interactions", () => {
+describe("SwarmStore: script interactions", () => {
   it("startPlanning sends task to backend", async () => {
-    (api.startBeforeLoop as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: true });
+    (api.startScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: true });
     await getStore().startPlanning("build login");
-    expect(api.startBeforeLoop).toHaveBeenCalledWith("build login");
+    expect(api.startScript).toHaveBeenCalledWith("build login");
   });
 
-  it("cancelBeforeLoop resets state", async () => {
-    (api.cancelBeforeLoop as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: true });
+  it("cancelScript resets state", async () => {
+    (api.cancelScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: true });
     // Set running state first
-    useSwarmStore.setState({ loopPhase: "before-loop-dialog", beforeLoopState: { phase: "before-loop-dialog", task: "test", conversationLength: 5, planReady: false, busy: false } });
-    await getStore().cancelBeforeLoop();
-    expect(getStore().loopPhase).toBe("idle");
+    useSwarmStore.setState({ phase: "script", scriptState: { phase: "script", task: "test", conversationLength: 5, planReady: false, busy: false } });
+    await getStore().cancelScript();
+    expect(getStore().phase).toBe("idle");
   });
 
   it("sendSteering sends operator message to running loop", async () => {

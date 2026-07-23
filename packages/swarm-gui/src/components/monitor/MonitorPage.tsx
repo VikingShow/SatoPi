@@ -16,7 +16,7 @@ import FileChangesPanel from "./FileChangesPanel";
 import RoleBrowser from "./RoleBrowser";
 import ScalingHistory from "./ScalingHistory";
 import CommMatrix from "./CommMatrix";
-import AfterLoopPanel from "./AfterLoopPanel";
+import CurtainPanel from "./CurtainPanel";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -33,15 +33,15 @@ function estimateCost(tokens: number): string {
 
 export default function MonitorPage() {
   const {
-    swarmState, isRunning, isConnected, loopPhase,
-    convergenceHistory, pauseRun, resumeRun, afterLoopResult,
+    swarmState, isRunning, isConnected, phase,
+    convergenceHistory, pauseRun, resumeRun, curtainResult,
   } = useSwarmStore((s) => ({
     swarmState: s.swarmState,
     isRunning: s.isRunning,
     isConnected: s.isConnected,
-    loopPhase: s.loopPhase,
+    phase: s.phase,
     convergenceHistory: s.convergenceHistory,
-    afterLoopResult: s.afterLoopResult,
+    curtainResult: s.curtainResult,
     pauseRun: s.pauseRun,
     resumeRun: s.resumeRun,
   }), shallow);
@@ -50,7 +50,7 @@ export default function MonitorPage() {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"chat" | "timeline" | "files" | "topology" | "roles" | "scaling" | "commatrix" | "afterloop">("chat");
 
-  const isActive = loopPhase === "running" || loopPhase === "blocked";
+  const isActive = phase === "stage" || phase === "blocked";
 
   // P2-5: Compute convergence trend from the last 3 values.
   const convergenceTrend = useMemo(() => {
@@ -63,29 +63,29 @@ export default function MonitorPage() {
   }, [convergenceHistory]);
 
   const statusLabel = (() => {
-    switch (loopPhase) {
-      case "before-loop-dialog": return t("swarm.planningDialog", "Planning (Dialog)");
-      case "before-loop-debate": return t("swarm.planningDebate", "Planning (Debate)");
-      case "before-loop-confirm": return t("swarm.readyToStart", "Ready to Start");
-      case "running": return t("swarm.running", "Running");
+    switch (phase) {
+      case "script": return t("swarm.planningDialog", "Planning (Dialog)");
+      case "script-debate": return t("swarm.planningDebate", "Planning (Debate)");
+      case "script-confirm": return t("swarm.readyToStart", "Ready to Start");
+      case "stage": return t("swarm.running", "Running");
       case "blocked": return t("swarm.blocked", "Blocked");
-      case "after-loop": return t("swarm.afterLoop", "After Loop");
+      case "curtain": return t("swarm.afterLoop", "After Loop");
       default: return isRunning ? t("swarm.running", "Running") : swarmState?.status === "idle" ? t("swarm.idle", "Idle") : swarmState?.status ?? t("swarm.unknown", "Unknown");
     }
   })();
 
   const statusColor = (() => {
-    switch (loopPhase) {
-      case "before-loop-dialog":
-      case "before-loop-debate":
+    switch (phase) {
+      case "script":
+      case "script-debate":
         return "text-primary";
-      case "before-loop-confirm":
+      case "script-confirm":
         return "text-status-info";
-      case "running":
+      case "stage":
         return "text-status-success";
       case "blocked":
         return "text-status-danger";
-      case "after-loop":
+      case "curtain":
         return "text-status-accent";
       default:
         return "text-muted-foreground";
@@ -123,7 +123,7 @@ export default function MonitorPage() {
               <Button variant={viewMode === "commatrix" ? "secondary" : "ghost"} size="xs" onClick={() => setViewMode("commatrix")}>
                 <ArrowRightLeft size={12} /> Comm
               </Button>
-              {afterLoopResult && (
+              {curtainResult && (
                 <Button
                   variant={viewMode === "afterloop" ? "secondary" : "ghost"}
                   size="xs"
@@ -171,7 +171,7 @@ export default function MonitorPage() {
         {/* Right side: pause/resume controls + status indicators */}
         <div className="flex items-center gap-2">
           {/* Pause / Resume — available when running or paused */}
-          {loopPhase === "running" && (
+          {phase === "stage" && (
             <Button
               variant="outline"
               size="sm"
@@ -183,7 +183,7 @@ export default function MonitorPage() {
               Pause
             </Button>
           )}
-          {loopPhase === "paused" && (
+          {phase === "paused" && (
             <Button
               variant="outline"
               size="sm"
@@ -197,7 +197,7 @@ export default function MonitorPage() {
           )}
 
           {/* Debate in progress indicator */}
-          {loopPhase === "before-loop-debate" && (
+          {phase === "script-debate" && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-accent">
               <Loader2 size={14} className="animate-spin" />
               Debating...
@@ -205,7 +205,7 @@ export default function MonitorPage() {
           )}
 
           {/* After-loop processing indicator */}
-          {loopPhase === "after-loop" && (
+          {phase === "curtain" && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-status-accent">
               <Loader2 size={14} className="animate-spin" />
               Processing...
@@ -215,7 +215,7 @@ export default function MonitorPage() {
       </div>
 
       {/* Phase pipeline — visible in all phases except idle */}
-      {loopPhase !== "idle" && <PhasePipeline />}
+      {phase !== "idle" && <PhasePipeline />}
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
@@ -247,7 +247,7 @@ export default function MonitorPage() {
           </div>
         ) : viewMode === "afterloop" ? (
           <div className="flex-1 overflow-y-auto p-4">
-            <AfterLoopPanel />
+            <CurtainPanel />
           </div>
         ) : (
           <div className="flex-1 relative">
@@ -256,7 +256,7 @@ export default function MonitorPage() {
         )}
       </div>
 
-      {/* Blocker resolution dialog — shown when loopPhase === "blocked" */}
+      {/* Blocker resolution dialog — shown when phase === "blocked" */}
       <BlockerDialog />
     </div>
   );

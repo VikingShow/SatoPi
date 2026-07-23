@@ -1,14 +1,13 @@
 /**
- * SwarmStateMachine — explicit LoopPhase transition arbiter.
+ * SwarmStateMachine — explicit Chapter transition arbiter.
  *
  * ## Role: arbiter, NOT driver
  *
- * This machine does NOT drive execution. The long-running `runLoop()` in
- * LoopController remains a command-style function that owns its own
- * `for (iteration) { for (round) }` loop and its own `await` suspension
- * points (pause / blocker). Trying to invert control (state machine calls
- * `start runLoop()` on entry) is an impedance mismatch with a long-lived
- * imperative loop and would let "phase" and "actual progress" drift apart.
+ * This machine does NOT drive execution. The long-running Stage phase in
+ * StageController remains a command-style function that owns its own
+ * event loop. Trying to invert control (state machine calls
+ * `start runStage()`) is an impedance mismatch with a long-lived
+ * imperative process and would let "phase" and "actual progress" drift apart.
  *
  * Instead this machine is the SINGLE place where:
  *  - a phase transition is validated against an explicit transition table
@@ -18,17 +17,21 @@
  *    gap that the scattered updatePipeline/logPhase calls left open),
  *  - onEnter / onExit / onError side effects are dispatched.
  *
- * LoopController routes every `loopPhase` change through `transition()`; the
+ * StageController routes every `phase` change through `transition()`; the
  * suspension mechanics (checkPause / blockerResolver await) stay inside
- * runLoop untouched.
+ * the stage loop untouched.
  *
- * The backend is the SOLE authority for LoopPhase. The frontend must be a
+ * The backend is the SOLE authority for Chapter. The frontend must be a
  * pure projection of the phase broadcast here — it must not infer phase
  * locally.
+ *
+ * ## Lifecycle
+ *
+ *   idle → script → (script-debate) → script-confirm → stage ↔ (paused | blocked) → curtain → idle
  */
-import type { LoopPhase } from "./state";
+import type { Chapter } from "./state";
 
-/** Terminal reason carried into the after-loop / idle transition. */
+/** Terminal reason carried into the curtain / idle transition. */
 export type TerminalStatus =
 	| "completed"
 	| "failed"
@@ -41,9 +44,9 @@ export type TerminalStatus =
 export interface PhaseContext {
 	/** Human-readable reason (e.g. blocker reason). */
 	reason?: string;
-	/** Current loop iteration (1-based) when known. */
+	/** Current iteration (1-based) when known. */
 	iteration?: number;
-	/** Terminal status when entering after-loop / idle after a run. */
+	/** Terminal status when entering curtain / idle after a run. */
 	terminalStatus?: TerminalStatus;
 	/** Marks a forced (escape-hatch) transition, e.g. hard abort/reset. */
 	forced?: boolean;
@@ -51,8 +54,8 @@ export interface PhaseContext {
 
 export interface TransitionResult {
 	ok: boolean;
-	from: LoopPhase;
-	to: LoopPhase;
+	from: Chapter;
+	to: Chapter;
 	/** Present when ok === false. */
 	reason?: string;
 	/** True when to === from (idempotent no-op that still succeeds). */
@@ -62,35 +65,23 @@ export interface TransitionResult {
 /**
  * Explicit transition table — the single source of truth for legal moves.
  *
- * Notes on completeness (deliberately covering the real branches that the
- * scattered code exercises today):
- *  - before-loop-* → idle          : cancelBeforeLoop() from any planning phase
- *  - running → after-loop           : normal completion AND non-abort terminal
- *                                     states (converged_failed/partial/escalated/
- *                                     failed) — the terminalStatus rides in
- *                                     PhaseContext so the reason is not lost.
- *  - paused → after-loop            : abort while paused
- *  - blocked → running              : unblock (also the target of the timed
- *                                     auto-continue transition)
- *  - blocked → after-loop           : abort from a blocker
- *  - after-loop → idle              : run finished, back to idle
- *  - after-loop → running           : retry a fresh run (resetAgentStatuses)
+ * Lifecycle: idle → script ↔ script-debate ↔ script-confirm → stage ↔ (paused | blocked) → curtain → idle
  */
-export const LOOP_TRANSITIONS: Record<LoopPhase, LoopPhase[]> = {
-	idle: ["before-loop-dialog", "running"],
-	"before-loop-dialog": ["before-loop-debate", "before-loop-confirm", "idle"],
-	"before-loop-debate": ["before-loop-confirm", "before-loop-dialog", "idle"],
-	"before-loop-confirm": ["running", "before-loop-dialog", "before-loop-debate", "idle"],
-	running: ["paused", "blocked", "after-loop"],
-	paused: ["running", "after-loop", "idle"],
-	blocked: ["running", "after-loop", "idle"],
-	"after-loop": ["idle", "running"],
+export const WORKFLOW_TRANSITIONS: Record<Chapter, Chapter[]> = {
+	idle:                ["script", "stage"],
+	script:              ["script-debate", "script-confirm", "idle"],
+	"script-debate":     ["script-confirm", "script", "idle"],
+	"script-confirm":    ["stage", "script", "script-debate", "idle"],
+	stage:               ["paused", "blocked", "curtain"],
+	paused:              ["stage", "curtain", "idle"],
+	blocked:             ["stage", "curtain", "idle"],
+	curtain:             ["idle", "stage"],
 };
 
 /** Pure predicate: is `from → to` a legal transition? (self-loops are legal no-ops) */
-export function canTransition(from: LoopPhase, to: LoopPhase): boolean {
+export function canTransition(from: Chapter, to: Chapter): boolean {
 	if (from === to) return true;
-	return (LOOP_TRANSITIONS[from] ?? []).includes(to);
+	return (WORKFLOW_TRANSITIONS[from] ?? []).includes(to);
 }
 
 /** Side-effect hooks. All are optional and invoked defensively (errors isolated). */
@@ -100,25 +91,25 @@ export interface StateMachineHooks {
 	 * atomic broadcast point: implementers update StateTracker + ActivityLogger
 	 * + SSE here in one step.
 	 */
-	onEnter?: (phase: LoopPhase, ctx: PhaseContext) => void | Promise<void>;
+	onEnter?: (phase: Chapter, ctx: PhaseContext) => void | Promise<void>;
 	/** Called just before leaving a phase (cleanup of intermediate state). */
-	onExit?: (phase: LoopPhase, ctx: PhaseContext) => void | Promise<void>;
+	onExit?: (phase: Chapter, ctx: PhaseContext) => void | Promise<void>;
 	/** Called when a transition is rejected or a hook throws. */
-	onError?: (from: LoopPhase, to: LoopPhase, reason: string) => void;
+	onError?: (from: Chapter, to: Chapter, reason: string) => void;
 }
 
 export class SwarmStateMachine {
-	#phase: LoopPhase;
+	#phase: Chapter;
 	#hooks: StateMachineHooks;
 	/** Active timed-transition timer (e.g. blocker auto-continue). */
 	#timer: ReturnType<typeof setTimeout> | null = null;
 
-	constructor(initial: LoopPhase = "idle", hooks: StateMachineHooks = {}) {
+	constructor(initial: Chapter = "idle", hooks: StateMachineHooks = {}) {
 		this.#phase = initial;
 		this.#hooks = hooks;
 	}
 
-	get phase(): LoopPhase {
+	get phase(): Chapter {
 		return this.#phase;
 	}
 
@@ -127,12 +118,12 @@ export class SwarmStateMachine {
 	 *
 	 * Policy: illegal transitions are REJECTED (phase unchanged) and reported
 	 * via onError — we never throw, so a single bad transition cannot tear down
-	 * the loop. Use `force()` for legitimate escape hatches (hard abort/reset).
+	 * the workflow. Use `force()` for legitimate escape hatches (hard abort/reset).
 	 *
 	 * Idempotent: `to === current` succeeds as a no-op WITHOUT firing
 	 * onExit/onEnter again (avoids duplicate broadcasts).
 	 */
-	async transition(to: LoopPhase, ctx: PhaseContext = {}): Promise<TransitionResult> {
+	async transition(to: Chapter, ctx: PhaseContext = {}): Promise<TransitionResult> {
 		const from = this.#phase;
 
 		if (to === from) {
@@ -140,7 +131,7 @@ export class SwarmStateMachine {
 		}
 
 		if (!canTransition(from, to)) {
-			const reason = `Illegal LoopPhase transition: ${from} → ${to}`;
+			const reason = `Illegal Chapter transition: ${from} → ${to}`;
 			this.#safeError(from, to, reason);
 			return { ok: false, from, to, reason };
 		}
@@ -152,13 +143,13 @@ export class SwarmStateMachine {
 	 * Force a transition regardless of the table (escape hatch).
 	 * Used for hard abort / reset where any source phase must reach the target.
 	 */
-	async force(to: LoopPhase, ctx: PhaseContext = {}): Promise<TransitionResult> {
+	async force(to: Chapter, ctx: PhaseContext = {}): Promise<TransitionResult> {
 		const from = this.#phase;
 		if (to === from) return { ok: true, from, to, noop: true };
 		return this.#apply(from, to, { ...ctx, forced: true });
 	}
 
-	async #apply(from: LoopPhase, to: LoopPhase, ctx: PhaseContext): Promise<TransitionResult> {
+	async #apply(from: Chapter, to: Chapter, ctx: PhaseContext): Promise<TransitionResult> {
 		// Any pending timed transition is invalidated by an explicit move.
 		this.#clearTimer();
 		try {
@@ -177,15 +168,14 @@ export class SwarmStateMachine {
 
 	/**
 	 * Schedule an automatic transition after `ms` unless a manual transition
-	 * happens first. Models e.g. `blocked --(5min timeout)--> running`
+	 * happens first. Models e.g. `blocked --(5min timeout)--> stage`
 	 * (blocker auto-continue). The timer is cleared by any manual transition.
 	 */
-	scheduleTimed(to: LoopPhase, ms: number, ctx: PhaseContext = {}): void {
+	scheduleTimed(to: Chapter, ms: number, ctx: PhaseContext = {}): void {
 		this.#clearTimer();
 		const armedFrom = this.#phase;
 		this.#timer = setTimeout(() => {
 			this.#timer = null;
-			// Only fire if we are still in the phase we armed from.
 			if (this.#phase === armedFrom) {
 				void this.transition(to, { ...ctx, reason: ctx.reason ?? "timed auto-transition" });
 			}
@@ -204,7 +194,7 @@ export class SwarmStateMachine {
 		}
 	}
 
-	#safeError(from: LoopPhase, to: LoopPhase, reason: string): void {
+	#safeError(from: Chapter, to: Chapter, reason: string): void {
 		try {
 			this.#hooks.onError?.(from, to, reason);
 		} catch {

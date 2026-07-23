@@ -8,7 +8,7 @@
 
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, AfterLoopResult, LoopPhase, BeforeLoopState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
+import type { SwarmState, ActivityEntry, ChatChannel, ChatMessage, CurtainResult, Chapter, ScriptState, TodoItem, BlockerContext, BlockerResolution } from "../lib/types";
 import { api, setActiveSession } from "../lib/api-client";
 import { sseClient, setActiveSSESession } from "../lib/sse-client";
 import { deriveChannel } from "../lib/channel-derivation";
@@ -60,20 +60,20 @@ function applyPipelineStateEntry(
 }
 
 /**
- * The set of LoopPhase values the backend SwarmStateMachine broadcasts as
+ * The set of Chapter values the backend SwarmStateMachine broadcasts as
  * authoritative phase events. The frontend adopts these verbatim (pure
  * projection). Other `phase` events (workers/cloner-review/todo-updated/…)
- * are sub-events and must NOT be treated as a LoopPhase.
+ * are sub-events and must NOT be treated as a Chapter.
  */
 const AUTHORITATIVE_LOOP_PHASES = new Set<string>([
   "idle",
-  "before-loop-dialog",
-  "before-loop-debate",
-  "before-loop-confirm",
-  "running",
+  "script",
+  "script-debate",
+  "script-confirm",
+  "stage",
   "paused",
   "blocked",
-  "after-loop",
+  "curtain",
 ]);
 
 interface SwarmStore {
@@ -91,11 +91,11 @@ interface SwarmStore {
    */
   connectionStatus: "connecting" | "live" | "reconnecting";
   isRunning: boolean;
-  loopPhase: LoopPhase;
-  beforeLoopState: BeforeLoopState | null;
+  phase: Chapter;
+  scriptState: ScriptState | null;
   planVersion: number;
   todos: TodoItem[];
-  afterLoopResult: AfterLoopResult | null;
+  curtainResult: CurtainResult | null;
   blockerContext: BlockerContext | null;
   error: string | null;
   /** P2-5: Latest convergence values for trend display. */
@@ -112,7 +112,7 @@ interface SwarmStore {
   refreshState: () => Promise<void>;
   startRun: () => Promise<void>;
   stopRun: () => Promise<void>;
-  fetchAfterLoopResult: () => Promise<void>;
+  fetchCurtainResult: () => Promise<void>;
 
   // Pause / Resume
   pauseRun: () => Promise<void>;
@@ -120,13 +120,13 @@ interface SwarmStore {
 
   // Before Loop actions
   startPlanning: (task: string) => Promise<void>;
-  sendBeforeLoopMessage: (text: string) => Promise<void>;
+  sendScriptMessage: (text: string) => Promise<void>;
   runDebate: () => Promise<void>;
   confirmAndStart: () => Promise<void>;
-  cancelBeforeLoop: () => Promise<void>;
-  refreshBeforeLoopState: () => Promise<void>;
-  /** P2-2: Load before-loop conversation history. */
-  loadBeforeLoopHistory: () => Promise<Array<{ role: string; content: string }>>;
+  cancelScript: () => Promise<void>;
+  refreshScriptState: () => Promise<void>;
+  /** P2-2: Load script conversation history. */
+  loadScriptHistory: () => Promise<Array<{ role: string; content: string }>>;
 
   // Steering (during running loop)
   sendSteering: (text: string) => Promise<void>;
@@ -221,11 +221,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   isConnected: false,
   connectionStatus: "connecting",
   isRunning: false,
-  loopPhase: "idle",
-  beforeLoopState: null,
+  phase: "idle",
+  scriptState: null,
   planVersion: 0,
   todos: [],
-  afterLoopResult: null,
+  curtainResult: null,
   blockerContext: null,
   error: null,
   convergenceHistory: [],
@@ -311,11 +311,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // getState() may resolve to null/undefined. We must NOT blindly overwrite
         // swarmState with a falsy value — that is what made the right-hand panel
         // vanish. Preserve any existing state and only merge when we actually
-        // received one. loopPhase is also read defensively via optional chaining.
+        // received one. phase is also read defensively via optional chaining.
         set((prev) => ({
           swarmState: state ?? prev.swarmState,
           isRunning: runStatus.running,
-          loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
+          phase: state?.phase ?? (runStatus.running ? "stage" : "idle"),
           error: null,
         }));
       } catch (apiErr: any) {
@@ -343,7 +343,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           const fallback = "SatoPi";
           setActiveSession(fallback);
           setActiveSSESession(fallback);
-          set({ loopPhase: "idle", isRunning: false, error: null });
+          set({ phase: "idle", isRunning: false, error: null });
           // Re-init with the fallback session.
           (get() as any).__initRunning = false;
           get().init();
@@ -352,12 +352,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         set({ error: msg });
       }
 
-      // Fetch before-loop state if in a before-loop phase
-      const phase = get().loopPhase;
-      if (phase.startsWith("before-loop")) {
+      // Fetch script state if in a script phase
+      const phase = get().phase;
+      if (phase.startsWith("script")) {
         try {
-          const blState = await api.getBeforeLoopState();
-          set({ beforeLoopState: blState });
+          const blState = await api.getScriptState();
+          set({ scriptState: blState });
           // Conversation history is NOT loaded separately — the activity log
           // replay below (api.getHistory → addActivity) already carries every
           // broadcast event (operator + socrates messages) from session.jsonl.
@@ -368,10 +368,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
       }
 
-      // Fetch any existing after-loop result from a previous run
+      // Fetch any existing curtain result from a previous run
       try {
-        const afterLoop = await api.getAfterLoopSummary();
-        set({ afterLoopResult: afterLoop });
+        const afterLoop = await api.getCurtainSummary();
+        set({ curtainResult: afterLoop });
       } catch {
         // 404 is expected when no run has completed yet
       }
@@ -445,15 +445,15 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           const p = entry.phase ?? "";
 
           // ── Single authority: the backend SwarmStateMachine emits an
-          // authoritative `phase` event for every LoopPhase transition. The
+          // authoritative `phase` event for every Chapter transition. The
           // frontend is a PURE PROJECTION — adopt any authoritative phase
-          // directly, with no local inference. Non-LoopPhase phase events
+          // directly, with no local inference. Non-Chapter phase events
           // (workers / cloner-review / todo-updated / etc.) are sub-events
           // handled by their own side-effects below.
           if (AUTHORITATIVE_LOOP_PHASES.has(p)) {
-            const phase = p as LoopPhase;
+            const phase = p as Chapter;
             set((s) => ({
-              loopPhase: phase,
+              phase: phase,
               // blockerContext is only meaningful while blocked; clear it on
               // any transition away from "blocked".
               blockerContext: phase === "blocked" ? s.blockerContext : null,
@@ -474,26 +474,26 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }
 
           // After-loop-done → fetch result
-          if (p === "after-loop-done") {
-            setTimeout(() => get().fetchAfterLoopResult(), 500);
+          if (p === "curtain-done") {
+            setTimeout(() => get().fetchCurtainResult(), 500);
           }
 
-          // Refresh before-loop state on relevant phase events
-          if (p.startsWith("before-loop") || p === "debate-start" || p === "debate-done") {
-            setTimeout(() => get().refreshBeforeLoopState(), 300);
+          // Refresh script state on relevant phase events
+          if (p.startsWith("script") || p === "debate-start" || p === "debate-done") {
+            setTimeout(() => get().refreshScriptState(), 300);
           }
         }
 
-        // Broadcast messages in before-loop: also refresh before-loop state
+        // Broadcast messages in script: also refresh script state
         // (to detect planReady changes)
         if (entry.type === "broadcast" && entry.from === "socrates") {
-          setTimeout(() => get().refreshBeforeLoopState(), 300);
+          setTimeout(() => get().refreshScriptState(), 300);
         }
 
-        // Stream ended from Socrates during before-loop — unlock the input
+        // Stream ended from Socrates during script — unlock the input
         // immediately instead of waiting for the next phase event.
-        if (entry.type === "stream_end" && entry.from === "socrates" && get().loopPhase.startsWith("before-loop")) {
-          get().refreshBeforeLoopState();
+        if (entry.type === "stream_end" && entry.from === "socrates" && get().phase.startsWith("script")) {
+          get().refreshScriptState();
         }
 
         // P2-5: Track convergence events.
@@ -816,12 +816,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       ]);
       const wasRunning = get().isRunning;
       const nowRunning = runStatus.running;
-      // Backend is the single authority for loopPhase (StateTracker.state.loopPhase
+      // Backend is the single authority for phase (StateTracker.state.phase
       // is set atomically by the SwarmStateMachine). Polling adopts it directly —
       // the previous "keep blocked" guard is no longer needed because the backend
       // holds "blocked" until the blocker is resolved, so the polled value already
       // reflects it. Only fall back to a derived phase when the backend has none.
-      const polledPhase = state?.loopPhase ?? (nowRunning ? "running" : "idle");
+      const polledPhase = state?.phase ?? (nowRunning ? "stage" : "idle");
 
       set({
         // Guard against null API response — a brand-new session may not
@@ -829,15 +829,15 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // and cause the right panel (ContextPanel) to disappear.
         swarmState: state || get().swarmState,
         isRunning: nowRunning,
-        loopPhase: polledPhase,
+        phase: polledPhase,
         todos: state?.todos ?? [],
         error: null,
       });
 
-      // When a run transitions from running → stopped, fetch after-loop result
+      // When a run transitions from running → stopped, fetch curtain result
       if (wasRunning && !nowRunning) {
-        // Small delay to let the after-loop pipeline finish writing
-        setTimeout(() => get().fetchAfterLoopResult(), 1000);
+        // Small delay to let the curtain pipeline finish writing
+        setTimeout(() => get().fetchCurtainResult(), 1000);
       }
     } catch (err) {
       set({ error: String(err) });
@@ -848,7 +848,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     try {
       const result = await api.startRun();
       if (result.success) {
-        set({ isRunning: true, loopPhase: "running", afterLoopResult: null, error: null });
+        set({ isRunning: true, phase: "stage", curtainResult: null, error: null });
       } else {
         set({ error: result.error ?? "Failed to start" });
       }
@@ -870,12 +870,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  fetchAfterLoopResult: async () => {
+  fetchCurtainResult: async () => {
     try {
-      const result = await api.getAfterLoopSummary();
-      set({ afterLoopResult: result, loopPhase: "idle" });
+      const result = await api.getCurtainSummary();
+      set({ curtainResult: result, phase: "idle" });
     } catch {
-      // 404 is expected when no after-loop result is available
+      // 404 is expected when no curtain result is available
     }
   },
 
@@ -885,7 +885,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     try {
       const result = await api.pauseRun();
       if (result.success) {
-        set({ loopPhase: "paused" });
+        set({ phase: "paused" });
         toast.info("Swarm Paused", { description: "Workers have been paused. Click Resume to continue." });
       } else {
         toast.error("Failed to pause", { description: result.error ?? "Unknown error" });
@@ -899,7 +899,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     try {
       const result = await api.resumeRun();
       if (result.success) {
-        set({ loopPhase: "running" });
+        set({ phase: "stage" });
         toast.success("Swarm Resumed", { description: "Workers are continuing." });
       } else {
         toast.error("Failed to resume", { description: result.error ?? "Unknown error" });
@@ -921,13 +921,13 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     // costs at most 2 s but prevents silent event loss.
     await waitForSSE(sseClient, 2000);
     try {
-      const result = await api.startBeforeLoop(task);
+      const result = await api.startScript(task);
       if (result.success) {
-        set({ loopPhase: "before-loop-dialog", error: null });
+        set({ phase: "script", error: null });
         // Switch to roundtable channel to see Socrates dialogue
         set({ activeChannelId: "roundtable" });
-        // Refresh before-loop state
-        setTimeout(() => get().refreshBeforeLoopState(), 500);
+        // Refresh script state
+        setTimeout(() => get().refreshScriptState(), 500);
       } else {
         set({ error: result.error ?? "Failed to start planning" });
       }
@@ -936,12 +936,12 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  sendBeforeLoopMessage: async (text: string) => {
+  sendScriptMessage: async (text: string) => {
     // Optimistically add user's message to chat for instant display
     pushUserMessage(set, text);
     await waitForSSE(sseClient, 2000);
     try {
-      const result = await api.sendBeforeLoopMessage(text);
+      const result = await api.sendScriptMessage(text);
       if (!result.success) {
         set({ error: result.error ?? "Failed to send message" });
       }
@@ -955,7 +955,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     try {
       const result = await api.runDebate();
       if (result.success) {
-        set({ loopPhase: "before-loop-debate", error: null });
+        set({ phase: "script-debate", error: null });
       } else {
         set({ error: result.error ?? "Failed to start debate" });
       }
@@ -966,9 +966,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
   confirmAndStart: async (opts?: { workerCount?: number; clonerCount?: number }) => {
     try {
-      const result = await api.confirmBeforeLoop(opts);
+      const result = await api.confirmScript(opts);
       if (result.success) {
-        set({ loopPhase: "running", isRunning: true, afterLoopResult: null, error: null });
+        set({ phase: "stage", isRunning: true, curtainResult: null, error: null });
       } else {
         set({ error: result.error ?? "Failed to confirm" });
       }
@@ -977,11 +977,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  cancelBeforeLoop: async () => {
+  cancelScript: async () => {
     try {
-      const result = await api.cancelBeforeLoop();
+      const result = await api.cancelScript();
       if (result.success) {
-        set({ loopPhase: "idle", beforeLoopState: null, error: null });
+        set({ phase: "idle", scriptState: null, error: null });
       } else {
         set({ error: result.error ?? "Failed to cancel" });
       }
@@ -990,24 +990,24 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  refreshBeforeLoopState: async () => {
+  refreshScriptState: async () => {
     try {
-      const blState = await api.getBeforeLoopState();
-      set({ beforeLoopState: blState, loopPhase: blState.phase });
+      const blState = await api.getScriptState();
+      set({ scriptState: blState, phase: blState.phase });
 
       // If debate finished, update phase
-      if (blState.phase === "before-loop-confirm") {
-        set({ loopPhase: "before-loop-confirm" });
+      if (blState.phase === "script-confirm") {
+        set({ phase: "script-confirm" });
       }
     } catch {
       // Before-loop manager might not be available
     }
   },
 
-  // P2-2: Load before-loop conversation history.
-  loadBeforeLoopHistory: async () => {
+  // P2-2: Load script conversation history.
+  loadScriptHistory: async () => {
     try {
-      const result = await api.getBeforeLoopHistory();
+      const result = await api.loadScriptHistory();
       return result.history ?? [];
     } catch {
       return [];
@@ -1036,7 +1036,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     try {
       const result = await api.resolveBlocker(decision);
       if (result.success) {
-        set({ blockerContext: null, loopPhase: decision === "abort" ? "idle" : "running", error: null });
+        set({ blockerContext: null, phase: decision === "abort" ? "idle" : "stage", error: null });
         if (decision === "abort") {
           toast.info("Run Aborted", { description: "The swarm run has been stopped." });
         }
@@ -1082,11 +1082,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       messages: new Map(),
       activeChannelId: "roundtable",
       isRunning: false,
-      loopPhase: "idle",
-      beforeLoopState: null,
+      phase: "idle",
+      scriptState: null,
       planVersion: 0,
       todos: [],
-      afterLoopResult: null,
+      curtainResult: null,
       blockerContext: null,
       error: null,
       convergenceHistory: [],
@@ -1165,9 +1165,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         if (entry.type === "phase") {
           const p = entry.phase ?? "";
           if (AUTHORITATIVE_LOOP_PHASES.has(p)) {
-            const phase = p as LoopPhase;
+            const phase = p as Chapter;
             set((s) => ({
-              loopPhase: phase,
+              phase: phase,
               blockerContext: phase === "blocked" ? s.blockerContext : null,
             }));
             if (phase === "blocked") {
@@ -1176,18 +1176,18 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }
           if (p === "plan-updated") set((s) => ({ planVersion: s.planVersion + 1 }));
           if (p === "todo-updated") setTimeout(() => get().refreshState(), 100);
-          if (p === "after-loop-done") setTimeout(() => get().fetchAfterLoopResult(), 500);
-          if (p.startsWith("before-loop") || p === "debate-start" || p === "debate-done") {
-            setTimeout(() => get().refreshBeforeLoopState(), 300);
+          if (p === "curtain-done") setTimeout(() => get().fetchCurtainResult(), 500);
+          if (p.startsWith("script") || p === "debate-start" || p === "debate-done") {
+            setTimeout(() => get().refreshScriptState(), 300);
           }
         }
 
         if (entry.type === "broadcast" && entry.from === "socrates") {
-          setTimeout(() => get().refreshBeforeLoopState(), 300);
+          setTimeout(() => get().refreshScriptState(), 300);
         }
 
-        if (entry.type === "stream_end" && entry.from === "socrates" && get().loopPhase.startsWith("before-loop")) {
-          get().refreshBeforeLoopState();
+        if (entry.type === "stream_end" && entry.from === "socrates" && get().phase.startsWith("script")) {
+          get().refreshScriptState();
         }
 
         if (entry.type === "convergence" && entry.jaccard !== undefined) {
@@ -1295,17 +1295,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       set((prev) => ({
         swarmState: state ?? prev.swarmState,
         isRunning: runStatus.running,
-        loopPhase: state?.loopPhase ?? (runStatus.running ? "running" : "idle"),
+        phase: state?.phase ?? (runStatus.running ? "stage" : "idle"),
         error: null,
       }));
     } catch { /* brand-new session may not have state yet */ }
 
-    // 5. Fetch before-loop / after-loop state if applicable.
-    const phase = get().loopPhase;
-    if (phase.startsWith("before-loop")) {
-      try { set({ beforeLoopState: await api.getBeforeLoopState() }); } catch {}
+    // 5. Fetch script / curtain state if applicable.
+    const phase = get().phase;
+    if (phase.startsWith("script")) {
+      try { set({ scriptState: await api.getScriptState() }); } catch {}
     }
-    try { set({ afterLoopResult: await api.getAfterLoopSummary() }); } catch {}
+    try { set({ curtainResult: await api.getCurtainSummary() }); } catch {}
 
     // 6. Replay history.
     try {

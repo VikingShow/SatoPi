@@ -36,7 +36,7 @@ const { api } = await import("../api-client");
 
 describe("api.getState", () => {
   it("returns SwarmState on success", async () => {
-    const state = { name: "demo", status: "idle", loopPhase: "before-loop-dialog" };
+    const state = { name: "demo", status: "idle", phase: "script-dialog" };
     mockOk(state);
     const result = await api.getState();
     expect(result).toEqual(state);
@@ -57,12 +57,12 @@ describe("api.getConfig", () => {
   });
 });
 
-describe("api.startBeforeLoop", () => {
+describe("api.startScript", () => {
   it("POSTs task and returns success", async () => {
     mockOk({ success: true });
-    const result = await api.startBeforeLoop("build auth");
+    const result = await api.startScript("build auth");
     expect(result.success).toBe(true);
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/before-loop/start", expect.objectContaining({
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/script/start", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ task: "build auth" }),
     }));
@@ -70,18 +70,18 @@ describe("api.startBeforeLoop", () => {
 
   it("returns error from backend", async () => {
     mockOk({ success: false, error: "Already running" });
-    const result = await api.startBeforeLoop("test");
+    const result = await api.startScript("test");
     expect(result.success).toBe(false);
     expect(result.error).toBe("Already running");
   });
 });
 
-describe("api.cancelBeforeLoop", () => {
+describe("api.cancelScript", () => {
   it("sends POST with no body", async () => {
     mockOk({ success: true });
-    const result = await api.cancelBeforeLoop();
+    const result = await api.cancelScript();
     expect(result.success).toBe(true);
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/before-loop/cancel", expect.objectContaining({ method: "POST" }));
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/script/cancel", expect.objectContaining({ method: "POST" }));
   });
 });
 

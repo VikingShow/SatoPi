@@ -5,16 +5,16 @@
  *   1. start(task) → spawn Socrates agent → output via SSE → frontend ChatView
  *   2. sendMessage(text) → user msg via SSE → spawn Socrates with full history → output via SSE
  *   3. runDebate() → runPlanDebate() → refined plan.md → plan-updated event via SSE
- *   4. confirm() → SwarmRunManager.start() → loop runs → phase becomes "running"
+ *   4. confirm() → SwarmRunManager.start() → loop runs → phase becomes "stage"
  *
- * Each stage updates StateTracker.loopPhase so the frontend can react.
+ * Each stage updates StateTracker.phase so the frontend can react.
  * All agent output is pushed to the frontend via ActivityLogger → SSE.
  */
 
 import * as fs from "node:fs/promises";
 import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { StateTracker, LoopPhase } from "./state";
+import type { StateTracker, Chapter } from "./state";
 import type { ActivityLogger } from "./activity-logger";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { RunManager } from "./monitor/api-routes";
@@ -30,7 +30,7 @@ import SOCRATES_SYSTEM_PROMPT from "./prompts/socrates.hbs" with { type: "text" 
 // ============================================================================
 
 export interface BeforeLoopState {
-	phase: LoopPhase;
+	phase: Chapter;
 	task: string;
 	conversationLength: number;
 	planReady: boolean;
@@ -113,7 +113,7 @@ export class BeforeLoopManager {
 
 	#conversation: ConversationTurn[] = [];
 	#taskDescription = "";
-	#phase: LoopPhase = "idle";
+	#phase: Chapter = "idle";
 	#busy = false;
 	#planReady = false;
 	#planMtime = 0;
@@ -198,7 +198,7 @@ export class BeforeLoopManager {
 		if (this.#busy) {
 			return { success: false, error: "Socrates is still thinking. Please wait." };
 		}
-		if (this.#phase !== "idle" && this.#phase !== "after-loop") {
+		if (this.#phase !== "idle" && this.#phase !== "curtain") {
 			return { success: false, error: `Before-loop already in progress (phase: ${this.#phase})` };
 		}
 
@@ -214,10 +214,10 @@ export class BeforeLoopManager {
 		this.#planReady = false;
 		this.#recommendedWorkers = undefined;
 		this.#recommendedCloners = undefined;
-		this.#phase = "before-loop-dialog";
-		await this.#setPhase("before-loop-dialog");
+		this.#phase = "script";
+		await this.#setPhase("script");
 
-		this.#activityLogger.logPhase("before-loop-start");
+		this.#activityLogger.logPhase("script-start");
 		this.#activityLogger.logBroadcast("operator", task);
 
 		// Generate planning prompt (queries experience store for past lessons).
@@ -253,7 +253,7 @@ export class BeforeLoopManager {
 		if (this.#busy) {
 			return { success: false, error: "Socrates is still thinking. Please wait." };
 		}
-		if (this.#phase !== "before-loop-dialog") {
+		if (this.#phase !== "script") {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
 
@@ -283,12 +283,12 @@ export class BeforeLoopManager {
 		if (this.#busy) {
 			return { success: false, error: "Socrates is still thinking. Please wait." };
 		}
-		if (this.#phase !== "before-loop-dialog" && this.#phase !== "before-loop-confirm") {
+		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot run debate in phase: ${this.#phase}` };
 		}
 
-		this.#phase = "before-loop-debate";
-		await this.#setPhase("before-loop-debate");
+		this.#phase = "script-debate";
+		await this.#setPhase("script-debate");
 		this.#activityLogger.logPhase("debate-start");
 		this.#activityLogger.logBroadcast("system", "Starting plan debate (Cloner Roundtable)...");
 
@@ -332,13 +332,13 @@ export class BeforeLoopManager {
 					`Plan debate ${result.converged ? "converged" : "completed"} (${result.refined ? "refined" : "unchanged"}). Review the plan and click "Confirm & Start" to begin.`,
 				);
 
-				this.#phase = "before-loop-confirm";
-				await this.#setPhase("before-loop-confirm");
+				this.#phase = "script-confirm";
+				await this.#setPhase("script-confirm");
 			} catch (err) {
 				logger.error("Plan debate failed", { error: String(err) });
 				this.#activityLogger.logBroadcast("system", `[Error] Debate failed: ${String(err)}`);
-				this.#phase = "before-loop-dialog";
-				await this.#setPhase("before-loop-dialog");
+				this.#phase = "script";
+				await this.#setPhase("script");
 			} finally {
 				this.#busy = false;
 			}
@@ -358,7 +358,7 @@ export class BeforeLoopManager {
 		if (this.#busy) {
 			return { success: false, error: "Socrates or debate is still running. Please wait." };
 		}
-		if (this.#phase !== "before-loop-dialog" && this.#phase !== "before-loop-confirm") {
+		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
 		}
 
@@ -393,16 +393,16 @@ export class BeforeLoopManager {
 			}
 		}
 
-		this.#phase = "running";
-		await this.#setPhase("running");
+		this.#phase = "stage";
+		await this.#setPhase("stage");
 
 		// Delegate to RunManager which stamps plan.md and runs the loop
 		const result = await this.#runManager.start();
 
 		if (!result.success) {
 			// Revert phase on failure
-			this.#phase = "before-loop-confirm";
-			await this.#setPhase("before-loop-confirm");
+			this.#phase = "script-confirm";
+			await this.#setPhase("script-confirm");
 			this.#activityLogger.logBroadcast("system", `Failed to start loop: ${result.error}`);
 		}
 
@@ -420,7 +420,7 @@ export class BeforeLoopManager {
 		this.#busy = false;
 		this.#phase = "idle";
 		await this.#setPhase("idle");
-		this.#activityLogger.logPhase("before-loop-cancelled");
+		this.#activityLogger.logPhase("script-cancelled");
 		this.#activityLogger.logBroadcast("system", "Before Loop cancelled.");
 		return { success: true };
 	}
@@ -562,8 +562,8 @@ export class BeforeLoopManager {
 	// Internal: helpers
 	// ────────────────────────────────────────────────────────────────────────
 
-	async #setPhase(phase: LoopPhase): Promise<void> {
-		await this.#stateTracker.updatePipeline({ loopPhase: phase });
+	async #setPhase(phase: Chapter): Promise<void> {
+		await this.#stateTracker.updatePipeline({ phase: phase });
 	}
 
 	async #readLoopConfig(): Promise<LoopSwarmConfig | null> {

@@ -3,7 +3,7 @@ import { Crown, FileWarning, Bot, ListTodo, FileText, Brain, TrendingUp, Trendin
 import { useSwarmStore } from "../../stores/swarm-store";
 import PlanViewer from "./PlanViewer";
 import TodoList from "./TodoList";
-import AfterLoopPanel from "./AfterLoopPanel";
+import AfterLoopPanel from "./CurtainPanel";
 import { Button } from "../ui/button";
 
 function WorkerCard({ name, praise, criticism, conflict, status, role }: {
@@ -12,7 +12,7 @@ function WorkerCard({ name, praise, criticism, conflict, status, role }: {
 }) {
   const score = praise - criticism - conflict;
   const scoreColor = score > 0 ? "text-success" : score < 0 ? "text-danger" : "text-muted-foreground";
-  const statusDot = status === "completed" ? "bg-success" : status === "running" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-background-overlay";
+  const statusDot = status === "completed" ? "bg-success" : status === "stage" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-background-overlay";
 
   return (
     <div className="bg-background-elevated rounded px-2.5 py-2 border border-border">

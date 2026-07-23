@@ -227,7 +227,7 @@ export interface LoopSnapshotConfig {
 }
 
 // ============================================================================
-// P4-1: YAML-configured pipeline hooks
+// Lifecycle hooks YAML-configured pipeline hooks
 // ============================================================================
 
 export interface HookConfig {
@@ -293,7 +293,7 @@ export interface AgentToolRestriction {
 }
 
 // ============================================================================
-// P4: Mnemopi semantic recall config
+// Experience Mnemopi semantic recall config
 // ============================================================================
 
 /** Semantic recall configuration powered by mnemopi. */
@@ -309,7 +309,7 @@ export interface MnemopiConfig {
 }
 
 // ============================================================================
-// P7: Stigmergy config
+// Agent identity Stigmergy config
 // ============================================================================
 
 /**
@@ -332,7 +332,7 @@ export interface StigmergyConfig {
 }
 
 // ============================================================================
-// P5.5: Offload pipeline + Mermaid context graph config
+// Offload Offload pipeline + Mermaid context graph config
 // ============================================================================
 
 /**
@@ -395,21 +395,21 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		agentRestrictions: parseAgentRestrictions(
 			raw.agent_restrictions as Record<string, Record<string, unknown>> | undefined,
 		),
-		// P4-1: YAML-configured lifecycle hooks.
+		// Lifecycle hooks YAML-configured lifecycle hooks.
 		hooks: parseHooksConfig(raw.hooks as Record<string, unknown>[] | undefined),
 		// Snapshot / rollback config.
 		snapshot: parseSnapshotConfig(raw.snapshot as Record<string, unknown> | undefined),
-		// P4: Mnemopi semantic recall (opt-in, disabled by default).
+		// Experience Mnemopi semantic recall (opt-in, disabled by default).
 		mnemopi: parseMnemopiConfig(raw.mnemopi as Record<string, unknown> | undefined),
-		// P5.5: Offload pipeline (opt-in, disabled by default).
+		// Offload Offload pipeline (opt-in, disabled by default).
 		offload: parseOffloadConfig(raw.offload as Record<string, unknown> | undefined),
-		// P7: Stigmergy environment (opt-in, disabled by default).
+		// Agent identity Stigmergy environment (opt-in, disabled by default).
 		stigmergy: parseStigmergyConfig(raw.stigmergy as Record<string, unknown> | undefined),
 	};
 }
 
 // ============================================================================
-// P4: Parse Mnemopi config from YAML
+// Experience Parse Mnemopi config from YAML
 // ============================================================================
 
 function parseMnemopiConfig(raw: Record<string, unknown> | undefined): MnemopiConfig | undefined {
@@ -423,7 +423,7 @@ function parseMnemopiConfig(raw: Record<string, unknown> | undefined): MnemopiCo
 }
 
 // ============================================================================
-// P5.5: Parse Offload config from YAML
+// Offload Parse Offload config from YAML
 // ============================================================================
 
 function parseOffloadConfig(raw: Record<string, unknown> | undefined): OffloadConfig | undefined {
@@ -438,7 +438,7 @@ function parseOffloadConfig(raw: Record<string, unknown> | undefined): OffloadCo
 }
 
 // ============================================================================
-// P7: Parse Stigmergy config from YAML
+// Agent identity Parse Stigmergy config from YAML
 // ============================================================================
 
 function parseStigmergyConfig(raw: Record<string, unknown> | undefined): StigmergyConfig | undefined {
@@ -556,7 +556,7 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 			reportsTo: Array.isArray(config.reports_to) ? config.reports_to : [],
 			model: typeof config.model === "string" ? config.model.trim() : undefined,
 			waitsFor: Array.isArray(config.waits_for) ? config.waits_for : [],
-			// P1-5: Tool restrictions per agent.
+			// Tool restriction Tool restrictions per agent.
 			allowedTools: Array.isArray(config.allowed_tools)
 				? config.allowed_tools.map(t => t.trim()).filter(Boolean)
 				: undefined,

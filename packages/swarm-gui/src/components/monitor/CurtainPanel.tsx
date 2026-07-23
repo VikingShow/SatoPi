@@ -28,18 +28,18 @@ const LESSON_COLORS: Record<string, string> = {
   reflection: "text-status-accent",
 };
 
-export default function AfterLoopPanel() {
-  const afterLoopResult = useSwarmStore((s) => s.afterLoopResult);
+export default function CurtainPanel() {
+  const curtainResult = useSwarmStore((s) => s.curtainResult);
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState<ExperienceStats | null>(null);
 
   useEffect(() => {
     api.getExperienceStats().then(setStats).catch(() => {});
-  }, [afterLoopResult]);
+  }, [curtainResult]);
 
-  if (!afterLoopResult) return null;
+  if (!curtainResult) return null;
 
-  const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = afterLoopResult;
+  const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = curtainResult;
   const safeLessons = lessons ?? [];
   const safeRunStats = runStats ?? { workerCount: 0, clonerCount: 0, clonerApprovalRatio: 0 };
   const statusIcon = status === "completed" ? CheckCircle : status === "escalated" ? AlertTriangle : AlertOctagon;

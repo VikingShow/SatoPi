@@ -84,6 +84,14 @@ export interface AgentProfile {
 		/** 引用过此人工作的 Agent ID 列表 */
 		citedBy: string[];
 	};
+
+	// ── 任务统计 (P1: agent-hour estimation) ────────────────────
+	stats: {
+		avgTaskCompletionTime: number;
+		tasksCompletedByDomain: Record<string, number>;
+		preferredRoles: string[];
+		rolePerformance: Record<string, { tasks: number; successRate: number }>;
+	};
 }
 
 // ============================================================================
@@ -169,6 +177,12 @@ export class ProfileRegistry {
 				collaborationCount: 0,
 				citedBy: [],
 			},
+			stats: {
+				avgTaskCompletionTime: 0,
+				tasksCompletedByDomain: {},
+				preferredRoles: [],
+				rolePerformance: {},
+			},
 		};
 
 		this.#profiles.set(opts.profileId, profile);
@@ -221,9 +235,13 @@ export class ProfileRegistry {
 
 	/**
 	 * 记录任务完成。
-	 * 成功完成 → 信用分 +3，update successRate。
+	 * 成功完成 → 信用分 +3，update successRate 和 stats。
 	 */
-	recordTaskCompleted(profileId: string, success: boolean): AgentProfile | undefined {
+	recordTaskCompleted(
+		profileId: string,
+		success: boolean,
+		opts?: { domain?: string; role?: string; durationMs?: number },
+	): AgentProfile | undefined {
 		const profile = this.#profiles.get(profileId);
 		if (!profile) return undefined;
 
@@ -238,7 +256,33 @@ export class ProfileRegistry {
 		const prevSuccess = Math.round((total - 1) * profile.credit.successRate);
 		profile.credit.successRate = (prevSuccess + (success ? 1 : 0)) / total;
 
+		// 更新 stats
+		const s = profile.stats;
+		if (opts?.durationMs !== undefined && opts.durationMs > 0) {
+			s.avgTaskCompletionTime = s.avgTaskCompletionTime > 0
+				? (s.avgTaskCompletionTime * (total - 1) + opts.durationMs) / total
+				: opts.durationMs;
+		}
+		if (opts?.domain) {
+			s.tasksCompletedByDomain[opts.domain] = (s.tasksCompletedByDomain[opts.domain] ?? 0) + 1;
+		}
+		if (opts?.role) {
+			const existing = s.rolePerformance[opts.role];
+			if (existing) {
+				const newTotal = existing.tasks + 1;
+				existing.tasks = newTotal;
+				existing.successRate = (existing.successRate * (newTotal - 1) + (success ? 1 : 0)) / newTotal;
+			} else {
+				s.rolePerformance[opts.role] = { tasks: 1, successRate: success ? 1 : 0 };
+			}
+			// 更新偏好角色排序
+			s.preferredRoles = Object.entries(s.rolePerformance)
+				.sort((a, b) => b[1].tasks - a[1].tasks)
+				.map(([role]) => role);
+		}
+
 		this.#bumpVersion(profileId);
+		this.invalidateRankCache();
 		return profile;
 	}
 

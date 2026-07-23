@@ -1,7 +1,7 @@
 import { useSwarmStore } from "../../stores/swarm-store";
 import { Check, Loader2, AlertTriangle, Pause } from "lucide-react";
 
-import type { LoopPhase } from "../../lib/types";
+import type { Chapter } from "../../lib/types";
 
 /**
  * PhasePipeline — user-readable 6-step progress bar with sub-steps.
@@ -14,7 +14,7 @@ import type { LoopPhase } from "../../lib/types";
 interface Step {
   key: string;
   label: string;
-  internalPhases: LoopPhase[];
+  internalPhases: Chapter[];
   /** Sub-step labels derived from roundtablePhase string matching. */
   subStepPatterns?: Array<{ match: string; label: string }>;
 }
@@ -22,15 +22,15 @@ interface Step {
 const STEPS: Step[] = [
   {
     key: "planning", label: "Plan",
-    internalPhases: ["before-loop-dialog", "before-loop-debate"],
+    internalPhases: ["script", "script-debate"],
   },
   {
     key: "refining", label: "Refine",
-    internalPhases: ["before-loop-confirm"],
+    internalPhases: ["script-confirm"],
   },
   {
     key: "working", label: "Work",
-    internalPhases: ["running", "paused"],  // paused is running suspended
+    internalPhases: ["stage", "paused"],  // paused is running suspended
     subStepPatterns: [
       { match: "Workers executing", label: "Working" },
       { match: "Debate: challenging", label: "Challenging" },
@@ -40,7 +40,7 @@ const STEPS: Step[] = [
   },
   {
     key: "reviewing", label: "Review",
-    internalPhases: [], // activated by roundtablePhase match during "running" or "blocked"
+    internalPhases: [], // activated by roundtablePhase match during "stage" or "blocked"
     subStepPatterns: [
       { match: "Cloners reviewing", label: "Reviewing" },
     ],
@@ -51,18 +51,18 @@ const STEPS: Step[] = [
   },
   {
     key: "summary", label: "Summary",
-    internalPhases: ["after-loop"],
+    internalPhases: ["curtain"],
   },
 ];
 
 export default function PhasePipeline() {
   const swarmState = useSwarmStore((s) => s.swarmState);
-  const loopPhase = useSwarmStore((s) => s.loopPhase);
-  const phase = swarmState?.roundtablePhase ?? "";
+  const phase = useSwarmStore((s) => s.phase);
+  const subPhase = swarmState?.roundtablePhase ?? "";
   const iter = swarmState?.loopIteration ?? 0;
   const maxIter = swarmState?.targetCount ?? 0;
 
-  if (loopPhase === "idle") return null;
+  if (phase === "idle") return null;
 
   /** Return the active sub-step label for a step, or null. */
   function getSubStep(step: Step): string | null {
@@ -78,16 +78,16 @@ export default function PhasePipeline() {
     if (!step) return "pending";
 
     // Blocked phase: special red highlight
-    if (step.internalPhases.includes("blocked") && loopPhase === "blocked") return "blocked";
+    if (step.internalPhases.includes("blocked") && phase === "blocked") return "blocked";
 
     // Paused phase: show pause indicator on the Work step
-    if (loopPhase === "paused" && step.internalPhases.includes("paused")) return "paused";
+    if (phase === "paused" && step.internalPhases.includes("paused")) return "paused";
 
-    // Active: current loopPhase matches
-    if (step.internalPhases.includes(loopPhase)) return "active";
+    // Active: current phase matches
+    if (step.internalPhases.includes(phase)) return "active";
 
     // In Running phase, check roundtablePhase for Review step
-    if (loopPhase === "running") {
+    if (phase === "stage") {
       if (phase.includes("Cloners reviewing") && step.key === "reviewing") return "active";
       if (phase.includes("After Loop") && step.key === "summary") return "active";
       if (phase.includes("After Loop completed")) {
@@ -97,7 +97,7 @@ export default function PhasePipeline() {
     }
 
     // Blocked: prior steps are done
-    if (loopPhase === "blocked") {
+    if (phase === "blocked") {
       const blockedIdx = STEPS.findIndex((s) => s.key === "blocked");
       if (index < blockedIdx) return "done";
     }
@@ -105,8 +105,8 @@ export default function PhasePipeline() {
     // Find active index to mark earlier steps as done
     const activeIdx = STEPS.findIndex(
       (s) =>
-        s.internalPhases.includes(loopPhase) ||
-        (loopPhase === "running" && phase.includes(
+        s.internalPhases.includes(phase) ||
+        (phase === "stage" && phase.includes(
           s.key === "reviewing" ? "Cloners reviewing" : s.key === "summary" ? "After Loop" : "",
         )),
     );

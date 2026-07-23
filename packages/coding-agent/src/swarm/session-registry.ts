@@ -58,10 +58,11 @@ export interface SessionServices {
 	sessionManager?: SwarmSessionManager;
 }
 
+/** High-level session status for the run listing. */
 export type SessionStatus =
 	| "idle"
-	| "before-loop"
-	| "running"
+	| "script"
+	| "stage"
 	| "paused"
 	| "blocked"
 	| "completed"
@@ -190,7 +191,7 @@ export class SessionRegistry {
 			if (snapshot) {
 				services.stateTracker.updatePipeline(snapshot);
 				logger.info("[SessionRegistry] seeded StateTracker from persisted snapshot", {
-					name, status: snapshot.status, loopPhase: snapshot.loopPhase,
+					name, status: snapshot.status, phase: snapshot.phase,
 				});
 			}
 		}

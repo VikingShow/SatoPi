@@ -10,19 +10,19 @@ export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "abor
 /**
  * Loop phase — high-level workflow stage.
  * Drives the frontend UI state machine.
- * idle → before-loop-dialog → before-loop-debate → before-loop-confirm → running → after-loop → idle
+ * idle → script-dialog → script-debate → script-confirm → running → curtain → idle
  * running can transition to "blocked" (stagnation/deadlock) → user resolves → running
  * running can transition to "paused" (manual pause) → user resumes → running
  */
-export type LoopPhase =
+export type Chapter =
   | "idle"
-  | "before-loop-dialog"
-  | "before-loop-debate"
-  | "before-loop-confirm"
-  | "running"
+  | "script"
+  | "script-debate"
+  | "script-confirm"
+  | "stage"
   | "paused"
   | "blocked"
-  | "after-loop";
+  | "curtain";
 
 /** Context payload broadcast when the loop is blocked awaiting user decision. */
 export interface BlockerContext {
@@ -40,8 +40,8 @@ export interface BlockerContext {
 
 export type BlockerResolution = "continue" | "skip" | "abort";
 
-export interface BeforeLoopState {
-  phase: LoopPhase;
+export interface ScriptState {
+  phase: Chapter;
   task: string;
   conversationLength: number;
   planReady: boolean;
@@ -92,7 +92,7 @@ export interface SwarmState {
   loopIteration?: number;
   roundtablePhase?: string;
   reviewVerdict?: string;
-  loopPhase?: LoopPhase;
+  phase?: Chapter;
   todos?: TodoItem[];
   /** P2-6: Cumulative input+output tokens across all agents. */
   totalTokens?: number;
@@ -190,7 +190,7 @@ export interface ExperienceLesson {
   source: string;
 }
 
-export interface AfterLoopResult {
+export interface CurtainResult {
   runId: string;
   status: string;
   iterations: number;

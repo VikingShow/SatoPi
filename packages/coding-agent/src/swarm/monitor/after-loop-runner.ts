@@ -49,7 +49,7 @@ export async function runAfterLoopPipeline(
     if (!vResult.passed && loopConfig.verification.blocking) {
       logger.info("[AfterLoop] Verification failed (blocking) — returning to running");
       activityLogger.logBroadcast("system", "[verification] Blocking failure — returning to running for another iteration");
-      await stateTracker.updatePipeline({ loopPhase: "running", status: "running", roundtablePhase: "Verification failed — re-running" });
+      await stateTracker.updatePipeline({ phase: "stage", status: "running", roundtablePhase: "Verification failed — re-running" });
       activityLogger.logPhase("loop-start");
       try {
         const restartResult = await loopController.runLoop({
@@ -68,8 +68,8 @@ export async function runAfterLoopPipeline(
 
   try {
     // 1. Phase → after-loop
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop: extracting lessons", loopPhase: "after-loop" });
-    activityLogger.logPhase("after-loop", undefined, result.iterations);
+    await stateTracker.updatePipeline({ roundtablePhase: "Curtain: extracting lessons", phase: "curtain" });
+    activityLogger.logPhase("curtain", undefined, result.iterations);
 
     // 2. Agent counts
     const agents = stateTracker.state.agents;
@@ -80,7 +80,7 @@ export async function runAfterLoopPipeline(
     const extraction = extractLessons(result, workerCount, clonerCount);
     logger.info("[AfterLoop] Extracted lessons", { count: extraction.lessons.length });
 
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop: deep reflection" });
+    await stateTracker.updatePipeline({ roundtablePhase: "Curtain: deep reflection" });
 
     // 4. Deep reflection (LLM, best-effort)
     let reflection = null;
@@ -97,7 +97,7 @@ export async function runAfterLoopPipeline(
       logger.warn("[AfterLoop] Deep reflection failed", { error: String(reflectErr) });
     }
 
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop: saving experience" });
+    await stateTracker.updatePipeline({ roundtablePhase: "Curtain: saving experience" });
 
     // 5. Save lessons
     const referencedRunIds: string[] = [];
@@ -119,7 +119,7 @@ export async function runAfterLoopPipeline(
     logger.info("[AfterLoop] Summary written", { path: `.omp/experience/summaries/${runId}.md` });
 
     // 7. Archive plan.md — plan lives in per-session swarm dir, archives in workspace .omp/plans/
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop: archiving plan" });
+    await stateTracker.updatePipeline({ roundtablePhase: "Curtain: archiving plan" });
     try {
       const { archivePlanForHistory } = await import("../before-loop");
       await archivePlanForHistory(stateTracker.swarmDir, workspace);
@@ -155,14 +155,14 @@ export async function runAfterLoopPipeline(
     };
 
     // 10. Phase → completed
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop completed", loopPhase: "idle", status: "completed" });
+    await stateTracker.updatePipeline({ roundtablePhase: "After Loop completed", phase: "idle", status: "completed" });
     activityLogger.logPhase("after-loop-done", undefined, result.iterations);
 
     logger.info("[AfterLoop] Pipeline completed successfully");
     return afterLoopResult;
   } catch (afterLoopErr) {
     logger.error("[AfterLoop] Pipeline failed", { error: String(afterLoopErr) });
-    await stateTracker.updatePipeline({ roundtablePhase: "After Loop failed", loopPhase: "idle", status: "failed" });
+    await stateTracker.updatePipeline({ roundtablePhase: "After Loop failed", phase: "idle", status: "failed" });
     return null;
   }
 }

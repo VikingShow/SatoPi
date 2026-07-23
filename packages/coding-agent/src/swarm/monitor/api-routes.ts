@@ -239,7 +239,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
 		// Guard: the only valid entry point for starting a run is
-		// POST /before-loop/confirm (via the BeforeLoop flow).
+		// POST /script/confirm (via the BeforeLoop flow).
 		return json({ error: "Use the Before Loop flow to start a run. Direct /run/start is not allowed." }, 400);
 	},
 
@@ -283,7 +283,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	// -- Before Loop (interactive planning) ------------------------------
-	"POST/before-loop/start": async (req, ctx) => {
+	"POST/script/start": async (req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		if (ctx.services.runManager?.isRunning) return json({ error: "A swarm run is already in progress" }, 409);
 		const body = (await req.json().catch(() => ({}))) as { task?: string };
@@ -294,7 +294,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/message": async (req, ctx) => {
+	"POST/script/message": async (req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as { text?: string };
 		if (!body.text || body.text.trim().length === 0) {
@@ -304,23 +304,23 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"GET/before-loop/state": (_req, ctx) => {
+	"GET/script/state": (_req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		return json(ctx.services.beforeLoopManager.getState());
 	},
 
-	"GET/before-loop/history": (_req, ctx) => {
+	"GET/script/history": (_req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		return json({ history: ctx.services.beforeLoopManager.getHistory() });
 	},
 
-	"POST/before-loop/debate": async (_req, ctx) => {
+	"POST/script/debate": async (_req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		const result = await ctx.services.beforeLoopManager.runDebate();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/confirm": async (req, ctx) => {
+	"POST/script/confirm": async (req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as {
 			workerCount?: number;
@@ -333,7 +333,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/cancel": async (_req, ctx) => {
+	"POST/script/cancel": async (_req, ctx) => {
 		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
 		const result = await ctx.services.beforeLoopManager.cancel();
 		return json(result, result.success ? 200 : 500);

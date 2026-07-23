@@ -16,18 +16,20 @@ export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "abor
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 
 /**
- * Loop phase — tracks the high-level workflow stage.
- * Drives the frontend UI state machine via SwarmState.loopPhase.
+ * Workflow phase — tracks the high-level stage.
+ * Drives the frontend UI state machine via SwarmState.phase.
+ *
+ * Lifecycle: idle → script → (script-debate) → script-confirm → stage ↔ (paused | blocked) → curtain → idle
  */
-export type LoopPhase =
+export type Chapter =
 	| "idle"
-	| "before-loop-dialog"
-	| "before-loop-debate"
-	| "before-loop-confirm"
-	| "running"
+	| "script"
+	| "script-debate"
+	| "script-confirm"
+	| "stage"
 	| "paused"
 	| "blocked"
-	| "after-loop";
+	| "curtain";
 
 /**
  * To-Do item — a structured task parsed from plan.md.
@@ -76,13 +78,15 @@ export interface SwarmState {
 	agents: Record<string, AgentState>;
 	startedAt: number;
 	completedAt?: number;
-	/** Loop-specific fields (set when mode === "loop") */
+	/** Iteration counter (set during Stage phase). */
 	loopIteration?: number;
+	/** Sub-phase label string for UI display. */
 	roundtablePhase?: string;
+	/** Review verdict summary string. */
 	reviewVerdict?: string;
 	/** High-level workflow phase — drives frontend UI state machine. */
-	loopPhase?: LoopPhase;
-	/** To-Do items parsed from plan.md — tracked during loop execution. */
+	phase?: Chapter;
+	/** To-Do items parsed from plan.md — tracked during execution. */
 	todos?: TodoItem[];
 	/** Cumulative input+output token usage across all agents in this run. */
 	totalTokens?: number;
@@ -125,7 +129,7 @@ export class StateTracker {
 			targetCount: 1,
 			agents: {},
 			startedAt: Date.now(),
-			loopPhase: "idle",
+			phase: "idle",
 		};
 	}
 

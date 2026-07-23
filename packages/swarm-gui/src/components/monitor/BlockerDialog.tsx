@@ -41,14 +41,14 @@ function formatMs(ms: number): string {
  * Glassmorphism design with red/amber accent for urgency.
  */
 export default function BlockerDialog() {
-  const loopPhase = useSwarmStore((s) => s.loopPhase);
+  const phase = useSwarmStore((s) => s.phase);
   const blockerContext = useSwarmStore((s) => s.blockerContext);
   const resolveBlocker = useSwarmStore((s) => s.resolveBlocker);
 
   const [pending, setPending] = useState<BlockerResolution | null>(null);
   const countdown = useCountdown(blockerContext?.deadline);
 
-  if (loopPhase !== "blocked") return null;
+  if (phase !== "blocked") return null;
 
   const handleResolve = async (decision: BlockerResolution) => {
     setPending(decision);
