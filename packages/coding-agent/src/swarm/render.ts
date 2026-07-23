@@ -90,8 +90,8 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 	}
 
 	if (isLoop) {
-		const workers = agents.filter(a => a.name.startsWith("agent-"));
-		const cloners = agents.filter(a => a.name.startsWith("agent-"));
+		const agents = agents.filter(a => a.name.startsWith("agent-"));
+		const reviewers = agents.filter(a => a.name.startsWith("agent-"));
 
 		// Workers section
 		if (workers.length > 0) {
@@ -101,7 +101,7 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 			const reviewer = workers.find(w => w.role === "reviewer");
 			const reviewerTag = reviewer ? `  ${C.magenta}👑 reviewer: ${reviewer.name}${C.reset}` : "";
 			lines.push(
-				`  ${C.bold}Workers${C.reset} (${workers.length}): ${C.green}${wDone} done${C.reset}${wRun > 0 ? ` ${C.yellow}${wRun} running${C.reset}` : ""}${wFail > 0 ? ` ${C.red}${wFail} failed${C.reset}` : ""}${reviewerTag}`,
+				`  ${C.bold}Agents${C.reset} (${workers.length}): ${C.green}${wDone} done${C.reset}${wRun > 0 ? ` ${C.yellow}${wRun} running${C.reset}` : ""}${wFail > 0 ? ` ${C.red}${wFail} failed${C.reset}` : ""}${reviewerTag}`,
 			);
 			for (const w of workers) {
 				lines.push(`    ${formatAgentLine(w)}`);
@@ -113,7 +113,7 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 			const cDone = cloners.filter(a => a.status === "completed").length;
 			const cRun = cloners.filter(a => a.status === "running").length;
 			lines.push(
-				`  ${C.bold}Cloners${C.reset} (${cloners.length}): ${cDone} done${cRun > 0 ? ` ${cRun} running` : ""}`,
+				`  ${C.bold}Reviewers${C.reset} (${cloners.length}): ${cDone} done${cRun > 0 ? ` ${cRun} running` : ""}`,
 			);
 			for (const c of cloners) {
 				lines.push(`    ${formatAgentLine(c)}`);

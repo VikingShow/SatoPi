@@ -362,7 +362,7 @@ export default function ChatView() {
     ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
     ? "Give feedback or guidance..."
-    : "";
+    : isLoopRunning ? "Give feedback or guidance..." : "";
 
   function handleSend() {
     const text = inputText.trim();

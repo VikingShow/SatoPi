@@ -51,7 +51,6 @@ export interface ScriptState {
   /** Extracted from planner recommendation output. */
   recommendedAgents?: number;
   estimatedAgentHours?: number;
-  /** Estimated agent-hours for the plan. */
   estimatedAgentHours?: number;
 }
 
@@ -221,7 +220,7 @@ export interface CurtainResult {
   stats: {
     totalIterations: number;
     finalStatus: string;
-    reviewerApprovalRatio: number;
+    clonerApprovalRatio: number;
     reviewerCount: number;
     agentCount: number;
   };

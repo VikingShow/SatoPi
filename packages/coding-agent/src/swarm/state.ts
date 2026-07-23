@@ -257,7 +257,7 @@ export class StateTracker {
 		if (agent) agent.conflictCount++;
 		await this.#persist();
 		if (this.#onStateChange && agent) {
-			this.#onStateChange({ type: "agent_state", worker: agentId, from: agentId, conflictCount: agent.conflictCount });
+			this.#onStateChange({ type: "agent_state", agent: agentId, from: agentId, conflictCount: agent.conflictCount });
 		}
 	}
 
