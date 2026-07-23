@@ -16,7 +16,7 @@ import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { StateTracker, Chapter } from "./state";
 import type { ActivityLogger } from "./activity-logger";
-import type { ExperienceStore } from "./after-loop/experience";
+import type { ExperienceStore } from "./curtain/experience";
 import type { RunManager } from "./monitor/api-routes";
 import type { SwarmSessionManager } from "./swarm-session-manager";
 import type { ProfileRegistry } from "./agent-profile";
@@ -150,7 +150,7 @@ export class ScriptManager {
 		await this.#setPhase("script");
 
 		this.#activityLogger.logPhase("script-start");
-		this.#activityLogger.logBroadcast("operator", task);
+		this.#activityLogger.logBroadcast("human", task);
 
 		await generatePlanningPrompt(
 			{ swarmDir: this.#swarmDir, workspace: this.#workspace, loopConfig, taskDescription: task },
@@ -175,7 +175,7 @@ export class ScriptManager {
 		if (this.#phase !== "script") {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
-		this.#activityLogger.logBroadcast("operator", text);
+		this.#activityLogger.logBroadcast("human", text);
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
 		this.#planMtime = await this.#getPlanMtime();

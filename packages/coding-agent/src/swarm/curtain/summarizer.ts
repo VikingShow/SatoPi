@@ -43,7 +43,7 @@ export interface SummaryData {
  * Generate a human-readable run summary from extraction results.
  *
  * This is a template-based approach. For production use, the summary
- * generation can be passed to the Cloner agent for LLM-based refinement.
+ * generation can be passed to the reporter agent for LLM-based refinement.
  */
 export function generateRunSummary(runId: string, result: ExtractionResult): RunSummary {
 	const { lessons, stats } = result;
@@ -102,7 +102,7 @@ function generateMarkdownSummary(data: SummaryData, totalLessons: number): strin
 		`| Status | ${statusEmoji} ${data.status} |`,
 		`| Iterations | ${data.iterations} |`,
 		`| Workers | ${data.agentCount} |`,
-		`| Reviewers | ${data.reviewerCount} |`,
+		`| Agents | ${data.reviewerCount} |`,
 		`| Review Approval | ${Math.round(data.reviewApprovalRatio * 100)}% |`,
 		`| Lessons Extracted | ${totalLessons} |`,
 		``,

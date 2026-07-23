@@ -231,7 +231,7 @@ export class RoleAssetManager {
       name: input.name,
       description: input.description,
       version: 1,
-      author: input.author ?? "operator",
+      author: input.author ?? "human",
       status: "draft",
       pool: input.pool ?? "workers",
       prompts: {

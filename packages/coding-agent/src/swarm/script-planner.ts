@@ -19,7 +19,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExperienceStore } from "./after-loop/experience";
+import type { ExperienceStore } from "./curtain/experience";
 import type { LoopSwarmConfig } from "./schema";
 import { getSessionPlanPath, getPlanArchiveDir, getSessionOmpDir } from "./plan-paths";
 

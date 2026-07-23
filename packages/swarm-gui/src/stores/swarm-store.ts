@@ -164,7 +164,7 @@ function pushUserMessage(
     msgList.push({
       id,
       channelId: "roundtable",
-      from: "operator",
+      from: "human",
       to: "all",
       body,
       timestamp: ts,
@@ -784,9 +784,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const seq = state.activities.length;
       const derived = deriveChannel(entry, seq);
       if (derived) {
-        const isOperatorEcho = !fromHistory &&
+        const isHumanEcho = !fromHistory &&
           (entry.type === "broadcast" || entry.type === "steering") &&
-          entry.from === "operator";
+          entry.from === "human";
 
         const existing = channels.get(derived.id);
         if (!existing) {
@@ -797,7 +797,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           if (state.activeChannelId !== derived.id) existing.unreadCount++;
         }
 
-        if (!isOperatorEcho) {
+        if (!isHumanEcho) {
           const msgList = [...(messages.get(derived.id) ?? [])];
           msgList.push(derived.message);
           messages.set(derived.id, msgList);

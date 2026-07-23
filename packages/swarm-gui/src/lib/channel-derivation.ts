@@ -31,7 +31,7 @@ export function deriveChannel(
     }
     case "steering": {
       // Operator steering to "all" → goes to roundtable (main chat)
-      if (entry.from === "operator" && entry.to === "all") {
+      if (entry.from === "human" && entry.to === "all") {
         const id = "roundtable";
         return {
           id,

@@ -37,7 +37,7 @@ export interface ExperienceEntry {
 	stats: LoopRunStats;
 	/** Experience quality weight (0.1–5.0). Initial 1.0, boosted on reference, decayed when unreferenced. */
 	weight?: number;
-	/** ISO timestamp of last reference by a Cloner during planning. */
+	/** ISO timestamp of last reference by a reviewer during planning. */
 	lastReferencedAt?: string;
 }
 
@@ -103,8 +103,8 @@ const SYNONYMS: Record<string, string[]> = {
 	convergence: ["收敛"],
 	converge: ["收敛"],
 	review: ["审查", "评审"],
-	cloner: ["审查者"],
-	worker: ["工作者", "工人"],
+	reviewer: ["审查者"],
+	agent: ["工作者", "执行者"],
 	"plan.md": ["计划"],
 };
 

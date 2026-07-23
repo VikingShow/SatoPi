@@ -1,15 +1,15 @@
 /**
  * After Loop — Rule-based lesson extraction.
  *
- * Analyzes LoopResult + worker/cloner output to extract structured lessons
+ * Analyzes LoopResult to extract structured lessons from agent output
  * suitable for storage in the experience database.
  *
  * Extraction rules:
  *   - Error patterns (what went wrong, root cause if identifiable)
  *   - Success patterns (what approach worked well)
  *   - Iteration insights (how many iterations, convergence speed)
- *   - Worker dynamics (coordination patterns, role emergence)
- *   - Cloner verdicts (alignment issues, safety flags)
+ *   - Agent dynamics (coordination patterns, role assignment)
+ *   - Review verdicts (alignment issues, safety flags)
  */
 
 import type { LoopResult } from "../loop-controller";
@@ -29,7 +29,7 @@ export interface ExtractedLesson {
 	tags: string[];
 	/** 0-1 confidence in this lesson. */
 	confidence: number;
-	/** Source: which iteration/cloner/worker produced this. */
+	/** Source: which iteration/agent produced this. */
 	source: string;
 }
 
@@ -52,6 +52,7 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
+export function extractLessons(result: LoopResult, agentCount: number, reviewerCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
 	const lessons: ExtractedLesson[] = [];
 
 	// 1. Status-based insight
@@ -59,7 +60,7 @@ export interface LoopRunStats {
 		lessons.push({
 			type: "success",
 			summary: `Loop completed in ${result.iterations} iteration(s)`,
-			detail: `The swarm reached consensus after ${result.iterations} iteration(s) with ${agentCount} workers and ${reviewerCount} cloners.`,
+			detail: `The swarm reached consensus after ${result.iterations} iteration(s) with ${agentCount} agents.`,
 			tags: ["completion", "consensus", `iterations:${result.iterations}`],
 			confidence: 0.9,
 			source: "loop-controller",
@@ -69,7 +70,7 @@ export interface LoopRunStats {
 			type: "warning",
 			summary: `Loop escalated to human after ${result.iterations} iteration(s)`,
 			detail:
-				"The swarm could not reach consensus. Cloners disagreed or confidence was too low. Human intervention needed.",
+				"The swarm could not reach consensus. Reviewers disagreed or confidence was too low. Human intervention needed.",
 			tags: ["escalation", "no-consensus", "human-intervention"],
 			confidence: 0.8,
 			source: "loop-controller",
@@ -78,7 +79,7 @@ export interface LoopRunStats {
 		lessons.push({
 			type: "error",
 			summary: `Loop failed after ${result.iterations} iteration(s)`,
-			detail: `Max iterations (${result.iterations}) reached without passing review. Consider: clearer acceptance criteria, more workers, or task decomposition.`,
+			detail: `Max iterations (${result.iterations}) reached without passing review. Consider: clearer acceptance criteria, more agents, or task decomposition.`,
 			tags: ["failure", "max-iterations", "no-consensus"],
 			confidence: 0.7,
 			source: "loop-controller",
@@ -112,7 +113,7 @@ export interface LoopRunStats {
 					detail: `Review finding (${verdict.approvalCount}/${verdict.totalCount} passed): ${finding}`,
 					tags: [...tags, "review", "finding"],
 					confidence: 0.7,
-					source: "cloner-review",
+					source: "agent-review",
 				});
 			}
 		}
@@ -128,7 +129,6 @@ export interface LoopRunStats {
 		finalStatus: result.status,
 		reviewApprovalRatio: Math.round(approvalRatio * 100) / 100,
 		agentCount,
-		reviewerCount,
 	};
 
 	return { lessons, stats };

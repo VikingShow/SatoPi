@@ -163,12 +163,12 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isSteering = msg.body.startsWith("[AGENT STEERING]");
-  const isOperator = msg.from === "operator";
+  const isHuman = msg.from === "human";
   const isSystem = msg.from === "system";
   const isSocrates = msg.from === "socrates";
 
   return (
-    <div className={`flex flex-col gap-0.5 ${isOperator ? "items-end" : "items-start"}`}>
+    <div className={`flex flex-col gap-0.5 ${isHuman ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-1.5 px-1">
         <span className={`text-xs font-medium ${
           isSocrates ? "text-primary" :
@@ -186,7 +186,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             ? "bg-status-accent/15 border border-status-accent/30 text-foreground"
             : isSystem
             ? "bg-card/50 text-muted-foreground italic text-xs"
-            : isOperator
+            : isHuman
             ? "bg-primary/20 text-foreground/90"
             : isSocrates
             ? "bg-primary/10 border border-primary/20 text-foreground/90"
@@ -499,7 +499,7 @@ export default function ChatView() {
             ) : isBeforeLoopDialog ? (
               <>
                 <Shield size={12} />
-                <span>Operator → Socrates</span>
+                <span>Operator → Planner</span>
               </>
             ) : isRunning ? (
               <>
@@ -509,7 +509,7 @@ export default function ChatView() {
             ) : (
               <>
                 <Shield size={12} />
-                <span>Operator</span>
+                <span>Human</span>
               </>
             )}
           </div>

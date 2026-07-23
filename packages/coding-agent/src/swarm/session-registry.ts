@@ -17,7 +17,7 @@ import type { StateTracker } from "./state";
 import type { ActivityLogger, ActivityBroadcaster } from "./activity-logger";
 import type { RunManager, SteeringSink } from "./monitor/api-routes";
 import type { ScriptManager } from "./monitor/api-routes";
-import type { ExperienceStore } from "./after-loop/experience";
+import type { ExperienceStore } from "./curtain/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { RoleAssetManager } from "./role-asset";

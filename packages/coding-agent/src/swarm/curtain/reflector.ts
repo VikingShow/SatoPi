@@ -51,7 +51,7 @@ const REFLECTION_MAX_TOKENS = 1024;
  * Perform a deep LLM reflection on a completed loop run.
  *
  * Uses a cheap (smol/tiny) model to analyze the loop's outcome, extracted
- * lessons, and cloner verdicts. Returns structured insights for storage in
+ * lessons, and agent review. Returns structured insights for storage in
  * the experience database.
  *
  * @returns DeepReflection on success, or `null` if the LLM call fails
@@ -195,7 +195,7 @@ function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult)
 		`- Status: ${result.status}`,
 		`- Iterations: ${result.iterations}`,
 		`- Workers: ${stats.agentCount}`,
-		`- Cloners: ${stats.reviewerCount}`,
+		`- Agents: ${stats.agentCount}`,
 		`- Cloner approval ratio: ${stats.reviewApprovalRatio}`,
 	];
 
@@ -206,7 +206,7 @@ function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult)
 	// Review findings
 	const findings = result.reviewVerdicts.flatMap(v => v.findings);
 	if (findings.length > 0) {
-		lines.push("", "### Cloner Findings", ...findings.slice(0, 10).map(f => `- ${f.slice(0, 300)}`));
+		lines.push("", "### Review Findings", ...findings.slice(0, 10).map(f => `- ${f.slice(0, 300)}`));
 	}
 
 	// Extracted lessons

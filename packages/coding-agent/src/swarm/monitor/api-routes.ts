@@ -13,7 +13,7 @@
 
 import * as path from "node:path";
 import type { StateTracker } from "../state";
-import type { ExperienceStore } from "../after-loop/experience";
+import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { RoleAssetManager } from "../role-asset";
 import type { AfterLoopResult } from "./types";
@@ -56,7 +56,7 @@ export interface ScriptManager {
 	readonly isBusy: boolean;
 }
 
-/** Accepts steering messages from the operator during a running loop. */
+/** Accepts steering messages from the human during a running loop. */
 export interface SteeringSink {
 	steer(text: string): void;
 }

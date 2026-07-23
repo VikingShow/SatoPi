@@ -504,7 +504,7 @@ export class LoopController {
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
 			// Pause/resume gate: if pause() was called, block here until resume().
-			// This allows the operator to update the plan between iterations.
+			// This allows the human to update the plan between iterations.
 			await this.#checkPause();
 
 			// P0-F: beforeIteration hook — can skip.

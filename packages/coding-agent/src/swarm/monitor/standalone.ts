@@ -25,7 +25,7 @@ import { Settings } from "../../config/settings";
 import { stampAndArchivePlanMd } from "../script-planner";
 import { getSessionPlanPath } from "../plan-paths";
 import { ScriptManager } from "../script-manager";
-import { ExperienceStore } from "../after-loop";
+import { ExperienceStore } from "../curtain";
 import type { LoopResult } from "../loop-controller";
 import type { LoopSwarmConfig } from "../schema";
 import type { SwarmSessionManager } from "../swarm-session-manager";
@@ -365,7 +365,7 @@ async function createSessionServices(
 
 	const steeringSink: SteeringSink = {
 		steer(text: string): void {
-			activityLogger.logSteering("operator", "all", text);
+			activityLogger.logSteering("human", "all", text);
 		},
 	};
 

@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { StateTracker } from "../state";
 import { ActivityLogger } from "../activity-logger";
-import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary } from "../after-loop";
+import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary } from "../curtain";
 import { VerificationHook } from "../verification-hook";
 import { streamAgentOutput } from "../streaming";
 import type { LoopResult } from "../loop-controller";
