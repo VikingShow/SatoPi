@@ -11,7 +11,7 @@ const CHANNEL_TYPE_META: Record<string, { icon: React.ReactNode; color: string; 
   private: { icon: <Lock size={14} className="text-muted-foreground" />, color: "text-muted-foreground", group: "Active" },
   steering: { icon: <Bot size={14} className="text-status-accent" />, color: "text-status-accent", group: "Review" },
   deliberation: { icon: <Swords size={14} className="text-amber-400" />, color: "text-amber-400", group: "Review" },
-  cloner: { icon: <ShieldCheck size={14} className="text-violet-400" />, color: "text-violet-400", group: "Review" },
+  reviewer: { icon: <ShieldCheck size={14} className="text-violet-400" />, color: "text-violet-400", group: "Review" },
   file: { icon: <FileText size={14} className="text-emerald-400" />, color: "text-emerald-400", group: "Coordination" },
 };
 

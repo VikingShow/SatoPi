@@ -486,13 +486,13 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
         // Broadcast messages in script: also refresh script state
         // (to detect planReady changes)
-        if (entry.type === "broadcast" && entry.from === "socrates") {
+        if (entry.type === "broadcast" && entry.from === "planner") {
           setTimeout(() => get().refreshScriptState(), 300);
         }
 
         // Stream ended from Socrates during script — unlock the input
         // immediately instead of waiting for the next phase event.
-        if (entry.type === "stream_end" && entry.from === "socrates" && get().phase.startsWith("script")) {
+        if (entry.type === "stream_end" && entry.from === "planner" && get().phase.startsWith("script")) {
           get().refreshScriptState();
         }
 
@@ -1175,11 +1175,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }
         }
 
-        if (entry.type === "broadcast" && entry.from === "socrates") {
+        if (entry.type === "broadcast" && entry.from === "planner") {
           setTimeout(() => get().refreshScriptState(), 300);
         }
 
-        if (entry.type === "stream_end" && entry.from === "socrates" && get().phase.startsWith("script")) {
+        if (entry.type === "stream_end" && entry.from === "planner" && get().phase.startsWith("script")) {
           get().refreshScriptState();
         }
 

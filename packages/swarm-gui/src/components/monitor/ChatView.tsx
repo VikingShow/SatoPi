@@ -165,13 +165,13 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isSteering = msg.body.startsWith("[AGENT STEERING]");
   const isHuman = msg.from === "human";
   const isSystem = msg.from === "system";
-  const isSocrates = msg.from === "socrates";
+  const isPlanner = msg.from === "planner";
 
   return (
     <div className={`flex flex-col gap-0.5 ${isHuman ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-1.5 px-1">
         <span className={`text-xs font-medium ${
-          isSocrates ? "text-primary" :
+          isPlanner ? "text-primary" :
           isSystem ? "text-muted-foreground" :
           "text-foreground/80"
         }`}>{msg.from}</span>
@@ -188,7 +188,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             ? "bg-card/50 text-muted-foreground italic text-xs"
             : isHuman
             ? "bg-primary/20 text-foreground/90"
-            : isSocrates
+            : isPlanner
             ? "bg-primary/10 border border-primary/20 text-foreground/90"
             : "bg-background-elevated text-foreground"
         }`}

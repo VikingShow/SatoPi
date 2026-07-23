@@ -51,7 +51,7 @@ export interface ReviewConfig {
 	previousFindings?: string[];
 	/** Enable cross-examination round when findings diverge. Default false. */
 	deliberation?: boolean;
-	/** P0-D: Per-cloner role assignments (reviewerId → RoleAsset). When provided, each cloner gets a role-specific system prompt, weight, and veto flag. */
+	/** P0-D: Per-agent role assignments (reviewerId → RoleAsset). When provided, each cloner gets a role-specific system prompt, weight, and veto flag. */
 	clonerRoles?: Record<string, RoleAsset>;
 	/** Tool restriction to apply to cloner agents (config-as-constraint). */
 	toolRestriction?: import("./schema").AgentToolRestriction;
@@ -66,8 +66,8 @@ export interface ReviewConfig {
 export class ReviewCouncil {
 	/**
 	 * Run a full review cycle:
-	 * 1. Spawn cloner subprocesses in parallel
-	 * 2. Each cloner independently reviews worker output
+	 * 1. Launch reviewer subprocesses in parallel
+	 * 2. Each agent independently reviews worker output
 	 * 3. Parse JSON verdicts from cloner output
 	 * 4. Tally votes — majority rule.
 	 * 5. Optionally run deliberation cross-examination round.
@@ -118,7 +118,7 @@ export class ReviewCouncil {
 			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"agent_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 		];
 
-		// Guard: token budget for cloner review (default 128K)
+		// Guard: token budget for reviewer review (default 128K)
 		const guard = guardTaskBudget(reviewPrompt, undefined, `ReviewCouncil #${iteration}`);
 		if (guard.exceeded) {
 			reviewPrompt.length = 0;
@@ -134,7 +134,7 @@ export class ReviewCouncil {
 
 		const settled = await Promise.allSettled(
 			reviewerIds.map((id, i) => {
-				const clonerMsgId = `cloner-review-${id}-${iteration}`;
+				const clonerMsgId = `agent-review-${id}-${iteration}`;
 				return streamAgentOutput(
 					{ activityLogger: activityLogger!, msgId: clonerMsgId, from: id },
 					{
@@ -162,7 +162,7 @@ export class ReviewCouncil {
 			const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 			return {
 				index: i,
-				id: `cloner-review-${reviewerIds[i]}-${iteration}`,
+				id: `agent-review-${reviewerIds[i]}-${iteration}`,
 				agent: reviewerIds[i],
 				agentSource: "project" as const,
 				task: "",
@@ -200,7 +200,7 @@ export class ReviewCouncil {
 
 			const deliberationSettled = await Promise.allSettled(
 				reviewerIds.map((id, i) => {
-					const delibMsgId = `cloner-deliberation-${id}-${iteration}`;
+					const delibMsgId = `agent-deliberation-${id}-${iteration}`;
 					return streamAgentOutput(
 						{ activityLogger: activityLogger!, msgId: delibMsgId, from: id },
 						{
@@ -221,7 +221,7 @@ export class ReviewCouncil {
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 				return {
 					index: i,
-					id: `cloner-deliberation-${reviewerIds[i]}-${iteration}`,
+					id: `agent-deliberation-${reviewerIds[i]}-${iteration}`,
 					agent: reviewerIds[i],
 					agentSource: "project" as const,
 					task: "",
@@ -420,7 +420,7 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 			passed: false,
 			approvalCount: 0,
 			totalCount: 0,
-			findings: ["[SYSTEM] All cloner subprocesses failed — no review available"],
+			findings: ["[SYSTEM] All reviewer agents failed — no review available"],
 			workerCountSuggestions: [],
 			disagreed: false,
 			roleSuggestions: {},

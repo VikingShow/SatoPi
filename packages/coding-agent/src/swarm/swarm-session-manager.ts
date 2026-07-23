@@ -185,7 +185,7 @@ export class SwarmSessionManager {
 
 	// -- Verdict --------------------------------------------------------------
 
-	/** Log a cloner review verdict. */
+	/** Log a review verdict. */
 	logVerdict(verdict: {
 		iteration: number;
 		passed: boolean;

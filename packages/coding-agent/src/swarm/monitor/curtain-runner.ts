@@ -45,7 +45,7 @@ export interface CurtainResultData {
 	status: string;
 	iterations: number;
 	summaryMarkdown: string;
-	lessons: import("../after-loop/experience").ExperienceLesson[];
+	lessons: import("../curtain/experience").ExperienceLesson[];
 	reflection: {
 		rootCauses: string[];
 		effectivePatterns: string[];
@@ -236,7 +236,7 @@ async function runReporterAgent(
 // ============================================================================
 
 interface ReflectionResult {
-	lessons: import("../after-loop/experience").ExperienceLesson[];
+	lessons: import("../curtain/experience").ExperienceLesson[];
 	stats: {
 		totalIterations: number;
 		finalStatus: string;

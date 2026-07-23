@@ -189,7 +189,7 @@ function buildYaml(config: ConfigStore): string {
     majority_threshold: ${config.scaling.majorityThreshold}
 
   agent_restrictions:
-    socrates:
+    planner:
       allowed: ["read", "write_file", "grep", "find", "glob"]
 `;
 }

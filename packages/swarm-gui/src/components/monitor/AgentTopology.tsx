@@ -23,7 +23,7 @@ import { useSwarmStore } from "../../stores/swarm-store";
 const AGENT_COLORS: Record<string, string> = {
   developer: "#10B981",
   reviewer: "#F59E0B",
-  socrates: "#3B82F6",
+  planner: "#3B82F6",
 };
 
 const STATUS_COLORS: Record<string, string> = {
