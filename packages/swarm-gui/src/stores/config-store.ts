@@ -114,19 +114,19 @@ function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> 
       mode: typeof s.mode === "string" ? s.mode : prev.mode,
       workers: {
         ...prev.workers,
-        initial: workers.initial ?? prev.workers.initial,
-        min: workers.min ?? prev.workers.min,
-        max: workers.max ?? prev.workers.max,
-        auto: typeof workers.auto === "boolean" ? workers.auto : prev.workers.auto,
-        maxRounds: workers.max_rounds ?? workers.maxRounds ?? prev.workers.maxRounds,
-        roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.workers.roundsConvergenceThreshold,
-        model: workers.model ?? prev.workers.model,
+        initial: workers.initial ?? prev.agents.initial,
+        min: workers.min ?? prev.agents.min,
+        max: workers.max ?? prev.agents.max,
+        auto: typeof workers.auto === "boolean" ? workers.auto : prev.agents.auto,
+        maxRounds: workers.max_rounds ?? workers.maxRounds ?? prev.agents.maxRounds,
+        roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.agents.roundsConvergenceThreshold,
+        model: workers.model ?? prev.agents.model,
       },
       cloners: {
         ...prev.cloners,
-        count: cloners.count ?? prev.cloners.count,
-        model: cloners.model ?? prev.cloners.model,
-        reviewStrictness: cloners.review_strictness ?? cloners.reviewStrictness ?? prev.cloners.reviewStrictness,
+        count: cloners.count ?? prev.agents.reviewerscount,
+        model: cloners.model ?? prev.agents.reviewersmodel,
+        reviewStrictness: cloners.review_strictness ?? cloners.reviewStrictness ?? prev.agents.reviewersreviewStrictness,
       },
       loop: {
         maxIterations: s.max_iterations ?? s.maxIterations ?? prev.loop.maxIterations,
@@ -159,7 +159,7 @@ function buildYaml(config: ConfigStore): string {
   workspace: .
   mode: ${config.mode}
   target_count: 1
-  model: ${config.workers.model}
+  model: ${config.agents.model}
   max_iterations: ${config.loop.maxIterations}
   auto_retry: true
   human_escalation: ${config.loop.humanEscalation}
@@ -167,18 +167,18 @@ function buildYaml(config: ConfigStore): string {
   agents: {}
 
   workers:
-    initial: ${config.workers.initial}
-    min: ${config.workers.min}
-    max: ${config.workers.max}
-    auto: ${config.workers.auto}
-    max_rounds: ${config.workers.maxRounds}
-    rounds_convergence_threshold: ${config.workers.roundsConvergenceThreshold}
-    model: ${config.workers.model}
+    initial: ${config.agents.initial}
+    min: ${config.agents.min}
+    max: ${config.agents.max}
+    auto: ${config.agents.auto}
+    max_rounds: ${config.agents.maxRounds}
+    rounds_convergence_threshold: ${config.agents.roundsConvergenceThreshold}
+    model: ${config.agents.model}
 
   cloners:
-    count: ${config.cloners.count}
-    model: ${config.cloners.model}
-    review_strictness: ${config.cloners.reviewStrictness}
+    count: ${config.agents.reviewerscount}
+    model: ${config.agents.reviewersmodel}
+    review_strictness: ${config.agents.reviewersreviewStrictness}
 
   convergence_threshold: ${config.convergence.threshold}
   approval_ratio: ${config.convergence.approvalRatio}

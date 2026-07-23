@@ -66,16 +66,16 @@ const DEFAULT_YAML = `swarm:
   agents: {}
   target_count: 1
   max_iterations: 10
-  workers:
+  agents:
     initial: 3
     min: 1
     max: 10
     auto: false
-  cloners:
+  reviewers:
     count: 2
   plan_debate:
     enabled: true
-    cloner_count: 2
+    reviewer_count: 2
     max_rounds: 2
     convergence_threshold: 0.7
 `;

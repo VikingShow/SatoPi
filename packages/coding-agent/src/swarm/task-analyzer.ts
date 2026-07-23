@@ -148,7 +148,7 @@ function recommendFromSignals(
 	signals: TaskComplexitySignals,
 	loopConfig: LoopSwarmConfig,
 ): TaskComplexityRecommendation {
-	const defaultCloners = loopConfig.cloners.count;
+	const defaultCloners = loopConfig.agents.reviewers;
 
 	// Complexity heuristic
 	let complexity: "low" | "medium" | "high";
@@ -194,7 +194,7 @@ function recommendFromSignals(
 	}
 	if (signals.crossPackage) maxRounds += 1;
 	// Clamp to config bounds (0 = unlimited from config stays 0)
-	const configMaxRounds = loopConfig.workers.maxRounds;
+	const configMaxRounds = loopConfig.agents.maxRounds;
 	if (configMaxRounds > 0) maxRounds = Math.min(maxRounds, configMaxRounds);
 	roundsConvergenceThreshold = Math.max(1, Math.min(roundsConvergenceThreshold, maxRounds > 0 ? maxRounds : 10));
 
@@ -233,10 +233,10 @@ export class TaskComplexityAnalyzer {
 	async analyze(planContent: string, loopConfig: LoopSwarmConfig): Promise<TaskComplexityRecommendation> {
 		if (!planContent || planContent.trim().length === 0) {
 			return {
-				workers: loopConfig.workers.initial,
-				cloners: loopConfig.cloners.count,
-				maxRounds: loopConfig.workers.maxRounds,
-				roundsConvergenceThreshold: loopConfig.workers.roundsConvergenceThreshold,
+				workers: loopConfig.agents.initial,
+				cloners: loopConfig.agents.reviewers,
+				maxRounds: loopConfig.agents.maxRounds,
+				roundsConvergenceThreshold: loopConfig.agents.roundsConvergenceThreshold,
 				complexity: "medium",
 				parallelism: 1,
 				safetyCritical: false,

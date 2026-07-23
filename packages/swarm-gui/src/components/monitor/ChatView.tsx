@@ -466,9 +466,9 @@ export default function ChatView() {
       {((phase === "script" && planReady) || phase === "script-confirm") && !isBusy && (
         <ActionBar
           phase={phase}
-          recommendedWorkers={scriptState?.recommendedWorkers}
-          recommendedCloners={scriptState?.recommendedCloners}
-          onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, clonerCount: cc })}
+          recommendedAgents={scriptState?.recommendedAgents}
+          estimatedAgentHours={scriptState?.estimatedAgentHours}
+          onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, agentCount: cc })}
           onDebate={runDebate}
         />
       )}

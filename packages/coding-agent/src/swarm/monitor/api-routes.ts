@@ -50,8 +50,8 @@ export interface ScriptManager {
 	getState(): {
 		phase: string; task: string; conversationLength: number;
 		planReady: boolean; busy: boolean;
-		selectedAgentId?: string; recommendedWorkers?: number;
-		recommendedCloners?: number; estimatedAgentHours?: number;
+		selectedAgentId?: string; recommendedAgents?: number;
+		estimatedAgentHours?: number; estimatedAgentHours?: number;
 	};
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
 	readonly isBusy: boolean;

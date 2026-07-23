@@ -64,49 +64,51 @@ export interface SwarmDefinition {
 // ============================================================================
 
 export interface LoopSwarmConfig {
-	/** Optional model override for socrates / planning agents. */
+	/** Optional model override for planning agents. */
 	model?: string;
 	/** Maximum review-retry iterations before escalating to human. Default: 5. */
 	maxIterations: number;
 	/** If true, rejected outputs trigger automatic retry without human input. */
 	autoRetry: boolean;
 	humanEscalation: boolean;
-	/** Worker configuration. */
-	workers: {
-		/** Initial worker count (proposed by Cloner, confirmed by human). Default: 5. */
+	/** Agent configuration. */
+	agents: {
+		/** Initial agent count (proposed by planner, confirmed by human). Default: 5. */
 		initial: number;
-		/** Minimum workers allowed during dynamic scaling. Default: 1. */
+		/** Minimum agents allowed during dynamic scaling. Default: 1. */
 		min: number;
-		/** Maximum workers allowed during dynamic scaling. Default: 12. */
+		/** Maximum agents allowed during dynamic scaling. Default: 12. */
 		max: number;
+		/** Number of agents assigned to review role. Default: min(3, initial). */
+		reviewers: number;
 		/**
 		 * When true, the TaskComplexityAnalyzer evaluates plan.md before
-		 * the loop starts and overrides `initial` and `cloners.count` with
+		 * the stage starts and overrides `initial` and `reviewers` with
 		 * its recommendations (clamped to min/max). Default: false (opt-in).
 		 */
 		auto: boolean;
 		/**
 		 * Number of deliberation rounds within one iteration.
-		 * Workers in each round see prior rounds' outputs and refine.
+		 * Agents in each round see prior rounds' outputs and refine.
 		 * 0 = unlimited — driven by roundsConvergenceThreshold + hard safety cap (10).
 		 * Default: 5.
 		 */
 		maxRounds: number;
 		/**
 		 * Consecutive rounds with Jaccard similarity at or above this
-		 * threshold trigger early convergence and end the worker rounds.
+		 * threshold trigger early convergence and end the agent rounds.
 		 * Only meaningful when maxRounds > 1 or maxRounds = 0.
 		 * Default: 3.
 		 */
 		roundsConvergenceThreshold: number;
 		/**
-		 * Prompt excerpt injected into workers after round 1,
+		 * Prompt excerpt injected into agents after round 1,
 		 * instructing them to cross-examine prior outputs. Handlebars template:
 		 * `{{priorOutputs}}` contains the prior rounds' outputs.
 		 */
 		roundtablePrompt?: string;
 		/**
-		 * Per-worker wall-clock timeout in ms. When exceeded the agent is
+		 * Per-agent wall-clock timeout in ms. When exceeded the agent is
 		 * aborted and marked as CRASHED. Default 5 min. 0 = no limit.
 		 */
 		agentTimeoutMs?: number;
@@ -120,32 +122,29 @@ export interface LoopSwarmConfig {
 		 */
 		enabled: boolean;
 		/**
-		 * Timeout in milliseconds for nomination phase. Workers must
+		 * Timeout in milliseconds for nomination phase. Agents must
 		 * include `## Nomination` in their output within this window.
 		 * Default: 0 (no timeout — collected at end of round).
 		 */
 		electionTimeoutMs: number;
 	};
-	/** Worker deliberation (debate) configuration. */
+	/** Agent deliberation (debate) configuration. */
 	debate: {
 		/**
-		 * Enable structured debate between workers after each round (round 1+).
-		 * Workers challenge, rebut, and resolve each other's outputs.
+		 * Enable structured debate between agents after each round (round 1+).
+		 * Agents challenge, rebut, and resolve each other's outputs.
 		 * Default: true.
 		 */
 		enabled: boolean;
-		/**
-		 * Maximum deliberation sub-rounds (challenge → rebuttal → resolution).
-		 * Default: 2.
-		 */
+		/** Maximum deliberation sub-rounds (challenge → rebuttal → resolution). Default: 2. */
 		maxRounds: number;
 	};
-	/** Plan debate configuration (Before Loop phase). */
+	/** Plan debate configuration (Script phase). */
 	planDebate: {
-		/** Enable multi-cloner plan debate before execution. Default: true. */
+		/** Enable multi-agent plan debate before execution. Default: true. */
 		enabled: boolean;
-		/** Number of cloner instances in the debate. Default: 2. */
-		clonerCount: number;
+		/** Number of agents in the debate. Default: 2. */
+		agentCount: number;
 		/** Maximum debate rounds. Default: 3. */
 		maxRounds: number;
 		/**
@@ -154,31 +153,22 @@ export interface LoopSwarmConfig {
 		 */
 		convergenceThreshold: number;
 	};
-	/** Cloner configuration. */
-	cloners: {
-		/**
-		 * Cloner count. Cloners are latent guardians — they only review
-		 * when the worker swarm fails to converge internally.
-		 * Default: min(3, workers.initial).
-		 */
-		count: number;
-	};
 	/**
-	 * Convergence detection: stop the loop early when cloner findings
+	 * Convergence detection: stop the stage early when review findings
 	 * are identical for this many consecutive iterations.
 	 * 0 disables convergence detection (backward-compatible).
 	 * Default: 2.
 	 */
 	convergenceThreshold: number;
 	/**
-	 * Per-iteration timeout in milliseconds. Workers or cloners that
-	 * exceed this are aborted and the iteration continues to the next.
+	 * Per-iteration timeout in milliseconds. Agents that exceed this are
+	 * aborted and the iteration continues to the next.
 	 * Default: 300_000 (5 minutes). 0 disables timeout.
 	 */
 	iterationTimeoutMs: number;
 	/**
-	 * Enable cloner deliberation: when a review FAILs with split findings,
-	 * cloners cross-examine each other's findings and re-vote.
+	 * Enable review deliberation: when a review FAILs with split findings,
+	 * reviewers cross-examine each other's findings and re-vote.
 	 * Default: true.
 	 */
 	enableDeliberation: boolean;
@@ -190,7 +180,7 @@ export interface LoopSwarmConfig {
 	verification?: VerificationConfig;
 	/**
 	 * Per-agent tool restrictions — config-as-constraint pattern.
-	 * Keys are agent name patterns (e.g. "worker", "cloner", "socrates").
+	 * Keys are agent name patterns (e.g. "agent", "planner", "reviewer").
 	 * Agents physically cannot use blocked tools.
 	 */
 	agentRestrictions?: Record<string, AgentToolRestriction>;
@@ -337,7 +327,7 @@ export interface StigmergyConfig {
 
 /**
  * Offload pipeline configuration for L1→L1.5→L2→L3 context offload
- * and Mermaid context graph injection into Worker/Cloner/LoopController.
+ * and Mermaid context graph injection into Agent/StageController.
  */
 export interface OffloadConfig {
 	/** Enable the full offload pipeline. Default false. */
@@ -354,28 +344,31 @@ export interface OffloadConfig {
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
-	const workersRaw = (raw.workers as Record<string, unknown>) ?? {};
-	const clonersRaw = (raw.cloners as Record<string, number>) ?? {};
-	const workerInitial = (workersRaw.initial as number) ?? 5;
+	const agentsRaw = (raw.agents as Record<string, unknown>) ?? (raw.workers as Record<string, unknown>) ?? {};
+	const agentInitial = (agentsRaw.initial as number) ?? 5;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,
 		planDebate: {
 			enabled: ((raw.plan_debate as Record<string, unknown>)?.enabled as boolean) ?? true,
-			clonerCount: ((raw.plan_debate as Record<string, unknown>)?.cloner_count as number) ?? 2,
+			agentCount: ((raw.plan_debate as Record<string, unknown>)?.agent_count as number)
+				?? ((raw.plan_debate as Record<string, unknown>)?.cloner_count as number) ?? 2,
 			maxRounds: ((raw.plan_debate as Record<string, unknown>)?.max_rounds as number) ?? 3,
 			convergenceThreshold: ((raw.plan_debate as Record<string, unknown>)?.convergence_threshold as number) ?? 2,
 		},
 		autoRetry: (raw.auto_retry as boolean) ?? true,
 		humanEscalation: (raw.human_escalation as boolean) ?? true,
-		workers: {
-			initial: workerInitial,
-			min: (workersRaw.min as number) ?? 1,
-			max: (workersRaw.max as number) ?? 12,
-			auto: (workersRaw.auto as boolean) ?? false,
-			maxRounds: (workersRaw.max_rounds as number) ?? 5,
-			roundsConvergenceThreshold: (workersRaw.rounds_convergence_threshold as number) ?? 3,
-			roundtablePrompt: workersRaw.roundtable_prompt as string | undefined,
-			agentTimeoutMs: workersRaw.agent_timeout_ms as number | undefined,
+		agents: {
+			initial: agentInitial,
+			min: (agentsRaw.min as number) ?? 1,
+			max: (agentsRaw.max as number) ?? 12,
+			reviewers: (agentsRaw.reviewers as number)
+				?? (raw.cloners as Record<string, number>)?.count
+				?? Math.min(3, agentInitial),
+			auto: (agentsRaw.auto as boolean) ?? false,
+			maxRounds: (agentsRaw.max_rounds as number) ?? 5,
+			roundsConvergenceThreshold: (agentsRaw.rounds_convergence_threshold as number) ?? 3,
+			roundtablePrompt: agentsRaw.roundtable_prompt as string | undefined,
+			agentTimeoutMs: agentsRaw.agent_timeout_ms as number | undefined,
 		},
 		reviewer: {
 			enabled: ((raw.reviewer as Record<string, unknown>)?.enabled as boolean) ?? true,
@@ -384,9 +377,6 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		debate: {
 			enabled: ((raw.debate as Record<string, unknown>)?.enabled as boolean) ?? true,
 			maxRounds: ((raw.debate as Record<string, unknown>)?.max_rounds as number) ?? 2,
-		},
-		cloners: {
-			count: clonersRaw.count ?? Math.min(3, workerInitial),
 		},
 		convergenceThreshold: (raw.convergence_threshold as number) ?? 2,
 		iterationTimeoutMs: (raw.iteration_timeout_ms as number) ?? 300_000,
@@ -618,8 +608,8 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 		errors.push("target_count must be at least 1");
 	}
 	if (def.loopConfig) {
-		if (def.loopConfig.workers.maxRounds < 0) {
-			errors.push("workers.max_rounds must be >= 0 (0 = unlimited, convergence-driven)");
+		if (def.loopConfig.agents.maxRounds < 0) {
+			errors.push("agents.max_rounds must be >= 0 (0 = unlimited, convergence-driven)");
 		}
 	}
 	if (def.mode !== "pipeline" && def.mode !== "loop" && def.targetCount !== 1) {

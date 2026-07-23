@@ -40,7 +40,7 @@ describe("ConfigStore: initial state", () => {
   });
 
   it("default workers count is 3", () => {
-    expect(getStore().workers.initial).toBe(3);
+    expect(getStore().agents.initial).toBe(3);
   });
 
   it("starts not dirty", () => {
@@ -51,14 +51,14 @@ describe("ConfigStore: initial state", () => {
 describe("ConfigStore: update actions", () => {
   it("updateWorkers updates values and marks dirty", () => {
     getStore().updateWorkers({ initial: 8 });
-    expect(getStore().workers.initial).toBe(8);
+    expect(getStore().agents.initial).toBe(8);
     expect(getStore().isDirty).toBe(true);
   });
 
   it("updateCloners updates count", () => {
     getStore().updateCloners({ count: 5, reviewStrictness: "lenient" });
-    expect(getStore().cloners.count).toBe(5);
-    expect(getStore().cloners.reviewStrictness).toBe("lenient");
+    expect(getStore().agents.reviewerscount).toBe(5);
+    expect(getStore().agents.reviewersreviewStrictness).toBe("lenient");
   });
 
   it("updateLoop toggles human escalation", () => {

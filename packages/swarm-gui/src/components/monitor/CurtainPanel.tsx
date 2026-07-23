@@ -41,7 +41,7 @@ export default function CurtainPanel() {
 
   const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = curtainResult;
   const safeLessons = lessons ?? [];
-  const safeRunStats = runStats ?? { workerCount: 0, clonerCount: 0, clonerApprovalRatio: 0 };
+  const safeRunStats = runStats ?? { workerCount: 0, agentCount: 0, clonerApprovalRatio: 0 };
   const statusIcon = status === "completed" ? CheckCircle : status === "escalated" ? AlertTriangle : AlertOctagon;
   const StatusIcon = statusIcon;
   const statusColor = status === "completed" ? "text-status-success" : status === "escalated" ? "text-status-warning" : "text-status-danger";
@@ -79,7 +79,7 @@ export default function CurtainPanel() {
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Cloners</div>
-              <div className="text-foreground font-mono">{safeRunStats.clonerCount}</div>
+              <div className="text-foreground font-mono">{safeRunStats.agentCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Approval</div>

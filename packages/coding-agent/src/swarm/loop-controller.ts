@@ -428,9 +428,9 @@ export class LoopController {
 		// Dynamic worker tracking
 		// Per-iteration role suggestions from cloner review (Round 2+).
 		let currentRoleSuggestions: Record<string, string> = {};
-		let currentWorkerCount = this.#loopConfig.workers.initial;
-		let currentMaxRounds = this.#loopConfig.workers.maxRounds;
-		let currentConvergenceNeeded = this.#loopConfig.workers.roundsConvergenceThreshold;
+		let currentWorkerCount = this.#loopConfig.agents.initial;
+		let currentMaxRounds = this.#loopConfig.agents.maxRounds;
+		let currentConvergenceNeeded = this.#loopConfig.agents.roundsConvergenceThreshold;
 
 		const workerIds: string[] = [];
 		let clonerIds: string[] = [];
@@ -446,7 +446,7 @@ export class LoopController {
 
 		// TaskComplexityAnalyzer: override worker count, maxRounds, and convergence
 		// based on plan.md content when workers.auto is enabled.
-		if (this.#loopConfig.workers.auto && this.#planContent) {
+		if (this.#loopConfig.agents.auto && this.#planContent) {
 			const analyzer = new TaskComplexityAnalyzer();
 			const rec = await analyzer.analyze(this.#planContent, this.#loopConfig);
 			currentWorkerCount = rec.workers;
@@ -471,7 +471,7 @@ export class LoopController {
 		}
 
 		const initialWorkerCount = currentWorkerCount;
-		const clonerCount = this.#loopConfig.cloners.count;
+		const clonerCount = this.#loopConfig.agents.reviewers;
 
 		// Initialize worker and cloner IDs
 		for (let i = 0; i < initialWorkerCount; i++) workerIds.push(`worker-${i + 1}`);
@@ -589,8 +589,8 @@ export class LoopController {
 						}
 					}
 					if (round > 0) {
-						const prompt = this.#loopConfig.workers.roundtablePrompt
-							? `\n${this.#loopConfig.workers.roundtablePrompt}\n`
+						const prompt = this.#loopConfig.agents.roundtablePrompt
+							? `\n${this.#loopConfig.agents.roundtablePrompt}\n`
 							: `\n## Prior Round Outputs\n\nCross-examine these outputs. Flag gaps, contradictions, and quality issues. Be direct — your peers expect honest critique. Refine and improve upon the prior work.\n`;
 						extraContext = `${extraContext}${prompt}\n${priorOutputs}`;
 					}

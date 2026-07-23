@@ -39,9 +39,9 @@ export interface ScriptState {
 	/** The agent selected for planning. */
 	selectedAgentId?: string;
 	/** Extracted from planner recommendation line. */
-	recommendedWorkers?: number;
+	recommendedAgents?: number;
 	/** Extracted from planner recommendation line. */
-	recommendedCloners?: number;
+	estimatedAgentHours?: number;
 	/** Estimated agent-hours from the plan. */
 	estimatedAgentHours?: number;
 }
@@ -75,8 +75,8 @@ export class ScriptManager {
 	#planReady = false;
 	#planMtime = 0;
 	#selectedAgentId: string | undefined;
-	#recommendedWorkers: number | undefined;
-	#recommendedCloners: number | undefined;
+	#recommendedAgents: number | undefined;
+	#estimatedAgentHours: number | undefined;
 	#estimatedAgentHours: number | undefined;
 	/** OH-MY-PI SessionManager for session.jsonl persistence. */
 	#sessionManager: SwarmSessionManager | null = null;
@@ -135,8 +135,8 @@ export class ScriptManager {
 			planReady: this.#planReady,
 			busy: this.#busy,
 			selectedAgentId: this.#selectedAgentId,
-			recommendedWorkers: this.#recommendedWorkers,
-			recommendedCloners: this.#recommendedCloners,
+			recommendedAgents: this.#recommendedAgents,
+			estimatedAgentHours: this.#estimatedAgentHours,
 			estimatedAgentHours: this.#estimatedAgentHours,
 		};
 	}
@@ -162,8 +162,8 @@ export class ScriptManager {
 		this.#conversation = [];
 		this.#planReady = false;
 		this.#selectedAgentId = agentId;
-		this.#recommendedWorkers = undefined;
-		this.#recommendedCloners = undefined;
+		this.#recommendedAgents = undefined;
+		this.#estimatedAgentHours = undefined;
 		this.#estimatedAgentHours = undefined;
 		this.#phase = "script";
 		await this.#setPhase("script");
@@ -254,7 +254,7 @@ export class ScriptManager {
 			try {
 				this.#activityLogger.logBroadcast(
 					"system",
-					`${loopConfig.planDebate.clonerCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
+					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
 				);
 
 				const result = await runPlanDebate(
@@ -291,13 +291,13 @@ export class ScriptManager {
 	}
 
 	// ────────────────────────────────────────────────────────────────────────
-	// Stage 4: Confirm — stamp plan.md and enter Stage
+	// Stage 4: Confirm — enter Stage phase
+	//
+	// Agent count is determined automatically by StageController based on
+	// plan complexity analysis — no need for manual worker/cloner counts.
 	// ────────────────────────────────────────────────────────────────────────
 
-	async confirm(
-		workerCount?: number,
-		clonerCount?: number,
-	): Promise<{ success: boolean; error?: string }> {
+	async confirm(): Promise<{ success: boolean; error?: string }> {
 		if (this.#busy) {
 			return { success: false, error: "Planner or debate is still running. Please wait." };
 		}
@@ -305,32 +305,13 @@ export class ScriptManager {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
 		}
 
+		const estimated = this.#estimatedAgentHours
+			? ` (estimated ${this.#estimatedAgentHours} agent-hours)`
+			: "";
 		this.#activityLogger.logBroadcast(
 			"system",
-			workerCount != null || clonerCount != null
-				? `Plan confirmed. Creating team (${workerCount ?? "?"} workers, ${clonerCount ?? "?"} cloners)...`
-				: "Plan confirmed. Starting Stage execution...",
+			`Plan confirmed. Starting Stage execution${estimated}...`,
 		);
-
-		if (workerCount != null || clonerCount != null) {
-			try {
-				const config = Bun.YAML.parse(await fs.readFile(this.#yamlPath, "utf-8")) as Record<string, unknown>;
-				const swarm = config.swarm as Record<string, unknown> | undefined;
-				if (swarm) {
-					if (workerCount != null) {
-						const workers = swarm.workers as Record<string, unknown> | undefined;
-						if (workers) workers.initial = workerCount;
-					}
-					if (clonerCount != null) {
-						const cloners = swarm.cloners as Record<string, unknown> | undefined;
-						if (cloners) cloners.count = clonerCount;
-					}
-				}
-				await fs.writeFile(this.#yamlPath, Bun.YAML.stringify(config), "utf-8");
-			} catch (err) {
-				logger.warn("Failed to update loop.yaml counts", { error: String(err) });
-			}
-		}
 
 		this.#phase = "stage";
 		await this.#setPhase("stage");
@@ -434,8 +415,8 @@ export class ScriptManager {
 			// Parse recommendations from planner output
 			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*workers?,?\s*(\d+)\s*cloners?/i);
 			if (recMatch) {
-				this.#recommendedWorkers = parseInt(recMatch[1], 10);
-				this.#recommendedCloners = parseInt(recMatch[2], 10);
+				this.#recommendedAgents = parseInt(recMatch[1], 10);
+				this.#estimatedAgentHours = parseInt(recMatch[2], 10);
 			}
 			// Parse agent-hour estimate
 			const hrsMatch = displayOutput.match(/Estimated:\s*(\d+(?:\.\d+)?)\s*agent[- ]hours?/i);

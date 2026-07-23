@@ -71,8 +71,8 @@ export async function generatePlanningPrompt(
 ): Promise<string> {
 	const { swarmDir, workspace, loopConfig, taskDescription } = config;
 
-	const defaultWorkers = loopConfig.workers.initial;
-	const defaultCloners = loopConfig.cloners.count;
+	const defaultWorkers = loopConfig.agents.initial;
+	const defaultCloners = loopConfig.agents.reviewers;
 	const planPath = getSessionPlanPath(swarmDir);
 
 	const sections = [

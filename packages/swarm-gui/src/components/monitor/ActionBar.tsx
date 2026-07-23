@@ -5,27 +5,27 @@ import type { Chapter } from "../../lib/types";
 
 export interface ActionBarProps {
   phase: Chapter;
-  recommendedWorkers?: number;
-  recommendedCloners?: number;
-  onConfirm: (workerCount: number, clonerCount: number) => void;
+  recommendedAgents?: number;
+  estimatedAgentHours?: number;
+  onConfirm: (workerCount: number, agentCount: number) => void;
   onDebate: () => void;
 }
 
 export function ActionBar({
   phase,
-  recommendedWorkers,
-  recommendedCloners,
+  recommendedAgents,
+  estimatedAgentHours,
   onConfirm,
   onDebate,
 }: ActionBarProps) {
-  const [workerCount, setWorkerCount] = useState(recommendedWorkers ?? 3);
-  const [clonerCount, setClonerCount] = useState(recommendedCloners ?? 2);
+  const [workerCount, setWorkerCount] = useState(recommendedAgents ?? 3);
+  const [agentCount, setClonerCount] = useState(estimatedAgentHours ?? 2);
 
   // Sync with recommendations when they change (e.g. after debate refines plan).
   useEffect(() => {
-    if (recommendedWorkers != null) setWorkerCount(recommendedWorkers);
-    if (recommendedCloners != null) setClonerCount(recommendedCloners);
-  }, [recommendedWorkers, recommendedCloners]);
+    if (recommendedAgents != null) setWorkerCount(recommendedAgents);
+    if (estimatedAgentHours != null) setClonerCount(estimatedAgentHours);
+  }, [recommendedAgents, estimatedAgentHours]);
 
   const isDebateDone = phase === "script-confirm";
 
@@ -61,7 +61,7 @@ export function ActionBar({
               type="number"
               min={1}
               max={20}
-              value={clonerCount}
+              value={agentCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v) && v > 0) setClonerCount(v);
@@ -87,7 +87,7 @@ export function ActionBar({
           <Button
             variant="default"
             size="xs"
-            onClick={() => onConfirm(workerCount, clonerCount)}
+            onClick={() => onConfirm(workerCount, agentCount)}
             className="bg-status-success hover:bg-status-success/80"
           >
             <Check size={12} />

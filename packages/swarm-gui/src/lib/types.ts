@@ -49,9 +49,9 @@ export interface ScriptState {
   /** The agent selected for the planning conversation. */
   selectedAgentId?: string;
   /** Extracted from planner recommendation output. */
-  recommendedWorkers?: number;
+  recommendedAgents?: number;
   /** Extracted from planner recommendation output. */
-  recommendedCloners?: number;
+  estimatedAgentHours?: number;
   /** Estimated agent-hours for the plan. */
   estimatedAgentHours?: number;
 }
@@ -224,7 +224,7 @@ export interface CurtainResult {
     finalStatus: string;
     clonerApprovalRatio: number;
     workerCount: number;
-    clonerCount: number;
+    agentCount: number;
   };
 }
 
