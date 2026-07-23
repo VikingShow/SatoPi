@@ -23,7 +23,7 @@ export interface ScaleDeltaParams {
 	/** Number of voters eligible to vote. */
 	voterCount: number;
 	/** Current number of active workers. */
-	currentWorkerCount: number;
+	currentAgentCount: number;
 	/** Minimum allowed workers. */
 	min: number;
 }
@@ -31,11 +31,11 @@ export interface ScaleDeltaParams {
 /**
  * Compute the signed agent-count delta from voter suggestions.
  * Returns 0 when no scaling should occur. Does NOT clamp to max — the caller
- * clamps against `max - currentWorkerCount` when adding, and against
- * `currentWorkerCount - min` when removing.
+ * clamps against `max - currentAgentCount` when adding, and against
+ * `currentAgentCount - min` when removing.
  */
 export function computeScaleDelta(params: ScaleDeltaParams): number {
-	const { suggestions, voterCount, currentWorkerCount, min } = params;
+	const { suggestions, voterCount, currentAgentCount, min } = params;
 
 	// Gate: not enough voters voted.
 	if (suggestions.length < Math.ceil(voterCount / 2)) return 0;
@@ -56,7 +56,7 @@ export function computeScaleDelta(params: ScaleDeltaParams): number {
 	// Conservative up.
 	if (upVotes >= majority) return 1;
 	// Conservative down (only when above the floor).
-	if (downVotes >= majority && currentWorkerCount > min) return -1;
+	if (downVotes >= majority && currentAgentCount > min) return -1;
 
 	return 0;
 }

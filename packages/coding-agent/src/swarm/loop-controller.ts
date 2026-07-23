@@ -96,7 +96,7 @@ export interface LoopResult {
 	errors: string[];
 	/** When status is "escalated", carries context for human decision. */
 	escalationContext?: {
-		lastWorkerOutput: string;
+		lastAgentOutput: string;
 		lastFindings: string[];
 		approvalRatio: number;
 	};
@@ -108,9 +108,9 @@ export interface LoopResult {
 export interface BlockerContext {
 	iteration: number;
 	lastFindings: string[];
-	lastWorkerOutput: string;
+	lastAgentOutput: string;
 	stagnationCount: number;
-	workerCrashCounts: Record<string, number>;
+	agentCrashCounts: Record<string, number>;
 	reason: string;
 	/** Auto-continue timeout in ms (0 = no auto-continue). */
 	timeoutMs: number;
@@ -127,7 +127,7 @@ export type BlockerResolution = "continue" | "skip" | "abort";
 // ============================================================================
 // Prompts
 // ============================================================================
-const WORKER_SYSTEM_PROMPT = `\
+const AGENT_SYSTEM_PROMPT = `\
 You are a Worker in the Loop Engineering system — part of a self-organizing swarm.
 You collaborate with other Workers to complete a task defined in a plan that will be provided.
 
@@ -264,7 +264,7 @@ OUTPUT:
 export class LoopController {
 	readonly #loopConfig: LoopSwarmConfig;
 	readonly #ircBus: IrcBus;
-	readonly #clonerId: string;
+	readonly #reviewerId: string;
 	readonly #stateTracker: StateTracker;
 	#channel?: AgentChannel;
 	#fileTracker: FileTracker = new FileTracker();
@@ -292,7 +292,7 @@ export class LoopController {
 	/** Last cloner findings key for stagnation comparison. */
 	#lastFindingsKey = "";
 	/** Per-worker crash counter — used to detect repeated worker failures. */
-	#workerCrashCounts: Record<string, number> = {};
+	#agentCrashCounts: Record<string, number> = {};
 	/** Pending blocker resolution Promise resolver — set when blocked, cleared on resolve. */
 	#blockerResolver: ((decision: BlockerResolution) => void) | null = null;
 	/** Context for the current blockage (if any). */
@@ -311,7 +311,7 @@ export class LoopController {
 	constructor(options: LoopOptions) {
 		this.#loopConfig = options.loopConfig;
 		this.#ircBus = options.ircBus ?? IrcBus.global();
-		this.#clonerId = options.clonerAgentId ?? MAIN_AGENT_ID;
+		this.#reviewerId = options.clonerAgentId ?? MAIN_AGENT_ID;
 		this.#stateTracker = options.stateTracker;
 		this.#activityLogger = options.activityLogger;
 		// P0-1: Use injected executor or default to SubprocessAgentExecutor.
@@ -361,7 +361,7 @@ export class LoopController {
 		if (this.#pauseSignal) return; // already paused
 		this.#pauseSignal = new AbortController();
 		void this.#setChapter("paused");
-		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop paused. Awaiting plan update or resume.");
+		this.#activityLogger?.logBroadcast(this.#reviewerId, "Loop paused. Awaiting plan update or resume.");
 		logger.info("LoopController paused");
 	}
 
@@ -372,7 +372,7 @@ export class LoopController {
 	resume(): void {
 		if (!this.#pauseSignal) return; // not paused
 		void this.#setChapter("stage");
-		this.#activityLogger?.logBroadcast(this.#clonerId, "Loop resumed.");
+		this.#activityLogger?.logBroadcast(this.#reviewerId, "Loop resumed.");
 		const resolver = this.#pauseResolver;
 		this.#pauseSignal = null;
 		this.#pauseResolver = null;
@@ -394,7 +394,7 @@ export class LoopController {
 		} catch (err) {
 			logger.warn("Failed to write updated plan.md", { error: String(err) });
 		}
-		this.#activityLogger?.logBroadcast(this.#clonerId, "Plan updated. New plan will be used in the next iteration.");
+		this.#activityLogger?.logBroadcast(this.#reviewerId, "Plan updated. New plan will be used in the next iteration.");
 		logger.info("LoopController plan updated", { length: newPlanContent.length });
 	}
 
@@ -424,16 +424,16 @@ export class LoopController {
 		// Reset blockage state at the start of a fresh loop
 		this.#stagnationCount = 0;
 		this.#lastFindingsKey = "";
-		this.#workerCrashCounts = {};
+		this.#agentCrashCounts = {};
 		// Dynamic worker tracking
 		// Per-iteration role suggestions from cloner review (Round 2+).
 		let currentRoleSuggestions: Record<string, string> = {};
-		let currentWorkerCount = this.#loopConfig.agents.initial;
+		let currentAgentCount = this.#loopConfig.agents.initial;
 		let currentMaxRounds = this.#loopConfig.agents.maxRounds;
 		let currentConvergenceNeeded = this.#loopConfig.agents.roundsConvergenceThreshold;
 
-		const workerIds: string[] = [];
-		let clonerIds: string[] = [];
+		const agentIds: string[] = [];
+		let reviewerIds: string[] = [];
 		const { workspace, modelRegistry, settings, signal } = options;
 
 		// P0-F: Pipeline hooks.
@@ -449,7 +449,7 @@ export class LoopController {
 		if (this.#loopConfig.agents.auto && this.#planContent) {
 			const analyzer = new TaskComplexityAnalyzer();
 			const rec = await analyzer.analyze(this.#planContent, this.#loopConfig);
-			currentWorkerCount = rec.workers;
+			currentAgentCount = rec.workers;
 			currentMaxRounds = rec.maxRounds;
 			currentConvergenceNeeded = rec.roundsConvergenceThreshold;
 			logger.info("TaskComplexityAnalyzer override", {
@@ -470,36 +470,36 @@ export class LoopController {
 			}
 		}
 
-		const initialWorkerCount = currentWorkerCount;
-		const clonerCount = this.#loopConfig.agents.reviewers;
+		const initialWorkerCount = currentAgentCount;
+		const reviewerCount = this.#loopConfig.agents.reviewers;
 
 		// Initialize worker and cloner IDs
-		for (let i = 0; i < initialWorkerCount; i++) workerIds.push(`worker-${i + 1}`);
-		clonerIds = Array.from({ length: clonerCount }, (_, i) => `cloner-${i + 1}`);
+		for (let i = 0; i < initialWorkerCount; i++) agentIds.push(`worker-${i + 1}`);
+		reviewerIds = Array.from({ length: reviewerCount }, (_, i) => `cloner-${i + 1}`);
 
 		// Register initial workers and cloners to StateTracker so that
 		// subsequent updateAgent / incrementPraise / etc. calls don't
 		// silently no-op (state.ts:127 `if (!agent) return`).
-		for (const id of workerIds) {
+		for (const id of agentIds) {
 			await this.#stateTracker.registerAgent(id, this.#loopConfig.model);
 		}
-		for (const id of clonerIds) {
+		for (const id of reviewerIds) {
 			await this.#stateTracker.registerAgent(id, this.#loopConfig.model);
 		}
 
 		this.#channel = new AgentChannel(
 			this.#ircBus,
 			{
-				workers: workerIds,
-				cloners: clonerIds,
+				workers: agentIds,
+				cloners: reviewerIds,
 			},
 			this.#activityLogger,
 		);
 		// Create per-session RegionLockManager for file-level lock coordination.
 		const lockMgr = new RegionLockManager();
 		await this.#channel.broadcast(
-			this.#clonerId,
-			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${clonerCount}.`,
+			this.#reviewerId,
+			`Plan broadcast. Workers: ${initialWorkerCount}, Cloners: ${reviewerCount}.`,
 		);
 
 		for (let iter = 0; iter < this.#loopConfig.maxIterations; iter++) {
@@ -542,7 +542,7 @@ export class LoopController {
 			}
 
 			// Progress: workers running
-			for (const id of workerIds) {
+			for (const id of agentIds) {
 				await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 			}
 			await this.#stateTracker.updatePipeline({ loopIteration: iter + 1, roundtablePhase: "Workers executing" });
@@ -552,18 +552,18 @@ export class LoopController {
 				targetCount: this.#loopConfig.maxIterations,
 				currentWave: 0,
 				totalWaves: 1,
-				agents: Object.fromEntries(workerIds.map(id => [id, { status: "running", iteration: iter }])),
+				agents: Object.fromEntries(agentIds.map(id => [id, { status: "running", iteration: iter }])),
 			});
 
 			let verdict: ReviewVerdict | null = null;
-			let lastWorkerOutput = "";
-			let workersConverged = false;
+			let lastAgentOutput = "";
+			let agentsConverged = false;
 			try {
 				const maxRounds = currentMaxRounds;
 				const convergenceNeeded = currentConvergenceNeeded;
 				// 0 = unlimited; safety cap at 10 rounds
 				const hardLimit = maxRounds === 0 ? 10 : maxRounds;
-				const allWorkerResults: SingleResult[] = [];
+				const allAgentResults: SingleResult[] = [];
 				let priorOutputs = "";
 				let convergenceStreak = 0;
 				let lastRoundOutputsKey = "";
@@ -597,12 +597,12 @@ export class LoopController {
 
 					// P0-F: beforeWorkerRound hook — can skip.
 				const shouldRunRound = await invokeHook(hooks, "beforeWorkerRound", () =>
-					hooks?.beforeWorkerRound?.(round, workerIds, pipelineCtx),
+					hooks?.beforeWorkerRound?.(round, agentIds, pipelineCtx),
 				);
 				if (shouldRunRound === false) continue;
 
 				let roundResults = await this.#spawnWorkers(
-						workerIds,
+						agentIds,
 						workspace,
 						this.#planContent,
 						clonerFeedbackHistory,
@@ -630,8 +630,8 @@ export class LoopController {
 					}
 
 					// Release all locks held by round workers (defensive cleanup).
-					for (const id of workerIds) lockMgr.releaseAll(id);
-					allWorkerResults.push(...roundResults);
+					for (const id of agentIds) lockMgr.releaseAll(id);
+					allAgentResults.push(...roundResults);
 
 					// P0-F: afterWorkerRound hook.
 					await invokeHook(hooks, "afterWorkerRound", () =>
@@ -648,7 +648,7 @@ export class LoopController {
 
 						roundResults = await this.#runDeliberationPhase(
 							roundResults,
-							workerIds,
+							agentIds,
 							workspace,
 							this.#planContent,
 							modelRegistry,
@@ -708,7 +708,7 @@ export class LoopController {
 							}
 						}
 						if (converged) {
-							workersConverged = true;
+							agentsConverged = true;
 							break;
 						}
 					}
@@ -724,7 +724,7 @@ export class LoopController {
 					reviewerId = nominationResult?.elected ?? undefined;
 
 					// Update state tracker: mark reviewer role, clear previous
-					for (const id of workerIds) {
+					for (const id of agentIds) {
 						await this.#stateTracker.updateAgent(id, {
 							role: id === reviewerId ? "reviewer" : undefined,
 						});
@@ -733,7 +733,7 @@ export class LoopController {
 
 				// All worker rounds complete — mark workers as completed in
 				// StateTracker so the widget reflects their finished state.
-				for (const id of workerIds) {
+				for (const id of agentIds) {
 					await this.#stateTracker.updateAgent(id, {
 						status: "completed",
 						iteration: iter,
@@ -742,16 +742,16 @@ export class LoopController {
 				}
 
 				// File conflict detection: collect raw worker outputs for attribution
-				const workerOutputMap = new Map<string, string>();
-				for (const r of allWorkerResults) {
-					workerOutputMap.set(r.agent, r.output);
+				const agentOutputMap = new Map<string, string>();
+				for (const r of allAgentResults) {
+					agentOutputMap.set(r.agent, r.output);
 				}
 
 				// Emit tool_call events BEFORE endRound — these power the
 				// AgentTimeline component and must fire regardless of whether
 				// git diff succeeds. endRound failures previously skipped these
 				// events entirely, leaving Timeline blank.
-				for (const r of allWorkerResults) {
+				for (const r of allAgentResults) {
 					this.#activityLogger?.logToolCall(
 						r.agent,
 						"round_complete",
@@ -766,7 +766,7 @@ export class LoopController {
 				// does NOT skip all downstream events (conflict, file_change,
 				// todo-updated, cloner-review, verdict).
 				try {
-					lastConflictReport = await this.#fileTracker.endRound(workerOutputMap);
+					lastConflictReport = await this.#fileTracker.endRound(agentOutputMap);
 				} catch (err) {
 					const errMsg = err instanceof Error ? err.message : String(err);
 					this.#activityLogger?.logPhase("file-track-error", undefined, iter + 1);
@@ -794,12 +794,12 @@ export class LoopController {
 				}
 
 				// 3. Collect worker output for review context (all rounds)
-				lastWorkerOutput = allWorkerResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
+				lastAgentOutput = allAgentResults.map(r => `[${r.agent}] ${r.output.slice(0, 4000)}`).join("\n\n---\n\n");
 
 				// Update todo statuses from worker round summaries
 				if (this.#planContent && this.#stateTracker.state.todos && this.#stateTracker.state.todos.length > 0) {
 					const updatedTodos = this.#todoTracker.updateFromWorkerOutput(
-						lastWorkerOutput,
+						lastAgentOutput,
 						this.#stateTracker.state.todos,
 					);
 					await this.#stateTracker.updatePipeline({ todos: updatedTodos });
@@ -807,7 +807,7 @@ export class LoopController {
 				}
 
 				// 4. Latent cloner gate: only review when workers failed to converge internally
-				if (workersConverged) {
+				if (agentsConverged) {
 					// Workers converged — internal peer review sufficed. Skip cloner review.
 					await this.#stateTracker.updatePipeline({
 						roundtablePhase: "Workers converged internally",
@@ -819,7 +819,7 @@ export class LoopController {
 						currentWave: 0,
 						totalWaves: 1,
 						agents: Object.fromEntries(
-							workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
+							agentIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 						),
 					});
 					// ── Verification hook ──
@@ -855,12 +855,12 @@ export class LoopController {
 
 				// Workers did not converge — escalate to latent cloner review
 				await this.#channel.broadcast(
-					this.#clonerId,
+					this.#reviewerId,
 					`Swarm did not converge internally. Escalating to Cloner review (iteration ${iter + 1}).`,
 				);
 
 				// Progress: cloners reviewing
-				for (const id of clonerIds) {
+				for (const id of reviewerIds) {
 					await this.#stateTracker.updateAgent(id, { status: "running", iteration: iter });
 				}
 				await this.#stateTracker.updatePipeline({ roundtablePhase: "Cloners reviewing (escalation)" });
@@ -870,20 +870,20 @@ export class LoopController {
 					targetCount: this.#loopConfig.maxIterations,
 					currentWave: 0,
 					totalWaves: 1,
-					agents: Object.fromEntries(clonerIds.map(id => [id, { status: "running", iteration: iter }])),
+					agents: Object.fromEntries(reviewerIds.map(id => [id, { status: "running", iteration: iter }])),
 				});
 
 				// Spawn cloners to review (parallel)
 
 				// P0-F: beforeClonerReview hook.
 				await invokeHook(hooks, "beforeClonerReview", () =>
-					hooks?.beforeClonerReview?.(iter, lastWorkerOutput, pipelineCtx),
+					hooks?.beforeClonerReview?.(iter, lastAgentOutput, pipelineCtx),
 				);
 
 				verdict = await this.#runClonerReview(
-					clonerIds,
+					reviewerIds,
 					iter,
-					lastWorkerOutput,
+					lastAgentOutput,
 					workspace,
 					this.#planContent,
 					clonerFeedbackHistory,
@@ -903,15 +903,15 @@ export class LoopController {
 				}
 
 				// Track worker quality from cloner verdict (GAP 3)
-				if (verdict.praisedWorkers.length > 0) {
-					await this.#stateTracker.incrementPraise(verdict.praisedWorkers);
+				if (verdict.praisedAgents.length > 0) {
+					await this.#stateTracker.incrementPraise(verdict.praisedAgents);
 				}
-				if (verdict.criticizedWorkers.length > 0) {
-					await this.#stateTracker.incrementCriticism(verdict.criticizedWorkers);
+				if (verdict.criticizedAgents.length > 0) {
+					await this.#stateTracker.incrementCriticism(verdict.criticizedAgents);
 				}
 
 				// Progress: cloners completed
-				for (const id of clonerIds) {
+				for (const id of reviewerIds) {
 					await this.#stateTracker.updateAgent(id, {
 						status: "completed",
 						iteration: iter,
@@ -929,8 +929,8 @@ export class LoopController {
 					currentWave: 0,
 					totalWaves: 1,
 					agents: Object.fromEntries([
-						...workerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
-						...clonerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
+						...agentIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
+						...reviewerIds.map(id => [id, { status: "completed" as const, iteration: iter }]),
 					]),
 				});
 				if (verdict.passed) {
@@ -969,7 +969,7 @@ export class LoopController {
 				// A crash bypasses the normal releaseAll path (line ~619), leaking
 				// locks into the next iteration where same-named workers would be
 				// blocked on their own stale locks.
-				for (const id of workerIds) lockMgr.releaseAll(id);
+				for (const id of agentIds) lockMgr.releaseAll(id);
 
 				const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
 				const message = isTimeout
@@ -1033,7 +1033,7 @@ export class LoopController {
 							};
 							if (this.#loopConfig.humanEscalation) {
 								result.escalationContext = {
-									lastWorkerOutput,
+									lastAgentOutput,
 									lastFindings: verdict.findings,
 									approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
 								};
@@ -1061,7 +1061,7 @@ export class LoopController {
 			// Called after convergence check. If the loop is stuck, the loop pauses
 			// here awaiting user resolution (continue / skip / abort).
 			{
-				const resolution = await this.#detectBlockage(iter, verdict, lastWorkerOutput);
+				const resolution = await this.#detectBlockage(iter, verdict, lastAgentOutput);
 				if (resolution === "abort") {
 					return {
 						status: "aborted",
@@ -1090,33 +1090,33 @@ export class LoopController {
 				// Pure decision extracted to worker-scaler.ts (unit-tested).
 				const delta = computeScaleDelta({
 					suggestions,
-					clonerCount: clonerIds.length,
-					currentWorkerCount,
+					reviewerCount: reviewerIds.length,
+					currentAgentCount,
 					min,
 				});
 
 				if (delta > 0) {
-					const addCount = Math.min(delta, max - currentWorkerCount);
+					const addCount = Math.min(delta, max - currentAgentCount);
 					for (let i = 0; i < addCount; i++) {
-						const newId = `worker-${workerIds.length + 1}`;
-						this.#channel.addWorker(newId);
+						const newId = `worker-${agentIds.length + 1}`;
+						this.#channel.addAgentb(newId);
 						await this.#stateTracker.registerAgent(newId, this.#loopConfig.model);
-						workerIds.push(newId);
-						currentWorkerCount++;
+						agentIds.push(newId);
+						currentAgentCount++;
 						this.#activityLogger?.logScaling("add", newId, `cloner suggestion +${delta}`);
 					}
-				} else if (delta < 0 && currentWorkerCount > min) {
-					const removeCount = Math.min(-delta, currentWorkerCount - min);
+				} else if (delta < 0 && currentAgentCount > min) {
+					const removeCount = Math.min(-delta, currentAgentCount - min);
 					for (let i = 0; i < removeCount; i++) {
 						// Quality-based scale-down: remove the lowest-scoring worker (GAP 3)
-						const worst = this.#stateTracker.getWorstWorker(workerIds);
-						const removed = worst ?? workerIds[workerIds.length - 1];
-						const idx = workerIds.indexOf(removed);
-						if (idx >= 0) workerIds.splice(idx, 1);
-						this.#channel.removeWorker(removed);
+						const worst = this.#stateTracker.getWorstAgent(agentIds);
+						const removed = worst ?? agentIds[agentIds.length - 1];
+						const idx = agentIds.indexOf(removed);
+						if (idx >= 0) agentIds.splice(idx, 1);
+						this.#channel.removeAgentb(removed);
 						await this.#stateTracker.unregisterAgent(removed);
 						this.#activityLogger?.logScaling("remove", removed, `cloner suggestion ${delta}`);
-						currentWorkerCount--;
+						currentAgentCount--;
 					}
 				}
 			}
@@ -1124,7 +1124,7 @@ export class LoopController {
 			// 6. Broadcast feedback and accumulate for cross-iteration memory
 			const feedback = verdict.findings.join("\n");
 			clonerFeedbackHistory.push(feedback);
-			await this.#channel.broadcast(this.#clonerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
+			await this.#channel.broadcast(this.#reviewerId, `Review feedback (iteration ${iter + 1}):\n${feedback}`);
 
 			// P0-F: afterIteration hook.
 			await invokeHook(hooks, "afterIteration", () => hooks?.afterIteration?.(iter, pipelineCtx));
@@ -1139,7 +1139,7 @@ export class LoopController {
 				};
 				if (status === "escalated") {
 					result.escalationContext = {
-						lastWorkerOutput,
+						lastAgentOutput,
 						lastFindings: verdict.findings,
 						approvalRatio: verdict.totalCount > 0 ? verdict.approvalCount / verdict.totalCount : 0,
 					};
@@ -1203,12 +1203,12 @@ export class LoopController {
 	async #detectBlockage(
 		iteration: number,
 		verdict: ReviewVerdict,
-		lastWorkerOutput: string,
+		lastAgentOutput: string,
 	): Promise<BlockerResolution> {
 		// Pure blockage decision extracted to blockage.ts (unit-tested).
 		const decision = evaluateBlockage({
 			stagnationCount: this.#stagnationCount,
-			workerCrashCounts: this.#workerCrashCounts,
+			agentCrashCounts: this.#agentCrashCounts,
 		});
 
 		if (!decision.blocked) {
@@ -1220,9 +1220,9 @@ export class LoopController {
 		this.#currentBlockerContext = {
 			iteration: iteration + 1,
 			lastFindings: verdict.findings,
-			lastWorkerOutput: lastWorkerOutput.slice(0, 8000),
+			lastAgentOutput: lastAgentOutput.slice(0, 8000),
 			stagnationCount: this.#stagnationCount,
-			workerCrashCounts: { ...this.#workerCrashCounts },
+			agentCrashCounts: { ...this.#agentCrashCounts },
 			reason,
 			timeoutMs: BLOCKER_TIMEOUT_MS,
 			deadline: Date.now() + BLOCKER_TIMEOUT_MS,
@@ -1277,7 +1277,7 @@ export class LoopController {
 		if (decision === "continue") {
 			this.#stagnationCount = 0;
 			this.#lastFindingsKey = "";
-			this.#workerCrashCounts = {};
+			this.#agentCrashCounts = {};
 		}
 
 		this.#blockerResolver(decision);
@@ -1285,8 +1285,8 @@ export class LoopController {
 	}
 
 	/** Track worker crashes for deadlock detection (called from #spawnWorkers error handler). */
-	#trackWorkerCrash(workerId: string): void {
-		this.#workerCrashCounts[workerId] = (this.#workerCrashCounts[workerId] ?? 0) + 1;
+	#trackWorkerCrash(agentId: string): void {
+		this.#agentCrashCounts[agentId] = (this.#agentCrashCounts[agentId] ?? 0) + 1;
 	}
 
 	// -------------------------------------------------------------------
@@ -1405,7 +1405,7 @@ export class LoopController {
 	// Spawn workers in parallel
 	// -------------------------------------------------------------------
 	async #spawnWorkers(
-		workerIds: string[],
+		agentIds: string[],
 		workspace: string,
 		planContent: string | undefined,
 		previousFeedback: string[],
@@ -1432,12 +1432,12 @@ export class LoopController {
 		const hooks = lockMgr && channel ? (id: string) => this.#buildLockHooks(id, lockMgr, channel) : undefined;
 
 		const results = await Promise.allSettled(
-			workerIds.map((id, i) => {
+			agentIds.map((id, i) => {
 				const workerHooks = hooks?.(id);
 				const isReviewer = reviewerId !== undefined && id === reviewerId;
 				const systemPrompt = isReviewer
-					? `${WORKER_SYSTEM_PROMPT}\n${AgentChannel.buildReviewerPrompt()}`
-					: WORKER_SYSTEM_PROMPT;
+					? `${AGENT_SYSTEM_PROMPT}\n${AgentChannel.buildReviewerPrompt()}`
+					: AGENT_SYSTEM_PROMPT;
 
 				const agentDef: AgentDefinition = {
 					name: id,
@@ -1448,8 +1448,8 @@ export class LoopController {
 				applyToolRestrictions(agentDef, resolveToolRestrictions(this.#loopConfig, "worker"));
 
 				const taskText = [
-					`You are Worker ${i + 1} of ${workerIds.length}.`,
-					`Your peers are: ${workerIds.filter(w => w !== id).join(", ")}.`,
+					`You are Worker ${i + 1} of ${agentIds.length}.`,
+					`Your peers are: ${agentIds.filter(w => w !== id).join(", ")}.`,
 					`Negotiate with them via IRC (use \`irc send to:worker:*\` for broadcast).`,
 					`Work in the workspace: ${workspace}.`,
 					planContent ? `\n## Plan\n\n${planContent}` : "",
@@ -1510,13 +1510,13 @@ export class LoopController {
 		return results.map((r, i) => {
 			if (r.status === "fulfilled") return r.value;
 			const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-			errors.push(`Worker ${workerIds[i]} crashed: ${errMsg}`);
-			this.#trackWorkerCrash(workerIds[i]);
-			this.#activityLogger?.logCrash(workerIds[i], errMsg);
+			errors.push(`Worker ${agentIds[i]} crashed: ${errMsg}`);
+			this.#trackWorkerCrash(agentIds[i]);
+			this.#activityLogger?.logCrash(agentIds[i], errMsg);
 			return {
 				index: i,
-				id: `worker-${workerIds[i]}`,
-				agent: workerIds[i],
+				id: `worker-${agentIds[i]}`,
+				agent: agentIds[i],
 				agentSource: "project" as const,
 				task: "",
 				exitCode: 1,
@@ -1532,7 +1532,7 @@ export class LoopController {
 	// -------------------------------------------------------------------
 	// Build per-worker lock hooks for tier 1 (intent broadcast) + tier 2 (function-level lock)
 	// -------------------------------------------------------------------
-	#buildLockHooks(workerId: string, lockMgr: RegionLockManager, channel: AgentChannel) {
+	#buildLockHooks(agentId: string, lockMgr: RegionLockManager, channel: AgentChannel) {
 		/** Tool names that modify files — intercepted for lock coordination. */
 		const EDIT_TOOLS = new Set(["edit", "write", "bash"]);
 
@@ -1562,11 +1562,11 @@ export class LoopController {
 			if (!file) return undefined;
 
 			// Tier 2: check if another worker holds a lock on this file
-			const check = lockMgr.checkLock(file, workerId);
+			const check = lockMgr.checkLock(file, agentId);
 			if (check.locked && check.entry) {
 				void channel.broadcast(
-					workerId,
-					`[BLOCKED] ${workerId} wants ${file} but ${RegionLockManager.describeLock(check.entry)}.`,
+					agentId,
+					`[BLOCKED] ${agentId} wants ${file} but ${RegionLockManager.describeLock(check.entry)}.`,
 				);
 				return {
 					block: true as const,
@@ -1575,7 +1575,7 @@ export class LoopController {
 			}
 
 			// Tier 2: acquire lock before tool executes
-			if (!lockMgr.tryLock(workerId, file)) {
+			if (!lockMgr.tryLock(agentId, file)) {
 				return {
 					block: true as const,
 					reason: `Cannot acquire lock on ${file} — concurrent edit conflict. Retry or negotiate via IRC.`,
@@ -1583,7 +1583,7 @@ export class LoopController {
 			}
 
 			// Tier 1: broadcast editing intent
-			void channel.broadcast(workerId, `[EDITING] ${workerId} started editing ${file}.`);
+			void channel.broadcast(agentId, `[EDITING] ${agentId} started editing ${file}.`);
 
 			return undefined;
 		};
@@ -1595,8 +1595,8 @@ export class LoopController {
 			const file = extractPath(name, ctx.args);
 			if (!file) return undefined;
 
-			lockMgr.release(workerId, file);
-			void channel.broadcast(workerId, `[DONE] ${workerId} finished editing ${file}.`);
+			lockMgr.release(agentId, file);
+			void channel.broadcast(agentId, `[DONE] ${agentId} finished editing ${file}.`);
 
 			return undefined;
 		};
@@ -1613,7 +1613,7 @@ export class LoopController {
 	 */
 	async #runDeliberationPhase(
 		roundResults: SingleResult[],
-		workerIds: string[],
+		agentIds: string[],
 		workspace: string,
 		planContent: string | undefined,
 		modelRegistry: ModelRegistry | undefined,
@@ -1650,7 +1650,7 @@ export class LoopController {
 			});
 
 			const subResults = await Promise.allSettled(
-				workerIds.map((id, i) => {
+				agentIds.map((id, i) => {
 					const delibMsgId = `deliberation-${id}-${sub}`;
 					return streamAgentOutput(
 						{ activityLogger: this.#activityLogger!, msgId: delibMsgId, from: id },
@@ -1690,12 +1690,12 @@ export class LoopController {
 			currentOutputs = subResults.map((r, i) => {
 				if (r.status === "fulfilled") return r.value;
 				const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-				errors.push(`Deliberation worker ${workerIds[i]} crashed: ${errMsg}`);
+				errors.push(`Deliberation worker ${agentIds[i]} crashed: ${errMsg}`);
 				return (
 					currentOutputs[i] ?? {
 						index: i,
-						id: `deliberation-${workerIds[i]}`,
-						agent: workerIds[i],
+						id: `deliberation-${agentIds[i]}`,
+						agent: agentIds[i],
 						agentSource: "project" as const,
 						task: "",
 						exitCode: 1,
@@ -1717,9 +1717,9 @@ export class LoopController {
 	// Run cloner review via ReviewCouncil
 	// -------------------------------------------------------------------
 	async #runClonerReview(
-		clonerIds: string[],
+		reviewerIds: string[],
 		iteration: number,
-		workerOutput: string,
+		agentOutput: string,
 		workspace: string,
 		planContent: string | undefined,
 		previousFindings: string[],
@@ -1730,10 +1730,10 @@ export class LoopController {
 		const council = new ReviewCouncil();
 		return council.review(
 			{
-				clonerIds,
+				reviewerIds,
 				workspace,
 				iteration,
-				workerOutput,
+				agentOutput,
 				planContent,
 				previousFindings,
 				deliberation: this.#loopConfig.enableDeliberation,

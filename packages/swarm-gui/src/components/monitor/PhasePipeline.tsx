@@ -42,7 +42,7 @@ const STEPS: Step[] = [
     key: "reviewing", label: "Review",
     internalPhases: [], // activated by roundtablePhase match during "stage" or "blocked"
     subStepPatterns: [
-      { match: "Cloners reviewing", label: "Reviewing" },
+      { match: "Reviewers reviewing", label: "Reviewing" },
     ],
   },
   {
@@ -88,7 +88,7 @@ export default function PhasePipeline() {
 
     // In Running phase, check roundtablePhase for Review step
     if (phase === "stage") {
-      if (phase.includes("Cloners reviewing") && step.key === "reviewing") return "active";
+      if (phase.includes("Reviewers reviewing") && step.key === "reviewing") return "active";
       if (phase.includes("After Loop") && step.key === "summary") return "active";
       if (phase.includes("After Loop completed")) {
         if (step.key === "summary") return "done";
@@ -107,7 +107,7 @@ export default function PhasePipeline() {
       (s) =>
         s.internalPhases.includes(phase) ||
         (phase === "stage" && phase.includes(
-          s.key === "reviewing" ? "Cloners reviewing" : s.key === "summary" ? "After Loop" : "",
+          s.key === "reviewing" ? "Reviewers reviewing" : s.key === "summary" ? "After Loop" : "",
         )),
     );
     if (activeIdx >= 0 && index < activeIdx) return "done";

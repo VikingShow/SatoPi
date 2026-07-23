@@ -14,7 +14,7 @@ export interface BlockageInput {
 	/** Consecutive rounds with stagnant cloner findings. */
 	stagnationCount: number;
 	/** Per-worker crash counts. */
-	workerCrashCounts: Record<string, number>;
+	agentCrashCounts: Record<string, number>;
 	/** Override the stagnation threshold (defaults to STAGNATION_THRESHOLD). */
 	stagnationThreshold?: number;
 	/** Override the crash threshold (defaults to CRASH_THRESHOLD). */
@@ -41,7 +41,7 @@ export function evaluateBlockage(input: BlockageInput): BlockageDecision {
 	const crashThreshold = input.crashThreshold ?? CRASH_THRESHOLD;
 
 	const stagnated = input.stagnationCount >= stagnationThreshold;
-	const deadlocked = Object.values(input.workerCrashCounts).some((c) => c >= crashThreshold);
+	const deadlocked = Object.values(input.agentCrashCounts).some((c) => c >= crashThreshold);
 
 	if (!stagnated && !deadlocked) {
 		return { blocked: false };

@@ -14,7 +14,7 @@ import { create } from "zustand";
 import { api } from "../lib/api-client";
 import type { ModelOption } from "../lib/types";
 
-interface WorkersConfig {
+interface AgentsConfig {
   initial: number;
   min: number;
   max: number;
@@ -24,7 +24,7 @@ interface WorkersConfig {
   model: string;
 }
 
-interface ClonersConfig {
+interface ReviewersConfig {
   count: number;
   model: string;
   reviewStrictness: string;
@@ -49,8 +49,8 @@ interface LoopConfig {
 interface ConfigStore {
   name: string;
   mode: string;
-  workers: WorkersConfig;
-  cloners: ClonersConfig;
+  agents: AgentsConfig;
+  reviewers: ReviewersConfig;
   convergence: ConvergenceConfig;
   scaling: ScalingConfig;
   loop: LoopConfig;
@@ -62,8 +62,8 @@ interface ConfigStore {
   loadConfig: () => Promise<void>;
   loadModels: () => Promise<void>;
   saveConfig: () => Promise<void>;
-  updateWorkers: (patch: Partial<WorkersConfig>) => void;
-  updateCloners: (patch: Partial<ClonersConfig>) => void;
+  updateAgents: (patch: Partial<AgentsConfig>) => void;
+  updateReviewers: (patch: Partial<ReviewersConfig>) => void;
   updateConvergence: (patch: Partial<ConvergenceConfig>) => void;
   updateScaling: (patch: Partial<ScalingConfig>) => void;
   updateLoop: (patch: Partial<LoopConfig>) => void;
@@ -72,12 +72,12 @@ interface ConfigStore {
 
 // Defaults match the current loop.yaml so the form opens with the configured
 // values if the YAML is unreadable.
-const defaultWorkers: WorkersConfig = {
+const defaultAgents: AgentsConfig = {
   initial: 3, min: 2, max: 8, auto: true,
   maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-v4-pro",
 };
 
-const defaultCloners: ClonersConfig = {
+const defaultReviewers: ReviewersConfig = {
   count: 3, model: "deepseek-v4-pro", reviewStrictness: "strict",
 };
 
@@ -107,12 +107,12 @@ function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> 
     const raw = Bun.YAML.parse(yaml) as { swarm?: Record<string, any> } | null;
     if (!raw?.swarm) return {};
     const s = raw.swarm;
-    const workers = s.workers ?? {};
-    const cloners = s.cloners ?? {};
+    const workers = s.agents ?? {};
+    const cloners = s.reviewers ?? {};
     return {
       name: typeof s.name === "string" ? s.name : prev.name,
       mode: typeof s.mode === "string" ? s.mode : prev.mode,
-      workers: {
+      agents: {
         ...prev.workers,
         initial: workers.initial ?? prev.agents.initial,
         min: workers.min ?? prev.agents.min,
@@ -122,7 +122,7 @@ function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> 
         roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.agents.roundsConvergenceThreshold,
         model: workers.model ?? prev.agents.model,
       },
-      cloners: {
+      reviewers: {
         ...prev.cloners,
         count: cloners.count ?? prev.agents.reviewerscount,
         model: cloners.model ?? prev.agents.reviewersmodel,
@@ -166,7 +166,7 @@ function buildYaml(config: ConfigStore): string {
 
   agents: {}
 
-  workers:
+  agents:
     initial: ${config.agents.initial}
     min: ${config.agents.min}
     max: ${config.agents.max}
@@ -175,7 +175,7 @@ function buildYaml(config: ConfigStore): string {
     rounds_convergence_threshold: ${config.agents.roundsConvergenceThreshold}
     model: ${config.agents.model}
 
-  cloners:
+  reviewers:
     count: ${config.agents.reviewerscount}
     model: ${config.agents.reviewersmodel}
     review_strictness: ${config.agents.reviewersreviewStrictness}
@@ -197,8 +197,8 @@ function buildYaml(config: ConfigStore): string {
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   name: "SatoPi",
   mode: "loop",
-  workers: defaultWorkers,
-  cloners: defaultCloners,
+  agents: defaultAgents,
+  reviewers: defaultReviewers,
   convergence: defaultConvergence,
   scaling: defaultScaling,
   loop: defaultLoop,
@@ -237,13 +237,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set({ isDirty: false });
   },
 
-  updateWorkers: (patch) => {
-    set((s) => ({ workers: { ...s.workers, ...patch }, isDirty: true }));
+  updateAgents: (patch) => {
+    set((s) => ({ agents: { ...s.agents, ...patch }, isDirty: true }));
     get().setYamlFromForm();
   },
 
-  updateCloners: (patch) => {
-    set((s) => ({ cloners: { ...s.cloners, ...patch }, isDirty: true }));
+  updateReviewers: (patch) => {
+    set((s) => ({ reviewers: { ...s.reviewers, ...patch }, isDirty: true }));
     get().setYamlFromForm();
   },
 

@@ -57,8 +57,8 @@ export interface CurtainResultData {
 		totalIterations: number;
 		finalStatus: string;
 		clonerApprovalRatio: number;
-		workerCount: number;
-		clonerCount: number;
+		agentCount: number;
+		reviewerCount: number;
 	};
 }
 
@@ -87,15 +87,15 @@ export async function runCurtainPipeline(
 
 	// Agent counts
 	const agents = stateTracker.state.agents;
-	const workerCount = Object.values(agents).filter(a => a.name.startsWith("worker")).length;
-	const clonerCount = Object.values(agents).filter(a => a.name.startsWith("cloner")).length;
+	const agentCount = Object.values(agents).filter(a => a.name.startsWith("worker")).length;
+	const reviewerCount = Object.values(agents).filter(a => a.name.startsWith("cloner")).length;
 
 	// ── Run reporter + reflection in parallel ──
 	const [reporterSummary, extraction] = await Promise.all([
 		// Thread A: Reporter agent
 		runReporterAgent(workspace, result, { modelRegistry, settings, activityLogger, roleAssetManager }),
 		// Thread B: Reflection pipeline
-		runReflectionPipeline(result, { workerCount, clonerCount, experienceStore, modelRegistry, settings, runId }),
+		runReflectionPipeline(result, { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId }),
 	]);
 
 	// ── Merge results ──
@@ -153,8 +153,8 @@ export async function runCurtainPipeline(
 			totalIterations: extraction.stats.totalIterations,
 			finalStatus: extraction.stats.finalStatus,
 			clonerApprovalRatio: extraction.stats.clonerApprovalRatio,
-			workerCount: extraction.stats.workerCount,
-			clonerCount: extraction.stats.clonerCount,
+			agentCount: extraction.stats.agentCount,
+			reviewerCount: extraction.stats.reviewerCount,
 		},
 	};
 
@@ -243,8 +243,8 @@ interface ReflectionResult {
 		totalIterations: number;
 		finalStatus: string;
 		clonerApprovalRatio: number;
-		workerCount: number;
-		clonerCount: number;
+		agentCount: number;
+		reviewerCount: number;
 	};
 	reflectionSummary: string;
 	deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null;
@@ -253,18 +253,18 @@ interface ReflectionResult {
 async function runReflectionPipeline(
 	result: LoopResult,
 	opts: {
-		workerCount: number;
-		clonerCount: number;
+		agentCount: number;
+		reviewerCount: number;
 		experienceStore: ExperienceStore;
 		modelRegistry: ModelRegistry;
 		settings: Settings;
 		runId: string;
 	},
 ): Promise<ReflectionResult> {
-	const { workerCount, clonerCount, experienceStore, modelRegistry, settings, runId } = opts;
+	const { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId } = opts;
 
 	// Extract lessons
-	const extraction = extractLessons(result, workerCount, clonerCount);
+	const extraction = extractLessons(result, agentCount, reviewerCount);
 
 	// Deep reflection (LLM, best-effort)
 	let deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null = null;

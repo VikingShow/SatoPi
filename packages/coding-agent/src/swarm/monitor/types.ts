@@ -37,7 +37,7 @@ export interface AfterLoopResult {
     totalIterations: number;
     finalStatus: string;
     clonerApprovalRatio: number;
-    workerCount: number;
-    clonerCount: number;
+    agentCount: number;
+    reviewerCount: number;
   };
 }

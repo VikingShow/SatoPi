@@ -55,8 +55,8 @@ describe("ConfigStore: update actions", () => {
     expect(getStore().isDirty).toBe(true);
   });
 
-  it("updateCloners updates count", () => {
-    getStore().updateCloners({ count: 5, reviewStrictness: "lenient" });
+  it("updateReviewers updates count", () => {
+    getStore().updateReviewers({ count: 5, reviewStrictness: "lenient" });
     expect(getStore().agents.reviewerscount).toBe(5);
     expect(getStore().agents.reviewersreviewStrictness).toBe("lenient");
   });

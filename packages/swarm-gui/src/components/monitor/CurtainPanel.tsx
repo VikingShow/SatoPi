@@ -41,7 +41,7 @@ export default function CurtainPanel() {
 
   const { status, iterations, lessons, reflection, stats: runStats, summaryMarkdown } = curtainResult;
   const safeLessons = lessons ?? [];
-  const safeRunStats = runStats ?? { workerCount: 0, agentCount: 0, clonerApprovalRatio: 0 };
+  const safeRunStats = runStats ?? { agentCount: 0, reviewerCount: 0, reviewerApprovalRatio: 0 };
   const statusIcon = status === "completed" ? CheckCircle : status === "escalated" ? AlertTriangle : AlertOctagon;
   const StatusIcon = statusIcon;
   const statusColor = status === "completed" ? "text-status-success" : status === "escalated" ? "text-status-warning" : "text-status-danger";
@@ -75,15 +75,15 @@ export default function CurtainPanel() {
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Workers</div>
-              <div className="text-foreground font-mono">{safeRunStats.workerCount}</div>
+              <div className="text-foreground font-mono">{safeRunStats.agentCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
-              <div className="text-muted-foreground/60">Cloners</div>
+              <div className="text-muted-foreground/60">Reviewers</div>
               <div className="text-foreground font-mono">{safeRunStats.agentCount}</div>
             </div>
             <div className="bg-background-elevated rounded px-2 py-1.5 text-center">
               <div className="text-muted-foreground/60">Approval</div>
-              <div className="text-foreground font-mono">{Math.round((safeRunStats.clonerApprovalRatio ?? 0) * 100)}%</div>
+              <div className="text-foreground font-mono">{Math.round((safeRunStats.reviewerApprovalRatio ?? 0) * 100)}%</div>
             </div>
           </div>
 

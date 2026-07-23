@@ -27,7 +27,7 @@ function applyAgentStateEntry(
 	agents: Record<string, NonNullable<SwarmState["agents"]>[string]> | undefined,
 ): Record<string, NonNullable<SwarmState["agents"]>[string]> | null {
 	if (!agents) return null;
-	const existing = agents[entry.worker!];
+	const existing = agents[entry.agent!];
 	if (!existing) return null;
 	const updated = { ...existing };
 	const e = entry as unknown as Record<string, unknown>;
@@ -39,7 +39,7 @@ function applyAgentStateEntry(
 	if (e.role !== undefined) updated.role = e.role as typeof updated.role;
 	if (e.modelName !== undefined) updated.modelName = e.modelName as string;
 	const next = { ...agents };
-	next[entry.worker!] = updated;
+	next[entry.agent!] = updated;
 	return next;
 }
 
@@ -62,7 +62,7 @@ function applyPipelineStateEntry(
 /**
  * The set of Chapter values the backend SwarmStateMachine broadcasts as
  * authoritative phase events. The frontend adopts these verbatim (pure
- * projection). Other `phase` events (workers/cloner-review/todo-updated/…)
+ * projection). Other `phase` events (workers/agent-review/todo-updated/…)
  * are sub-events and must NOT be treated as a Chapter.
  */
 const AUTHORITATIVE_LOOP_PHASES = new Set<string>([
@@ -448,7 +448,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           // authoritative `phase` event for every Chapter transition. The
           // frontend is a PURE PROJECTION — adopt any authoritative phase
           // directly, with no local inference. Non-Chapter phase events
-          // (workers / cloner-review / todo-updated / etc.) are sub-events
+          // (workers / agent-review / todo-updated / etc.) are sub-events
           // handled by their own side-effects below.
           if (AUTHORITATIVE_LOOP_PHASES.has(p)) {
             const phase = p as Chapter;
@@ -516,7 +516,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           // Tool calls are captured via addActivity → deriveChannel for chat display.
           // The toast provides a transient notification for long-running tools.
           if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
-            toast(`${entry.worker ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
+            toast(`${entry.agent ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
               description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
               duration: 3000,
             });
@@ -525,7 +525,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           // Populate toolCalls for AgentTimeline
           set((s) => {
             const toolCalls = new Map(s.toolCalls);
-            const agent = entry.worker ?? entry.from ?? "unknown";
+            const agent = entry.agent ?? entry.from ?? "unknown";
             const agentCalls = [...(toolCalls.get(agent) ?? [])];
             const call = {
               ts: entry.ts,
@@ -551,7 +551,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           set((s) => ({
             fileChanges: [...s.fileChanges, {
               ts: entry.ts,
-              agent: entry.worker ?? entry.from ?? "unknown",
+              agent: entry.agent ?? entry.from ?? "unknown",
               file: entry.file!,
               action: entry.action ?? "modified",
               linesChanged: entry.linesChanged,
@@ -560,7 +560,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
 
         // P1-1: Real-time agent state — update swarmState.agents without polling.
-        if (entry.type === "agent_state" && entry.worker) {
+        if (entry.type === "agent_state" && entry.agent) {
           set((s) => {
             const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
             if (!agents) return {};
@@ -957,7 +957,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  confirmAndStart: async (opts?: { workerCount?: number; agentCount?: number }) => {
+  confirmAndStart: async (opts?: { agentCount?: number; agentCount?: number }) => {
     try {
       const result = await api.confirmScript(opts);
       if (result.success) {
@@ -1198,14 +1198,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
         if (entry.type === "tool_call" && entry.toolName) {
           if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
-            toast(`${entry.worker ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
+            toast(`${entry.agent ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
               description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
               duration: 3000,
             });
           }
           set((s) => {
             const toolCalls = new Map(s.toolCalls);
-            const agent = entry.worker ?? entry.from ?? "unknown";
+            const agent = entry.agent ?? entry.from ?? "unknown";
             const agentCalls = [...(toolCalls.get(agent) ?? [])];
             const call = {
               ts: entry.ts,
@@ -1227,7 +1227,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           set((s) => ({
             fileChanges: [...s.fileChanges, {
               ts: entry.ts,
-              agent: entry.worker ?? entry.from ?? "unknown",
+              agent: entry.agent ?? entry.from ?? "unknown",
               file: entry.file!,
               action: entry.action ?? "modified",
               linesChanged: entry.linesChanged,
@@ -1235,7 +1235,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }));
         }
 
-        if (entry.type === "agent_state" && entry.worker) {
+        if (entry.type === "agent_state" && entry.agent) {
           set((s) => {
             const agents = applyAgentStateEntry(entry, s.swarmState?.agents);
             if (!agents) return {};

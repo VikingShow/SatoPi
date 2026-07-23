@@ -7,7 +7,7 @@ export interface ActionBarProps {
   phase: Chapter;
   recommendedAgents?: number;
   estimatedAgentHours?: number;
-  onConfirm: (workerCount: number, agentCount: number) => void;
+  onConfirm: (agentCount: number, reviewerCount: number) => void;
   onDebate: () => void;
 }
 
@@ -18,14 +18,12 @@ export function ActionBar({
   onConfirm,
   onDebate,
 }: ActionBarProps) {
-  const [workerCount, setWorkerCount] = useState(recommendedAgents ?? 3);
-  const [agentCount, setClonerCount] = useState(estimatedAgentHours ?? 2);
+  const [agentCount, setAgentCount] = useState(recommendedAgents ?? 3);
+  const [reviewerCount, setReviewerCount] = useState(2);
 
-  // Sync with recommendations when they change (e.g. after debate refines plan).
   useEffect(() => {
-    if (recommendedAgents != null) setWorkerCount(recommendedAgents);
-    if (estimatedAgentHours != null) setClonerCount(estimatedAgentHours);
-  }, [recommendedAgents, estimatedAgentHours]);
+    if (recommendedAgents != null) setAgentCount(recommendedAgents);
+  }, [recommendedAgents]);
 
   const isDebateDone = phase === "script-confirm";
 
@@ -37,18 +35,15 @@ export function ActionBar({
           {isDebateDone ? "Debate complete - plan refined" : "Plan draft ready"}
         </span>
 
-        {/* Worker / Cloner count inputs */}
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1 text-xs text-muted-foreground">
-            Workers
+            Agents
             <input
-              type="number"
-              min={1}
-              max={20}
-              value={workerCount}
+              type="number" min={1} max={20}
+              value={agentCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v > 0) setWorkerCount(v);
+                if (!isNaN(v) && v > 0) setAgentCount(v);
               }}
               className="w-12 h-6 px-1 text-xs text-center bg-gray-900/60 border border-gray-700 rounded
                          text-gray-200 focus:outline-none focus:border-purple-500/60
@@ -56,15 +51,13 @@ export function ActionBar({
             />
           </label>
           <label className="flex items-center gap-1 text-xs text-muted-foreground">
-            Cloners
+            Reviewers
             <input
-              type="number"
-              min={1}
-              max={20}
-              value={agentCount}
+              type="number" min={1} max={20}
+              value={reviewerCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v > 0) setClonerCount(v);
+                if (!isNaN(v) && v > 0) setReviewerCount(v);
               }}
               className="w-12 h-6 px-1 text-xs text-center bg-gray-900/60 border border-gray-700 rounded
                          text-gray-200 focus:outline-none focus:border-purple-500/60
@@ -87,7 +80,7 @@ export function ActionBar({
           <Button
             variant="default"
             size="xs"
-            onClick={() => onConfirm(workerCount, agentCount)}
+            onClick={() => onConfirm(agentCount, reviewerCount)}
             className="bg-status-success hover:bg-status-success/80"
           >
             <Check size={12} />

@@ -148,19 +148,19 @@ export class AgentChannel {
 	 * Reviewer 介入指导一个 agent（steering）。
 	 * Agent 收到高优先级消息，调整方向但不停止。
 	 */
-	async interrupt(clonerId: string, agentId: string, reason: string): Promise<void> {
-		this.#activityLogger?.logSteering(clonerId, agentId, reason);
+	async interrupt(reviewerId: string, agentId: string, reason: string): Promise<void> {
+		this.#activityLogger?.logSteering(reviewerId, agentId, reason);
 		await this.#ircBus.send({
-			from: clonerId,
+			from: reviewerId,
 			to: agentId,
 			body: `[CLONER STEERING] ${reason}`,
 		});
 	}
 
-	async broadcastSteering(clonerId: string, body: string): Promise<void> {
-		this.#activityLogger?.logSteering(clonerId, "all", body);
+	async broadcastSteering(reviewerId: string, body: string): Promise<void> {
+		this.#activityLogger?.logSteering(reviewerId, "all", body);
 		await Promise.all(
-			[...this.#agents].map(to => this.#ircBus.send({ from: clonerId, to, body: `[CLONER STEERING] ${body}` })),
+			[...this.#agents].map(to => this.#ircBus.send({ from: reviewerId, to, body: `[CLONER STEERING] ${body}` })),
 		);
 	}
 
@@ -241,7 +241,7 @@ export class AgentChannel {
 
 	/**
 	 * Build the reviewer-specific system prompt suffix.
-	 * Appended to the base WORKER_SYSTEM_PROMPT for the elected reviewer.
+	 * Appended to the base AGENT_SYSTEM_PROMPT for the elected reviewer.
 	 */
 	static buildReviewerPrompt(): string {
 		return [

@@ -153,12 +153,12 @@ export function createOffloadHooks(
 
 		// -- beforeWorkerRound ---------------------------------------------------
 
-		async beforeWorkerRound(round: number, workerIds: string[], ctx: PipelineContext) {
+		async beforeWorkerRound(round: number, agentIds: string[], ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			// ── MMD 局部视图注入 ──────────────────────────────────────────
 			if (config.injectMermaid) {
-				const phases = workerIds
+				const phases = agentIds
 					.map((id) => workerPhases.get(id))
 					.filter((p): p is string => !!p);
 
@@ -170,7 +170,7 @@ export function createOffloadHooks(
 
 			// ── 历史经验注入 (ExperienceStore 桥接) ────────────────────────
 			if (experienceStore) {
-				for (const agentId of workerIds) {
+				for (const agentId of agentIds) {
 					try {
 						const phaseHint = workerPhases.get(agentId) ?? config.getPhaseHint?.(agentId) ?? "";
 						const query = `agent:${agentId} ${phaseHint}`;
@@ -219,7 +219,7 @@ export function createOffloadHooks(
 
 		// -- beforeClonerReview --------------------------------------------------
 
-		async beforeClonerReview(iteration: number, workerOutput: string, ctx: PipelineContext) {
+		async beforeClonerReview(iteration: number, agentOutput: string, ctx: PipelineContext) {
 			if (!config.enabled || !config.injectMermaid) return;
 
 			if (currentMmd) {
@@ -292,8 +292,8 @@ export function createOffloadHooks(
 			if (experienceStore) {
 				await bridgeToExperienceStore(store, experienceStore, {
 					iteration, sessionId,
-					workerCount: workerPhases.size,
-					clonerCount: 1, // Cloner Council 汇总为 1 个逻辑 agent
+					agentCount: workerPhases.size,
+					reviewerCount: 1, // Cloner Council 汇总为 1 个逻辑 agent
 					taskDescription: phases.map(p => p.title).join(", "),
 				});
 			}
@@ -372,8 +372,8 @@ function toOffloadEntry(output: OffloadPipeline.L1Output): {
 interface BridgeMeta {
 	iteration?: number;
 	sessionId?: string;
-	workerCount: number;
-	clonerCount: number;
+	agentCount: number;
+	reviewerCount: number;
 	taskDescription?: string;
 }
 
@@ -424,8 +424,8 @@ async function bridgeToExperienceStore(
 			totalIterations: meta.iteration ?? 0,
 			finalStatus: avgScore >= 7 ? "completed" : avgScore >= 4 ? "converged_partial" : "converged_failed",
 			clonerApprovalRatio: avgScore / 10,
-			workerCount: meta.workerCount,
-			clonerCount: meta.clonerCount,
+			agentCount: meta.agentCount,
+			reviewerCount: meta.reviewerCount,
 			taskDescription: meta.taskDescription,
 		};
 
@@ -474,8 +474,8 @@ async function bridgeSessionSummary(
 		totalIterations: 0,
 		finalStatus: meta.status as LoopRunStats["finalStatus"],
 		clonerApprovalRatio: avgScore / 10,
-		workerCount: 0,
-		clonerCount: meta.totalClonerTasks,
+		agentCount: 0,
+		reviewerCount: meta.totalClonerTasks,
 		taskDescription: `Offload session: ${meta.swarmDir}`,
 	};
 

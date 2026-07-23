@@ -120,7 +120,7 @@ export interface PipelineHooks {
  */
 export interface LoopPipelineHooks extends PipelineHooks {
 	/** Called before each worker round within an iteration. Return false to skip. */
-	beforeWorkerRound?: (round: number, workerIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
+	beforeWorkerRound?: (round: number, agentIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
 	/** Called after each worker round completes. */
 	afterWorkerRound?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
 	/** Called before deliberation phase starts. */
@@ -128,7 +128,7 @@ export interface LoopPipelineHooks extends PipelineHooks {
 	/** Called after deliberation phase completes. */
 	afterDeliberation?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
 	/** Called before cloner review starts. */
-	beforeClonerReview?: (iteration: number, workerOutput: string, ctx: PipelineContext) => Promise<void>;
+	beforeClonerReview?: (iteration: number, agentOutput: string, ctx: PipelineContext) => Promise<void>;
 	/** Called after cloner review completes. */
 	afterClonerReview?: (iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) => Promise<void>;
 }

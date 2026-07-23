@@ -338,9 +338,9 @@ export default function ChatView() {
     switch (a.type) {
       case "verdict": return `${a.passed ? "PASS" : "FAIL"} ${a.approval}/${a.total} ${a.findings?.[0] ?? ""}`;
       case "phase": return `Phase: ${a.phase}`;
-      case "scaling": return `${a.action === "add" ? "+" : "-"}${a.worker} (${a.reason})`;
+      case "scaling": return `${a.action === "add" ? "+" : "-"}${a.agent} (${a.reason})`;
       case "nomination": return `Reviewer elected: ${a.elected ?? "none"}`;
-      case "crash": return `${a.worker} crashed: ${a.error}`;
+      case "crash": return `${a.agent} crashed: ${a.error}`;
       default: return "";
     }
   }
@@ -468,7 +468,7 @@ export default function ChatView() {
           phase={phase}
           recommendedAgents={scriptState?.recommendedAgents}
           estimatedAgentHours={scriptState?.estimatedAgentHours}
-          onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, agentCount: cc })}
+          onConfirm={(ac, rc) => confirmAndStart({ agentCount: ac, reviewerCount: rc })}
           onDebate={runDebate}
         />
       )}

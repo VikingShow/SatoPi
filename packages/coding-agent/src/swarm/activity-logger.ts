@@ -188,8 +188,8 @@ export class ActivityLogger {
 			total: verdict.totalCount,
 			findings: verdict.findings,
 			disagreed: verdict.disagreed,
-			praised: verdict.praisedWorkers,
-			criticized: verdict.criticizedWorkers,
+			praised: verdict.praisedAgents,
+			criticized: verdict.criticizedAgents,
 		});
 	}
 
@@ -315,8 +315,8 @@ export class ActivityLogger {
 
 	/** Emit a single cloner's verdict before aggregation. Enables the
 	 *  frontend to show per-cloner findings in dedicated channels. */
-	logClonerIndividual(clonerId: string, passed: boolean, findings: string[]): void {
-		this.log({ ts: Date.now(), type: "cloner_individual", from: clonerId, passed, findings });
+	logClonerIndividual(reviewerId: string, passed: boolean, findings: string[]): void {
+		this.log({ ts: Date.now(), type: "cloner_individual", from: reviewerId, passed, findings });
 	}
 
 	// ── File coordination (P2 — file-conflict channel routing) ───────

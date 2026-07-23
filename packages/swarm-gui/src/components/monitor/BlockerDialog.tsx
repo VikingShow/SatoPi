@@ -121,10 +121,10 @@ export default function BlockerDialog() {
                 </div>
               </div>
 
-              {/* Worker crash counts */}
+              {/* Agent crash counts */}
               {Object.keys(ctx.workerCrashCounts).length > 0 && (
                 <div>
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Worker Crashes</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Agent Crashes</span>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {Object.entries(ctx.workerCrashCounts)
                       .filter(([, count]) => count > 0)
@@ -147,7 +147,7 @@ export default function BlockerDialog() {
               {/* Last findings */}
               {ctx.lastFindings.length > 0 && (
                 <div>
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Last Cloner Findings</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Last Reviewer Findings</span>
                   <ul className="mt-1 space-y-1">
                     {ctx.lastFindings.slice(0, 5).map((finding, i) => (
                       <li key={i} className="text-sm text-muted-foreground flex gap-2">
@@ -165,7 +165,7 @@ export default function BlockerDialog() {
               {/* Last worker output preview */}
               {ctx.lastWorkerOutput && (
                 <div>
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Last Worker Output</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/60">Last Agent Output</span>
                   <pre className="mt-1 text-xs text-muted-foreground bg-background/60 border border-border rounded p-3 max-h-32 overflow-auto whitespace-pre-wrap font-mono">
                     {ctx.lastWorkerOutput.slice(0, 2000)}
                   </pre>

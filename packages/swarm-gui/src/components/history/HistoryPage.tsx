@@ -140,7 +140,7 @@ export default function HistoryPage() {
             <div className="space-y-1">
               {crashes.map((c, i) => (
                 <div key={i} className="bg-status-danger/10 border border-status-danger/20 rounded-lg p-2 text-xs">
-                  <span className="text-status-danger font-medium">{c.worker}</span>
+                  <span className="text-status-danger font-medium">{c.agent}</span>
                   <span className="text-muted-foreground ml-2">{c.error}</span>
                 </div>
               ))}

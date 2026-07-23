@@ -194,8 +194,8 @@ function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult)
 		"",
 		`- Status: ${result.status}`,
 		`- Iterations: ${result.iterations}`,
-		`- Workers: ${stats.workerCount}`,
-		`- Cloners: ${stats.clonerCount}`,
+		`- Workers: ${stats.agentCount}`,
+		`- Cloners: ${stats.reviewerCount}`,
 		`- Cloner approval ratio: ${stats.clonerApprovalRatio}`,
 	];
 

@@ -5,11 +5,11 @@
  * sessions cannot block each other's file edits.
  *
  * Lifecycle:
- * 1. Worker's beforeToolCall hook calls tryLock(file, workerId) before edit.
+ * 1. Worker's beforeToolCall hook calls tryLock(file, agentId) before edit.
  * 2. If another worker holds a conflicting lock → blocked; hook returns
  *    { block: true, reason: "worker-N is editing file:line-range" }.
- * 3. Worker's afterToolCall hook calls release(file, workerId) after edit.
- * 4. releaseAll(workerId) cleans up on worker session teardown.
+ * 3. Worker's afterToolCall hook calls release(file, agentId) after edit.
+ * 4. releaseAll(agentId) cleans up on worker session teardown.
  *
  * Intent declaration (tier 1) is handled through structured IRC broadcasts
  * emitted by the lock manager so other workers can see who is editing what.
@@ -21,7 +21,7 @@
 
 export interface LockEntry {
 	/** Worker that acquired this lock. */
-	workerId: string;
+	agentId: string;
 	/** Locked file path (relative to workspace). */
 	file: string;
 	/** Optional line range (e.g. "5-20"). */
@@ -77,18 +77,18 @@ export class RegionLockManager {
 	// -------------------------------------------------------------------
 
 	/**
-	 * Try to acquire a lock on `file` for `workerId`.
+	 * Try to acquire a lock on `file` for `agentId`.
 	 * Returns `true` if acquired, `false` if another worker already holds it.
 	 *
 	 * A worker re-acquiring a lock it already holds is a no-op (returns true,
 	 * updates range).
 	 */
-	tryLock(workerId: string, file: string, range?: string): boolean {
+	tryLock(agentId: string, file: string, range?: string): boolean {
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
 
 		if (existing) {
-			if (existing.workerId === workerId) {
+			if (existing.agentId === agentId) {
 				// Re-acquire — update range, no conflict
 				existing.range = range ?? existing.range;
 				existing.acquiredAt = Date.now();
@@ -99,7 +99,7 @@ export class RegionLockManager {
 		}
 
 		this.#locks.set(normalized, {
-			workerId,
+			agentId,
 			file: normalized,
 			range,
 			acquiredAt: Date.now(),
@@ -108,12 +108,12 @@ export class RegionLockManager {
 	}
 
 	/**
-	 * Release a specific lock, only if held by `workerId`.
+	 * Release a specific lock, only if held by `agentId`.
 	 */
-	release(workerId: string, file: string): void {
+	release(agentId: string, file: string): void {
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
-		if (existing && existing.workerId === workerId) {
+		if (existing && existing.agentId === agentId) {
 			this.#locks.delete(normalized);
 		}
 	}
@@ -121,21 +121,21 @@ export class RegionLockManager {
 	/**
 	 * Release all locks held by a worker. Called on session teardown.
 	 */
-	releaseAll(workerId: string): void {
+	releaseAll(agentId: string): void {
 		for (const [file, lock] of this.#locks) {
-			if (lock.workerId === workerId) {
+			if (lock.agentId === agentId) {
 				this.#locks.delete(file);
 			}
 		}
 	}
 
 	/**
-	 * Check if `file` is locked by someone other than `workerId`.
+	 * Check if `file` is locked by someone other than `agentId`.
 	 */
-	checkLock(file: string, workerId: string): LockCheckResult {
+	checkLock(file: string, agentId: string): LockCheckResult {
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
-		if (existing && existing.workerId !== workerId) {
+		if (existing && existing.agentId !== agentId) {
 			return { locked: true, entry: existing };
 		}
 		return { locked: false };
@@ -153,7 +153,7 @@ export class RegionLockManager {
 	 */
 	static describeLock(entry: LockEntry): string {
 		const range = entry.range ? `:${entry.range}` : "";
-		return `${entry.workerId} is editing ${entry.file}${range}`;
+		return `${entry.agentId} is editing ${entry.file}${range}`;
 	}
 
 	// -------------------------------------------------------------------

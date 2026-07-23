@@ -28,30 +28,30 @@ export interface ReviewVerdict {
 	workerCountSuggestions: number[];
 	/** True when findings across cloners diverge significantly. */
 	disagreed: boolean;
-	/** Cloner-suggested roles for workers (Round 2+). key=workerId, value=role name. */
+	/** Cloner-suggested roles for workers (Round 2+). key=agentId, value=role name. */
 	roleSuggestions: Record<string, string>;
 	/** Worker IDs praised by cloners this round. */
-	praisedWorkers: string[];
+	praisedAgents: string[];
 	/** Worker IDs criticized by cloners this round. */
-	criticizedWorkers: string[];
+	criticizedAgents: string[];
 }
 
 export interface ReviewConfig {
 	/** Cloner agent IDs. */
-	clonerIds: string[];
+	reviewerIds: string[];
 	/** Workspace directory. */
 	workspace: string;
 	/** Iteration number (0-indexed). */
 	iteration: number;
 	/** Worker output text for review context. */
-	workerOutput: string;
+	agentOutput: string;
 	/** plan.md content from Before Loop. Cloners review against this. */
 	planContent?: string;
 	/** Findings from previous iterations. Cloners avoid re-flagging resolved issues. */
 	previousFindings?: string[];
 	/** Enable cross-examination round when findings diverge. Default false. */
 	deliberation?: boolean;
-	/** P0-D: Per-cloner role assignments (clonerId → RoleAsset). When provided, each cloner gets a role-specific system prompt, weight, and veto flag. */
+	/** P0-D: Per-cloner role assignments (reviewerId → RoleAsset). When provided, each cloner gets a role-specific system prompt, weight, and veto flag. */
 	clonerRoles?: Record<string, RoleAsset>;
 	/** Tool restriction to apply to cloner agents (config-as-constraint). */
 	toolRestriction?: import("./schema").AgentToolRestriction;
@@ -78,7 +78,7 @@ export class ReviewCouncil {
 		settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const { clonerIds, workspace, iteration, workerOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles, activityLogger } = config;
+		const { reviewerIds, workspace, iteration, agentOutput, planContent, previousFindings, deliberation, toolRestriction, clonerRoles, activityLogger } = config;
 
 		// Build a cloner agent definition with optional tool restrictions applied.
 		const buildClonerAgent = (id: string, i: number): AgentDefinition => {
@@ -109,13 +109,13 @@ export class ReviewCouncil {
 			`Review the output from iteration ${iteration + 1}.`,
 			planContent ? `\n## Plan (what was requested)\n\n${planContent}\n` : "",
 			previousFindingsBlock,
-			`\n## Worker Output Summary\n\n${workerOutput}\n`,
+			`\n## Worker Output Summary\n\n${agentOutput}\n`,
 			`\n## Instructions`,
-			`- Optionally suggest \`worker_count_delta\`: signed integer adjustment to worker count (+2 to add 2, -1 to remove 1).`,
+			`- Optionally suggest \`agent_count_delta\`: signed integer adjustment to worker count (+2 to add 2, -1 to remove 1).`,
 			`- After Round 1+, optionally suggest \`role_suggestions\`: {"worker-1": "implementer", "worker-2": "reviewer", ...}.`,
 			`- Optionally list \`praised_workers\` and \`criticized_workers\` by worker ID.`,
 			`\nReturn a single JSON line:`,
-			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
+			`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["summary of findings"],"agent_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 		];
 
 		// Guard: token budget for cloner review (default 128K)
@@ -125,15 +125,15 @@ export class ReviewCouncil {
 			reviewPrompt.push(
 				`Review the output from iteration ${iteration + 1}.`,
 				planContent ? `Plan: ${planContent.slice(0, 4000)}...` : "",
-				`Worker Output: ${workerOutput.slice(0, 8000)}...`,
-				`Return JSON: {"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["..."],"worker_count_delta":0,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
+				`Worker Output: ${agentOutput.slice(0, 8000)}...`,
+				`Return JSON: {"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["..."],"agent_count_delta":0,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 			);
 		}
 
 		const reviewText = reviewPrompt.join("\n");
 
 		const settled = await Promise.allSettled(
-			clonerIds.map((id, i) => {
+			reviewerIds.map((id, i) => {
 				const clonerMsgId = `cloner-review-${id}-${iteration}`;
 				return streamAgentOutput(
 					{ activityLogger: activityLogger!, msgId: clonerMsgId, from: id },
@@ -162,8 +162,8 @@ export class ReviewCouncil {
 			const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 			return {
 				index: i,
-				id: `cloner-review-${clonerIds[i]}-${iteration}`,
-				agent: clonerIds[i],
+				id: `cloner-review-${reviewerIds[i]}-${iteration}`,
+				agent: reviewerIds[i],
 				agentSource: "project" as const,
 				task: "",
 				exitCode: 1,
@@ -195,11 +195,11 @@ export class ReviewCouncil {
 				`- Adjust your verdict if persuaded; otherwise, stand your ground.`,
 				planContent ? `- Measure against the plan's goals: ${planContent.slice(0, 200)}` : "",
 				`\nReturn a single JSON line:`,
-				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"worker_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
+				`{"verdict":"PASS"|"FAIL","confidence":0.0-1.0,"findings":["your final findings"],"agent_count_delta":<int>,"role_suggestions":{},"praised_workers":[],"criticized_workers":[]}`,
 			].join("\n");
 
 			const deliberationSettled = await Promise.allSettled(
-				clonerIds.map((id, i) => {
+				reviewerIds.map((id, i) => {
 					const delibMsgId = `cloner-deliberation-${id}-${iteration}`;
 					return streamAgentOutput(
 						{ activityLogger: activityLogger!, msgId: delibMsgId, from: id },
@@ -221,8 +221,8 @@ export class ReviewCouncil {
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 				return {
 					index: i,
-					id: `cloner-deliberation-${clonerIds[i]}-${iteration}`,
-					agent: clonerIds[i],
+					id: `cloner-deliberation-${reviewerIds[i]}-${iteration}`,
+					agent: reviewerIds[i],
 					agentSource: "project" as const,
 					task: "",
 					exitCode: 1,
@@ -266,12 +266,12 @@ interface ParsedVerdict {
 	confidence: number;
 	/** Cloner's suggested worker count delta for the next iteration (signed integer). */
 	workerCountDelta?: number;
-	/** Cloner's role assignment for each worker. key=workerId, value=role name. */
+	/** Cloner's role assignment for each worker. key=agentId, value=role name. */
 	roleSuggestions?: Record<string, string>;
 	/** Worker IDs the cloner praised. */
-	praisedWorkers?: string[];
+	praisedAgents?: string[];
 	/** Worker IDs the cloner criticized. */
-	criticizedWorkers?: string[];
+	criticizedAgents?: string[];
 }
 /**
  * Extract the first balanced JSON object containing a "verdict" key.
@@ -319,8 +319,8 @@ export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict
 		verdict: string;
 		confidence: number;
 		findings: string | string[];
-		worker_count?: number;
-		worker_count_delta?: number;
+		agent_count?: number;
+		agent_count_delta?: number;
 		role_suggestions?: Record<string, string>;
 		praised_workers?: string[];
 		criticized_workers?: string[];
@@ -328,12 +328,12 @@ export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict
 	if (parsed) {
 		try {
 			const findingsArr = Array.isArray(parsed.findings) ? parsed.findings : [parsed.findings ?? ""];
-			// worker_count_delta takes precedence; fall back to legacy worker_count
+			// agent_count_delta takes precedence; fall back to legacy agent_count
 			const delta =
-				typeof parsed.worker_count_delta === "number"
-					? parsed.worker_count_delta
-					: typeof parsed.worker_count === "number"
-						? parsed.worker_count - 3 // legacy: approximate delta from absolute count
+				typeof parsed.agent_count_delta === "number"
+					? parsed.agent_count_delta
+					: typeof parsed.agent_count === "number"
+						? parsed.agent_count - 3 // legacy: approximate delta from absolute count
 						: undefined;
 			return {
 				passed: parsed.verdict === "PASS",
@@ -341,8 +341,8 @@ export function extractVerdict(_reviewerId: string, text: string): ParsedVerdict
 				confidence: parsed.confidence ?? 0.5,
 				workerCountDelta: delta,
 				roleSuggestions: parsed.role_suggestions,
-				praisedWorkers: parsed.praised_workers,
-				criticizedWorkers: parsed.criticized_workers,
+				praisedAgents: parsed.praised_workers,
+				criticizedAgents: parsed.criticized_workers,
 			};
 		} catch {
 			// fall through to heuristic
@@ -380,8 +380,8 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 	let weightedPass = 0;
 	let weightedTotal = 0;
 	const allRoleSuggestions: Record<string, string> = {};
-	const praisedWorkers = new Set<string>();
-	const criticizedWorkers = new Set<string>();
+	const praisedAgents = new Set<string>();
+	const criticizedAgents = new Set<string>();
 	// P0-D: Veto tracking.
 	let vetoFail = false;
 	const vetoCloners: string[] = [];
@@ -407,8 +407,8 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 
 			if (verdict.workerCountDelta !== undefined) workerCounts.push(verdict.workerCountDelta);
 			if (verdict.roleSuggestions) Object.assign(allRoleSuggestions, verdict.roleSuggestions);
-			if (verdict.praisedWorkers) for (const w of verdict.praisedWorkers) praisedWorkers.add(w);
-			if (verdict.criticizedWorkers) for (const w of verdict.criticizedWorkers) criticizedWorkers.add(w);
+			if (verdict.praisedAgents) for (const w of verdict.praisedAgents) praisedAgents.add(w);
+			if (verdict.criticizedAgents) for (const w of verdict.criticizedAgents) criticizedAgents.add(w);
 		}
 	}
 
@@ -424,8 +424,8 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 			workerCountSuggestions: [],
 			disagreed: false,
 			roleSuggestions: {},
-			praisedWorkers: [],
-			criticizedWorkers: [],
+			praisedAgents: [],
+			criticizedAgents: [],
 		};
 	}
 
@@ -449,7 +449,7 @@ export function tallyVerdicts(results: SingleResult[], clonerRoles?: Record<stri
 		workerCountSuggestions: workerCounts,
 		disagreed: vetoFail || disagreed,
 		roleSuggestions: allRoleSuggestions,
-		praisedWorkers: [...praisedWorkers],
-		criticizedWorkers: [...criticizedWorkers],
+		praisedAgents: [...praisedAgents],
+		criticizedAgents: [...criticizedAgents],
 	};
 }

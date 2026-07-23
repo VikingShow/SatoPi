@@ -90,8 +90,8 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 	}
 
 	if (isLoop) {
-		const workers = agents.filter(a => a.name.startsWith("worker-"));
-		const cloners = agents.filter(a => a.name.startsWith("cloner-"));
+		const workers = agents.filter(a => a.name.startsWith("agent-"));
+		const cloners = agents.filter(a => a.name.startsWith("agent-"));
 
 		// Workers section
 		if (workers.length > 0) {

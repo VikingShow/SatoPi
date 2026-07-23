@@ -85,24 +85,24 @@ export class FileTracker {
 	}
 
 	/** 记录 worker 输出中引用的文件路径（归属分析用）。 */
-	recordWorkerOutput(workerId: string, output: string): void {
+	recordWorkerOutput(agentId: string, output: string): void {
 		const paths = extractFilePaths(output);
 		for (const p of paths) {
 			const writers = this.#writes.get(p);
 			if (writers) {
-				writers.add(workerId);
+				writers.add(agentId);
 			} else {
-				this.#writes.set(p, new Set([workerId]));
+				this.#writes.set(p, new Set([agentId]));
 			}
 		}
 	}
 
 	/** 每轮结束：分析 git diff + worker 归属，返回冲突报告。 */
-	async endRound(workerOutputs: Map<string, string>): Promise<FileRoundSummary> {
+	async endRound(agentOutputs: Map<string, string>): Promise<FileRoundSummary> {
 		try {
 			// Record worker outputs for attribution
-			for (const [workerId, output] of workerOutputs) {
-				this.recordWorkerOutput(workerId, output);
+			for (const [agentId, output] of agentOutputs) {
+				this.recordWorkerOutput(agentId, output);
 			}
 
 			// Get changed files via git diff

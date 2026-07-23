@@ -289,11 +289,11 @@ export class ProfileRegistry {
 	/**
 	 * 记录 Cloner 评审反馈。
 	 */
-	recordReviewFeedback(workerIds: string[], praised: string[], criticized: string[]): void {
+	recordReviewFeedback(agentIds: string[], praised: string[], criticized: string[]): void {
 		const praisedSet = new Set(praised);
 		const criticizedSet = new Set(criticized);
 
-		for (const id of workerIds) {
+		for (const id of agentIds) {
 			const profile = this.#profiles.get(id);
 			if (!profile) continue;
 

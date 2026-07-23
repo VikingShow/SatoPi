@@ -44,8 +44,8 @@ export interface LoopRunStats {
 	totalIterations: number;
 	finalStatus: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
 	clonerApprovalRatio: number;
-	workerCount: number;
-	clonerCount: number;
+	agentCount: number;
+	reviewerCount: number;
 	taskDescription?: string;
 }
 
@@ -53,7 +53,7 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
-export function extractLessons(result: LoopResult, workerCount: number, clonerCount: number): ExtractionResult {
+export function extractLessons(result: LoopResult, agentCount: number, reviewerCount: number): ExtractionResult {
 	const lessons: ExtractedLesson[] = [];
 
 	// 1. Status-based insight
@@ -61,7 +61,7 @@ export function extractLessons(result: LoopResult, workerCount: number, clonerCo
 		lessons.push({
 			type: "success",
 			summary: `Loop completed in ${result.iterations} iteration(s)`,
-			detail: `The swarm reached consensus after ${result.iterations} iteration(s) with ${workerCount} workers and ${clonerCount} cloners.`,
+			detail: `The swarm reached consensus after ${result.iterations} iteration(s) with ${agentCount} workers and ${reviewerCount} cloners.`,
 			tags: ["completion", "consensus", `iterations:${result.iterations}`],
 			confidence: 0.9,
 			source: "loop-controller",
@@ -129,8 +129,8 @@ export function extractLessons(result: LoopResult, workerCount: number, clonerCo
 		totalIterations: result.iterations,
 		finalStatus: result.status,
 		clonerApprovalRatio: Math.round(approvalRatio * 100) / 100,
-		workerCount,
-		clonerCount,
+		agentCount,
+		reviewerCount,
 	};
 
 	return { lessons, stats };

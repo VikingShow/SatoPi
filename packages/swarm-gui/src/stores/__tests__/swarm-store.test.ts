@@ -131,12 +131,12 @@ describe("SwarmStore: SSE streaming (stream_start → stream_delta → stream_en
     store.addActivity({
       ts: 1000,
       type: "stream_start",
-      from: "worker-7",
+      from: "agent-7",
       // no messageId → falls back to from
     });
 
     const msgs = getStore().messages.get("roundtable")!;
-    expect(msgs[0].id).toBe("stream-worker-7");
+    expect(msgs[0].id).toBe("stream-agent-7");
   });
 
   it("stream_start is NOT skipped during history replay (fromHistory=true)", () => {
@@ -342,7 +342,7 @@ describe("SwarmStore: init() guard and session sync", () => {
         name: "test-session",
         status: "stage",
         phase: "stage",
-        agents: { "worker-1": { name: "worker-1", status: "stage", role: "worker", praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
+        agents: { "agent-1": { name: "agent-1", status: "stage", role: "worker", praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
       } as any,
     });
     (useSwarmStore.getState() as any).__initRunning = false;
@@ -355,7 +355,7 @@ describe("SwarmStore: init() guard and session sync", () => {
 
     // The previous swarmState must be preserved, not clobbered to null.
     expect(getStore().swarmState).not.toBeNull();
-    expect(getStore().swarmState?.agents["worker-1"]).toBeDefined();
+    expect(getStore().swarmState?.agents["agent-1"]).toBeDefined();
     // phase falls back gracefully without throwing on state.phase.
     expect(getStore().phase).toBe("idle");
   });

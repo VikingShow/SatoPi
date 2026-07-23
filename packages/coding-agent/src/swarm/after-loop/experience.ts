@@ -769,8 +769,8 @@ export class ExperienceStore {
 				totalIterations: 0,
 				finalStatus: "completed",
 				clonerApprovalRatio: 1,
-				workerCount: 0,
-				clonerCount: 0,
+				agentCount: 0,
+				reviewerCount: 0,
 				taskDescription: "principle-generation",
 			},
 		};

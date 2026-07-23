@@ -144,12 +144,12 @@ export class SwarmMnemopiAdapter {
 	 * 帮助 Cloner 参考类似场景下的历史判定。
 	 */
 	async recallForCloner(
-		workerOutputs: string[],
+		agentOutputs: string[],
 		iteration: number,
 	): Promise<RecallResult | null> {
 		if (!this.#config.enabled) return null;
 
-		const summary = workerOutputs.join(" ").slice(0, 500);
+		const summary = agentOutputs.join(" ").slice(0, 500);
 		const query = `审查 ${summary} (iteration ${iteration})`;
 
 		try {

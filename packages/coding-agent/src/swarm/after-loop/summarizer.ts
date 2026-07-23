@@ -27,8 +27,8 @@ export interface SummaryData {
 	timestamp: string;
 	status: string;
 	iterations: number;
-	workerCount: number;
-	clonerCount: number;
+	agentCount: number;
+	reviewerCount: number;
 	clonerApprovalRatio: number;
 	topFindings: string[];
 	keyInsights: string[];
@@ -71,8 +71,8 @@ export function generateRunSummary(runId: string, result: ExtractionResult): Run
 		timestamp,
 		status: stats.finalStatus,
 		iterations: stats.totalIterations,
-		workerCount: stats.workerCount,
-		clonerCount: stats.clonerCount,
+		agentCount: stats.agentCount,
+		reviewerCount: stats.reviewerCount,
 		clonerApprovalRatio: stats.clonerApprovalRatio,
 		topFindings,
 		keyInsights,
@@ -101,8 +101,8 @@ function generateMarkdownSummary(data: SummaryData, totalLessons: number): strin
 		`| Timestamp | ${data.timestamp} |`,
 		`| Status | ${statusEmoji} ${data.status} |`,
 		`| Iterations | ${data.iterations} |`,
-		`| Workers | ${data.workerCount} |`,
-		`| Cloners | ${data.clonerCount} |`,
+		`| Workers | ${data.agentCount} |`,
+		`| Cloners | ${data.reviewerCount} |`,
 		`| Cloner Approval Ratio | ${Math.round(data.clonerApprovalRatio * 100)}% |`,
 		`| Lessons Extracted | ${totalLessons} |`,
 		``,

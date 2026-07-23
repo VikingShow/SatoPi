@@ -45,7 +45,7 @@ export default function ScalingHistory() {
         batch = { ts: ev.ts, count: currentCount, events: [] };
         pts.push(batch);
       }
-      batch.events.push({ worker: ev.worker ?? "?", action, reason: ev.reason });
+      batch.events.push({ worker: ev.agent ?? "?", action, reason: ev.reason });
     }
     if (batch) {
       currentCount += batch.events.filter((e) => e.action === "add").length;
@@ -62,7 +62,7 @@ export default function ScalingHistory() {
       <EmptyState
         icon={<GitBranch size={24} />}
         title="No scaling events"
-        description="Worker count changes (add/remove) will appear here during loop execution."
+        description="Agent count changes (add/remove) will appear here during loop execution."
       />
     );
   }
@@ -142,7 +142,7 @@ export default function ScalingHistory() {
                   ) : (
                     <TrendingDown size={10} className="text-status-danger flex-shrink-0" />
                   )}
-                  <span className="font-mono text-foreground/80">{ev.worker}</span>
+                  <span className="font-mono text-foreground/80">{ev.agent}</span>
                   <span className="text-fg-faint">{ev.action === "add" ? "added" : "removed"}</span>
                   {ev.reason && (
                     <span className="text-fg-faint/70 truncate">— {ev.reason}</span>

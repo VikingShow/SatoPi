@@ -67,7 +67,7 @@ function ScalingEvents() {
                 ) : (
                   <TrendingDown size={10} className="text-status-danger flex-shrink-0" />
                 )}
-                <span className="font-mono text-foreground/80">{ev.worker}</span>
+                <span className="font-mono text-foreground/80">{ev.agent}</span>
                 <span>{ev.reason ?? (isAdd ? "added" : "removed")}</span>
               </div>
             );
@@ -210,7 +210,7 @@ export default function ContextPanel() {
             </div>
           )}
 
-          {/* Worker scaling events */}
+          {/* Agent scaling events */}
           <ScalingEvents />
 
           {/* After Loop results */}

@@ -62,7 +62,7 @@ export function deriveChannel(
 
     // ── Per-cloner individual verdict → dedicated cloner channel ──
     case "cloner_individual": {
-      const id = `cloner-${entry.from}`;
+      const id = `agent-${entry.from}`;
       const verdictLabel = entry.passed ? "PASS" : "FAIL";
       const body = `**${verdictLabel}**${entry.findings?.length ? `\n${(entry.findings as string[]).map((f: string) => `· ${f}`).join("\n")}` : ""}`;
       return {
@@ -91,7 +91,7 @@ export function deriveChannel(
       return {
         id,
         channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
-        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.worker ?? "agent", to: "all", body, timestamp: ts },
+        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.agent ?? "agent", to: "all", body, timestamp: ts },
       };
     }
     default:

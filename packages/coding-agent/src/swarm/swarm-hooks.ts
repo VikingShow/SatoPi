@@ -99,11 +99,11 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 
 		// ── beforeWorkerRound ─────────────────────────────────────
 
-		async beforeWorkerRound(round: number, workerIds: string[], _ctx: PipelineContext) {
+		async beforeWorkerRound(round: number, agentIds: string[], _ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			// 确保所有 Worker 都有 Profile（幂等注册）
-			for (const id of workerIds) {
+			for (const id of agentIds) {
 				if (!registeredProfiles.has(id)) {
 					profileRegistry.getOrCreate({
 						profileId: id,
@@ -116,13 +116,13 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 			}
 
 			// 更新全局 Agent ID 列表
-			allAgentIds = [...new Set([...allAgentIds, ...workerIds])];
+			allAgentIds = [...new Set([...allAgentIds, ...agentIds])];
 
 			// 记录协作关系
-			profileRegistry.recordCollaboration(workerIds);
+			profileRegistry.recordCollaboration(agentIds);
 
 			// 为每个 Worker 放置 start-round Mark
-			for (const id of workerIds) {
+			for (const id of agentIds) {
 				markEnvironment.placeMark({
 					markId: `worker-${id}-round-${round}-${Date.now()}`,
 					type: "signal",
@@ -133,7 +133,7 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 				});
 			}
 
-			logger.debug("[SwarmHooks] Worker round started", { round, workers: workerIds.length });
+			logger.debug("[SwarmHooks] Worker round started", { round, workers: agentIds.length });
 		},
 
 		// ── afterWorkerRound ──────────────────────────────────────
@@ -166,7 +166,7 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 
 		// ── beforeClonerReview ────────────────────────────────────
 
-		async beforeClonerReview(_iteration: number, _workerOutput: string, _ctx: PipelineContext) {
+		async beforeClonerReview(_iteration: number, _agentOutput: string, _ctx: PipelineContext) {
 			if (!config.enabled) return;
 			// no-op for now — cloner profiles registered on next cloner run
 		},

@@ -303,14 +303,14 @@ export async function runPlanDebate(
 	}
 
 	const table = new DebateRoundtable({
-		clonerCount: debateConfig.clonerCount,
+		reviewerCount: debateConfig.reviewerCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
 		toolRestriction: loopConfig.agentRestrictions?.cloner ?? loopConfig.agentRestrictions?.["*"],
 	});
 
 	logger.info("Starting plan debate", {
-		clonerCount: debateConfig.clonerCount,
+		reviewerCount: debateConfig.reviewerCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
 	});

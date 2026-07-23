@@ -218,14 +218,14 @@ export class StateTracker {
 	}
 
 	/** Increment praise count for a set of workers. */
-	async incrementPraise(workerIds: string[]): Promise<void> {
-		for (const id of workerIds) {
+	async incrementPraise(agentIds: string[]): Promise<void> {
+		for (const id of agentIds) {
 			const agent = this.#state.agents[id];
 			if (agent) agent.praiseCount++;
 		}
 		await this.#persist();
 		if (this.#onStateChange) {
-			for (const id of workerIds) {
+			for (const id of agentIds) {
 				const agent = this.#state.agents[id];
 				if (agent) {
 					this.#onStateChange({ type: "agent_state", worker: id, from: id, praiseCount: agent.praiseCount });
@@ -235,14 +235,14 @@ export class StateTracker {
 	}
 
 	/** Increment criticism count for a set of workers. */
-	async incrementCriticism(workerIds: string[]): Promise<void> {
-		for (const id of workerIds) {
+	async incrementCriticism(agentIds: string[]): Promise<void> {
+		for (const id of agentIds) {
 			const agent = this.#state.agents[id];
 			if (agent) agent.criticismCount++;
 		}
 		await this.#persist();
 		if (this.#onStateChange) {
-			for (const id of workerIds) {
+			for (const id of agentIds) {
 				const agent = this.#state.agents[id];
 				if (agent) {
 					this.#onStateChange({ type: "agent_state", worker: id, from: id, criticismCount: agent.criticismCount });
@@ -252,24 +252,24 @@ export class StateTracker {
 	}
 
 	/** Increment conflict count for a worker. */
-	async incrementConflict(workerId: string): Promise<void> {
-		const agent = this.#state.agents[workerId];
+	async incrementConflict(agentId: string): Promise<void> {
+		const agent = this.#state.agents[agentId];
 		if (agent) agent.conflictCount++;
 		await this.#persist();
 		if (this.#onStateChange && agent) {
-			this.#onStateChange({ type: "agent_state", worker: workerId, from: workerId, conflictCount: agent.conflictCount });
+			this.#onStateChange({ type: "agent_state", worker: agentId, from: agentId, conflictCount: agent.conflictCount });
 		}
 	}
 
 	/** Get a quality score for a worker (praise - criticism - conflictCount). */
-	getWorkerScore(workerId: string): number {
-		const agent = this.#state.agents[workerId];
+	getAgentScore(agentId: string): number {
+		const agent = this.#state.agents[agentId];
 		if (!agent) return 0;
 		return agent.praiseCount - agent.criticismCount - agent.conflictCount;
 	}
 
 	/** Find the best-scoring worker (highest score), excluding given IDs. */
-	getBestWorker(excludeIds?: string[]): string | null {
+	getBestAgent(excludeIds?: string[]): string | null {
 		let bestId: string | null = null;
 		let bestScore = -Infinity;
 		const exclude = new Set(excludeIds ?? []);
@@ -289,7 +289,7 @@ export class StateTracker {
 	 * @param candidates — if provided, only search among these agent IDs.
 	 *   If omitted, search all registered agents.
 	 */
-	getWorstWorker(candidates?: string[]): string | null {
+	getWorstAgent(candidates?: string[]): string | null {
 		let worstId: string | null = null;
 		let worstScore = Infinity;
 		const candidateSet = candidates ? new Set(candidates) : null;
