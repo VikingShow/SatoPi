@@ -52,7 +52,7 @@ describe("SwarmStateMachine.transition", () => {
 		const res = await sm.transition("script");
 		expect(res.ok).toBe(true);
 		expect(sm.phase).toBe("script");
-		expect(calls).toEqual(["exit:idle", "enter:before-loop-dialog"]);
+		expect(calls).toEqual(["exit:idle", "enter:script"]);
 	});
 
 	it("rejects an illegal transition without changing phase or firing hooks", async () => {
