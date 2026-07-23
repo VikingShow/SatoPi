@@ -121,7 +121,7 @@ export async function runAfterLoopPipeline(
     // 7. Archive plan.md — plan lives in per-session swarm dir, archives in workspace .omp/plans/
     await stateTracker.updatePipeline({ roundtablePhase: "Curtain: archiving plan" });
     try {
-      const { archivePlanForHistory } = await import("../before-loop");
+      const { archivePlanForHistory } = await import("../script-planner");
       await archivePlanForHistory(stateTracker.swarmDir, workspace);
       logger.info("[AfterLoop] plan.md archived to .omp/plans/");
     } catch (archiveErr) {

@@ -118,8 +118,8 @@ interface SwarmStore {
   pauseRun: () => Promise<void>;
   resumeRun: () => Promise<void>;
 
-  // Before Loop actions
-  startPlanning: (task: string) => Promise<void>;
+  // Script actions
+  startPlanning: (task: string, agentId?: string) => Promise<void>;
   sendScriptMessage: (text: string) => Promise<void>;
   runDebate: () => Promise<void>;
   confirmAndStart: () => Promise<void>;
@@ -911,22 +911,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
   // ── Before Loop actions ──
 
-  startPlanning: async (task: string) => {
-    // Optimistically add user's message to chat for instant display
+  startPlanning: async (task: string, agentId?: string) => {
     pushUserMessage(set, task);
-    // Ensure SSE is connected BEFORE sending the API request.  If the
-    // EventSource is still connecting (readyState === 0) or the socket
-    // died silently, the backend events would be broadcast into a void
-    // — no subscriber to receive them, silently dropped.  Waiting here
-    // costs at most 2 s but prevents silent event loss.
     await waitForSSE(sseClient, 2000);
     try {
-      const result = await api.startScript(task);
+      const result = await api.startScript(task, agentId);
       if (result.success) {
         set({ phase: "script", error: null });
-        // Switch to roundtable channel to see Socrates dialogue
         set({ activeChannelId: "roundtable" });
-        // Refresh script state
         setTimeout(() => get().refreshScriptState(), 500);
       } else {
         set({ error: result.error ?? "Failed to start planning" });

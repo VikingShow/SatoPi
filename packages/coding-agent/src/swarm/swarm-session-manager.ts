@@ -205,7 +205,7 @@ export class SwarmSessionManager {
 
 	/**
 	 * Persist the full conversation history as a snapshot.
-	 * Called by BeforeLoopManager after each turn mutation.
+	 * Called by ScriptManager after each turn mutation.
 	 * This replaces the legacy conversation.json file.
 	 */
 	logConversationSnapshot(turns: Array<{ role: string; content: string }>): void {

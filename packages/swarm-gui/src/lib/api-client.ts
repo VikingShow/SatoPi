@@ -152,12 +152,15 @@ export const api = {
   getRecentLessons: (limit = 20) =>
     fetchJson<{ lessons: Array<{ runId: string; timestamp: string; lesson: ExperienceLesson; stats: unknown }> }>(`/api/experience/recent?limit=${limit}`),
 
-  // -- Before Loop (session-scoped) ------------------------------------------
+  // -- Script phase (session-scoped) -----------------------------------------
 
-  startScript: (task: string) =>
+  getScriptAgents: () =>
+    fetchJson<{ agents: import("./types").AgentSummary[] }>(sessionUrl("/script/agents")),
+
+  startScript: (task: string, agentId?: string) =>
     fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/start"), {
       method: "POST",
-      body: JSON.stringify({ task }),
+      body: JSON.stringify({ task, agentId }),
     }),
 
   sendScriptMessage: (text: string) =>

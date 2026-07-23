@@ -27,7 +27,7 @@ import { getSessionPlanPath, getPlanArchiveDir, getSessionOmpDir } from "./plan-
 // Types
 // ============================================================================
 
-export interface BeforeLoopConfig {
+export interface ScriptConfig {
 	/** Session swarm directory (e.g. workspace/.swarm_SatoPi). */
 	swarmDir: string;
 	/** Workspace root (for experience store, plan archives). */
@@ -37,7 +37,7 @@ export interface BeforeLoopConfig {
 	taskDescription?: string;
 }
 
-export interface BeforeLoopResult {
+export interface ScriptResult {
 	/** Whether to proceed with the loop. */
 	confirmed: boolean;
 	/** Path to the generated plan.md. */
@@ -66,7 +66,7 @@ export interface BeforeLoopResult {
  * @param experienceStore Optional store to query past loop experience.
  */
 export async function generatePlanningPrompt(
-	config: BeforeLoopConfig,
+	config: ScriptConfig,
 	experienceStore?: ExperienceStore,
 ): Promise<string> {
 	const { swarmDir, workspace, loopConfig, taskDescription } = config;

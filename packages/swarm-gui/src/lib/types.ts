@@ -46,10 +46,26 @@ export interface ScriptState {
   conversationLength: number;
   planReady: boolean;
   busy: boolean;
-  /** Extracted from Socrates recommendation output. */
+  /** The agent selected for the planning conversation. */
+  selectedAgentId?: string;
+  /** Extracted from planner recommendation output. */
   recommendedWorkers?: number;
-  /** Extracted from Socrates recommendation output. */
+  /** Extracted from planner recommendation output. */
   recommendedCloners?: number;
+  /** Estimated agent-hours for the plan. */
+  estimatedAgentHours?: number;
+}
+
+export interface AgentSummary {
+  profileId: string;
+  name: string;
+  archetype: string;
+  score: number;
+  domains: string[];
+  totalTasks: number;
+  successRate: number;
+  preferredRoles: string[];
+  recommended: boolean;
 }
 
 export interface AgentState {

@@ -3,7 +3,7 @@
  *
  * Bootstraps auth, ModelRegistry, Settings, ExperienceStore, and
  * RoleAssetManager as shared services.  Uses SessionRegistry to
- * create per-session service graphs (SwarmRunManager, BeforeLoopManager,
+ * create per-session service graphs (SwarmRunManager, ScriptManager,
  * ActivityLogger, etc.) on demand.
  *
  * Usage: bun run src/swarm/monitor/standalone.ts [workspace-dir]
@@ -21,9 +21,9 @@ import { createLoopController } from "../loop-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
-import { stampAndArchivePlanMd } from "../before-loop";
+import { stampAndArchivePlanMd } from "../script-planner";
 import { getSessionPlanPath } from "../plan-paths";
-import { BeforeLoopManager } from "../before-loop-manager";
+import { ScriptManager } from "../script-manager";
 import { ExperienceStore } from "../after-loop";
 import type { LoopResult } from "../loop-controller";
 import type { LoopSwarmConfig } from "../schema";
@@ -307,7 +307,7 @@ async function createSessionServices(
 		markEnvironment,
 	});
 
-	const beforeLoopManager = new BeforeLoopManager({
+	const scriptManager = new ScriptManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,
 		workspace: shared.workspace,
@@ -317,6 +317,8 @@ async function createSessionServices(
 		activityLogger,
 		experienceStore: shared.experienceStore,
 		runManager,
+		profileRegistry: shared.profileRegistry,
+		roleAssetManager: shared.roleAssetManager,
 	});
 
 	const steeringSink: SteeringSink = {
@@ -325,7 +327,7 @@ async function createSessionServices(
 		},
 	};
 
-	return { name, swarmDir, stateTracker, activityLogger, runManager, beforeLoopManager, steeringSink };
+	return { name, swarmDir, stateTracker, activityLogger, runManager, scriptManager, steeringSink };
 }
 
 // ============================================================================

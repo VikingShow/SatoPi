@@ -39,15 +39,20 @@ export interface RunManager {
 	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
 }
 
-/** Manages the Before Loop interactive planning phase. */
-export interface BeforeLoopManager {
-		setSessionManager?(sm: SwarmSessionManager): void;
-	start(task: string): Promise<{ success: boolean; error?: string }>;
+/** Manages the Script (planning) phase. */
+export interface ScriptManager {
+	setSessionManager?(sm: SwarmSessionManager): void;
+	start(task: string, agentId?: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
 	confirm(workerCount?: number, clonerCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
-	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
+	getState(): {
+		phase: string; task: string; conversationLength: number;
+		planReady: boolean; busy: boolean;
+		selectedAgentId?: string; recommendedWorkers?: number;
+		recommendedCloners?: number; estimatedAgentHours?: number;
+	};
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
 	readonly isBusy: boolean;
 }
@@ -75,7 +80,7 @@ export interface ApiRouteContext {
 	/** Services — populated from the session or from shared services. */
 	services: {
 		runManager?: RunManager;
-		beforeLoopManager?: BeforeLoopManager;
+		scriptManager?: ScriptManager;
 		steeringSink?: SteeringSink;
 		experienceStore?: ExperienceStore;
 		modelRegistry?: ModelRegistry;
@@ -116,7 +121,7 @@ export function buildApiRouteContext(
 		experienceStore: shared.experienceStore,
 		roleAssetManager: shared.roleAssetManager,
 		runManager: session?.runManager,
-		beforeLoopManager: session?.beforeLoopManager,
+		scriptManager: session?.scriptManager,
 		steeringSink: session?.steeringSink,
 		sessionManager: session?.sessionManager,
 	};
@@ -230,6 +235,28 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ todos: ctx.stateTracker.state.todos ?? [] });
 	},
 
+
+		// -- Agents (profile listing for agent selector) --------------------
+		"GET/script/agents": (_req, ctx) => {
+			const profileRegistry = ctx.registry.shared.profileRegistry;
+			const profiles = profileRegistry.list();
+			const agents = profiles.map(p => ({
+				profileId: p.profileId,
+				name: p.identity.name,
+				archetype: p.identity.archetype,
+				score: p.credit.score,
+				domains: p.expertise.domains,
+				totalTasks: p.credit.totalTasks,
+				successRate: p.credit.successRate,
+				preferredRoles: p.stats.preferredRoles,
+				recommended: p.stats.rolePerformance["planner"]
+					? p.stats.rolePerformance["planner"].successRate >= 0.7 && p.stats.rolePerformance["planner"].tasks >= 2
+					: p.credit.score >= 70,
+			}));
+			agents.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0) || b.score - a.score);
+			return json({ agents });
+		},
+
 	// -- Run control -----------------------------------------------------
 	"POST/run/start": async (_req, ctx) => {
 		if (!ctx.services.runManager) {
@@ -284,49 +311,49 @@ export const apiRoutes: Record<string, RouteHandler> = {
 
 	// -- Before Loop (interactive planning) ------------------------------
 	"POST/script/start": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		if (!ctx.services.scriptManager) return json({ error: "Script manager not available" }, 503);
 		if (ctx.services.runManager?.isRunning) return json({ error: "A swarm run is already in progress" }, 409);
-		const body = (await req.json().catch(() => ({}))) as { task?: string };
+		const body = (await req.json().catch(() => ({}))) as { task?: string; agentId?: string };
 		if (!body.task || body.task.trim().length === 0) {
 			return json({ error: "Task description is required" }, 400);
 		}
-		const result = await ctx.services.beforeLoopManager.start(body.task);
+		const result = await ctx.services.scriptManager.start(body.task, body.agentId);
 		return json(result, result.success ? 200 : 500);
 	},
 
 	"POST/script/message": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		if (!ctx.services.scriptManager) return json({ error: "Script manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as { text?: string };
 		if (!body.text || body.text.trim().length === 0) {
 			return json({ error: "Message text is required" }, 400);
 		}
-		const result = await ctx.services.beforeLoopManager.sendMessage(body.text);
+		const result = await ctx.services.scriptManager.sendMessage(body.text);
 		return json(result, result.success ? 200 : 500);
 	},
 
 	"GET/script/state": (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		return json(ctx.services.beforeLoopManager.getState());
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json(ctx.services.scriptManager.getState());
 	},
 
 	"GET/script/history": (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		return json({ history: ctx.services.beforeLoopManager.getHistory() });
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json({ history: ctx.services.scriptManager.getHistory() });
 	},
 
 	"POST/script/debate": async (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.runDebate();
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.scriptManager.runDebate();
 		return json(result, result.success ? 200 : 500);
 	},
 
 	"POST/script/confirm": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as {
 			workerCount?: number;
 			clonerCount?: number;
 		};
-		const result = await ctx.services.beforeLoopManager.confirm(
+		const result = await ctx.services.scriptManager.confirm(
 			body.workerCount,
 			body.clonerCount,
 		);
@@ -334,8 +361,8 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	"POST/script/cancel": async (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.cancel();
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.scriptManager.cancel();
 		return json(result, result.success ? 200 : 500);
 	},
 

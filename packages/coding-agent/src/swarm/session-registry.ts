@@ -2,7 +2,7 @@
  * SessionRegistry — manages all swarm sessions.
  *
  * Each session owns its own StateTracker, ActivityLogger, RunManager,
- * BeforeLoopManager, SteeringSink, and AbortController.  Sessions share
+ * ScriptManager, SteeringSink, and AbortController.  Sessions share
  * workspace-scoped services (ExperienceStore, ModelRegistry, RoleAssetManager)
  * through a SharedServices bag.
  *
@@ -16,7 +16,7 @@ import * as fs from "node:fs/promises";
 import type { StateTracker } from "./state";
 import type { ActivityLogger, ActivityBroadcaster } from "./activity-logger";
 import type { RunManager, SteeringSink } from "./monitor/api-routes";
-import type { BeforeLoopManager } from "./monitor/api-routes";
+import type { ScriptManager } from "./monitor/api-routes";
 import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
@@ -51,7 +51,7 @@ export interface SessionServices {
 	stateTracker: StateTracker;
 	activityLogger: ActivityLogger;
 	runManager: RunManager;
-	beforeLoopManager: BeforeLoopManager;
+	scriptManager: ScriptManager;
 	steeringSink: SteeringSink;
 	abortController: AbortController;
 	/** OH-MY-PI-based session persistence (replaces pipeline.json, activity.jsonl, conversation.json). */
@@ -179,7 +179,7 @@ export class SessionRegistry {
 		if (sessionManager) {
 			services.stateTracker.setSessionManager(sessionManager);
 			services.activityLogger.setSessionManager(sessionManager);
-			services.beforeLoopManager.setSessionManager?.(sessionManager);
+			services.scriptManager.setSessionManager?.(sessionManager);
 
 			// Seed the in-memory StateTracker from the persisted snapshot when
 			// the session.jsonl already existed (e.g. backend restart recovering

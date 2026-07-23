@@ -7,7 +7,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { ExperienceStore, extractLessons } from "../after-loop";
-import { generatePlanningPrompt } from "../before-loop";
+import { generatePlanningPrompt } from "../script-planner";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "../dag";
 import { LoopController } from "../loop-controller";
 import { ClonerCouncil } from "../roundtable";

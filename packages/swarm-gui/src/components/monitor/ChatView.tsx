@@ -14,6 +14,7 @@ import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ActionBar } from "./ActionBar";
+import AgentSelector from "./AgentSelector";
 
 // ── Code block cache (LRU-bounded, shared module) ──────────────────────
 import { cacheKey, getCachedHtml, setCachedHtml } from "../../lib/code-cache";
@@ -255,6 +256,7 @@ export default function ChatView() {
   const viewingSession = useSessionStore((s) => s.viewingSession);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
   const channelMessages = messages.get(activeChannelId ?? "roundtable") ?? [];
 
@@ -367,7 +369,7 @@ export default function ChatView() {
     if (!text || !canSend || isBusy) return;
 
     if (isIdle) {
-      startPlanning(text);
+      startPlanning(text, selectedAgentId || undefined);
     } else if (isBeforeLoopDialog) {
       sendScriptMessage(text);
     } else if (isLoopRunning) {
