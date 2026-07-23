@@ -18,6 +18,7 @@ import { ActivityLogger } from "../activity-logger";
 import type { RunManager, SteeringSink } from "./api-routes";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
 import { createLoopController } from "../loop-controller";
+import { createStageController } from "../stage/stage-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
@@ -101,6 +102,8 @@ class SwarmRunManager implements RunManager {
 	#profileRegistry: ProfileRegistry;
 	/** P7: Stigmergy mark environment (per-session). */
 	#markEnvironment: MarkEnvironment;
+	/** Role asset manager for role-based prompts and tools. */
+	#roleAssetManager: RoleAssetManager;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -113,6 +116,7 @@ class SwarmRunManager implements RunManager {
 		sessionManager?: SwarmSessionManager;
 		profileRegistry: ProfileRegistry;
 		markEnvironment: MarkEnvironment;
+		roleAssetManager: RoleAssetManager;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -124,6 +128,7 @@ class SwarmRunManager implements RunManager {
 		this.#sessionManager = opts.sessionManager;
 		this.#profileRegistry = opts.profileRegistry;
 		this.#markEnvironment = opts.markEnvironment;
+		this.#roleAssetManager = opts.roleAssetManager;
 	}
 
 
@@ -165,42 +170,79 @@ class SwarmRunManager implements RunManager {
 			await this.#stateTracker.init(agentNames, def.targetCount, def.mode);
 			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 
-			this.#loopController = createLoopController(this.#stateTracker, {
-				loopConfig: def.loopConfig,
-				workspace: this.#workspace,
-				activityLogger: this.#activityLogger,
-			});
-
 			this.#abortController = new AbortController();
 			this.#running = true;
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
-			// P7: Create SwarmHooks for Profile + Stigmergy lifecycle
-			const swarmHooks = createSwarmHooks({
-				enabled: this.#loopConfig.stigmergy?.enabled ?? false,
-				profileRegistry: this.#profileRegistry,
-				markEnvironment: this.#markEnvironment,
-			});
+			// Choose execution engine:
+			// - StageController (new): task-queue-based, event-driven, agent selection
+			// - LoopController (legacy): iteration-based, round-robin
+			const useStageController = planContent != null && planContent.length > 0;
 
-			this.#loopController.runLoop({
-				workspace: this.#workspace,
-				modelRegistry: this.#modelRegistry,
-				settings: this.#settings,
-				signal: this.#abortController.signal,
-				planContent,
-				hooks: swarmHooks.hooks,
-				getAgentContext: swarmHooks.context.getAgentContext,
-			}).then(async (result) => {
-				logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
-				if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
-				await this.#runAfterLoopPipeline(result);
-			}).catch((err) => {
-				logger.error("[RunManager] Loop failed", { error: String(err) });
-			}).finally(() => {
-				this.#running = false;
-				this.#loopController = null;
-				this.#abortController = null;
-			});
+			if (useStageController && planContent) {
+				const stage = createStageController({
+					workspace: this.#workspace,
+					swarmName: def.name,
+					planContent,
+					loopConfig: def.loopConfig,
+					stateTracker: this.#stateTracker,
+					activityLogger: this.#activityLogger,
+					modelRegistry: this.#modelRegistry,
+					settings: this.#settings,
+					signal: this.#abortController.signal,
+					profileRegistry: this.#profileRegistry,
+					roleAssetManager: this.#roleAssetManager,
+				});
+
+				stage.run().then(async (result) => {
+					logger.info("[RunManager] Stage finished", { status: result.status });
+					if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
+					await this.#runAfterLoopPipeline({
+						status: result.status === "completed" ? "completed" : "failed",
+						iterations: 1,
+						reviewVerdicts: [],
+						errors: result.errors,
+					});
+				}).catch((err) => {
+					logger.error("[RunManager] Stage failed", { error: String(err) });
+				}).finally(() => {
+					this.#running = false;
+					this.#abortController = null;
+				});
+			} else {
+				// Legacy LoopController fallback
+				this.#loopController = createLoopController(this.#stateTracker, {
+					loopConfig: def.loopConfig,
+					workspace: this.#workspace,
+					activityLogger: this.#activityLogger,
+				});
+
+				const swarmHooks = createSwarmHooks({
+					enabled: this.#loopConfig.stigmergy?.enabled ?? false,
+					profileRegistry: this.#profileRegistry,
+					markEnvironment: this.#markEnvironment,
+				});
+
+				this.#loopController.runLoop({
+					workspace: this.#workspace,
+					modelRegistry: this.#modelRegistry,
+					settings: this.#settings,
+					signal: this.#abortController.signal,
+					planContent,
+					hooks: swarmHooks.hooks,
+					getAgentContext: swarmHooks.context.getAgentContext,
+				}).then(async (result) => {
+					logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
+					if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
+					await this.#runAfterLoopPipeline(result);
+				}).catch((err) => {
+					logger.error("[RunManager] Loop failed", { error: String(err) });
+				}).finally(() => {
+					this.#running = false;
+					this.#loopController = null;
+					this.#abortController = null;
+				});
+			}
 
 			return { success: true };
 		} catch (err) {
@@ -305,6 +347,7 @@ async function createSessionServices(
 		experienceStore: shared.experienceStore,
 		profileRegistry: shared.profileRegistry,
 		markEnvironment,
+		roleAssetManager: shared.roleAssetManager,
 	});
 
 	const scriptManager = new ScriptManager({
