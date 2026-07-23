@@ -514,7 +514,7 @@ export class ProfileRegistry {
 	/** Save profiles to workspace disk. */
 	async save(workspaceDir: string): Promise<void> {
 		try {
-			const path = `${workspaceDir}/.swarm-workspace/profiles.json`;
+			const path = `${workspaceDir}/profiles.json`;
 			await Bun.write(path, JSON.stringify(this.serialize(), null, 2));
 		} catch (err) {
 			// Best-effort — never crash on persistence failure

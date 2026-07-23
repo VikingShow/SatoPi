@@ -484,12 +484,6 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ profiles: registry.list() });
 		},
 		"POST /api/profiles": async (req, ctx) => {
-
-		"POST /api/profiles/save": async (_req, ctx) => {
-			const registry = ctx.registry.shared.profileRegistry;
-			await registry.save(ctx.registry.shared.workspace);
-			return json({ success: true, count: registry.list().length });
-		},
 			const registry = ctx.registry.shared.profileRegistry;
 			const body = (await req.json()) as { profileId?: string; name?: string; archetype?: string };
 			if (!body.profileId) return json({ error: "profileId is required" }, 400);
@@ -500,6 +494,12 @@ export const apiRoutes: Record<string, RouteHandler> = {
 				description: `Agent: ${body.name ?? body.profileId}`,
 			});
 			return json(profile, 201);
+		},
+
+		"POST /api/profiles/save": async (_req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			await registry.save(ctx.registry.shared.workspace);
+			return json({ success: true, count: registry.list().length });
 		},
 
 	// -- Role Asset Library ----------------------------------------------
