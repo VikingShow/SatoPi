@@ -9,7 +9,7 @@ import type { ActivityEntry } from "../activity-logger";
 
 // -- Broadcaster interface (decouples ActivityLogger from MonitorServer) --
 export interface ActivityBroadcaster {
-  broadcast(entry: ActivityEntry): void;
+  broadcast(sessionName: string, entry: ActivityEntry): void;
 }
 
 // -- AfterLoop result (shared between standalone.ts and api-routes.ts) --

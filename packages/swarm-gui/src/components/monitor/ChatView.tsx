@@ -256,7 +256,14 @@ export default function ChatView() {
   const viewingSession = useSessionStore((s) => s.viewingSession);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => scriptState?.selectedAgentId ?? "");
+
+  // Restore selectedAgentId from scriptState on mount (survives page refresh)
+  useEffect(() => {
+    if (scriptState?.selectedAgentId && !selectedAgentId) {
+      setSelectedAgentId(scriptState.selectedAgentId);
+    }
+  }, [scriptState?.selectedAgentId]);
 
   const channelMessages = messages.get(activeChannelId ?? "roundtable") ?? [];
 
@@ -357,12 +364,15 @@ export default function ChatView() {
   const placeholder = isIdle
     ? "Describe your task..."
     : isBeforeLoopDialog
-    ? (isBusy ? "Socrates is thinking..." : "Reply...")
+    ? (isBusy ? "Agent is thinking..." : "Reply...")
     : isBeforeLoopConfirm
     ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
     ? "Give feedback or guidance..."
-    : isLoopRunning ? "Give feedback or guidance..." : "";
+    : phase === "paused" ? "Stage is paused — click Resume to continue"
+    : phase === "blocked" ? "Stage is blocked — resolve the blocker to continue"
+    : phase === "curtain" ? "Curtain call — click Applaud to finish"
+    : "";
 
   function handleSend() {
     const text = inputText.trim();

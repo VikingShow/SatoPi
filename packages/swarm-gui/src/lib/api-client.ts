@@ -226,6 +226,14 @@ export const api = {
       method: "POST",
     }),
 
+  // -- Plan update-and-continue (session-scoped) -------------------------
+
+  updatePlanAndContinue: (content: string) =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/plan/update-and-continue"), {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
   // -- Role Asset Library (global) ------------------------------------------
 
   getRoles: (status?: RoleStatus) => {

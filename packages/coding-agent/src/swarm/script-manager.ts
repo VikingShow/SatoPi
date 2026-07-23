@@ -235,7 +235,7 @@ export class ScriptManager {
 		return { success: true };
 	}
 
-	async confirm(): Promise<{ success: boolean; error?: string }> {
+	async confirm(agentCount?: number, reviewerCount?: number): Promise<{ success: boolean; error?: string }> {
 		if (this.#busy) return { success: false, error: "Planner or debate is still running. Please wait." };
 		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
