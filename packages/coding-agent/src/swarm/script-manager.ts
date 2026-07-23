@@ -135,6 +135,15 @@ export class ScriptManager {
 		this.#conversation = [];
 		this.#planReady = false;
 		this.#selectedAgentId = agentId;
+		// Register agent profile so Stage can select it later
+		if (agentId && this.#profileRegistry) {
+			this.#profileRegistry.getOrCreate({
+				profileId: agentId,
+				name: agentId,
+				archetype: "planner",
+				description: `Agent created during Script phase planning`,
+			});
+		}
 		this.#recommendedAgents = undefined;
 		this.#estimatedAgentHours = undefined;
 		this.#phase = "script";

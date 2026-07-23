@@ -478,6 +478,30 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	// Route key format: "METHOD /path"
 	// ══════════════════════════════════════════════════════════════════════
 
+		// -- Agent Profiles (global) -------------------------------------------
+		"GET /api/profiles": (_req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			return json({ profiles: registry.list() });
+		},
+		"POST /api/profiles": async (req, ctx) => {
+
+		"POST /api/profiles/save": async (_req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			await registry.save(ctx.registry.shared.workspace);
+			return json({ success: true, count: registry.list().length });
+		},
+			const registry = ctx.registry.shared.profileRegistry;
+			const body = (await req.json()) as { profileId?: string; name?: string; archetype?: string };
+			if (!body.profileId) return json({ error: "profileId is required" }, 400);
+			const profile = registry.getOrCreate({
+				profileId: body.profileId,
+				name: body.name ?? body.profileId,
+				archetype: body.archetype ?? "worker",
+				description: `Agent: ${body.name ?? body.profileId}`,
+			});
+			return json(profile, 201);
+		},
+
 	// -- Role Asset Library ----------------------------------------------
 	"GET /api/roles": (req, ctx) => {
 		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);

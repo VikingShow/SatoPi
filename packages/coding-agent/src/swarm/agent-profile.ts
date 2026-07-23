@@ -465,6 +465,62 @@ export class ProfileRegistry {
 		this.#creditRankCache = null;
 	}
 
+	// ── Persistence ──────────────────────────────────────────────────
+
+	/** Serialize all profiles to a JSON-serializable snapshot. */
+	serialize(): unknown[] {
+		return this.list().map(p => ({
+			...p,
+			// Convert Set to array for JSON
+			social: {
+				...p.social,
+				collaborators: [...p.social.collaborators],
+				citedBy: [...p.social.citedBy],
+			},
+		}));
+	}
+
+	/** Restore profiles from a serialized snapshot. */
+	deserialize(snapshots: unknown[]): void {
+		this.#profiles.clear();
+		this.#versions.clear();
+		this.#creditRankCache = null;
+		for (const snap of snapshots) {
+			const p = snap as AgentProfile;
+			// Reconstruct Set from array
+			p.social = {
+				collaborators: Array.isArray(p.social?.collaborators) ? p.social.collaborators : [],
+				collaborationCount: p.social?.collaborationCount ?? 0,
+				citedBy: Array.isArray(p.social?.citedBy) ? p.social.citedBy : [],
+			};
+			this.#profiles.set(p.profileId, p);
+			this.#versions.set(p.profileId, 1);
+		}
+	}
+
+	/** Load profiles from workspace disk. */
+	static async load(workspaceDir: string): Promise<ProfileRegistry> {
+		const registry = new ProfileRegistry();
+		try {
+			const file = Bun.file(`${workspaceDir}/.swarm-workspace/profiles.json`);
+			if (await file.exists()) {
+				const data = await file.json();
+				if (Array.isArray(data)) registry.deserialize(data);
+			}
+		} catch { /* first run — no profiles yet */ }
+		return registry;
+	}
+
+	/** Save profiles to workspace disk. */
+	async save(workspaceDir: string): Promise<void> {
+		try {
+			const path = `${workspaceDir}/.swarm-workspace/profiles.json`;
+			await Bun.write(path, JSON.stringify(this.serialize(), null, 2));
+		} catch (err) {
+			// Best-effort — never crash on persistence failure
+		}
+	}
+
 	// ── Internal ──────────────────────────────────────────────────────
 
 	#bumpVersion(profileId: string): void {

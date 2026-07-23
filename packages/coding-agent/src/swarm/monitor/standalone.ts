@@ -406,7 +406,8 @@ async function main() {
 	if (seeded > 0) logger.info(`Seeded ${seeded} built-in role assets`);
 
 	logger.info("Initializing ProfileRegistry (Agent identity system)...");
-	const profileRegistry = new ProfileRegistry();
+	const profileRegistry = await ProfileRegistry.load(WORKSPACE_DIR);
+	logger.info(`Loaded ${profileRegistry.list().length} agent profiles`);
 
 	const shared: SharedServices = {
 		workspace: WORKSPACE_DIR,
@@ -459,12 +460,13 @@ async function main() {
 		`└──────────────────────────────────────────────────┘`,
 	].join("\n"));
 
-	const shutdown = () => {
+	const shutdown = async () => {
 		logger.info("Shutting down...");
 		if (session.runManager.isRunning) session.runManager.stop().catch(() => {});
 		registry.destroyAll().catch(() => {});
 		server.stop();
 		experienceStore.close();
+		await profileRegistry.save(WORKSPACE_DIR);
 		process.exit(0);
 	};
 	process.on("SIGINT", shutdown);
