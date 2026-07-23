@@ -61,6 +61,10 @@ export interface AgentState {
 	role?: "reviewer";
 	/** Model name assigned to this agent (from loop config or swarm definition). */
 	modelName?: string;
+	/** P7: AgentProfile ID — links to persistent identity / credit record. */
+	profileId?: string;
+	/** P7: Trust weight derived from profile credit score (0-1). */
+	trustWeight?: number;
 }
 
 export interface SwarmState {

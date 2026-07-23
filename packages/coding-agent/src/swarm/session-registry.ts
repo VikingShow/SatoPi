@@ -21,6 +21,7 @@ import type { ExperienceStore } from "./after-loop/experience";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { RoleAssetManager } from "./role-asset";
+import type { ProfileRegistry } from "./agent-profile";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
 // is what makes persistence actually work.
@@ -39,6 +40,8 @@ export interface SharedServices {
 	settings: Settings;
 	experienceStore: ExperienceStore;
 	roleAssetManager: RoleAssetManager;
+	/** P7: AgentProfile registry — cross-run persistent agent identity. */
+	profileRegistry: ProfileRegistry;
 }
 
 /** The complete per-session service graph. */

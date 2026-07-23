@@ -42,6 +42,8 @@ export interface SwarmAgent {
 	allowedTools?: string[];
 	/** P1-5: Blacklist — these tools are blocked (config-as-constraint). */
 	blockedTools?: string[];
+	/** P7: AgentProfile ID — links this agent to its persistent identity / credit record. */
+	profileId?: string;
 }
 
 export interface SwarmDefinition {
@@ -200,6 +202,8 @@ export interface LoopSwarmConfig {
 	mnemopi?: MnemopiConfig;
 	/** P5.5: Offload pipeline + Mermaid context graph configuration. */
 	offload?: OffloadConfig;
+	/** P7: Stigmergic MarkEnvironment configuration (complement to IRC). */
+	stigmergy?: StigmergyConfig;
 }
 
 // ============================================================================
@@ -305,6 +309,29 @@ export interface MnemopiConfig {
 }
 
 // ============================================================================
+// P7: Stigmergy config
+// ============================================================================
+
+/**
+ * Stigmergic MarkEnvironment configuration.
+ * Controls mark TTLs, injection behavior, and guard layer settings.
+ */
+export interface StigmergyConfig {
+	/** Enable stigmergic environment. Default false. */
+	enabled?: boolean;
+	/** Default TTL for signal marks (ms). Default 10 min. */
+	signalTtlMs?: number;
+	/** Default TTL for artifact marks (ms). Default 30 min. */
+	artifactTtlMs?: number;
+	/** Default TTL for warning marks (ms). Default 60 min. */
+	warningTtlMs?: number;
+	/** Inject stigmergic context into agent prompts. Default true. */
+	injectContext?: boolean;
+	/** Enable file conflict guard layer (uses lock/claim marks). Default true. */
+	guardEnabled?: boolean;
+}
+
+// ============================================================================
 // P5.5: Offload pipeline + Mermaid context graph config
 // ============================================================================
 
@@ -376,6 +403,8 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		mnemopi: parseMnemopiConfig(raw.mnemopi as Record<string, unknown> | undefined),
 		// P5.5: Offload pipeline (opt-in, disabled by default).
 		offload: parseOffloadConfig(raw.offload as Record<string, unknown> | undefined),
+		// P7: Stigmergy environment (opt-in, disabled by default).
+		stigmergy: parseStigmergyConfig(raw.stigmergy as Record<string, unknown> | undefined),
 	};
 }
 
@@ -405,6 +434,22 @@ function parseOffloadConfig(raw: Record<string, unknown> | undefined): OffloadCo
 		l2NullThreshold: (raw.l2_null_threshold as number) ?? 3,
 		l2TimeoutSeconds: (raw.l2_timeout_seconds as number) ?? 120,
 		injectMermaid: (raw.inject_mermaid as boolean) ?? true,
+	};
+}
+
+// ============================================================================
+// P7: Parse Stigmergy config from YAML
+// ============================================================================
+
+function parseStigmergyConfig(raw: Record<string, unknown> | undefined): StigmergyConfig | undefined {
+	if (!raw) return undefined;
+	return {
+		enabled: (raw.enabled as boolean) ?? false,
+		signalTtlMs: (raw.signal_ttl_ms as number) ?? 600000,
+		artifactTtlMs: (raw.artifact_ttl_ms as number) ?? 1800000,
+		warningTtlMs: (raw.warning_ttl_ms as number) ?? 3600000,
+		injectContext: (raw.inject_context as boolean) ?? true,
+		guardEnabled: (raw.guard_enabled as boolean) ?? true,
 	};
 }
 

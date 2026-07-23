@@ -78,6 +78,12 @@ export interface LoopOptions extends PipelineOptions {
 	activityLogger?: ActivityLogger;
 	/** P0-F: Pipeline lifecycle hooks. */
 	hooks?: LoopPipelineHooks;
+	/**
+	 * P7: Per-agent context provider callback.
+	 * Called for each Worker before execution. Return value is appended
+	 * to the agent's task prompt. Return null/empty to skip injection.
+	 */
+	getAgentContext?: (agentId: string) => string | null;
 }
 
 // RoundSummaryData now lives in ./convergence; re-exported (below) for
@@ -605,6 +611,7 @@ export class LoopController {
 						reviewerId,
 						nominationPrompt,
 						iter,
+						options.getAgentContext,
 					);
 
 					if (iterSignal?.aborted) {
@@ -1407,6 +1414,8 @@ export class LoopController {
 		reviewerId: string | undefined,
 		nominationPrompt: string | undefined,
 		iteration: number,
+		/** P7: Per-agent context provider (Profile + Stigmergy injection). */
+		getAgentContext?: ((agentId: string) => string | null),
 	): Promise<SingleResult[]> {
 		const feedbackBlock =
 			previousFeedback.length > 0
@@ -1443,6 +1452,8 @@ export class LoopController {
 						? `\n## Role\n\nCloner review suggests your role for this round: **${roleSuggestions[id]}**.\nThis is non-binding — coordinate with peers to confirm your approach.\n`
 						: "",
 					nominationPrompt ?? "",
+					// P7: Per-agent context injection (Profile + Stigmergy).
+					getAgentContext?.(id) ?? "",
 					extraContext ?? "",
 				].join("\n");
 

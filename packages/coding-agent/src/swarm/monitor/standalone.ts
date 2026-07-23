@@ -36,6 +36,9 @@ import {
 	type SharedServices,
 	type SessionServices,
 } from "../session-registry";
+import { ProfileRegistry } from "../agent-profile";
+import { MarkEnvironment } from "../mark-environment";
+import { createSwarmHooks } from "../swarm-hooks";
 
 // ============================================================================
 // Workspace setup
@@ -94,6 +97,10 @@ class SwarmRunManager implements RunManager {
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
 	#loopConfig: LoopSwarmConfig | null = null;
+	/** P7: Agent identity registry (workspace-scoped, shared). */
+	#profileRegistry: ProfileRegistry;
+	/** P7: Stigmergy mark environment (per-session). */
+	#markEnvironment: MarkEnvironment;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -104,6 +111,8 @@ class SwarmRunManager implements RunManager {
 		activityLogger: ActivityLogger;
 		experienceStore: ExperienceStore;
 		sessionManager?: SwarmSessionManager;
+		profileRegistry: ProfileRegistry;
+		markEnvironment: MarkEnvironment;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -113,6 +122,8 @@ class SwarmRunManager implements RunManager {
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#sessionManager = opts.sessionManager;
+		this.#profileRegistry = opts.profileRegistry;
+		this.#markEnvironment = opts.markEnvironment;
 	}
 
 
@@ -164,12 +175,21 @@ class SwarmRunManager implements RunManager {
 			this.#running = true;
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
+			// P7: Create SwarmHooks for Profile + Stigmergy lifecycle
+			const swarmHooks = createSwarmHooks({
+				enabled: this.#loopConfig.stigmergy?.enabled ?? false,
+				profileRegistry: this.#profileRegistry,
+				markEnvironment: this.#markEnvironment,
+			});
+
 			this.#loopController.runLoop({
 				workspace: this.#workspace,
 				modelRegistry: this.#modelRegistry,
 				settings: this.#settings,
 				signal: this.#abortController.signal,
 				planContent,
+				hooks: swarmHooks.hooks,
+				getAgentContext: swarmHooks.context.getAgentContext,
 			}).then(async (result) => {
 				logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
 				if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
@@ -273,6 +293,8 @@ async function createSessionServices(
 		}
 	});
 
+	const markEnvironment = new MarkEnvironment();
+
 	const runManager = new SwarmRunManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,
@@ -281,6 +303,8 @@ async function createSessionServices(
 		stateTracker,
 		activityLogger,
 		experienceStore: shared.experienceStore,
+		profileRegistry: shared.profileRegistry,
+		markEnvironment,
 	});
 
 	const beforeLoopManager = new BeforeLoopManager({
@@ -337,6 +361,9 @@ async function main() {
 	const seeded = await roleAssetManager.seedIfEmpty();
 	if (seeded > 0) logger.info(`Seeded ${seeded} built-in role assets`);
 
+	logger.info("Initializing ProfileRegistry (Agent identity system)...");
+	const profileRegistry = new ProfileRegistry();
+
 	const shared: SharedServices = {
 		workspace: WORKSPACE_DIR,
 		yamlPath: YAML_PATH,
@@ -344,6 +371,7 @@ async function main() {
 		settings,
 		experienceStore,
 		roleAssetManager,
+		profileRegistry,
 	};
 
 	// Create SessionRegistry.  We delay session creation until AFTER the

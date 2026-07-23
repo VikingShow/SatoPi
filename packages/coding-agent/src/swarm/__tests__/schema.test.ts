@@ -337,4 +337,73 @@ swarm:
 		const errors = validateSwarmDefinition(def);
 		expect(errors).toEqual([]);
 	});
+
+	// ── P7: Stigmergy config ──────────────────────────────────────────
+
+	it("parses stigmergy config from YAML with defaults", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  stigmergy:
+    enabled: true
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		expect(def.loopConfig?.stigmergy).toBeDefined();
+		expect(def.loopConfig!.stigmergy!.enabled).toBe(true);
+		expect(def.loopConfig!.stigmergy!.injectContext).toBe(true); // default
+		expect(def.loopConfig!.stigmergy!.guardEnabled).toBe(true);  // default
+	});
+
+	it("stigmergy config is undefined when not present", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		expect(def.loopConfig?.stigmergy).toBeUndefined();
+	});
+
+	it("stigmergy config is undefined when disabled", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  stigmergy:
+    enabled: false
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		expect(def.loopConfig?.stigmergy?.enabled).toBe(false);
+	});
+
+	it("parses custom stigmergy TTLs and guard settings", () => {
+		const yaml = `
+swarm:
+  name: test-loop
+  workspace: /tmp/test
+  mode: loop
+  stigmergy:
+    enabled: true
+    signal_ttl_ms: 300000
+    artifact_ttl_ms: 600000
+    warning_ttl_ms: 1800000
+    inject_context: false
+    guard_enabled: false
+  agents: {}
+`;
+		const def = parseSwarmYaml(yaml);
+		const s = def.loopConfig!.stigmergy!;
+		expect(s.signalTtlMs).toBe(300000);
+		expect(s.artifactTtlMs).toBe(600000);
+		expect(s.warningTtlMs).toBe(1800000);
+		expect(s.injectContext).toBe(false);
+		expect(s.guardEnabled).toBe(false);
+	});
 });
