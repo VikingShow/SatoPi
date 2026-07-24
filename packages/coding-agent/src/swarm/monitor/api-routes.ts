@@ -45,7 +45,7 @@ export interface ScriptManager {
 	start(task: string, agentId?: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
-	confirm(agentCount?: number, reviewerCount?: number): Promise<{ success: boolean; error?: string }>;
+	confirm(agentCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
 	getState(): {
 		phase: string; task: string; conversationLength: number;
@@ -359,11 +359,9 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as {
 			agentCount?: number;
-			reviewerCount?: number;
 		};
 		const result = await ctx.services.scriptManager.confirm(
 			body.agentCount,
-			body.reviewerCount,
 		);
 		return json(result, result.success ? 200 : 500);
 	},

@@ -957,7 +957,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     }
   },
 
-  confirmAndStart: async (opts?: { agentCount?: number; reviewerCount?: number }) => {
+  confirmAndStart: async (opts?: { agentCount?: number }) => {
     try {
       const result = await api.confirmScript(opts);
       if (result.success) {

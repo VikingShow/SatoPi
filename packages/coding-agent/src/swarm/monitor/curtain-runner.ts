@@ -21,6 +21,8 @@ import type { AfterLoopResult } from "./types";
 import type { RoleAssetManager } from "../agent/role-asset";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
+import { ReporterElection, type ContributionData } from "./reporter-election";
 
 // ============================================================================
 // Types
@@ -36,6 +38,8 @@ export interface CurtainRunnerOpts {
 	settings: Settings;
 	roleAssetManager?: RoleAssetManager;
 	profileRegistry?: ProfileRegistry;
+	/** Optional IRC bus for agent-to-agent communication (enables reporter election). */
+	ircBus?: IrcBus;
 	/** Promise that resolves when user applauds. Set up by the API endpoint. */
 	applaudSignal?: AbortSignal;
 }
@@ -58,7 +62,6 @@ export interface CurtainResultData {
 		finalStatus: string;
 		reviewApprovalRatio: number;
 		agentCount: number;
-		
 	};
 }
 
@@ -76,6 +79,7 @@ export async function runCurtainPipeline(
 	const {
 		workspace, stateTracker, activityLogger, experienceStore,
 		loopConfig, modelRegistry, settings, roleAssetManager, profileRegistry,
+		ircBus,
 	} = opts;
 
 	const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}`;
@@ -90,11 +94,43 @@ export async function runCurtainPipeline(
 		const agentCount = Object.keys(agents).length;
 		const reviewerCount = Object.values(agents).filter(a => a.role === "reviewer").length;
 
+	// ── Elect reporter via agent voting (if IRC bus available) ──
+	let electedReporter: string | null = null;
+	if (ircBus && result.agentResults.size > 0) {
+		try {
+			const contributions: ContributionData[] = [];
+			for (const [agentId, agentResults] of result.agentResults) {
+				contributions.push({
+					agentId,
+					name: agents[agentId]?.name ?? agentId,
+					tasksCompleted: agentResults.filter(r => r.exitCode === 0).length,
+					codeLinesChanged: 0, // Not tracked in SingleResult
+				});
+			}
+			const eligibleIds = contributions.map(c => c.agentId);
+			const election = new ReporterElection(ircBus, activityLogger);
+			const electionResult = await election.elect({ contributions, eligibleIds });
+			electedReporter = electionResult.reporterId;
+			activityLogger.logBroadcast("system", `Elected reporter: ${electedReporter} (deputies: ${electionResult.deputyIds.join(", ")})`);
+			logger.info("[Curtain] Reporter elected", { reporter: electedReporter });
+		} catch (err) {
+			logger.warn("[Curtain] Reporter election failed, falling back to default reporter", { error: String(err) });
+		}
+	}
+
 	// ── Run reporter + reflection in parallel ──
 	const [reporterSummary, extraction] = await Promise.all([
-		// Thread A: Reporter agent
-		runReporterAgent(workspace, result, { modelRegistry, settings, activityLogger, roleAssetManager }),
+		// Thread A: Reporter agent (elected or default)
+		runReporterAgent(workspace, result, { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride: electedReporter }),
 		// Thread B: Reflection pipeline
+		runReflectionPipeline(result, {
+			agentCount,
+			reviewerCount,
+			experienceStore,
+			modelRegistry,
+			settings,
+			runId,
+		}),
 	]);
 
 	// ── Merge results ──
@@ -176,30 +212,33 @@ async function runReporterAgent(
 		settings: Settings;
 		activityLogger: ActivityLogger;
 		roleAssetManager?: RoleAssetManager;
+		/** Elected reporter agent ID override (from ReporterElection). Falls back to "reporter". */
+		reporterOverride?: string | null;
 	},
 ): Promise<string | null> {
-	const { modelRegistry, settings, activityLogger, roleAssetManager } = opts;
+	const { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride } = opts;
+	const reporterName = reporterOverride ?? "reporter";
 
 	// Load reporter role
 	let reporterPrompt: string | undefined;
 	try {
-		const role = await roleAssetManager?.get("reporter");
+		const role = await roleAssetManager?.get(reporterName);
 		if (role?.status === "approved") {
 			reporterPrompt = role.prompts.system;
 		}
 	} catch { /* use default */ }
 
 	const systemPrompt = reporterPrompt ??
-		"You are a Reporter agent. Summarize the completed build for the user. Be clear, concise, and honest about issues.";
+		`You are a ${reporterName} Reporter agent. Summarize the completed build for the user. Be clear, concise, and honest about issues.`;
 
 	try {
-		const msgId = `curtain-reporter-${Date.now()}`;
+		const msgId = `curtain-${reporterName}-${Date.now()}`;
 		const report = await streamAgentOutput(
-			{ activityLogger, msgId, from: "reporter" },
+			{ activityLogger, msgId, from: reporterName },
 			{
 				cwd: workspace,
 				agent: {
-					name: "reporter",
+					name: reporterName,
 					description: "Curtain phase reporter agent",
 					systemPrompt,
 					source: "project" as const,
@@ -242,7 +281,6 @@ interface ReflectionResult {
 		finalStatus: string;
 		reviewApprovalRatio: number;
 		agentCount: number;
-		
 	};
 	reflectionSummary: string;
 	deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null;
@@ -252,14 +290,14 @@ async function runReflectionPipeline(
 	result: StageResult,
 	opts: {
 		agentCount: number;
-		
+		reviewerCount: number;
 		experienceStore: ExperienceStore;
 		modelRegistry: ModelRegistry;
 		settings: Settings;
 		runId: string;
 	},
 ): Promise<ReflectionResult> {
-	const { agentCount, experienceStore, modelRegistry, settings, runId } = opts;
+	const { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId } = opts;
 
 	// Extract lessons
 	const extraction = extractLessons(result, agentCount, reviewerCount);

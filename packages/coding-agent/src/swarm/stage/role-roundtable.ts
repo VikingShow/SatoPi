@@ -50,10 +50,12 @@ export interface RoundtableConfig {
 export class RoleRoundtable {
 	readonly #ircBus: IrcBus;
 	readonly #activityLogger?: ActivityLogger;
+	#sharedChannel?: AgentChannel;
 
-	constructor(ircBus: IrcBus, activityLogger?: ActivityLogger) {
+	constructor(ircBus: IrcBus, activityLogger?: ActivityLogger, sharedChannel?: AgentChannel) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
+		this.#sharedChannel = sharedChannel;
 	}
 
 	/**
@@ -72,8 +74,8 @@ export class RoleRoundtable {
 
 		const agentIds = candidates.map(c => c.agentId);
 
-		// Build channel for this roundtable
-		const channel = new AgentChannel(
+		// Use shared channel if provided, otherwise create a new one
+		const channel = this.#sharedChannel ?? new AgentChannel(
 			this.#ircBus,
 			{ agents: agentIds, observers: [] },
 			this.#activityLogger,

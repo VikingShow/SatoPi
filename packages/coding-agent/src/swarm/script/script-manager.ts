@@ -235,7 +235,7 @@ export class ScriptManager {
 		return { success: true };
 	}
 
-	async confirm(agentCount?: number, reviewerCount?: number): Promise<{ success: boolean; error?: string }> {
+	async confirm(agentCount?: number): Promise<{ success: boolean; error?: string }> {
 		if (this.#busy) return { success: false, error: "Planner or debate is still running. Please wait." };
 		if (this.#phase !== "script" && this.#phase !== "script-confirm") {
 			return { success: false, error: `Cannot confirm in phase: ${this.#phase}` };
@@ -247,7 +247,7 @@ export class ScriptManager {
 		this.#phase = "stage";
 		await this.#setPhase("stage");
 
-		const result = await this.#runManager.start(agentCount, reviewerCount);
+		const result = await this.#runManager.start(agentCount);
 		if (!result.success) {
 			this.#phase = "script-confirm";
 			await this.#setPhase("script-confirm");

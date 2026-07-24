@@ -92,20 +92,20 @@ export class OffloadPipeline {
 	 * @param phaseHints agentId → phase 名称映射（可选）
 	 * @param scores     agentId → Cloner 评分映射（可选，cloner 场景）
 	 */
-	runL1(
+	async runL1(
 		results: Map<string, SingleResult>,
 		agentType: "worker" | "cloner" | "orchestrator",
 		iteration: number,
 		phaseHints?: Map<string, string>,
 		scores?: Map<string, number>,
-	): OffloadPipeline.L1Output[] {
+	): Promise<OffloadPipeline.L1Output[]> {
 		const outputs: OffloadPipeline.L1Output[] = [];
 
 		for (const [agentId, result] of results) {
 			const phaseHint = phaseHints?.get(agentId);
 			const score = scores?.get(agentId);
 
-			const summ = this.#summarizer.summarize({
+			const summ = await this.#summarizer.summarize({
 				result,
 				agentId,
 				agentType,

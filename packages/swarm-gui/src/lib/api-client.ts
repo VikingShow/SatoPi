@@ -191,11 +191,11 @@ export const api = {
       method: "POST",
     }),
 
-  confirmScript: (opts?: { agentCount?: number; reviewerCount?: number }) =>
+  confirmScript: (opts?: { agentCount?: number }) =>
     fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/confirm"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentCount: opts?.agentCount, reviewerCount: opts?.reviewerCount }),
+      body: JSON.stringify({ agentCount: opts?.agentCount }),
     }),
 
   cancelScript: () =>

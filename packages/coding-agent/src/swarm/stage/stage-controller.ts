@@ -32,6 +32,8 @@ import type { StateTracker } from "../core/state";
 import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
 import { TaskComplexityAnalyzer } from "../script/task-analyzer";
 import type { ReviewVerdict } from "../core/pipeline";
+import { RoleRoundtable, type RoleCandidate } from "./role-roundtable";
+import { AgentChannel } from "../channel/agent-channel";
 
 // ============================================================================
 // StageCallbacks — feedback interface for Profile credit + Stigmergy marks
@@ -77,8 +79,6 @@ export interface StageOptions {
 	agentIds?: string[];
 	/** User-specified agent count (overrides complexity analyzer). */
 	agentCount?: number;
-	/** User-specified reviewer count. */
-	reviewerCount?: number;
 	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
 	callbacks?: StageCallbacks;
 }
@@ -101,6 +101,7 @@ export class StageController {
 	readonly #opts: StageOptions;
 	#executor: AgentExecutor;
 	#lockMgr = new RegionLockManager();
+	#sharedChannel?: AgentChannel;
 
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
@@ -262,8 +263,7 @@ export class StageController {
 	// ────────────────────────────────────────────────────────────────────────
 
 	async #assignRoles(agents: ScoredAgent[]): Promise<Array<{ id: string; role: string }>> {
-		const { planContent, roleAssetManager, activityLogger } = this.#opts;
-		const assignments: Array<{ id: string; role: string }> = [];
+		const { planContent, roleAssetManager, activityLogger, ircBus } = this.#opts;
 
 		// 1. Derive needed roles from plan.md task types
 		const taskRoles = TaskQueue.parseFromPlan(planContent)
@@ -286,7 +286,41 @@ export class StageController {
 			return [{ id: agents[0].profileId, role: fallbackRole }];
 		}
 
-		// 4. First pass: agents with strong role preference
+		// 4. Build candidate list for roundtable
+		const candidates: RoleCandidate[] = agents.map(a => ({
+			agentId: a.profileId,
+			name: a.name,
+			preferredRoles: a.preferredRoles ?? [],
+		}));
+
+		// 5. Try roundtable negotiation (if IRC bus is available)
+		if (ircBus) {
+			// Create shared channel once and reuse across lifecycle
+			if (!this.#sharedChannel) {
+				this.#sharedChannel = new AgentChannel(
+					ircBus,
+					{ agents: candidates.map(c => c.agentId), observers: [] },
+					activityLogger,
+				);
+			}
+			const roundtable = new RoleRoundtable(ircBus, activityLogger, this.#sharedChannel);
+			const negotiated = await roundtable.negotiateRoles({
+				availableRoles,
+				candidates,
+			});
+
+			if (negotiated && negotiated.length > 0) {
+				activityLogger.logBroadcast(
+					"system",
+					`Roundtable role assignments: ${negotiated.map(a => `${a.agentId}=${a.role}`).join(", ")}`,
+				);
+				return negotiated;
+			}
+		}
+
+		// 6. Fallback: algorithm-based assignment
+		// First pass: agents with strong role preference
+		const assignments: Array<{ id: string; role: string }> = [];
 		for (const agent of agents) {
 			const preferred = agent.preferredRoles.find(r => availableRoles.includes(r));
 			if (preferred) {
@@ -294,7 +328,7 @@ export class StageController {
 			}
 		}
 
-		// 5. Second pass: remaining agents get remaining roles round-robin
+		// Second pass: remaining agents get remaining roles round-robin
 		const remaining = agents.filter(a => !assignments.find(ra => ra.id === a.profileId));
 		const remainingRoles = availableRoles.filter(r => !assignments.find(a => a.role === r));
 		for (let i = 0; i < remaining.length; i++) {
@@ -304,7 +338,7 @@ export class StageController {
 
 		activityLogger.logBroadcast(
 			"system",
-			`Role assignments: ${assignments.map(a => `${a.id}=${a.role}`).join(", ")}`,
+			`Algorithm role assignments: ${assignments.map(a => `${a.id}=${a.role}`).join(", ")}`,
 		);
 
 		return assignments;
@@ -367,7 +401,7 @@ export class StageController {
 							description: `Stage agent: ${agent.id} (${agent.role})`,
 							systemPrompt,
 							source: "project" as const,
-							...(roleDef?.tools ? { tools: roleDef.tools } : {}),
+							tools: [...(roleDef?.tools ?? []), "agent_fork"],
 						},
 						task: [
 							`## Task: ${task.title}`,

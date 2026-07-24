@@ -102,7 +102,7 @@ export function createOffloadAgentHooks(
 		const phaseHint = config.getPhaseHint?.(agentId);
 		const score = config.getScore?.(agentId);
 
-		const entry = summarizer.summarize({
+		const entry = await summarizer.summarize({
 			messages,
 			agentId,
 			turnIndex,

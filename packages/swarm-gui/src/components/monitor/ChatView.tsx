@@ -478,7 +478,7 @@ export default function ChatView() {
           phase={phase}
           recommendedAgents={scriptState?.recommendedAgents}
           estimatedAgentHours={scriptState?.estimatedAgentHours}
-          onConfirm={(ac, rc) => confirmAndStart({ agentCount: ac, reviewerCount: rc })}
+          onConfirm={(ac) => confirmAndStart({ agentCount: ac })}
           onDebate={runDebate}
         />
       )}

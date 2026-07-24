@@ -7,7 +7,7 @@ export interface ActionBarProps {
   phase: Chapter;
   recommendedAgents?: number;
   estimatedAgentHours?: number;
-  onConfirm: (agentCount: number, reviewerCount: number) => void;
+  onConfirm: (agentCount: number) => void;
   onDebate: () => void;
 }
 
@@ -19,7 +19,6 @@ export function ActionBar({
   onDebate,
 }: ActionBarProps) {
   const [agentCount, setAgentCount] = useState(recommendedAgents ?? 3);
-  const [reviewerCount, setReviewerCount] = useState(2);
 
   useEffect(() => {
     if (recommendedAgents != null) setAgentCount(recommendedAgents);
@@ -50,20 +49,6 @@ export function ActionBar({
                          [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </label>
-          <label className="flex items-center gap-1 text-xs text-muted-foreground">
-            Reviewers
-            <input
-              type="number" min={1} max={20}
-              value={reviewerCount}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v > 0) setReviewerCount(v);
-              }}
-              className="w-12 h-6 px-1 text-xs text-center bg-gray-900/60 border border-gray-700 rounded
-                         text-gray-200 focus:outline-none focus:border-purple-500/60
-                         [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </label>
         </div>
 
         {/* Action buttons */}
@@ -80,7 +65,7 @@ export function ActionBar({
           <Button
             variant="default"
             size="xs"
-            onClick={() => onConfirm(agentCount, reviewerCount)}
+            onClick={() => onConfirm(agentCount)}
             className="bg-status-success hover:bg-status-success/80"
           >
             <Check size={12} />

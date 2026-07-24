@@ -206,7 +206,7 @@ export function createOffloadHooks(
 				if (hint) { phaseHints.set(r.id, hint); workerPhases.set(r.id, hint); }
 			}
 
-			const l1Outputs = pipeline.runL1(resultMap, "worker", currentIteration, phaseHints);
+			const l1Outputs = await pipeline.runL1(resultMap, "worker", currentIteration, phaseHints);
 
 			// 持久化到 JSONL
 			for (const out of l1Outputs) {
@@ -251,7 +251,7 @@ export function createOffloadHooks(
 			const scores = new Map<string, number>();
 			scores.set("cloner", verdict.passed ? 8 : verdict.approvalCount > 0 ? 4 : 2);
 
-			const l1Outputs = pipeline.runL1(resultMap, "cloner", iteration, undefined, scores);
+			const l1Outputs = await pipeline.runL1(resultMap, "cloner", iteration, undefined, scores);
 			for (const out of l1Outputs) {
 				await store.appendEntry(out.agentId, toOffloadEntry(out));
 			}

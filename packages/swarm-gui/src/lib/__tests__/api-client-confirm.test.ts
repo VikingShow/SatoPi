@@ -1,9 +1,9 @@
 /**
- * api-client-confirm.test.ts — Tests for confirm API (agentCount/reviewerCount fix)
+ * api-client-confirm.test.ts — Tests for confirm API (agentCount fix)
  *
  * Coverage:
- * 1. confirm sends both agentCount and reviewerCount correctly
- * 2. confirm with reviewerCount omitted still works
+ * 1. confirm sends agentCount correctly
+ * 2. confirm with agentCount default works
  * 3. confirm handles server errors
  *
  * This file supplements api-client.test.ts with confirm-specific coverage.
@@ -32,25 +32,24 @@ function mockOk<T>(data: T) {
 
 const { api } = await import("../api-client");
 
-describe("api.confirmScript (agentCount + reviewerCount)", () => {
-	it("POSTs agentCount and reviewerCount correctly", async () => {
+describe("api.confirmScript (agentCount)", () => {
+	it("POSTs agentCount correctly", async () => {
 		mockOk({ success: true });
-		const result = await api.confirmScript({ agentCount: 3, reviewerCount: 1 });
+		const result = await api.confirmScript({ agentCount: 3 });
 
 		expect(result.success).toBe(true);
 		const fetchCall = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
 		const body = JSON.parse(fetchCall[1].body);
 
-		// Verify the fix: agentCount no longer duplicated, reviewerCount present
 		expect(body.agentCount).toBe(3);
-		expect(body.reviewerCount).toBe(1);
-		// Should NOT have duplicate agentCount keys
+		// Should NOT have reviewerCount (removed — roles auto-assigned by StageController)
+		expect(body.reviewerCount).toBeUndefined();
 		const bodyKeys = Object.keys(body);
 		const agentCountOccurrences = bodyKeys.filter(k => k === "agentCount").length;
 		expect(agentCountOccurrences).toBe(1); // no duplicate keys in JSON
 	});
 
-	it("sends agentCount only when reviewerCount omitted", async () => {
+	it("sends agentCount only, no reviewerCount", async () => {
 		mockOk({ success: true });
 		await api.confirmScript({ agentCount: 2 });
 
@@ -58,6 +57,7 @@ describe("api.confirmScript (agentCount + reviewerCount)", () => {
 		const body = JSON.parse(fetchCall[1].body);
 
 		expect(body.agentCount).toBe(2);
+		expect(body.reviewerCount).toBeUndefined();
 	});
 
 	it("handles confirm failure from server", async () => {
@@ -73,7 +73,7 @@ describe("api.confirmScript (agentCount + reviewerCount)", () => {
 
 	it("sends POST to /api/script/confirm endpoint", async () => {
 		mockOk({ success: true });
-		await api.confirmScript({ agentCount: 4, reviewerCount: 2 });
+		await api.confirmScript({ agentCount: 4 });
 
 		const fetchCall = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
 		expect(fetchCall[0]).toContain("/script/confirm");
