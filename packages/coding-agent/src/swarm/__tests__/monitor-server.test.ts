@@ -9,12 +9,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { EventEmitter } from "node:events";
-import { StateTracker } from "../state";
+import { StateTracker } from "../core/state";
 import { MonitorServer } from "../monitor/server";
-import { ActivityLogger } from "../activity-logger";
-import type { ActivityEntry } from "../activity-logger";
-import { SwarmSessionManager } from "../swarm-session-manager";
-import { SessionRegistry, type SharedServices, type SessionFactory } from "../session-registry";
+import { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityEntry } from "../hooks/activity-logger";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
+import { SessionRegistry, type SharedServices, type SessionFactory } from "../session/session-registry";
 
 /** Minimal stub that satisfies the SharedServices interface for tests. */
 function createSharedServices(tmpDir: string): SharedServices {

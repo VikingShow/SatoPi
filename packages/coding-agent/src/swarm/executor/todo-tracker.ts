@@ -8,7 +8,7 @@
  *      to todo items and update their status
  */
 
-import type { TodoItem } from "./state";
+import type { TodoItem } from "../core/state";
 
 // ============================================================================
 // Regex patterns for plan.md parsing

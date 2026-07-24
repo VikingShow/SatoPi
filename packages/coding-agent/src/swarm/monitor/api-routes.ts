@@ -12,13 +12,13 @@
  */
 
 import * as path from "node:path";
-import type { StateTracker } from "../state";
+import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
-import type { RoleAssetManager } from "../role-asset";
+import type { RoleAssetManager } from "../agent/role-asset";
 import type { AfterLoopResult } from "./types";
-import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
-import { SwarmSessionManager } from "../swarm-session-manager";
+import type { SessionRegistry, SessionServices, SharedServices } from "../session/session-registry";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 export type { AfterLoopResult };
 
@@ -28,7 +28,7 @@ export type { AfterLoopResult };
 
 /** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
-		setSessionManager?(sm: import("../swarm-session-manager").SwarmSessionManager): void;
+		setSessionManager?(sm: import("../session/swarm-session-manager").SwarmSessionManager): void;
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
 	pause(): Promise<{ success: boolean; error?: string }>;
@@ -506,7 +506,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	"GET /api/roles": (req, ctx) => {
 		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
 		const url = new URL(req.url);
-		const status = url.searchParams.get("status") as import("../role-asset").RoleStatus | null;
+		const status = url.searchParams.get("status") as import("../agent/role-asset").RoleStatus | null;
 		const tag = url.searchParams.get("tag") ?? undefined;
 		const q = url.searchParams.get("q") ?? undefined;
 		if (tag || q || status) {
@@ -529,7 +529,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	"POST /api/roles": async (req, ctx) => {
 		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
 		try {
-			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
+			const body = (await req.json()) as import("../agent/role-asset").RoleCreateInput;
 			if (!body.id || !body.name || !body.prompts) return json({ error: "Missing required fields: id, name, prompts" }, 400);
 			const role = await ctx.services.roleAssetManager.create(body);
 			return json(role, 201);
@@ -543,7 +543,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const id = ctx.params.id;
 		if (!id) return json({ error: "Missing role ID" }, 400);
 		try {
-			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
+			const body = (await req.json()) as import("../agent/role-asset").RoleUpdateInput;
 			const role = await ctx.services.roleAssetManager.update(id, body);
 			return json(role);
 		} catch (err) {

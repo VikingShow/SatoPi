@@ -12,8 +12,8 @@
  * route events to the correct SSE subscribers.
  */
 
-import type { ReviewVerdict } from "./pipeline";
-import type { SwarmSessionManager } from "./swarm-session-manager";
+import type { ReviewVerdict } from "../core/pipeline";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 // Types
@@ -230,8 +230,8 @@ export class ActivityLogger {
 		this.log({
 			ts: Date.now(),
 			type: "agent_state",
-			agentName,
-			from: agentName,
+			agentName: worker,
+			from: worker,
 			...fields,
 		} as ActivityEntry);
 	}

@@ -19,18 +19,20 @@ import type { ModelRegistry, Settings, AgentDefinition } from "@oh-my-pi/pi-codi
 import { logger } from "@oh-my-pi/pi-utils";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import type { ActivityLogger } from "../activity-logger";
-import type { AgentExecutor } from "../executor";
-import { SubprocessAgentExecutor } from "../executor";
-import { streamAgentOutput } from "../streaming";
-import { RegionLockManager } from "../region-lock";
-import { TaskQueue, type Task } from "../task-queue";
-import { type ScoredAgent, selectAgents, extractDomains } from "../agent-selector";
-import type { ProfileRegistry } from "../agent-profile";
-import type { RoleAssetManager, RoleAsset } from "../role-asset";
-import type { StateTracker } from "../state";
-import type { AgentToolRestriction, LoopSwarmConfig } from "../schema";
-import { TaskComplexityAnalyzer } from "../task-analyzer";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import type { AgentExecutor } from "../executor/executor";
+import { SubprocessAgentExecutor } from "../executor/executor";
+import { streamAgentOutput } from "../render/streaming";
+import { RegionLockManager } from "../coordination/region-lock";
+import { TaskQueue, type Task } from "../executor/task-queue";
+import { type ScoredAgent, selectAgents, extractDomains } from "../agent/agent-selector";
+import type { ProfileRegistry } from "../agent/agent-profile";
+import type { RoleAssetManager, RoleAsset } from "../agent/role-asset";
+import type { StateTracker } from "../core/state";
+import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
+import { TaskComplexityAnalyzer } from "../script/task-analyzer";
+import type { ReviewVerdict } from "../core/pipeline";
+import type { VerificationResult } from "../core/verification-hook";
 
 // ============================================================================
 // Types
@@ -52,6 +54,20 @@ export interface StageOptions {
 	executor?: AgentExecutor;
 	/** Pre-selected agent IDs (skip selection algorithm). */
 	agentIds?: string[];
+}
+
+/** Legacy alias for backward compat with curtain/monitor code. */
+export interface LoopResult {
+	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
+	iterations: number;
+	reviewVerdicts: ReviewVerdict[];
+	errors: string[];
+	escalationContext?: {
+		lastAgentOutput: string;
+		lastFindings: string[];
+		approvalRatio: number;
+	};
+	verificationResults?: VerificationResult;
 }
 
 export interface StageResult {
@@ -94,7 +110,7 @@ export class StageController {
 		const recommendation = await analyzer.analyze(planContent, loopConfig);
 		logger.info("[Stage] Complexity analysis", {
 			complexity: recommendation.complexity,
-			workers: recommendation.workers,
+			agents: recommendation.agents,
 			estimatedAgentHours: recommendation.estimatedAgentHours,
 		});
 
@@ -118,13 +134,13 @@ export class StageController {
 		} else {
 			const domains = extractDomains(planContent);
 			selectedAgents = selectAgents({
-				required: recommendation.workers,
+				required: recommendation.agents,
 				domains,
 				registry: this.#opts.profileRegistry,
 			});
 		}
 
-		const required = recommendation.workers;
+		const required = recommendation.agents;
 		const registry = this.#opts.profileRegistry;
 
 		// If not enough agents available, create new ones to meet the requirement

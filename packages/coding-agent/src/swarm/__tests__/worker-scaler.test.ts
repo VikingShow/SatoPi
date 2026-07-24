@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { computeScaleDelta } from "../agent-scaler";
+import { computeScaleDelta } from "../agent/agent-scaler";
 
 describe("computeScaleDelta", () => {
 	it("returns 0 when too few voted (gate)", () => {

@@ -4,7 +4,7 @@
  * Produces ANSI-color-coded lines for terminal display.
  */
 import { formatDuration, truncate } from "@oh-my-pi/pi-utils";
-import type { AgentState, SwarmState } from "./state";
+import type { AgentState, SwarmState } from "../core/state";
 
 // ---------------------------------------------------------------------------
 // ANSI color helpers
@@ -90,47 +90,32 @@ export function renderSwarmProgress(state: SwarmState): string[] {
 	}
 
 	if (isLoop) {
-		const agents = agents.filter(a => a.name.startsWith("agent-"));
-		const reviewers = agents.filter(a => a.name.startsWith("agent-"));
+		// Unified agent list — worker/cloner distinction removed in P7 unified model.
+		// Reviewer agents are marked with [R] tag via formatAgentLine.
+		const reviewer = agents.find(a => a.role === "reviewer");
+		const reviewerTag = reviewer ? `  ${C.magenta}\u{1F451} reviewer: ${reviewer.name}${C.reset}` : "";
 
-		// Workers section
-		if (workers.length > 0) {
-			const wDone = workers.filter(a => a.status === "completed").length;
-			const wRun = workers.filter(a => a.status === "running").length;
-			const wFail = workers.filter(a => a.status === "failed").length;
-			const reviewer = workers.find(w => w.role === "reviewer");
-			const reviewerTag = reviewer ? `  ${C.magenta}👑 reviewer: ${reviewer.name}${C.reset}` : "";
-			lines.push(
-				`  ${C.bold}Agents${C.reset} (${workers.length}): ${C.green}${wDone} done${C.reset}${wRun > 0 ? ` ${C.yellow}${wRun} running${C.reset}` : ""}${wFail > 0 ? ` ${C.red}${wFail} failed${C.reset}` : ""}${reviewerTag}`,
-			);
-			for (const w of workers) {
-				lines.push(`    ${formatAgentLine(w)}`);
-			}
-		}
-
-		// Cloners section (only when active)
-		if (cloners.length > 0 && cloners.some(c => c.status !== "pending")) {
-			const cDone = cloners.filter(a => a.status === "completed").length;
-			const cRun = cloners.filter(a => a.status === "running").length;
-			lines.push(
-				`  ${C.bold}Reviewers${C.reset} (${cloners.length}): ${cDone} done${cRun > 0 ? ` ${cRun} running` : ""}`,
-			);
-			for (const c of cloners) {
-				lines.push(`    ${formatAgentLine(c)}`);
-			}
+		const wDone = agents.filter(a => a.status === "completed").length;
+		const wRun = agents.filter(a => a.status === "running").length;
+		const wFail = agents.filter(a => a.status === "failed").length;
+		lines.push(
+			`  ${C.bold}Agents${C.reset} (${agents.length}): ${C.green}${wDone} done${C.reset}${wRun > 0 ? ` ${C.yellow}${wRun} running${C.reset}` : ""}${wFail > 0 ? ` ${C.red}${wFail} failed${C.reset}` : ""}${reviewerTag}`,
+		);
+		for (const a of agents) {
+			lines.push(`    ${formatAgentLine(a)}`);
 		}
 
 		// Verdict
 		if (state.reviewVerdict) {
 			const isPass = state.reviewVerdict.toLowerCase().includes("pass") || state.reviewVerdict === "swarm consensus";
 			const verdictColor = isPass ? C.green : C.yellow;
-			lines.push(`  ${verdictColor}▶ ${truncate(state.reviewVerdict, 80)}${C.reset}`);
+			lines.push(`  ${verdictColor}\u{25B6} ${truncate(state.reviewVerdict, 80)}${C.reset}`);
 		}
 
 		// Conflict summary
-		const conflictCount = workers.reduce((sum, w) => sum + w.conflictCount, 0);
+		const conflictCount = agents.reduce((sum, a) => sum + a.conflictCount, 0);
 		if (conflictCount > 0) {
-			lines.push(`  ${C.red}⚠ ${conflictCount} file conflict${conflictCount > 1 ? "s" : ""} detected${C.reset}`);
+			lines.push(`  ${C.red}\u{26A0} ${conflictCount} file conflict${conflictCount > 1 ? "s" : ""} detected${C.reset}`);
 		}
 	} else {
 		// Pipeline mode: simple flat list
@@ -172,7 +157,7 @@ function formatAgentLine(agent: AgentState): string {
 	const coloredGlyph = color(agent.status, glyph);
 	const dur = formatAgentDuration(agent);
 	const roleTag = agent.role === "reviewer" ? ` ${C.magenta}[R]${C.reset}` : "";
-	const conflictTag = agent.conflictCount > 0 ? ` ${C.red}⚠${agent.conflictCount}${C.reset}` : "";
+	const conflictTag = agent.conflictCount > 0 ? ` ${C.red}\u{26A0}${agent.conflictCount}${C.reset}` : "";
 	const err = agent.error ? ` ${C.red}${truncate(agent.error, 40)}${C.reset}` : "";
 
 	return `${coloredGlyph} ${agent.name}${roleTag} ${dur}${conflictTag}${err}`;

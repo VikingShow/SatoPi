@@ -16,7 +16,7 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentToolRestriction } from "./schema";
+import type { AgentToolRestriction } from "../core/schema";
 
 // ============================================================================
 // Types

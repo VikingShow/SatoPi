@@ -13,15 +13,15 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import type { StateTracker } from "./state";
-import type { ActivityLogger, ActivityBroadcaster } from "./activity-logger";
-import type { RunManager, SteeringSink } from "./monitor/api-routes";
-import type { ScriptManager } from "./monitor/api-routes";
-import type { ExperienceStore } from "./curtain/experience";
-import type { ModelRegistry } from "../config/model-registry";
-import type { Settings } from "../config/settings";
-import type { RoleAssetManager } from "./role-asset";
-import type { ProfileRegistry } from "./agent-profile";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger, ActivityBroadcaster } from "../hooks/activity-logger";
+import type { RunManager, SteeringSink } from "../monitor/api-routes";
+import type { ScriptManager } from "../monitor/api-routes";
+import type { ExperienceStore } from "../curtain/experience";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { Settings } from "../../config/settings";
+import type { RoleAssetManager } from "../agent/role-asset";
+import type { ProfileRegistry } from "../agent/agent-profile";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
 // is what makes persistence actually work.

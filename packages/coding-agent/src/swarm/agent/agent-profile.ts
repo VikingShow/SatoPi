@@ -107,9 +107,9 @@ const VIOLATION_SCORE_DEDUCTION: Record<ViolationSeverity, number> = {
 
 /** 成功完成任务 → 信用分奖励 */
 const SUCCESS_SCORE_REWARD = 3;
-/** 被 Cloner 赞扬 → 信用分奖励 */
+/** 被 reviewer 赞扬 → 信用分奖励 */
 const PRAISE_SCORE_REWARD = 5;
-/** 被 Cloner 批评 → 信用分扣减 */
+/** 被 reviewer 批评 → 信用分扣减 */
 const CRITICISM_SCORE_DEDUCTION = 5;
 /** 信用分下限（不归零，留观察空间） */
 const MIN_SCORE = 1;
@@ -287,7 +287,7 @@ export class ProfileRegistry {
 	}
 
 	/**
-	 * 记录 Cloner 评审反馈。
+	 * 记录 reviewer 评审反馈。
 	 */
 	recordReviewFeedback(agentIds: string[], praised: string[], criticized: string[]): void {
 		const praisedSet = new Set(praised);

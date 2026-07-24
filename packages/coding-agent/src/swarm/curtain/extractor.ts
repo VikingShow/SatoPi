@@ -12,7 +12,7 @@
  *   - Review verdicts (alignment issues, safety flags)
  */
 
-import type { LoopResult } from "../loop-controller";
+import type { LoopResult } from "../stage/stage-controller";
 
 // ============================================================================
 // Types

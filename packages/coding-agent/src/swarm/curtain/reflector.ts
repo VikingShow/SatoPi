@@ -15,7 +15,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import reflectionSystemPrompt from "../../prompts/system/loop-reflection.md" with { type: "text" };
-import type { LoopResult } from "../loop-controller";
+import type { LoopResult } from "../stage/stage-controller";
 import type { ExtractedLesson, ExtractionResult } from "./extractor";
 
 // ============================================================================

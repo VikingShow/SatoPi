@@ -12,7 +12,7 @@
  */
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import type { ActivityLogger } from "./activity-logger";
+import type { ActivityLogger } from "../hooks/activity-logger";
 
 // ============================================================================
 // Types

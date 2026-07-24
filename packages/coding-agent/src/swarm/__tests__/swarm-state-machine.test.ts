@@ -8,8 +8,8 @@ import {
 	canTransition,
 	WORKFLOW_TRANSITIONS,
 	type PhaseContext,
-} from "../swarm-state-machine";
-import type { Chapter } from "../state";
+} from "../core/swarm-state-machine";
+import type { Chapter } from "../core/state";
 
 describe("canTransition — transition table", () => {
 	it("accepts documented legal moves", () => {

@@ -11,8 +11,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { StateTracker } from "../state";
-import { SwarmSessionManager } from "../swarm-session-manager";
+import { StateTracker } from "../core/state";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 let tmpDir: string;
 

@@ -8,7 +8,7 @@
 
 import type { AgentProgress, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
-import type { ActivityLogger } from "./activity-logger";
+import type { ActivityLogger } from "../hooks/activity-logger";
 
 // ============================================================================
 // Types

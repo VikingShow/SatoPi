@@ -10,14 +10,14 @@ import * as path from "node:path";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/curtain";
+import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/curtain/index";
 import { createStageController } from "@oh-my-pi/pi-coding-agent/swarm/stage/stage-controller";
-import { parseSwarmYaml, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/schema";
-import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
-import { ProfileRegistry } from "@oh-my-pi/pi-coding-agent/swarm/agent-profile";
-import { RoleAssetManager } from "@oh-my-pi/pi-coding-agent/swarm/role-asset";
-import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
-import { ActivityLogger } from "@oh-my-pi/pi-coding-agent/swarm/activity-logger";
+import { parseSwarmYaml, validateSwarmDefinition } from "@oh-my-pi/pi-coding-agent/swarm/core/schema";
+import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/core/state";
+import { ProfileRegistry } from "@oh-my-pi/pi-coding-agent/swarm/agent/agent-profile";
+import { RoleAssetManager } from "@oh-my-pi/pi-coding-agent/swarm/agent/role-asset";
+import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render/render";
+import { ActivityLogger } from "@oh-my-pi/pi-coding-agent/swarm/hooks/activity-logger";
 
 const yamlPath = process.argv[2];
 if (!yamlPath) {

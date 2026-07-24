@@ -11,18 +11,18 @@
  *
  * 生命周期：
  *   beforePipeline      → 注册所有 Agent 的 Profile（幂等）
- *   beforeWorkerRound   → 可跳过
+ *   beforeAgentRound   → 可跳过
  *   afterWorkerRound    → 记录任务完成 + 更新信用分 + 放置 artifact Mark
  *   afterClonerReview   → 记录 praise/criticism → 更新信用分
  *   onHookError         → 日志
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { LoopPipelineHooks, PipelineContext } from "./pipeline";
+import type { LoopPipelineHooks, PipelineContext } from "../core/pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "./pipeline";
-import type { ProfileRegistry } from "./agent-profile";
-import type { MarkEnvironment } from "./mark-environment";
+import type { ReviewVerdict } from "../core/pipeline";
+import type { ProfileRegistry } from "../agent/agent-profile";
+import type { MarkEnvironment } from "../coordination/mark-environment";
 
 // ============================================================================
 // Types
@@ -97,9 +97,9 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 			});
 		},
 
-		// ── beforeWorkerRound ─────────────────────────────────────
+		// ── beforeAgentRound ─────────────────────────────────────
 
-		async beforeWorkerRound(round: number, agentIds: string[], _ctx: PipelineContext) {
+		async beforeAgentRound(round: number, agentIds: string[], _ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			// 确保所有 Worker 都有 Profile（幂等注册）
@@ -136,9 +136,9 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 			logger.debug("[SwarmHooks] Worker round started", { round, workers: agentIds.length });
 		},
 
-		// ── afterWorkerRound ──────────────────────────────────────
+		// ── afterAgentRound ──────────────────────────────────────
 
-		async afterWorkerRound(round: number, results: SingleResult[], _ctx: PipelineContext) {
+		async afterAgentRound(round: number, results: SingleResult[], _ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			for (const result of results) {
@@ -164,16 +164,16 @@ export function createSwarmHooks(config: SwarmHooksConfig): SwarmHooksResult {
 			}
 		},
 
-		// ── beforeClonerReview ────────────────────────────────────
+		// ── beforeReview ────────────────────────────────────
 
-		async beforeClonerReview(_iteration: number, _agentOutput: string, _ctx: PipelineContext) {
+		async beforeReview(_iteration: number, _agentOutput: string, _ctx: PipelineContext) {
 			if (!config.enabled) return;
 			// no-op for now — cloner profiles registered on next cloner run
 		},
 
-		// ── afterClonerReview ─────────────────────────────────────
+		// ── afterReview ─────────────────────────────────────
 
-		async afterClonerReview(iteration: number, verdict: ReviewVerdict | null, _ctx: PipelineContext) {
+		async afterReview(iteration: number, verdict: ReviewVerdict | null, _ctx: PipelineContext) {
 			if (!config.enabled || !verdict) return;
 
 			// 记录 praise/criticism 到 Profile 信用分

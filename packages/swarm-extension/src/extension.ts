@@ -13,26 +13,26 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
-import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/curtain";
+import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/curtain/index";
 import {
 	generatePlanningPrompt,
 	planExists,
 	runPlanDebate,
 	stampAndArchivePlanMd,
-} from "@oh-my-pi/pi-coding-agent/swarm/script-planner";
-import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
-import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
-import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
-import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render";
+} from "@oh-my-pi/pi-coding-agent/swarm/script/script-planner";
+import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/core/dag";
+import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/stage/stage-controller";
+import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/core/pipeline";
+import { renderSwarmProgress } from "@oh-my-pi/pi-coding-agent/swarm/render/render";
 import {
 	parseSwarmYaml,
 	resolveLoopConfig,
 	type SwarmDefinition,
 	validateSwarmDefinition,
-} from "@oh-my-pi/pi-coding-agent/swarm/schema";
-import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/state";
-import { TaskComplexityAnalyzer } from "@oh-my-pi/pi-coding-agent/swarm/task-analyzer";
-import { ActivityLogger } from "@oh-my-pi/pi-coding-agent/swarm/activity-logger";
+} from "@oh-my-pi/pi-coding-agent/swarm/core/schema";
+import { StateTracker } from "@oh-my-pi/pi-coding-agent/swarm/core/state";
+import { TaskComplexityAnalyzer } from "@oh-my-pi/pi-coding-agent/swarm/script/task-analyzer";
+import { ActivityLogger } from "@oh-my-pi/pi-coding-agent/swarm/hooks/activity-logger";
 import { MonitorServer } from "@oh-my-pi/pi-coding-agent/swarm/monitor";
 import { formatDuration } from "@oh-my-pi/pi-utils";
 

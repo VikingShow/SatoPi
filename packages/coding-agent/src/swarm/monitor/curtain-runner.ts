@@ -10,16 +10,16 @@
 
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
-import { StateTracker } from "../state";
-import { ActivityLogger } from "../activity-logger";
+import { StateTracker } from "../core/state";
+import { ActivityLogger } from "../hooks/activity-logger";
 import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary } from "../curtain";
-import { VerificationHook } from "../verification-hook";
-import { streamAgentOutput } from "../streaming";
-import type { LoopResult } from "../loop-controller";
-import type { LoopSwarmConfig } from "../schema";
+import { VerificationHook } from "../core/verification-hook";
+import { streamAgentOutput } from "../render/streaming";
+import type { LoopResult } from "../stage/stage-controller";
+import type { LoopSwarmConfig } from "../core/schema";
 import type { AfterLoopResult } from "./types";
-import type { RoleAssetManager } from "../role-asset";
-import type { ProfileRegistry } from "../agent-profile";
+import type { RoleAssetManager } from "../agent/role-asset";
+import type { ProfileRegistry } from "../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 
 // ============================================================================
@@ -127,7 +127,7 @@ export async function runCurtainPipeline(
 
 	// Archive plan
 	try {
-		const { archivePlanForHistory } = await import("../script-planner");
+		const { archivePlanForHistory } = await import("../script/script-planner");
 		await archivePlanForHistory(stateTracker.swarmDir, workspace);
 	} catch (err) {
 		logger.warn("[Curtain] Plan archival failed", { error: String(err) });

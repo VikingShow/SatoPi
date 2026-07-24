@@ -10,7 +10,7 @@
  * of entering the After Loop pipeline.
  */
 
-import type { ActivityLogger } from "./activity-logger";
+import type { ActivityLogger } from "../hooks/activity-logger";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================

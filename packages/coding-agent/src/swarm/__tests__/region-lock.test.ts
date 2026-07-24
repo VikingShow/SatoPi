@@ -4,7 +4,7 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test";
-import { RegionLockManager } from "../region-lock";
+import { RegionLockManager } from "../coordination/region-lock";
 
 describe("RegionLockManager", () => {
 	afterEach(() => {

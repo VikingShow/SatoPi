@@ -6,7 +6,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { SwarmSessionManager } from "./swarm-session-manager";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 // State types
@@ -55,11 +55,11 @@ export interface AgentState {
 	praiseCount: number;
 	/** Quality tracking: cumulative criticism count across loop runs. */
 	criticismCount: number;
-	/** Quality tracking: number of file conflicts this worker was involved in. */
+	/** Quality tracking: number of file conflicts this agent was involved in. */
 	conflictCount: number;
-	/** Mentor worker ID, set on scale-up for new workers. */
+	/** Mentor agent ID, set on scale-up for new agents. */
 	mentorId?: string;
-	/** Role override — "reviewer" when elected, undefined for normal workers. */
+	/** Role override — "reviewer" when elected, undefined for normal agents. */
 	role?: "reviewer";
 	/** Model name assigned to this agent (from loop config or swarm definition). */
 	modelName?: string;

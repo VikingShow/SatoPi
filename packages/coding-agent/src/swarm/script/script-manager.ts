@@ -14,17 +14,17 @@
 import * as fs from "node:fs/promises";
 import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { StateTracker, Chapter } from "./state";
-import type { ActivityLogger } from "./activity-logger";
-import type { ExperienceStore } from "./curtain/experience";
-import type { RunManager } from "./monitor/api-routes";
-import type { SwarmSessionManager } from "./swarm-session-manager";
-import type { ProfileRegistry } from "./agent-profile";
-import type { RoleAssetManager } from "./role-asset";
+import type { StateTracker, Chapter } from "../core/state";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ExperienceStore } from "../curtain/experience";
+import type { RunManager } from "../monitor/api-routes";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import type { ProfileRegistry } from "../agent/agent-profile";
+import type { RoleAssetManager } from "../agent/role-asset";
 import { generatePlanningPrompt, runPlanDebate } from "./script-planner";
-import { streamAgentOutput } from "./streaming";
+import { streamAgentOutput } from "../render/streaming";
 import { getSessionPlanPath } from "./plan-paths";
-import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "./schema";
+import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "../core/schema";
 
 // ============================================================================
 // Types

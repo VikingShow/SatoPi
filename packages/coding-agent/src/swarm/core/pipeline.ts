@@ -7,13 +7,13 @@
  * - For pipeline mode, iterations repeat the full DAG execution
  */
 import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { AgentExecutor } from "./executor";
-import { executeSwarmAgent } from "./executor";
+import type { AgentExecutor } from "../executor/executor";
+import { executeSwarmAgent } from "../executor/executor";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
 
 // ============================================================================
-// ReviewVerdict — result of a Cloner review phase (kept for backward compat
+// ReviewVerdict — result of a review phase (kept for backward compat
 // with existing hooks in LoopPipelineHooks, to be removed when StageController
 // fully replaces LoopController).
 // ============================================================================
@@ -23,15 +23,13 @@ export interface ReviewVerdict {
 	approvalCount: number;
 	totalCount: number;
 	findings: string[];
-	/** Cloner-suggested worker count deltas for next iteration. */
-	workerCountSuggestions: number[];
-	/** True when findings across cloners diverge significantly. */
+	/** Reviewer-suggested agent count deltas for next iteration. */
+	agentCountSuggestions: number[];
+	/** True when findings across reviewers diverge significantly. */
 	disagreed: boolean;
-	/** Cloner-suggested roles for workers (Round 2+). key=agentId, value=role name. */
-	roleSuggestions: Record<string, string>;
-	/** Worker IDs praised by cloners this round. */
+	/** Agent IDs praised by reviewers this round. */
 	praisedAgents: string[];
-	/** Worker IDs criticized by cloners this round. */
+	/** Agent IDs criticized by reviewers this round. */
 	criticizedAgents: string[];
 }
 
@@ -137,22 +135,22 @@ export interface PipelineHooks {
 /**
  * Extended lifecycle hooks for LoopController.
  *
- * Adds loop-specific events (worker rounds, deliberation, cloner review)
+ * Adds loop-specific events (agent rounds, deliberation, review)
  * on top of the base {@link PipelineHooks}.
  */
 export interface LoopPipelineHooks extends PipelineHooks {
-	/** Called before each worker round within an iteration. Return false to skip. */
-	beforeWorkerRound?: (round: number, agentIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
-	/** Called after each worker round completes. */
-	afterWorkerRound?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
+	/** Called before each agent round within an iteration. Return false to skip. */
+	beforeAgentRound?: (round: number, agentIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
+	/** Called after each agent round completes. */
+	afterAgentRound?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
 	/** Called before deliberation phase starts. */
 	beforeDeliberation?: (round: number, ctx: PipelineContext) => Promise<void>;
 	/** Called after deliberation phase completes. */
 	afterDeliberation?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
-	/** Called before cloner review starts. */
-	beforeClonerReview?: (iteration: number, agentOutput: string, ctx: PipelineContext) => Promise<void>;
-	/** Called after cloner review completes. */
-	afterClonerReview?: (iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) => Promise<void>;
+	/** Called before review starts. */
+	beforeReview?: (iteration: number, agentOutput: string, ctx: PipelineContext) => Promise<void>;
+	/** Called after review completes. */
+	afterReview?: (iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) => Promise<void>;
 }
 
 // ============================================================================

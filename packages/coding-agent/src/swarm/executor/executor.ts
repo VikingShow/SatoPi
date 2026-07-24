@@ -21,10 +21,10 @@ import type {
 	SingleResult,
 } from "@oh-my-pi/pi-coding-agent";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
-import type { SwarmAgent } from "./schema";
-import type { StateTracker } from "./state";
-import type { ActivityLogger } from "./activity-logger";
-import { createStreamProgressHandler } from "./streaming";
+import type { SwarmAgent } from "../core/schema";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import { createStreamProgressHandler } from "../render/streaming";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;

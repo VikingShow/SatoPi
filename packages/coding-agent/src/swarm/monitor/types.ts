@@ -5,7 +5,7 @@
  * Both modules import from here instead of each other.
  */
 
-import type { ActivityEntry } from "../activity-logger";
+import type { ActivityEntry } from "../hooks/activity-logger";
 
 // -- Broadcaster interface (decouples ActivityLogger from MonitorServer) --
 export interface ActivityBroadcaster {

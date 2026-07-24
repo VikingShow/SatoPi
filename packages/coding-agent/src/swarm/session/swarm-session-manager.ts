@@ -44,8 +44,8 @@ import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manage
 import { logger } from "@oh-my-pi/pi-utils";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import type { ActivityEntry, ActivityEventType } from "./activity-logger";
-import type { Chapter, PipelineStatus, SwarmState, AgentState } from "./state";
+import type { ActivityEntry, ActivityEventType } from "../hooks/activity-logger";
+import type { Chapter, PipelineStatus, SwarmState, AgentState } from "../core/state";
 
 // ============================================================================
 // Custom entry type tags

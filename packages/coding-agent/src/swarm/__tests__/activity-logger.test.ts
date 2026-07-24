@@ -5,8 +5,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as path from "node:path";
 import * as os from "node:os";
-import { ActivityLogger, type ActivityEntry, type ActivityBroadcaster } from "../activity-logger";
-import { SwarmSessionManager } from "../swarm-session-manager";
+import { ActivityLogger, type ActivityEntry, type ActivityBroadcaster } from "../hooks/activity-logger";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 describe("ActivityLogger", () => {
 	let tmpDir: string;
@@ -78,9 +78,8 @@ describe("ActivityLogger", () => {
 			approvalCount: 1,
 			totalCount: 3,
 			findings: ["missing validation", "no error handling"],
-			workerCountSuggestions: [1],
+			agentCountSuggestions: [1],
 			disagreed: false,
-			roleSuggestions: {},
 			praisedAgents: ["worker-1"],
 			criticizedAgents: ["worker-3"],
 		});

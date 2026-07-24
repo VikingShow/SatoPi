@@ -14,10 +14,10 @@
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { ProfileRegistry } from "../agent-profile";
-import { MarkEnvironment } from "../mark-environment";
-import { createSwarmHooks } from "../swarm-hooks";
-import type { LoopPipelineHooks, PipelineContext } from "../pipeline";
+import { ProfileRegistry } from "../agent/agent-profile";
+import { MarkEnvironment } from "../coordination/mark-environment";
+import { createSwarmHooks } from "../hooks/swarm-hooks";
+import type { LoopPipelineHooks, PipelineContext } from "../core/pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 
 /** Empty pipeline context for test hooks */
@@ -56,7 +56,7 @@ describe("createSwarmHooks", () => {
 	// ── beforeWorkerRound ─────────────────────────────────────────────
 
 	test("beforeWorkerRound — creates profiles for new workers", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2"], emptyCtx());
 
 		expect(profileRegistry.has("worker-1")).toBe(true);
 		expect(profileRegistry.has("worker-2")).toBe(true);
@@ -64,15 +64,15 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("beforeWorkerRound — idempotent profile creation", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
-		await hooks.beforeWorkerRound!(2, ["worker-1"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
+		await hooks.beforeAgentRound!(2, ["worker-1"], emptyCtx());
 
 		// Should not throw, should not create duplicate
 		expect(profileRegistry.has("worker-1")).toBe(true);
 	});
 
 	test("beforeWorkerRound — places start-round signal marks", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
 
 		const signals = markEnvironment.queryMarks({ types: ["signal"], agentId: "worker-1" });
 		expect(signals.length).toBeGreaterThanOrEqual(1);
@@ -80,7 +80,7 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("beforeWorkerRound — records collaboration", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
 
 		const w1 = profileRegistry.get("worker-1")!;
 		expect(w1.social.collaborationCount).toBe(1);
@@ -91,8 +91,8 @@ describe("createSwarmHooks", () => {
 	// ── afterWorkerRound ──────────────────────────────────────────────
 
 	test("afterWorkerRound — records task success", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
-		await hooks.afterWorkerRound!(1, [
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
+		await hooks.afterAgentRound!(1, [
 			mockResult("worker-1", 0, "Task completed successfully"),
 		], emptyCtx());
 
@@ -102,8 +102,8 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterWorkerRound — records task failure", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
-		await hooks.afterWorkerRound!(1, [
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
+		await hooks.afterAgentRound!(1, [
 			mockResult("worker-1", 1, "Build failed"),
 		], emptyCtx());
 
@@ -113,8 +113,8 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterWorkerRound — places artifact marks", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
-		await hooks.afterWorkerRound!(1, [
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
+		await hooks.afterAgentRound!(1, [
 			mockResult("worker-1", 0, "Refactored auth module"),
 		], emptyCtx());
 
@@ -127,9 +127,9 @@ describe("createSwarmHooks", () => {
 
 	test("afterClonerReview PASS — records praise for praised workers", async () => {
 		// Create profiles first
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: true,
 			approvalCount: 2,
 			totalCount: 2,
@@ -137,6 +137,10 @@ describe("createSwarmHooks", () => {
 				"Praise: worker-1 delivered excellent work",
 				"worker-2 output approved",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		const w1 = profileRegistry.get("worker-1")!;
@@ -145,9 +149,9 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterClonerReview FAIL — records violations", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: false,
 			approvalCount: 0,
 			totalCount: 2,
@@ -155,6 +159,10 @@ describe("createSwarmHooks", () => {
 				"FAIL: worker-1 has critical bug in auth flow",
 				"FAIL: worker-1 incorrect output format",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		const w1 = profileRegistry.get("worker-1")!;
@@ -163,13 +171,13 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterClonerReview FAIL — places warning mark", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: false,
 			approvalCount: 0,
 			totalCount: 2,
-			findings: ["FAIL: critical issue"],
+			findings: ["FAIL: critical issue"], agentCountSuggestions: [], disagreed: false, praisedAgents: [], criticizedAgents: [],
 		}, emptyCtx());
 
 		const warnings = markEnvironment.queryMarks({ types: ["warning"] });
@@ -179,7 +187,7 @@ describe("createSwarmHooks", () => {
 
 	test("afterClonerReview — handles null verdict gracefully", async () => {
 		// Should not throw
-		await hooks.afterClonerReview!(1, null, emptyCtx());
+		await hooks.afterReview!(1, null, emptyCtx());
 		// No profile changes expected
 		expect(profileRegistry.list()).toHaveLength(0);
 	});
@@ -187,7 +195,7 @@ describe("createSwarmHooks", () => {
 	// ── context.getAgentContext ───────────────────────────────────────
 
 	test("context.getAgentContext — returns combined profile + mark context", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2"], emptyCtx());
 
 		// Place a warning mark from w2
 		markEnvironment.placeMark({
@@ -211,7 +219,7 @@ describe("createSwarmHooks", () => {
 	// ── context.getSwarmCreditSummary ─────────────────────────────────
 
 	test("context.getSwarmCreditSummary — returns ranked agents", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
 
 		profileRegistry.recordTaskCompleted("worker-1", true);
 		profileRegistry.recordTaskCompleted("worker-1", true);
@@ -241,8 +249,8 @@ describe("createSwarmHooks", () => {
 			markEnvironment: new MarkEnvironment(),
 		});
 
-		await disabled.hooks.beforeWorkerRound!(1, ["worker-1"], emptyCtx());
-		await disabled.hooks.afterWorkerRound!(1, [
+		await disabled.hooks.beforeAgentRound!(1, ["worker-1"], emptyCtx());
+		await disabled.hooks.afterAgentRound!(1, [
 			mockResult("worker-1", 0, "done"),
 		], emptyCtx());
 
@@ -255,9 +263,9 @@ describe("createSwarmHooks", () => {
 	// ── Structured tags in cloner findings ────────────────────────────
 
 	test("afterClonerReview — structured [PRAISE:id] tag", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-architect", "worker-builder"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-architect", "worker-builder"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: true,
 			approvalCount: 2,
 			totalCount: 2,
@@ -265,6 +273,10 @@ describe("createSwarmHooks", () => {
 				"[PRAISE:worker-architect] Excellent architecture design",
 				"worker-builder output is acceptable",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		const w1 = profileRegistry.get("worker-architect")!;
@@ -273,15 +285,19 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterClonerReview — structured [CRITICIZE:id] tag", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-builder"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-builder"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: false,
 			approvalCount: 0,
 			totalCount: 2,
 			findings: [
 				"[CRITICIZE:worker-builder] output does not compile",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		const w = profileRegistry.get("worker-builder")!;
@@ -290,15 +306,19 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterClonerReview — structured [FAIL:id] tag records violation", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-builder"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-builder"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: false,
 			approvalCount: 0,
 			totalCount: 2,
 			findings: [
 				"[FAIL:worker-builder] critical: security vulnerability",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		const w = profileRegistry.get("worker-builder")!;
@@ -306,9 +326,9 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("afterClonerReview — structured tags handle comma-separated IDs", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2", "worker-3"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: true,
 			approvalCount: 3,
 			totalCount: 3,
@@ -316,6 +336,10 @@ describe("createSwarmHooks", () => {
 				"[PRAISE:worker-1, worker-2] Great teamwork",
 				"[CRITICIZE:worker-3] missed edge cases",
 			],
+			agentCountSuggestions: [],
+			disagreed: false,
+			praisedAgents: [],
+			criticizedAgents: [],
 		}, emptyCtx());
 
 		expect(profileRegistry.get("worker-1")!.credit.praiseCount).toBe(1);
@@ -329,13 +353,13 @@ describe("createSwarmHooks", () => {
 		// Create profiles with non-standard IDs
 		profileRegistry.createProfile({ profileId: "reviewer-01", name: "Reviewer", archetype: "reviewer" });
 		// Register through hooks
-		await hooks.beforeWorkerRound!(1, ["reviewer-01"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["reviewer-01"], emptyCtx());
 
-		await hooks.afterClonerReview!(1, {
+		await hooks.afterReview!(1, {
 			passed: true,
 			approvalCount: 1,
 			totalCount: 1,
-			findings: ["[PRAISE:reviewer-01] thorough review"],
+			findings: ["[PRAISE:reviewer-01] thorough review"], agentCountSuggestions: [], disagreed: false, praisedAgents: [], criticizedAgents: [],
 		}, emptyCtx());
 
 		expect(profileRegistry.get("reviewer-01")!.credit.praiseCount).toBe(1);
@@ -344,7 +368,7 @@ describe("createSwarmHooks", () => {
 	// ── Credit ranking cache ──────────────────────────────────────────
 
 	test("context.getSwarmCreditSummary — cache hit returns same result", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2"], emptyCtx());
 		profileRegistry.recordTaskCompleted("worker-1", true);
 
 		const s1 = context.getSwarmCreditSummary();
@@ -353,7 +377,7 @@ describe("createSwarmHooks", () => {
 	});
 
 	test("context.getSwarmCreditSummary — cache invalidates on mutation", async () => {
-		await hooks.beforeWorkerRound!(1, ["worker-1", "worker-2"], emptyCtx());
+		await hooks.beforeAgentRound!(1, ["worker-1", "worker-2"], emptyCtx());
 		profileRegistry.recordTaskCompleted("worker-1", true);
 
 		const s1 = context.getSwarmCreditSummary();

@@ -14,7 +14,7 @@
  * Last-Event-ID resume semantics.
  */
 
-import type { ActivityEntry, ActivityEventType } from "../activity-logger";
+import type { ActivityEntry, ActivityEventType } from "../hooks/activity-logger";
 
 export type SSEController = ReadableStreamDefaultController<Uint8Array>;
 

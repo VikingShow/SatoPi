@@ -114,6 +114,12 @@ export function selectAgents(input: AgentSelectionInput): ScoredAgent[] {
 
 /**
  * Score a single agent for fitness.
+ *
+ * Includes violation penalty factor:
+ * - 3+ violations → 0.7 multiplier
+ * - 2 violations  → 0.85 multiplier
+ * - 1 violation   → 0.95 multiplier
+ * - Recent violation (within 30 days) → additional 0.05 reduction
  */
 function computeAgentScore(
 	profile: AgentProfile,
@@ -125,12 +131,46 @@ function computeAgentScore(
 	const successWeight = 0.2;
 	const recencyWeight = 0.1;
 
-	return (
+	const baseScore =
 		(profile.credit.score / 100) * creditWeight +
 		domainMatch * domainWeight +
 		profile.credit.successRate * successWeight +
-		computeRecency(profile.credit.lastActiveAt, now) * recencyWeight
-	);
+		computeRecency(profile.credit.lastActiveAt, now) * recencyWeight;
+
+	// Violation penalty factor
+	const violationPenalty = computeViolationPenalty(profile.credit.violationCount, profile.credit.violationHistory, now);
+
+	return baseScore * violationPenalty;
+}
+
+/**
+ * Compute a penalty multiplier based on violation history.
+ * More violations = lower multiplier. Recent violations add extra penalty.
+ */
+function computeViolationPenalty(
+	violationCount: number,
+	violationHistory: AgentProfile["credit"]["violationHistory"],
+	now: number,
+): number {
+	if (violationCount === 0) return 1.0;
+
+	let penalty = 1.0;
+	if (violationCount >= 3) {
+		penalty = 0.7;
+	} else if (violationCount === 2) {
+		penalty = 0.85;
+	} else {
+		penalty = 0.95;
+	}
+
+	// Recent violation (within 30 days) adds extra penalty
+	const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+	const hasRecentViolation = violationHistory.some(v => (now - v.timestamp) < thirtyDaysMs);
+	if (hasRecentViolation) {
+		penalty = Math.max(0.5, penalty - 0.05);
+	}
+
+	return penalty;
 }
 
 /**

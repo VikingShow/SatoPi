@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { FileTracker } from "../file-tracker";
+import { FileTracker } from "../coordination/file-tracker";
 
 /**
  * FileTracker unit tests.

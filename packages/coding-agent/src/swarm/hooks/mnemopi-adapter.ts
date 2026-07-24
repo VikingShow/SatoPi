@@ -4,8 +4,8 @@
  * 在 Swarm 循环的 4 个关键 hook 点集成 mnemopi 语义记忆：
  *
  *   1. beforeIteration — 召回与当前 plan/task 相关的历史记忆
- *   2. beforeWorkerRound — 将召回的上下文注入 Worker
- *   3. beforeClonerReview — 召回与审查相关的历史判定模式
+ *   2. beforeAgentRound — 将召回的上下文注入 Worker
+ *   3. beforeReview — 召回与审查相关的历史判定模式
  *   4. afterIteration   — 将关键决策写入 mnemopi（双写）
  */
 
@@ -104,7 +104,7 @@ export class SwarmMnemopiAdapter {
 	}
 
 	// ------------------------------------------------------------------------
-	// Hook 2: beforeWorkerRound — 构建 Worker 注入块
+	// Hook 2: beforeAgentRound — 构建 Worker 注入块
 	// ------------------------------------------------------------------------
 
 	/**
@@ -136,14 +136,14 @@ export class SwarmMnemopiAdapter {
 	}
 
 	// ------------------------------------------------------------------------
-	// Hook 3: beforeClonerReview — 召回审查相关的历史判定模式
+	// Hook 3: beforeReview — 召回审查相关的历史判定模式
 	// ------------------------------------------------------------------------
 
 	/**
 	 * 在 Cloner 审查前，召回与"审查决策"相关的历史模式。
 	 * 帮助 Cloner 参考类似场景下的历史判定。
 	 */
-	async recallForCloner(
+	async recallForReviewer(
 		agentOutputs: string[],
 		iteration: number,
 	): Promise<RecallResult | null> {
@@ -156,14 +156,14 @@ export class SwarmMnemopiAdapter {
 			const items = await this.#client.recall(query, Math.ceil(this.#config.topK / 2));
 			const contextText = this.#formatContext(items);
 
-			logger.debug("[MnemopiAdapter] recallForCloner", {
+			logger.debug("[MnemopiAdapter] recallForReviewer", {
 				items: items.length,
 				iteration,
 			});
 
 			return { items, contextText };
 		} catch (err) {
-			logger.warn("[MnemopiAdapter] recallForCloner failed", { error: String(err) });
+			logger.warn("[MnemopiAdapter] recallForReviewer failed", { error: String(err) });
 			return null;
 		}
 	}

@@ -16,10 +16,10 @@
 
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { ActivityBroadcaster, ActivityEntry } from "../activity-logger";
+import type { ActivityBroadcaster, ActivityEntry } from "../hooks/activity-logger";
 import { EventBus, type SSEController } from "./event-bus";
 import { apiRoutes, type ApiRouteContext, buildApiRouteContext } from "./api-routes";
-import type { SessionRegistry } from "../session-registry";
+import type { SessionRegistry } from "../session/session-registry";
 import { recordHttpRequest, getMetricsString, getMetricsContentType, gauges } from "./metrics";
 
 /** P4-2: Default swarm monitor port. Override with PI_SWARM_PORT env var. */

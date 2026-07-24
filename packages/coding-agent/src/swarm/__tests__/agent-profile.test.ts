@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { ProfileRegistry } from "../agent-profile";
+import { ProfileRegistry } from "../agent/agent-profile";
 
 describe("ProfileRegistry", () => {
 	let registry: ProfileRegistry;

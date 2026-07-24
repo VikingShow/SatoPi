@@ -4,12 +4,10 @@
  *
  * These are all SIDE-EFFECT FREE string/similarity helpers used to decide
  * whether the swarm has converged:
- *  - extractRoundSummary / parseRoundSummaryJson / parseNomination: parse
  *    structured sections out of a worker's free-form output.
  *  - jaccardSimilarity / findingsSimilarity: measure how much two rounds'
  *    findings overlap (the fallback convergence signal when no reviewer JSON).
  */
-import type { Nomination } from "./agent-channel";
 
 /** Structured round summary produced by the elected reviewer. */
 export interface RoundSummaryData {
@@ -35,21 +33,6 @@ export interface RoundSummaryData {
 export function extractRoundSummary(output: string): string {
 	const match = output.match(/## Round Summary\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
 	return match?.[1]?.trim() || output.slice(0, 2000);
-}
-
-/**
- * Parse a `## Nomination` section from a worker's output.
- * Format expected:
- *   ## Nomination
- *   nominated: worker-3
- *   reason: has auth expertise
- */
-export function parseNomination(output: string): Nomination | null {
-	const section = output.match(/## Nomination\n([\s\S]*?)(?=\n## |\n```|\n---\n|---|\n\*\*\*|\n___|$)/);
-	if (!section?.[1]) return null;
-	const nominated = section[1].match(/nominated:\s*(\S+)/);
-	if (!nominated?.[1]) return null;
-	return { nominator: "", nominee: nominated[1] };
 }
 
 /** Jaccard similarity between two arrays of tokens. Returns 0–1. */

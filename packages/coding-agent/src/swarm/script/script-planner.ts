@@ -19,8 +19,8 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExperienceStore } from "./curtain/experience";
-import type { LoopSwarmConfig } from "./schema";
+import type { ExperienceStore } from "../curtain/experience";
+import type { LoopSwarmConfig } from "../core/schema";
 import { getSessionPlanPath, getPlanArchiveDir, getSessionOmpDir } from "./plan-paths";
 
 // ============================================================================
@@ -42,10 +42,8 @@ export interface ScriptResult {
 	confirmed: boolean;
 	/** Path to the generated plan.md. */
 	planPath: string | null;
-	/** Proposed worker count. */
-	proposedWorkerCount: number;
-	/** Proposed cloner count. */
-	proposedClonerCount: number;
+	/** Proposed agent count. */
+	proposedAgentCount: number;
 	/** Additional context for the loop. */
 	context: Record<string, unknown>;
 }
@@ -71,10 +69,8 @@ export async function generatePlanningPrompt(
 ): Promise<string> {
 	const { swarmDir, workspace, loopConfig, taskDescription } = config;
 
-	const defaultWorkers = loopConfig.agents.initial;
-	const defaultCloners = loopConfig.agents.initial;
+	const defaultAgents = loopConfig.agents.initial;
 	const planPath = getSessionPlanPath(swarmDir);
-
 	const sections = [
 		"# Script Phase — Planning",
 		"",
@@ -102,7 +98,7 @@ export async function generatePlanningPrompt(
 		"   ```",
 		"   Formula: ~0.5h per task + ~0.25h per unique file, with multipliers for safety-critical (1.5x),",
 		"   cross-package (1.3x), cross-language (1.2x). One agent ≈ 4h of focused work per run.",
-		`   Default recommendation: ${defaultWorkers} agents, ${defaultCloners} reviewers.`,
+		`   Default recommendation: ${defaultAgents} agents.`,
 		"4. **Ask for confirmation** — Present the plan, estimate, and agent count proposal.",
 		"   The human can confirm, request a debate, or continue refining.",
 		"",
@@ -167,13 +163,13 @@ export async function planExists(swarmDir: string): Promise<boolean> {
  * Stamp plan.md with a generation timestamp and return the stamped content.
  *
  * If the plan is already stamped (from a previous run), archives it first.
- * If unstamped (fresh Cloner output), stamps it.
+ * If unstamped (fresh agent output), stamps it.
  *
- * NOTE: Archive of old content only works when called BEFORE the Cloner
+ * NOTE: Archive of old content only works when called BEFORE the agent
  * overwrites plan.md. In the current flow (called at loop start, after
- * Cloner has already written), the archive path only fires if the Cloner
+ * agent has already written), the archive path only fires if the agent
  * did NOT overwrite — i.e., a re-run of an already-stamped plan.
- * Fresh plans from the Cloner are always unstamped, so archiving old content
+ * Fresh plans from the agent are always unstamped, so archiving old content
  * happens via archivePlanForHistory() called at the END of each run instead.
  *
  * @param swarmDir — per-session swarm directory
@@ -184,7 +180,7 @@ export async function stampAndArchivePlanMd(swarmDir: string, workspace: string)
 	const content = await Bun.file(planPath).text();
 
 	if (content.startsWith("<!-- plan-generated:")) {
-		// Plan is already stamped (re-run without Cloner overwrite).
+		// Plan is already stamped (re-run without agent overwrite).
 		// Archive it before returning — the caller may allow a Cloner to rewrite it.
 		const archiveDir = getPlanArchiveDir(workspace);
 		const ts = new Date().toISOString().replace(/:/g, "").slice(0, 19);
@@ -306,7 +302,7 @@ export async function runPlanDebate(
 		reviewerCount: debateConfig.reviewerCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
-		toolRestriction: loopConfig.agentRestrictions?.cloner ?? loopConfig.agentRestrictions?.["*"],
+		toolRestriction: loopConfig.agentRestrictions?.reviewer ?? loopConfig.agentRestrictions?.["*"],
 	});
 
 	logger.info("Starting plan debate", {

@@ -12,7 +12,7 @@
  * On LLM failure: fall back to rules-only + log warning.
  */
 
-import type { LoopSwarmConfig } from "./schema";
+import type { LoopSwarmConfig } from "../core/schema";
 
 // ============================================================================
 // Types
@@ -32,8 +32,7 @@ export interface TaskComplexitySignals {
 }
 
 export interface TaskComplexityRecommendation {
-	workers: number;
-	cloners: number;
+	agents: number;
 	/** Recommended max rounds per iteration for peer review. 0 = unlimited. */
 	maxRounds: number;
 	/** How many consecutive converged rounds to end early. */
@@ -46,8 +45,6 @@ export interface TaskComplexityRecommendation {
 	source: "rules" | "llm" | "fallback";
 	/** Estimated total agent-hours for the full plan. */
 	estimatedAgentHours: number;
-	/** Breakdown by role in agent-hours. */
-	roleBreakdown: { develop: number; test: number; review: number };
 }
 
 // ============================================================================
@@ -115,29 +112,14 @@ function extractSignals(planContent: string): TaskComplexitySignals {
  *              * crossPackage ? 1.3 : 1.0
  *              * crossLanguage ? 1.2 : 1.0
  *   total = base * multiplier
- *
- * Role breakdown (as % of total):
- *   develop: 55%, test: 25%, review: 20%
  */
-function estimateAgentHours(signals: TaskComplexitySignals): {
-	total: number;
-	breakdown: { develop: number; test: number; review: number };
-} {
+function estimateAgentHours(signals: TaskComplexitySignals): number {
 	const base = signals.parallelism * 0.5 + signals.codeSurface * 0.25;
 	let multiplier = 1.0;
 	if (signals.safetyCritical) multiplier *= 1.5;
 	if (signals.crossPackage) multiplier *= 1.3;
 	if (signals.crossLanguage) multiplier *= 1.2;
-	const total = Math.round(base * multiplier * 10) / 10; // round to 1 decimal
-
-	return {
-		total,
-		breakdown: {
-			develop: Math.round(total * 0.55 * 10) / 10,
-			test: Math.round(total * 0.25 * 10) / 10,
-			review: Math.round(total * 0.20 * 10) / 10,
-		},
-	};
+	return Math.round(base * multiplier * 10) / 10; // round to 1 decimal
 }
 
 // ============================================================================
@@ -193,20 +175,19 @@ function recommendFromSignals(
 	roundsConvergenceThreshold = Math.max(1, Math.min(roundsConvergenceThreshold, maxRounds > 0 ? maxRounds : 10));
 
 	// Agent-hour estimation
-	const hours = estimateAgentHours(signals);
+	const estimatedAgentHours = estimateAgentHours(signals);
 
 	const parts: string[] = [
 		`complexity=${complexity}`,
 		`parallelism=${signals.parallelism}`,
 		`codeSurface=${signals.codeSurface}`,
-		`estimatedAgentHours=${hours.total}`,
+		`estimatedAgentHours=${estimatedAgentHours}`,
 	];
 	if (signals.safetyCritical) parts.push("safety-critical");
 	if (signals.crossPackage) parts.push("cross-package");
 
 	return {
-		workers: agents,
-		cloners: 0,
+		agents,
 		maxRounds,
 		roundsConvergenceThreshold,
 		complexity,
@@ -214,8 +195,7 @@ function recommendFromSignals(
 		safetyCritical: signals.safetyCritical,
 		rationale: parts.join(", "),
 		source: "rules",
-		estimatedAgentHours: hours.total,
-		roleBreakdown: hours.breakdown,
+		estimatedAgentHours,
 	};
 }
 
@@ -227,8 +207,7 @@ export class TaskComplexityAnalyzer {
 	async analyze(planContent: string, loopConfig: LoopSwarmConfig): Promise<TaskComplexityRecommendation> {
 		if (!planContent || planContent.trim().length === 0) {
 			return {
-				workers: loopConfig.agents.initial,
-				cloners: 0,
+				agents: loopConfig.agents.initial,
 				maxRounds: loopConfig.agents.maxRounds,
 				roundsConvergenceThreshold: loopConfig.agents.roundsConvergenceThreshold,
 				complexity: "medium",
@@ -237,7 +216,6 @@ export class TaskComplexityAnalyzer {
 				rationale: "empty plan — using config defaults",
 				source: "fallback",
 				estimatedAgentHours: 0,
-				roleBreakdown: { develop: 0, test: 0, review: 0 },
 			};
 		}
 

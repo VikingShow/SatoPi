@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { evaluateBlockage, STAGNATION_THRESHOLD, CRASH_THRESHOLD } from "../blockage";
+import { evaluateBlockage, STAGNATION_THRESHOLD, CRASH_THRESHOLD } from "../core/blockage";
 
 describe("evaluateBlockage", () => {
 	it("does not block below both thresholds", () => {

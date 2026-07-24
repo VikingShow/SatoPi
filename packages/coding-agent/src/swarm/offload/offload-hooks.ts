@@ -22,9 +22,9 @@ import type {
 	PipelineContext,
 	PipelineResult,
 	WaveResult,
-} from "../pipeline";
+} from "../core/pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../pipeline";
+import type { ReviewVerdict } from "../core/pipeline";
 import type { SessionStorage } from "../../session/session-storage";
 import type { PlanPhase } from "./plan-node-attributor";
 import type { ExperienceStore } from "../curtain/experience";
@@ -153,7 +153,7 @@ export function createOffloadHooks(
 
 		// -- beforeWorkerRound ---------------------------------------------------
 
-		async beforeWorkerRound(round: number, agentIds: string[], ctx: PipelineContext) {
+		async beforeAgentRound(round: number, agentIds: string[], ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			// ── MMD 局部视图注入 ──────────────────────────────────────────
@@ -194,7 +194,7 @@ export function createOffloadHooks(
 
 		// -- afterWorkerRound ----------------------------------------------------
 
-		async afterWorkerRound(round: number, results: SingleResult[], ctx: PipelineContext) {
+		async afterAgentRound(round: number, results: SingleResult[], ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			const resultMap = new Map<string, SingleResult>();
@@ -219,7 +219,7 @@ export function createOffloadHooks(
 
 		// -- beforeClonerReview --------------------------------------------------
 
-		async beforeClonerReview(iteration: number, agentOutput: string, ctx: PipelineContext) {
+		async beforeReview(iteration: number, agentOutput: string, ctx: PipelineContext) {
 			if (!config.enabled || !config.injectMermaid) return;
 
 			if (currentMmd) {
@@ -230,7 +230,7 @@ export function createOffloadHooks(
 
 		// -- afterClonerReview ---------------------------------------------------
 
-		async afterClonerReview(iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) {
+		async afterReview(iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) {
 			if (!config.enabled || !verdict) return;
 
 			const clonerResult: SingleResult = {

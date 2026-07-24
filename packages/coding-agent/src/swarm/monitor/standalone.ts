@@ -12,32 +12,32 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { logger } from "@oh-my-pi/pi-utils";
-import { StateTracker } from "../state";
+import { StateTracker } from "../core/state";
 import { MonitorServer } from "./server";
-import { ActivityLogger } from "../activity-logger";
+import { ActivityLogger } from "../hooks/activity-logger";
 import type { RunManager, SteeringSink } from "./api-routes";
-import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
+import { parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
 import { createStageController } from "../stage/stage-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
-import { stampAndArchivePlanMd } from "../script-planner";
-import { getSessionPlanPath } from "../plan-paths";
-import { ScriptManager } from "../script-manager";
+import { stampAndArchivePlanMd } from "../script/script-planner";
+import { getSessionPlanPath } from "../script/plan-paths";
+import { ScriptManager } from "../script/script-manager";
 import { ExperienceStore } from "../curtain";
-import type { LoopResult } from "../loop-controller";
-import type { LoopSwarmConfig } from "../schema";
-import type { SwarmSessionManager } from "../swarm-session-manager";
-import { RoleAssetManager } from "../role-asset";
+import type { LoopResult } from "../stage/stage-controller";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import { RoleAssetManager } from "../agent/role-asset";
 import type { AfterLoopResult } from "./types";
 import { runCurtainPipeline } from "./curtain-runner";
 import {
 	SessionRegistry,
 	type SharedServices,
 	type SessionServices,
-} from "../session-registry";
-import { ProfileRegistry } from "../agent-profile";
-import { MarkEnvironment } from "../mark-environment";
+} from "../session/session-registry";
+import { ProfileRegistry } from "../agent/agent-profile";
+import { MarkEnvironment } from "../coordination/mark-environment";
 
 
 // ============================================================================

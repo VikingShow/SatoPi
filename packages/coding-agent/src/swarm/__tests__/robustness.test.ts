@@ -11,8 +11,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { StateTracker } from "../state";
-import { RegionLockManager } from "../region-lock";
+import { StateTracker } from "../core/state";
+import { RegionLockManager } from "../coordination/region-lock";
 
 let tmpDir: string;
 
