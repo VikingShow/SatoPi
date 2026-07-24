@@ -12,7 +12,7 @@ interface ConfigPageProps {
 
 export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
   const config = useConfigStore();
-  const { agents, reviewers, convergence, scaling, loop, yamlPreview, isDirty, isLoading, availableModels } = config;
+  const { agents, convergence, scaling, loop, yamlPreview, isDirty, isLoading, availableModels } = config;
   const isRunning = useSwarmStore((s) => s.isRunning);
   const stopRun = useSwarmStore((s) => s.stopRun);
 
@@ -83,41 +83,6 @@ export default function ConfigPage({ onNavigateToMonitor }: ConfigPageProps) {
           </div>
           <div className="mt-3">
             <ToggleField label="Auto (TaskComplexityAnalyzer)" checked={agents.auto} onChange={(v) => config.updateAgents({ auto: v })} />
-          </div>
-        </div>
-
-        {/* Reviewers */}
-        <div className="bg-background-card rounded-card border border-border p-4">
-          <h3 className="text-sm font-medium text-foreground mb-3">Reviewers</h3>
-          <div className="grid grid-cols-3 gap-3">
-            <NumberField label="Count" value={reviewers.count} onChange={(v) => config.updateReviewers({ count: v })} min={1} max={10} />
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Model</label>
-              <select
-                value={reviewers.model}
-                onChange={(e) => config.updateReviewers({ model: e.target.value })}
-                className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden"
-              >
-                {availableModels.length === 0 && <option value={reviewers.model}>{reviewers.model}</option>}
-                {availableModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id}
-                  </option>
-                ))}
-                {!availableModels.some((m) => m.id === reviewers.model) && availableModels.length > 0 && (
-                  <option value={reviewers.model}>{reviewers.model} (configured)</option>
-                )}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Review Strictness</label>
-              <select value={reviewers.reviewStrictness} onChange={(e) => config.updateReviewers({ reviewStrictness: e.target.value })}
-                className="bg-background-elevated text-foreground text-sm px-3 py-1.5 rounded-lg border border-border focus:border-primary/50 focus:outline-hidden">
-                <option value="strict">Strict</option>
-                <option value="normal">Normal</option>
-                <option value="lenient">Lenient</option>
-              </select>
-            </div>
           </div>
         </div>
 

@@ -20,29 +20,31 @@ vi.mock("../../lib/api-client", () => ({
   api: {
     getState: vi.fn(),
     startScript: vi.fn(),
-    sendBeforeScriptMessage: vi.fn(),
+    sendScriptMessage: vi.fn(),
     runDebate: vi.fn(),
-    confirmBeforeScript: vi.fn(),
+    confirmScript: vi.fn(),
     cancelScript: vi.fn(),
-    getBeforeScriptState: vi.fn(),
+    getScriptState: vi.fn(),
     sendSteering: vi.fn(),
     stopRun: vi.fn(),
-    getAfterLoopSummary: vi.fn(),
-    getBeforeScriptHistory: vi.fn(),
+    getCurtainSummary: vi.fn(),
+    loadScriptHistory: vi.fn(),
     getHistory: vi.fn(),
     getRunStatus: vi.fn(),
   },
   setActiveSession: vi.fn(),
 }));
 
-// Mock SSE client
+// Mock SSE client — isConnected is mutable so tests can override
+const sseMock = vi.hoisted(() => ({
+  isConnected: false as boolean,
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  on: vi.fn(() => () => {}),
+  onConnectionChange: vi.fn(() => () => {}),
+}));
 vi.mock("../../lib/sse-client", () => ({
-  sseClient: {
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    on: vi.fn(() => () => {}),
-    onConnectionChange: vi.fn(() => () => {}),
-  },
+  sseClient: sseMock,
   setActiveSSESession: vi.fn(),
 }));
 
@@ -55,6 +57,7 @@ function getStore() {
 
 beforeEach(() => {
   mockActiveSwarm = "test-session";
+  sseMock.isConnected = false;
   useSwarmStore.setState({
     swarmState: null,
     activities: [],
@@ -401,8 +404,10 @@ describe("SwarmStore: phase transitions", () => {
 describe("SwarmStore: script interactions", () => {
   it("startPlanning sends task to backend", async () => {
     (api.startScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: true });
+    sseMock.isConnected = true; // skip waitForSSE timeout
     await getStore().startPlanning("build login");
-    expect(api.startScript).toHaveBeenCalledWith("build login");
+    expect(api.startScript).toHaveBeenCalledWith("build login", undefined);
+    sseMock.isConnected = false;
   });
 
   it("cancelScript resets state", async () => {

@@ -22,8 +22,7 @@ beforeEach(() => {
   useConfigStore.setState({
     name: "swarm-run",
     mode: "loop",
-    workers: { initial: 3, min: 2, max: 8, auto: true, maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-chat" },
-    cloners: { count: 3, model: "gpt-4o", reviewStrictness: "strict" },
+    agents: { initial: 3, min: 2, max: 8, auto: true, maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-chat" },
     convergence: { threshold: 0.85, approvalRatio: 0.67, iterationTimeoutMs: 600000 },
     scaling: { superMajorityThreshold: 0.67, majorityThreshold: 0.5 },
     loop: { maxIterations: 5, humanEscalation: true },
@@ -39,7 +38,7 @@ describe("ConfigStore: initial state", () => {
     expect(getStore().mode).toBe("loop");
   });
 
-  it("default workers count is 3", () => {
+  it("default agents initial count is 3", () => {
     expect(getStore().agents.initial).toBe(3);
   });
 
@@ -49,27 +48,27 @@ describe("ConfigStore: initial state", () => {
 });
 
 describe("ConfigStore: update actions", () => {
-  it("updateWorkers updates values and marks dirty", () => {
-    getStore().updateWorkers({ initial: 8 });
+  it("updateAgents updates values and marks dirty", () => {
+    getStore().updateAgents({ initial: 8 });
     expect(getStore().agents.initial).toBe(8);
     expect(getStore().isDirty).toBe(true);
-  });
-
-  it("updateReviewers updates count", () => {
-    getStore().updateReviewers({ count: 5, reviewStrictness: "lenient" });
-    expect(getStore().reviewers.count).toBe(5);
-    expect(getStore().reviewers.reviewStrictness).toBe("lenient");
   });
 
   it("updateLoop toggles human escalation", () => {
     getStore().updateLoop({ humanEscalation: false });
     expect(getStore().loop.humanEscalation).toBe(false);
   });
+
+  it("updateConvergence changes threshold", () => {
+    getStore().updateConvergence({ threshold: 0.9 });
+    expect(getStore().convergence.threshold).toBe(0.9);
+    expect(getStore().isDirty).toBe(true);
+  });
 });
 
 describe("ConfigStore: load/save cycle", () => {
   it("loadConfig fetches yaml and stores as preview", async () => {
-    const yaml = "name: test-swarm\nmode: loop\nworkers:\n  initial: 5";
+    const yaml = "name: test-swarm\nmode: loop\nagents:\n  initial: 5";
     (api.getConfig as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ yaml });
     await getStore().loadConfig();
     expect(getStore().yamlPreview).toBe(yaml);
@@ -77,7 +76,7 @@ describe("ConfigStore: load/save cycle", () => {
   });
 
   it("setYamlFromForm generates yaml from form state", () => {
-    getStore().updateWorkers({ initial: 10 });
+    getStore().updateAgents({ initial: 10 });
     getStore().setYamlFromForm();
     expect(getStore().yamlPreview).toContain("initial: 10");
   });
