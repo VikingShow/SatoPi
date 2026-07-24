@@ -134,7 +134,7 @@ class SwarmRunManager implements RunManager {
 	get isRunning(): boolean { return this.#running; }
 	getLastAfterLoopResult(): AfterLoopResult | null { return this.#lastAfterLoopResult; }
 
-	async start(): Promise<{ success: boolean; error?: string }> {
+	async start(agentCount?: number, reviewerCount?: number): Promise<{ success: boolean; error?: string }> {
 
 			// Rotate session file so each Run gets a clean history slate.
 			try { await this.#sessionManager?.rotate(); } catch { /* best-effort */ }
@@ -192,6 +192,8 @@ class SwarmRunManager implements RunManager {
 				profileRegistry: this.#profileRegistry,
 				roleAssetManager: this.#roleAssetManager,
 				callbacks: stageFeedback,
+				agentCount,
+				reviewerCount,
 			});
 
 			stage.run().then(async (result) => {

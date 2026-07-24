@@ -11,6 +11,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { ReviewVerdict } from "../core/pipeline";
 import { WorkerSummarizer, type SummarizeOutput } from "./worker-summarizer";
+import type { AgentOffloadEntry } from "./agent-offload-summarizer";
 import {
 	Deduplicator,
 	type DedupEntry,
@@ -130,6 +131,31 @@ export class OffloadPipeline {
 			agentType,
 			iteration,
 			outputs: outputs.length,
+			pendingTotal: this.#pendingL1.length,
+		});
+
+		return outputs;
+	}
+
+	/**
+	 * 接收通用 AgentOffloadEntry[]（不依赖 worker/cloner 执行模型）。
+	 * 用于重构后的 OffloadAgentHooks 集成路径。
+	 */
+	runL1FromEntries(entries: AgentOffloadEntry[]): OffloadPipeline.L1Output[] {
+		const outputs: OffloadPipeline.L1Output[] = entries.map(e => ({
+			agentId: e.agentId,
+			agentType: "worker" as const,
+			summary: e.summary,
+			score: e.score,
+			taskCall: e.taskCall,
+			iteration: e.turnIndex,
+			phaseHint: e.phaseHint,
+			resultRef: e.resultRef,
+		}));
+
+		this.#pendingL1.push(...outputs);
+		logger.debug("[OffloadPipeline] L1 (generic) complete", {
+			entries: entries.length,
 			pendingTotal: this.#pendingL1.length,
 		});
 

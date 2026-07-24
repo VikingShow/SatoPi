@@ -247,7 +247,7 @@ export class ScriptManager {
 		this.#phase = "stage";
 		await this.#setPhase("stage");
 
-		const result = await this.#runManager.start();
+		const result = await this.#runManager.start(agentCount, reviewerCount);
 		if (!result.success) {
 			this.#phase = "script-confirm";
 			await this.#setPhase("script-confirm");

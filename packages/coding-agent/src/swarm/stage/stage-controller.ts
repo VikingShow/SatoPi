@@ -75,6 +75,10 @@ export interface StageOptions {
 	executor?: AgentExecutor;
 	/** Pre-selected agent IDs (skip selection algorithm). */
 	agentIds?: string[];
+	/** User-specified agent count (overrides complexity analyzer). */
+	agentCount?: number;
+	/** User-specified reviewer count. */
+	reviewerCount?: number;
 	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
 	callbacks?: StageCallbacks;
 }
@@ -117,9 +121,13 @@ export class StageController {
 		// 1. Analyse complexity → recommendations
 		const analyzer = new TaskComplexityAnalyzer();
 		const recommendation = await analyzer.analyze(planContent, loopConfig);
+		// Honour user-specified agent count from confirm bar
+		const effectiveAgentCount = this.#opts.agentCount ?? recommendation.agents;
 		logger.info("[Stage] Complexity analysis", {
 			complexity: recommendation.complexity,
-			agents: recommendation.agents,
+			agents: effectiveAgentCount,
+			analyzerRecommendation: recommendation.agents,
+			userOverride: this.#opts.agentCount,
 			estimatedAgentHours: recommendation.estimatedAgentHours,
 		});
 
@@ -143,13 +151,13 @@ export class StageController {
 		} else {
 			const domains = extractDomains(planContent);
 			selectedAgents = selectAgents({
-				required: recommendation.agents,
+				required: effectiveAgentCount,
 				domains,
 				registry: this.#opts.profileRegistry,
 			});
 		}
 
-		const required = recommendation.agents;
+		const required = effectiveAgentCount;
 		const registry = this.#opts.profileRegistry;
 
 		// If not enough agents available, create new ones to meet the requirement
