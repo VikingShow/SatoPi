@@ -4,12 +4,12 @@
  * 串联 SwarmOffloadStore + OffloadPipeline + MermaidSynthesizer + MmdInjector，
  * 通过 10 个生命周期 hook 实现完整的 offload 流水线：
  *
- *   afterWorkerRound  → L1  Worker 摘要 → JSONL + ♻ ExperienceStore
- *   afterClonerReview  → L1  Cloner 摘要 → JSONL
- *   afterIteration     → L1.5→L2→L3 流水线 → context-graph.mmd
- *   beforeWorkerRound  → MMD Worker 局部视图 + ♻ 历史经验注入
- *   beforeClonerReview → MMD Cloner 全局视图注入
- *   beforeIteration    → MMD LoopController 全景视图注入
+ *   afterAgentRound   → L1 Agent 摘要 → JSONL + ♻ ExperienceStore
+ *   afterReview       → L1 Review 摘要 → JSONL
+ *   afterIteration    → L1.5→L2→L3 流水线 → context-graph.mmd
+ *   beforeAgentRound  → MMD 局部视图 + ♻ 历史经验注入
+ *   beforeReview      → MMD 全局审查视图注入
+ *   beforeIteration   → MMD 全景视图注入
  *
  * ♻ = ExperienceStore 桥接 (Phase 6a: Offload ⇄ 经验蒸馏)
  *
@@ -56,7 +56,7 @@ export interface OffloadHooksConfig {
 	 * ExperienceStore 实例（可选）。
 	 * 传入后启用 Offload→Experience 桥接：
 	 *   - afterIteration: 将 offload 摘要蒸馏为 ExtractedLesson 写入
-	 *   - beforeWorkerRound: 检索历史经验注入 Worker prompt
+	 *   - beforeAgentRound: 检索历史经验注入 agent prompt
 	 */
 	experienceStore?: ExperienceStore;
 	/** 当前 session 标识（供 runId 生成）。 */
@@ -108,7 +108,7 @@ export function createOffloadHooks(
 	let latestMmdInjection: string | null = null;
 	// 最近一次经验检索结果 (agentId → XML 注入块)
 	const latestExperienceMap = new Map<string, string>();
-	// Worker phase 映射
+	// Agent phase 映射
 	const workerPhases = new Map<string, string>();
 	// 当前迭代编号
 	let currentIteration = 0;
@@ -151,7 +151,7 @@ export function createOffloadHooks(
 			}
 		},
 
-		// -- beforeWorkerRound ---------------------------------------------------
+		// -- beforeAgentRound ----------------------------------------------------
 
 		async beforeAgentRound(round: number, agentIds: string[], ctx: PipelineContext) {
 			if (!config.enabled) return;
@@ -192,7 +192,7 @@ export function createOffloadHooks(
 			}
 		},
 
-		// -- afterWorkerRound ----------------------------------------------------
+		// -- afterAgentRound -----------------------------------------------------
 
 		async afterAgentRound(round: number, results: SingleResult[], ctx: PipelineContext) {
 			if (!config.enabled) return;
@@ -206,7 +206,7 @@ export function createOffloadHooks(
 				if (hint) { phaseHints.set(r.id, hint); workerPhases.set(r.id, hint); }
 			}
 
-			const l1Outputs = await pipeline.runL1(resultMap, "worker", currentIteration, phaseHints);
+			const l1Outputs = await pipeline.runL1(resultMap, currentIteration, phaseHints);
 
 			// 持久化到 JSONL
 			for (const out of l1Outputs) {
@@ -217,7 +217,7 @@ export function createOffloadHooks(
 			totalWorkerTasks += l1Outputs.length;
 		},
 
-		// -- beforeClonerReview --------------------------------------------------
+		// -- beforeReview --------------------------------------------------------
 
 		async beforeReview(iteration: number, agentOutput: string, ctx: PipelineContext) {
 			if (!config.enabled || !config.injectMermaid) return;
@@ -228,7 +228,7 @@ export function createOffloadHooks(
 			}
 		},
 
-		// -- afterClonerReview ---------------------------------------------------
+		// -- afterReview ---------------------------------------------------------
 
 		async afterReview(iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) {
 			if (!config.enabled || !verdict) return;
@@ -251,7 +251,7 @@ export function createOffloadHooks(
 			const scores = new Map<string, number>();
 			scores.set("cloner", verdict.passed ? 8 : verdict.approvalCount > 0 ? 4 : 2);
 
-			const l1Outputs = await pipeline.runL1(resultMap, "cloner", iteration, undefined, scores);
+			const l1Outputs = await pipeline.runL1(resultMap, iteration, undefined, scores);
 			for (const out of l1Outputs) {
 				await store.appendEntry(out.agentId, toOffloadEntry(out));
 			}
@@ -293,7 +293,6 @@ export function createOffloadHooks(
 				await bridgeToExperienceStore(store, experienceStore, {
 					iteration, sessionId,
 					agentCount: workerPhases.size,
-					reviewerCount: 1, // Cloner Council 汇总为 1 个逻辑 agent
 					taskDescription: phases.map(p => p.title).join(", "),
 				});
 			}
@@ -342,7 +341,6 @@ export function createOffloadHooks(
 
 function toOffloadEntry(output: OffloadPipeline.L1Output): {
 	timestamp: string;
-	agent_type: "worker" | "cloner" | "orchestrator";
 	agent_id: string;
 	iteration: number;
 	phase_id?: string;
@@ -354,7 +352,6 @@ function toOffloadEntry(output: OffloadPipeline.L1Output): {
 } {
 	return {
 		timestamp: new Date().toISOString(),
-		agent_type: output.agentType,
 		agent_id: output.agentId,
 		iteration: output.iteration,
 		phase_id: output.phaseHint,
@@ -373,7 +370,6 @@ interface BridgeMeta {
 	iteration?: number;
 	sessionId?: string;
 	agentCount: number;
-	reviewerCount: number;
 	taskDescription?: string;
 }
 
@@ -425,7 +421,6 @@ async function bridgeToExperienceStore(
 			finalStatus: avgScore >= 7 ? "completed" : avgScore >= 4 ? "converged_partial" : "converged_failed",
 			reviewApprovalRatio: avgScore / 10,
 			agentCount: meta.agentCount,
-			reviewerCount: meta.reviewerCount,
 			taskDescription: meta.taskDescription,
 		};
 
@@ -464,7 +459,7 @@ async function bridgeSessionSummary(
 	const lesson: ExtractedLesson = {
 		type: meta.status === "completed" ? "success" : "insight",
 		summary: `Swarm session completed (status=${meta.status}): ${allEntries.length} offload entries, ${meta.totalWorkerTasks + meta.totalClonerTasks} tasks, avg score ${avgScore.toFixed(1)}`,
-		detail: allEntries.slice(0, 10).map(e => `[${e.agent_type}:${e.agent_id}] ${e.summary}`).join("\n"),
+		detail: allEntries.slice(0, 10).map(e => `[${e.agent_id}] ${e.summary}`).join("\n"),
 		tags: ["offload", "session-summary", meta.status],
 		confidence: 0.8,
 		source: "offload-bridge:session",
@@ -474,8 +469,7 @@ async function bridgeSessionSummary(
 		totalIterations: 0,
 		finalStatus: meta.status as LoopRunStats["finalStatus"],
 		reviewApprovalRatio: avgScore / 10,
-		agentCount: 0,
-		reviewerCount: meta.totalClonerTasks,
+		agentCount: meta.totalWorkerTasks + meta.totalClonerTasks,
 		taskDescription: `Offload session: ${meta.swarmDir}`,
 	};
 
