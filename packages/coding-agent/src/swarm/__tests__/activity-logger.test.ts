@@ -128,7 +128,7 @@ describe("ActivityLogger", () => {
 
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("crash");
-		expect(entries[0].agentName).toBe("worker-3");
+		expect(entries[0].agent).toBe("worker-3");
 		expect(entries[0].error).toBe("signal SIGTERM");
 	});
 

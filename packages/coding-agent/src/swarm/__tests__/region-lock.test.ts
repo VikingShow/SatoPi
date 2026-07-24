@@ -36,7 +36,7 @@ describe("RegionLockManager", () => {
 
 		expect(mgr.checkLock("src/foo.ts", "worker-2")).toEqual({
 			locked: true,
-			entry: { workerId: "worker-1", file: "src/foo.ts", range: undefined, acquiredAt: expect.any(Number) },
+			entry: { agentId: "worker-1", file: "src/foo.ts", range: undefined, acquiredAt: expect.any(Number) },
 		});
 
 		expect(mgr.checkLock("src/foo.ts", "worker-1")).toEqual({ locked: false });
@@ -54,7 +54,7 @@ describe("RegionLockManager", () => {
 		mgr.tryLock("worker-1", "src/foo.ts");
 		mgr.release("worker-2", "src/foo.ts");
 		expect(mgr.getActiveLocks()).toHaveLength(1);
-		expect(mgr.getActiveLocks()[0].workerId).toBe("worker-1");
+		expect(mgr.getActiveLocks()[0].agentId).toBe("worker-1");
 	});
 
 	it("releaseAll clears only that worker's locks", () => {
@@ -65,7 +65,7 @@ describe("RegionLockManager", () => {
 		mgr.releaseAll("worker-1");
 		const locks = mgr.getActiveLocks();
 		expect(locks).toHaveLength(1);
-		expect(locks[0].workerId).toBe("worker-2");
+		expect(locks[0].agentId).toBe("worker-2");
 	});
 
 	it("normalizes ./ prefix and duplicate slashes", () => {
@@ -77,7 +77,7 @@ describe("RegionLockManager", () => {
 
 	it("describeLock formats human-readable string", () => {
 		const desc = RegionLockManager.describeLock({
-			workerId: "worker-3",
+			agentId: "worker-3",
 			file: "src/auth.ts",
 			range: "5-20",
 			acquiredAt: 1234567890,
@@ -87,7 +87,7 @@ describe("RegionLockManager", () => {
 
 	it("describeLock omits range when absent", () => {
 		const desc = RegionLockManager.describeLock({
-			workerId: "worker-3",
+			agentId: "worker-3",
 			file: "src/auth.ts",
 			acquiredAt: 1234567890,
 		});
