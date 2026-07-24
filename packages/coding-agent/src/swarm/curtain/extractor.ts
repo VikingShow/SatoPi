@@ -52,7 +52,7 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
-export function extractLessons(result: StageResult, agentCount: number, reviewerCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
+export function extractLessons(result: StageResult, agentCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
 	const lessons: ExtractedLesson[] = [];
 
 	const taskCount = result.taskProgress.total;

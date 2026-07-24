@@ -92,7 +92,6 @@ export async function runCurtainPipeline(
 	// Agent counts
 	const agents = stateTracker.state.agents;
 		const agentCount = Object.keys(agents).length;
-		const reviewerCount = Object.values(agents).filter(a => a.role === "reviewer").length;
 
 	// ── Elect reporter via agent voting (if IRC bus available) ──
 	let electedReporter: string | null = null;
@@ -125,7 +124,6 @@ export async function runCurtainPipeline(
 		// Thread B: Reflection pipeline
 		runReflectionPipeline(result, {
 			agentCount,
-			reviewerCount,
 			experienceStore,
 			modelRegistry,
 			settings,
@@ -290,17 +288,16 @@ async function runReflectionPipeline(
 	result: StageResult,
 	opts: {
 		agentCount: number;
-		reviewerCount: number;
 		experienceStore: ExperienceStore;
 		modelRegistry: ModelRegistry;
 		settings: Settings;
 		runId: string;
 	},
 ): Promise<ReflectionResult> {
-	const { agentCount, reviewerCount, experienceStore, modelRegistry, settings, runId } = opts;
+	const { agentCount, experienceStore, modelRegistry, settings, runId } = opts;
 
 	// Extract lessons
-	const extraction = extractLessons(result, agentCount, reviewerCount);
+	const extraction = extractLessons(result, agentCount);
 
 	// Deep reflection (LLM, best-effort)
 	let deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null = null;
