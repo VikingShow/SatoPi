@@ -111,7 +111,7 @@ describe("ActivityLogger", () => {
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("scaling");
 		expect(entries[0].action).toBe("add");
-		expect(entries[0].agentName).toBe("worker-4");
+		expect(entries[0].agent).toBe("worker-4");
 	});
 
 	it("writes nomination events", async () => {

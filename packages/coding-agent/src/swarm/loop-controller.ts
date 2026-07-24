@@ -491,7 +491,7 @@ export class LoopController {
 			this.#ircBus,
 			{
 				workers: agentIds,
-				cloners: reviewerIds,
+				observers: reviewerIds,
 			},
 			this.#activityLogger,
 		);
@@ -1436,7 +1436,7 @@ export class LoopController {
 				const workerHooks = hooks?.(id);
 				const isReviewer = reviewerId !== undefined && id === reviewerId;
 				const systemPrompt = isReviewer
-					? `${AGENT_SYSTEM_PROMPT}\n${AgentChannel.buildReviewerPrompt()}`
+					? `${AGENT_SYSTEM_PROMPT}\n${AgentChannel.buildObserverReviewerPrompt()}`
 					: AGENT_SYSTEM_PROMPT;
 
 				const agentDef: AgentDefinition = {
