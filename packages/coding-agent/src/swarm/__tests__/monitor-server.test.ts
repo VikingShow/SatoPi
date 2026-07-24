@@ -64,7 +64,7 @@ describe("MonitorServer", () => {
 					resume: async () => ({ success: true }),
 					updatePlanAndContinue: async () => ({ success: true }),
 				},
-				beforeLoopManager: {
+				scriptManager: {
 					isBusy: false,
 					start: async () => ({ success: true }),
 					sendMessage: async () => ({ success: true }),
@@ -74,7 +74,7 @@ describe("MonitorServer", () => {
 					getState: () => ({ phase: "idle", task: "", conversationLength: 0, planReady: false, busy: false }),
 					getHistory: () => [],
 				},
-				steeringSink: { steer: () => {} },
+				sink: { steer: () => {} },
 			};
 		};
 

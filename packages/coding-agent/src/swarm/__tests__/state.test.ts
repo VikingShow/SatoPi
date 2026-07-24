@@ -131,7 +131,7 @@ describe("unregisterAgent", () => {
 		// Accumulate bad scores for worker-1
 		await st.incrementCriticism(["worker-1"]);
 		await st.incrementConflict("worker-1");
-		expect(st.getWorkerScore("worker-1")).toBe(-2);
+		expect(st.getAgentScore("worker-1")).toBe(-2);
 
 		// Scale-down: unregister worker-1
 		await st.unregisterAgent("worker-1");
@@ -140,7 +140,7 @@ describe("unregisterAgent", () => {
 		await st.registerAgent("worker-1");
 
 		// Counters should be clean
-		expect(st.getWorkerScore("worker-1")).toBe(0);
+		expect(st.getAgentScore("worker-1")).toBe(0);
 		expect(st.state.agents["worker-1"]!.criticismCount).toBe(0);
 		expect(st.state.agents["worker-1"]!.conflictCount).toBe(0);
 	});

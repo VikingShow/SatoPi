@@ -147,7 +147,7 @@ function estimateAgentHours(signals: TaskComplexitySignals): {
 function recommendFromSignals(
 	signals: TaskComplexitySignals,
 	loopConfig: LoopSwarmConfig,
-
+): TaskComplexityRecommendation {
 	// Complexity heuristic
 	let complexity: "low" | "medium" | "high";
 	if (signals.parallelism <= 2 && signals.codeSurface <= 3 && !signals.safetyCritical) {
@@ -162,10 +162,8 @@ function recommendFromSignals(
 		complexity = "medium";
 	}
 
-	// Workers: driven by parallelism
+	// Agents: driven by parallelism
 	const agents = signals.parallelism;
-	// Cloners: base on default, increase for safety-critical
-	if (complexity === "low" && cloners > 1) cloners -= 1;
 
 	// maxRounds: complexity-driven, capped by config (0 = unlimited, honored)
 	let maxRounds: number;
@@ -207,8 +205,8 @@ function recommendFromSignals(
 	if (signals.crossPackage) parts.push("cross-package");
 
 	return {
-		workers,
-		cloners,
+		workers: agents,
+		cloners: 0,
 		maxRounds,
 		roundsConvergenceThreshold,
 		complexity,
@@ -230,6 +228,7 @@ export class TaskComplexityAnalyzer {
 		if (!planContent || planContent.trim().length === 0) {
 			return {
 				workers: loopConfig.agents.initial,
+				cloners: 0,
 				maxRounds: loopConfig.agents.maxRounds,
 				roundsConvergenceThreshold: loopConfig.agents.roundsConvergenceThreshold,
 				complexity: "medium",
