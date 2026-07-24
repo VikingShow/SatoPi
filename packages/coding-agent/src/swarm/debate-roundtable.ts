@@ -1,7 +1,7 @@
 /**
  * DebateRoundtable — 多轮 Agent 计划辩论。
  *
- * After Socrates produces a draft plan.md, 2-3 agent instances debate it
+ * After Planner agent produces a draft plan.md, 2-3 agent instances debate it
  * over multiple rounds. Each agent independently critiques the plan, then
  * agents see each other's critiques and refine their positions. The roundtable
  * converges when plan text similarity (Jaccard) stabilizes for N consecutive
@@ -97,7 +97,7 @@ export class DebateRoundtable {
 	/**
 	 * Run the plan debate.
 	 *
-	 * @param draftPlan — the current plan.md content (from Socrates)
+	 * @param draftPlan — the current plan.md content (from Planner agent)
 	 * @param workspace — absolute workspace path
 	 */
 	async debate(

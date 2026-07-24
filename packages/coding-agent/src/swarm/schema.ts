@@ -79,11 +79,9 @@ export interface LoopSwarmConfig {
 		min: number;
 		/** Maximum agents allowed during dynamic scaling. Default: 12. */
 		max: number;
-		/** Number of agents assigned to review role. Default: min(3, initial). */
-		reviewers: number;
 		/**
 		 * When true, the TaskComplexityAnalyzer evaluates plan.md before
-		 * the stage starts and overrides `initial` and `reviewers` with
+		 * the stage starts and overrides `initial` with
 		 * its recommendations (clamped to min/max). Default: false (opt-in).
 		 */
 		auto: boolean;
@@ -112,21 +110,6 @@ export interface LoopSwarmConfig {
 		 * aborted and marked as CRASHED. Default 5 min. 0 = no limit.
 		 */
 		agentTimeoutMs?: number;
-	};
-	/** Reviewer election configuration. */
-	reviewer: {
-		/**
-		 * Enable reviewer election before round 1+.
-		 * Round 0 collects nominations; round 1+ has an elected reviewer.
-		 * Default: true.
-		 */
-		enabled: boolean;
-		/**
-		 * Timeout in milliseconds for nomination phase. Agents must
-		 * include `## Nomination` in their output within this window.
-		 * Default: 0 (no timeout — collected at end of round).
-		 */
-		electionTimeoutMs: number;
 	};
 	/** Agent deliberation (debate) configuration. */
 	debate: {
@@ -168,7 +151,7 @@ export interface LoopSwarmConfig {
 	iterationTimeoutMs: number;
 	/**
 	 * Enable review deliberation: when a review FAILs with split findings,
-	 * reviewers cross-examine each other's findings and re-vote.
+	 * agents cross-examine each other's findings and re-vote.
 	 * Default: true.
 	 */
 	enableDeliberation: boolean;
@@ -344,14 +327,14 @@ export interface OffloadConfig {
 
 /** Normalise raw loop YAML fields into LoopSwarmConfig with defaults. */
 export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig {
-	const agentsRaw = (raw.stage as Record<string, unknown>) ?? (raw.agents as Record<string, unknown>) ?? (raw.workers as Record<string, unknown>) ?? {};
+	const agentsRaw = (raw.stage as Record<string, unknown>) ?? (raw.agents as Record<string, unknown>) ?? {};
 	const agentInitial = (agentsRaw.initial as number) ?? 5;
 	return {
 		maxIterations: (raw.max_iterations as number) ?? 5,
 		planDebate: {
 			enabled: ((raw.plan_debate as Record<string, unknown>)?.enabled as boolean) ?? true,
 			agentCount: ((raw.plan_debate as Record<string, unknown>)?.agent_count as number)
-				?? ((raw.plan_debate as Record<string, unknown>)?.cloner_count as number) ?? 2,
+				?? 2,
 			maxRounds: ((raw.plan_debate as Record<string, unknown>)?.max_rounds as number) ?? 3,
 			convergenceThreshold: ((raw.plan_debate as Record<string, unknown>)?.convergence_threshold as number) ?? 2,
 		},
@@ -361,18 +344,11 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 			initial: agentInitial,
 			min: (agentsRaw.min as number) ?? 1,
 			max: (agentsRaw.max as number) ?? 12,
-			reviewers: (agentsRaw.reviewers as number)
-				?? (raw.cloners as Record<string, number>)?.count
-				?? Math.min(3, agentInitial),
 			auto: (agentsRaw.auto as boolean) ?? false,
 			maxRounds: (agentsRaw.max_rounds as number) ?? 5,
 			roundsConvergenceThreshold: (agentsRaw.rounds_convergence_threshold as number) ?? 3,
 			roundtablePrompt: agentsRaw.roundtable_prompt as string | undefined,
 			agentTimeoutMs: agentsRaw.agent_timeout_ms as number | undefined,
-		},
-		reviewer: {
-			enabled: ((raw.reviewer as Record<string, unknown>)?.enabled as boolean) ?? true,
-			electionTimeoutMs: ((raw.reviewer as Record<string, unknown>)?.election_timeout_ms as number) ?? 0,
 		},
 		debate: {
 			enabled: ((raw.debate as Record<string, unknown>)?.enabled as boolean) ?? true,

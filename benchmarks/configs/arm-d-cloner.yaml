@@ -10,7 +10,7 @@ swarm:
   auto_retry: false
   human_escalation: false
 
-  workers:
+  agents:
     initial: 3
     min: 3
     max: 3
@@ -23,8 +23,6 @@ swarm:
     max_rounds: 3
     convergence_threshold: 2
 
-  cloners:
-    count: 2
 
   agents: {}
 

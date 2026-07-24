@@ -172,7 +172,7 @@ export function reflectionToLesson(reflection: DeepReflection, runId: string): E
 		type: "reflection",
 		summary: summaryParts.join(" | ") || `Deep reflection for ${runId}`,
 		detail,
-		tags: ["reflection", "deep-analysis", "after-loop"],
+		tags: ["reflection", "deep-analysis", "curtain"],
 		confidence: reflection.confidence,
 		source: "reflector-llm",
 	};

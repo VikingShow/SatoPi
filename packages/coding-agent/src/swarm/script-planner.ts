@@ -2,15 +2,15 @@
  * BeforeLoop — Loop 启动前的规划与辩论。
  *
  * 流程:
- *   1. /loopeng 触发 → Socrates 苏格拉底式对话
- *   2. Socrates ↔ Human 多轮对话 (Socratic 引导)
- *   3. Socrates 产出 draft plan.md
- *   4. (NEW) Cloner Roundtable 多轮辩论草案 → refined plan.md
+ *   1. /loopeng 触发 → Planner 苏格拉底式对话
+ *   2. Planner ↔ Human 多轮对话 (Socratic 引导)
+ *   3. Planner 产出 draft plan.md
+ *   4. (NEW) Agent Debate 多轮辩论草案 → refined plan.md
  *   5. Human 确认 → Loop 启动
  *
  * 集成方式:
  *   扩展命令 handler 调用 generatePlanningPrompt() 获得提示文本，
- *   注入 agent 对话流中。Human 回复后，Socrates 自然引导至 plan.md 产出。
+ *   注入 agent 对话流中。Human 回复后，Planner 自然引导至 plan.md 产出。
  *   当 plan.md 就绪 → runPlanDebate() → human 确认 → handler 执行实际循环。
  *
  * plan.md is per-session: {swarmDir}/.omp/plan.md
@@ -55,10 +55,10 @@ export interface ScriptResult {
 // ============================================================================
 
 /**
- * Generate the Before Loop planning prompt for Socrates.
+ * Generate the Before Loop planning prompt for Planner.
  *
  * This prompt is injected into the conversation when /loopeng triggers.
- * Socrates engages the human in a Socratic dialogue to clarify goals,
+ * Planner engages the human in a Socratic dialogue to clarify goals,
  * constraints, and acceptance criteria, then produces plan.md.
  *
  * plan.md path (per-session): {swarmDir}/.omp/plan.md
@@ -72,7 +72,7 @@ export async function generatePlanningPrompt(
 	const { swarmDir, workspace, loopConfig, taskDescription } = config;
 
 	const defaultWorkers = loopConfig.agents.initial;
-	const defaultCloners = loopConfig.agents.reviewers;
+	const defaultCloners = loopConfig.agents.initial;
 	const planPath = getSessionPlanPath(swarmDir);
 
 	const sections = [
@@ -242,7 +242,7 @@ export async function archivePlanForHistory(swarmDir: string, workspace: string)
  * Returns absolute paths to each archived plan file.
  *
  * Archives are workspace-scoped (e.g. .omp/plans/) — they survive
- * across sessions so Socrates can reference past plans.
+ * across sessions so Planner can reference past plans.
  */
 export async function listArchivedPlans(workspace: string): Promise<string[]> {
 	const archiveDir = getPlanArchiveDir(workspace);
@@ -259,7 +259,7 @@ export async function listArchivedPlans(workspace: string): Promise<string[]> {
 }
 
 // ============================================================================
-// Plan Debate (Cloner Roundtable)
+// Plan Debate (Agent Debate)
 // ============================================================================
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
@@ -279,7 +279,7 @@ export interface PlanDebateResult {
  * Run the plan debate phase: 2-3 cloner instances debate the draft plan.md
  * over multiple rounds to produce a stronger plan before execution.
  *
- * Called after Socrates produces a draft plan.md but BEFORE human confirmation.
+ * Called after Planner produces a draft plan.md but BEFORE human confirmation.
  * If plan_debate.enabled is false, returns the draft plan unchanged.
  *
  * @param draftPlan — the current plan.md content

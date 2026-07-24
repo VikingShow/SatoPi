@@ -22,7 +22,7 @@
  * This is the SINGLE source of truth for all session activity — replacing:
  *   - pipeline.json       (StateTracker)
  *   - activity.jsonl      (ActivityLogger)
- *   - conversation.json   (before-loop-manager)
+ *   - conversation.json   (script-manager)
  *
  * ## SSE Push
  *
@@ -58,8 +58,8 @@ export const CTX = {
 	ACTIVITY:     "swarm_activity" as const,
 	PHASE:        "swarm_phase"  as const,
 	VERDICT:      "swarm_verdict" as const,
-	CONVERSATION: "socrates_turn" as const,
-	BEFORE_LOOP:  "before_loop_state" as const,
+	CONVERSATION: "script_turn" as const,
+	SCRIPT:  "script_state" as const,
 	CONVERSATION_SNAPSHOT: "conversation_snapshot" as const,
 } as const;
 

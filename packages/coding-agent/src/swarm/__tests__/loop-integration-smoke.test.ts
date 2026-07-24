@@ -10,7 +10,8 @@ import { ExperienceStore, extractLessons } from "../after-loop";
 import { generatePlanningPrompt } from "../script-planner";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "../dag";
 import { LoopController } from "../loop-controller";
-import { ReviewCouncil } from "../review-council";
+// ReviewCouncil removed — using pipeline types only
+import type { ReviewVerdict } from "../pipeline";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
 import { StateTracker } from "../state";
 
@@ -93,7 +94,7 @@ async function main() {
 	console.log(`  ✓  ExperienceStore: ${typeof ExperienceStore === "function" ? "class" : "?"}`);
 	console.log(`  ✓  extractLessons: ${typeof extractLessons === "function" ? "function" : "?"}`);
 	// Verify review methods exist on ReviewCouncil
-	console.log(`  ✓  ReviewCouncil: ${typeof ReviewCouncil === "function" ? "class" : "?"}`);
+	console.log(`  ✓  ReviewCouncil: removed — using pipeline ReviewVerdict type`);
 	console.log();
 
 	// Summary

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy, Bot } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -354,18 +354,18 @@ export default function ChatView() {
 
   // Determine input behavior based on phase
   const isIdle = phase === "idle";
-  const isBeforeLoopDialog = phase === "script";
-  const isBeforeLoopConfirm = phase === "script-confirm";
+  const isScriptDialog = phase === "script";
+  const isScriptConfirm = phase === "script-confirm";
   const isLoopRunning = phase === "stage";
-  const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
+  const canSend = isIdle || isScriptDialog || isLoopRunning;
   const isBusy = scriptState?.busy ?? false;
   const planReady = scriptState?.planReady ?? false;
 
   const placeholder = isIdle
     ? "Describe your task..."
-    : isBeforeLoopDialog
+    : isScriptDialog
     ? (isBusy ? "Agent is thinking..." : "Reply...")
-    : isBeforeLoopConfirm
+    : isScriptConfirm
     ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
     ? "Give feedback or guidance..."
@@ -380,7 +380,7 @@ export default function ChatView() {
 
     if (isIdle) {
       startPlanning(text, selectedAgentId || undefined);
-    } else if (isBeforeLoopDialog) {
+    } else if (isScriptDialog) {
       sendScriptMessage(text);
     } else if (isLoopRunning) {
       sendSteering(text);
@@ -429,10 +429,10 @@ export default function ChatView() {
                 title="What would you like the swarm to build?"
                 description="Describe your task below to start planning. You can also paste a GitHub issue, spec, or error message."
               />
-            ) : isBeforeLoopDialog ? (
+            ) : isScriptDialog ? (
               <EmptyState
                 icon={<Loader2 size={32} className="animate-spin" />}
-                title="Discussing requirements with Socrates"
+                title="Discussing requirements with Planner"
                 description="Answer the questions to help refine the task. A plan will emerge from this dialogue."
               />
             ) : isLoopRunning ? (
@@ -496,7 +496,7 @@ export default function ChatView() {
                 <Shield size={12} />
                 <span>New Task</span>
               </>
-            ) : isBeforeLoopDialog ? (
+            ) : isScriptDialog ? (
               <>
                 <Shield size={12} />
                 <span>Operator → Planner</span>

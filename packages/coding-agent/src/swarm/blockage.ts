@@ -13,7 +13,7 @@ export const CRASH_THRESHOLD = 3;
 export interface BlockageInput {
 	/** Consecutive rounds with stagnant cloner findings. */
 	stagnationCount: number;
-	/** Per-worker crash counts. */
+	/** Per-agent crash counts. */
 	agentCrashCounts: Record<string, number>;
 	/** Override the stagnation threshold (defaults to STAGNATION_THRESHOLD). */
 	stagnationThreshold?: number;
@@ -57,6 +57,6 @@ export function evaluateBlockage(input: BlockageInput): BlockageDecision {
 	return {
 		blocked: true,
 		cause: "deadlock",
-		reason: `Worker crash deadlock detected (a worker crashed ${crashThreshold}+ times)`,
+		reason: `Worker crash deadlock detected (a agent crashed ${crashThreshold}+ times)`,
 	};
 }

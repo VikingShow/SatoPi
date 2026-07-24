@@ -89,7 +89,7 @@ export default function PhasePipeline() {
     // In Running phase, check roundtablePhase for Review step
     if (phase === "stage") {
       if (subPhase.includes("Reviewers reviewing") && step.key === "reviewing") return "active";
-      if (subPhase.includes("After Loop") && step.key === "summary") return "active";
+      if (subPhase.includes("Curtain") && step.key === "summary") return "active";
       if (subPhase.includes("After Loop completed")) {
         if (step.key === "summary") return "done";
         if (index < STEPS.findIndex((s) => s.key === "summary")) return "done";
@@ -107,7 +107,7 @@ export default function PhasePipeline() {
       (s) =>
         s.internalPhases.includes(phase) ||
         (phase === "stage" && phase.includes(
-          s.key === "reviewing" ? "Reviewers reviewing" : s.key === "summary" ? "After Loop" : "",
+          s.key === "reviewing" ? "Reviewers reviewing" : s.key === "summary" ? "Curtain" : "",
         )),
     );
     if (activeIdx >= 0 && index < activeIdx) return "done";

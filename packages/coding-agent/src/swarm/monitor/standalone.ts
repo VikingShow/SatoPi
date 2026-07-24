@@ -17,7 +17,6 @@ import { MonitorServer } from "./server";
 import { ActivityLogger } from "../activity-logger";
 import type { RunManager, SteeringSink } from "./api-routes";
 import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
-import { createLoopController } from "../loop-controller";
 import { createStageController } from "../stage/stage-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
@@ -39,7 +38,7 @@ import {
 } from "../session-registry";
 import { ProfileRegistry } from "../agent-profile";
 import { MarkEnvironment } from "../mark-environment";
-import { createSwarmHooks } from "../swarm-hooks";
+
 
 // ============================================================================
 // Workspace setup
@@ -84,7 +83,6 @@ const DEFAULT_YAML = `swarm:
 // ============================================================================
 
 class SwarmRunManager implements RunManager {
-	#loopController: ReturnType<typeof createLoopController> | null = null;
 	#abortController: AbortController | null = null;
 	#modelRegistry: ModelRegistry;
 	#settings: Settings;
@@ -173,75 +171,36 @@ class SwarmRunManager implements RunManager {
 			this.#running = true;
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
-			// Choose execution engine:
-			// - StageController (new): task-queue-based, event-driven, agent selection
-			// - LoopController (legacy): iteration-based, round-robin
-			const useStageController = planContent != null && planContent.length > 0;
+						// StageController: task-queue-based, event-driven, agent selection
+			const stage = createStageController({
+				workspace: this.#workspace,
+				swarmName: def.name,
+				planContent: planContent ?? "",
+				loopConfig: def.loopConfig,
+				stateTracker: this.#stateTracker,
+				activityLogger: this.#activityLogger,
+				modelRegistry: this.#modelRegistry,
+				settings: this.#settings,
+				signal: this.#abortController.signal,
+				profileRegistry: this.#profileRegistry,
+				roleAssetManager: this.#roleAssetManager,
+			});
 
-			if (useStageController && planContent) {
-				const stage = createStageController({
-					workspace: this.#workspace,
-					swarmName: def.name,
-					planContent,
-					loopConfig: def.loopConfig,
-					stateTracker: this.#stateTracker,
-					activityLogger: this.#activityLogger,
-					modelRegistry: this.#modelRegistry,
-					settings: this.#settings,
-					signal: this.#abortController.signal,
-					profileRegistry: this.#profileRegistry,
-					roleAssetManager: this.#roleAssetManager,
+			stage.run().then(async (result) => {
+				logger.info("[RunManager] Stage finished", { status: result.status });
+				if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
+				await this.#runCurtainPipeline({
+					status: result.status === "completed" ? "completed" : "failed",
+					iterations: 1,
+					reviewVerdicts: [],
+					errors: result.errors,
 				});
-
-				stage.run().then(async (result) => {
-					logger.info("[RunManager] Stage finished", { status: result.status });
-					if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
-					await this.#runCurtainPipeline({
-						status: result.status === "completed" ? "completed" : "failed",
-						iterations: 1,
-						reviewVerdicts: [],
-						errors: result.errors,
-					});
-				}).catch((err) => {
-					logger.error("[RunManager] Stage failed", { error: String(err) });
-				}).finally(() => {
-					this.#running = false;
-					this.#abortController = null;
-				});
-			} else {
-				// Legacy LoopController fallback
-				this.#loopController = createLoopController(this.#stateTracker, {
-					loopConfig: def.loopConfig,
-					workspace: this.#workspace,
-					activityLogger: this.#activityLogger,
-				});
-
-				const swarmHooks = createSwarmHooks({
-					enabled: this.#loopConfig.stigmergy?.enabled ?? false,
-					profileRegistry: this.#profileRegistry,
-					markEnvironment: this.#markEnvironment,
-				});
-
-				this.#loopController.runLoop({
-					workspace: this.#workspace,
-					modelRegistry: this.#modelRegistry,
-					settings: this.#settings,
-					signal: this.#abortController.signal,
-					planContent,
-					hooks: swarmHooks.hooks,
-					getAgentContext: swarmHooks.context.getAgentContext,
-				}).then(async (result) => {
-					logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
-					if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
-					await this.#runCurtainPipeline(result);
-				}).catch((err) => {
-					logger.error("[RunManager] Loop failed", { error: String(err) });
-				}).finally(() => {
-					this.#running = false;
-					this.#loopController = null;
-					this.#abortController = null;
-				});
-			}
+			}).catch((err) => {
+				logger.error("[RunManager] Stage failed", { error: String(err) });
+			}).finally(() => {
+				this.#running = false;
+				this.#abortController = null;
+			});
 
 			return { success: true };
 		} catch (err) {
@@ -258,26 +217,21 @@ class SwarmRunManager implements RunManager {
 	}
 
 	async pause(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		this.#loopController.pause();
+		this.#abortController?.abort();
 		return { success: true };
 	}
 
 	async resume(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		this.#loopController.resume();
-		return { success: true };
+		return { success: false, error: "Resume not supported in Stage mode. Restart the run instead." };
 	}
 
-	async updatePlanAndContinue(newPlan: string): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		await this.#loopController.updatePlan(newPlan, this.#stateTracker.swarmDir);
-		this.#loopController.resume();
-		return { success: true };
+	async updatePlanAndContinue(_newPlan: string): Promise<{ success: boolean; error?: string }> {
+		return { success: false, error: "Update-plan-and-continue not supported in Stage mode. Restart the run instead." };
 	}
 
 	resolveBlocker(decision: "continue" | "skip" | "abort"): boolean {
-		return this.#loopController?.resolveBlocker(decision) ?? false;
+		if (decision === "abort") this.#abortController?.abort();
+		return true;
 	}
 
 	async #runCurtainPipeline(result: LoopResult): Promise<void> {

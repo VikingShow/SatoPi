@@ -24,11 +24,6 @@ interface AgentsConfig {
   model: string;
 }
 
-interface ReviewersConfig {
-  count: number;
-  model: string;
-  reviewStrictness: string;
-}
 
 interface ConvergenceConfig {
   threshold: number;
@@ -50,7 +45,6 @@ interface ConfigStore {
   name: string;
   mode: string;
   agents: AgentsConfig;
-  reviewers: ReviewersConfig;
   convergence: ConvergenceConfig;
   scaling: ScalingConfig;
   loop: LoopConfig;
@@ -63,7 +57,6 @@ interface ConfigStore {
   loadModels: () => Promise<void>;
   saveConfig: () => Promise<void>;
   updateAgents: (patch: Partial<AgentsConfig>) => void;
-  updateReviewers: (patch: Partial<ReviewersConfig>) => void;
   updateConvergence: (patch: Partial<ConvergenceConfig>) => void;
   updateScaling: (patch: Partial<ScalingConfig>) => void;
   updateLoop: (patch: Partial<LoopConfig>) => void;
@@ -77,9 +70,6 @@ const defaultAgents: AgentsConfig = {
   maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-v4-pro",
 };
 
-const defaultReviewers: ReviewersConfig = {
-  count: 3, model: "deepseek-v4-pro", reviewStrictness: "strict",
-};
 
 const defaultConvergence: ConvergenceConfig = {
   threshold: 0.85, approvalRatio: 0.67, iterationTimeoutMs: 600000,
@@ -107,26 +97,20 @@ function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> 
     const raw = Bun.YAML.parse(yaml) as { swarm?: Record<string, any> } | null;
     if (!raw?.swarm) return {};
     const s = raw.swarm;
-    const workers = s.agents ?? {};
-    const cloners = s.reviewers ?? {};
+    const agentsSrc = s.agents ?? {};
     return {
       name: typeof s.name === "string" ? s.name : prev.name,
       mode: typeof s.mode === "string" ? s.mode : prev.mode,
       agents: {
-        ...prev.workers,
-        initial: workers.initial ?? prev.agents.initial,
-        min: workers.min ?? prev.agents.min,
-        max: workers.max ?? prev.agents.max,
-        auto: typeof workers.auto === "boolean" ? workers.auto : prev.agents.auto,
-        maxRounds: workers.max_rounds ?? workers.maxRounds ?? prev.agents.maxRounds,
-        roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.agents.roundsConvergenceThreshold,
-        model: workers.model ?? prev.agents.model,
+        ...prev.agents,
+        initial: agentsSrc.initial ?? prev.agents.initial,
+        min: agentsSrc.min ?? prev.agents.min,
+        max: agentsSrc.max ?? prev.agents.max,
+        auto: typeof agentsSrc.auto === "boolean" ? workers.auto : prev.agents.auto,
+        maxRounds: agentsSrc.max_rounds ?? workers.maxRounds ?? prev.agents.maxRounds,
+        roundsConvergenceThreshold: agentsSrc.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.agents.roundsConvergenceThreshold,
+        model: agentsSrc.model ?? prev.agents.model,
       },
-      reviewers: {
-        ...prev.cloners,
-        count: cloners.count ?? prev.agents.reviewerscount,
-        model: cloners.model ?? prev.agents.reviewersmodel,
-        reviewStrictness: cloners.review_strictness ?? cloners.reviewStrictness ?? prev.agents.reviewersreviewStrictness,
       },
       loop: {
         maxIterations: s.max_iterations ?? s.maxIterations ?? prev.loop.maxIterations,
@@ -175,11 +159,6 @@ function buildYaml(config: ConfigStore): string {
     rounds_convergence_threshold: ${config.agents.roundsConvergenceThreshold}
     model: ${config.agents.model}
 
-  reviewers:
-    count: ${config.agents.reviewerscount}
-    model: ${config.agents.reviewersmodel}
-    review_strictness: ${config.agents.reviewersreviewStrictness}
-
   convergence_threshold: ${config.convergence.threshold}
   approval_ratio: ${config.convergence.approvalRatio}
   iteration_timeout_ms: ${config.convergence.iterationTimeoutMs}
@@ -198,7 +177,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   name: "SatoPi",
   mode: "loop",
   agents: defaultAgents,
-  reviewers: defaultReviewers,
   convergence: defaultConvergence,
   scaling: defaultScaling,
   loop: defaultLoop,
@@ -242,10 +220,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     get().setYamlFromForm();
   },
 
-  updateReviewers: (patch) => {
-    set((s) => ({ reviewers: { ...s.reviewers, ...patch }, isDirty: true }));
-    get().setYamlFromForm();
-  },
 
   updateConvergence: (patch) => {
     set((s) => ({ convergence: { ...s.convergence, ...patch }, isDirty: true }));

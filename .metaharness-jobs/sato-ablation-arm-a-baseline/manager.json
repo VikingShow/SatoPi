@@ -1,0 +1,16 @@
+{
+  "benchmark": "harbor",
+  "jobName": "sato-ablation-arm-a-baseline",
+  "dataset": "custom-tasks",
+  "agent": "omp",
+  "models": [
+    "deepseek-v4-pro"
+  ],
+  "pid": 1208605,
+  "role": "baseline",
+  "note": "sato-ablation: arm-a-baseline",
+  "config": {
+    "loopYaml": "/root/workspace/SatoPi/benchmarks/configs/arm-a-baseline.yaml",
+    "armLabel": "arm-a-baseline"
+  }
+}

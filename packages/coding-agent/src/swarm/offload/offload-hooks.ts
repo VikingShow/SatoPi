@@ -24,7 +24,7 @@ import type {
 	WaveResult,
 } from "../pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../review-council";
+import type { ReviewVerdict } from "../pipeline";
 import type { SessionStorage } from "../../session/session-storage";
 import type { PlanPhase } from "./plan-node-attributor";
 import type { ExperienceStore } from "../curtain/experience";

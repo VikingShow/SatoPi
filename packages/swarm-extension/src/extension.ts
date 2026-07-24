@@ -13,13 +13,13 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
-import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/after-loop";
+import { ExperienceStore, extractLessons } from "@oh-my-pi/pi-coding-agent/swarm/curtain";
 import {
 	generatePlanningPrompt,
 	planExists,
 	runPlanDebate,
 	stampAndArchivePlanMd,
-} from "@oh-my-pi/pi-coding-agent/swarm/before-loop";
+} from "@oh-my-pi/pi-coding-agent/swarm/script-planner";
 import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "@oh-my-pi/pi-coding-agent/swarm/dag";
 import { createLoopController, type LoopResult } from "@oh-my-pi/pi-coding-agent/swarm/loop-controller";
 import { PipelineController } from "@oh-my-pi/pi-coding-agent/swarm/pipeline";
@@ -163,7 +163,7 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 
 			pi.sendMessage(
 				{
-					customType: "before-loop-planning",
+					customType: "script-planning",
 					content: [{ type: "text", text: prompt }],
 					display: true,
 				},
@@ -240,10 +240,10 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		workspace,
 	});
 
-	// Loop mode shows workers/cloners/iterations; other modes show agents/waves/targetCount
+	// Loop mode shows agents/reviewers/iterations; other modes show agents/waves/targetCount
 	if (def.mode === "loop" && def.loopConfig) {
 		ctx.ui.notify(
-			`Starting swarm '${def.name}': ${def.loopConfig.workers.initial} workers, ${def.loopConfig.cloners.count} cloners, up to ${def.loopConfig.maxIterations} iterations`,
+			`Starting swarm '${def.name}': ${def.loopConfig.agents.initial} agents, up to ${def.loopConfig.maxIterations} iterations`,
 			"info",
 		);
 	} else {
@@ -286,8 +286,8 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 					stateTracker,
 					activityLogger,
 					runManager: null!,
-					beforeLoopManager: null!,
-					steeringSink: null!,
+					scriptManager: null!,
+					sink: null!,
 				}),
 			);
 			await registry.createSession(def.name);
@@ -312,20 +312,18 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 			/* plan.md is optional */
 		}
 
-		// TaskComplexityAnalyzer — when workers.auto is enabled, evaluate plan.md
-		// to dynamically determine worker/cloner counts instead of YAML defaults.
-		if (def.loopConfig.workers.auto && planContent) {
+		// TaskComplexityAnalyzer — when agents.auto is enabled, evaluate plan.md
+		// to dynamically determine agent counts instead of YAML defaults.
+		if (def.loopConfig.agents.auto && planContent) {
 			try {
 				const analyzer = new TaskComplexityAnalyzer();
 				const recommendation = await analyzer.analyze(planContent, def.loopConfig);
 				def.loopConfig = {
 					...def.loopConfig,
-					workers: { ...def.loopConfig.workers, initial: recommendation.workers },
-					cloners: { ...def.loopConfig.cloners, count: recommendation.cloners },
+agents: { ...def.loopConfig.agents, initial: recommendation.agents,  },
 				};
-				pi.logger.debug("TaskComplexityAnalyzer: dynamic worker/cloner counts", {
-					workers: recommendation.workers,
-					cloners: recommendation.cloners,
+				pi.logger.debug("TaskComplexityAnalyzer: dynamic agent/reviewer counts", {
+					agents: recommendation.agents,
 				});
 			} catch (err) {
 				pi.logger.warn("TaskComplexityAnalyzer failed, using YAML defaults", { error: String(err) });
@@ -334,7 +332,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		// Run cloner plan debate on the draft plan before execution
 		if (planContent && def.loopConfig.planDebate.enabled) {
 			// Update widget so the user knows the system is debating, not frozen
-			await stateTracker.updatePipeline({ roundtablePhase: "Plan debate in progress" });
+			await stateTracker.updatePipeline({ phaseLabel: "Plan debate in progress" });
 			updateWidget();
 			try {
 				const debateResult = await runPlanDebate(
@@ -543,7 +541,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 		try {
 			const store = new ExperienceStore(workspace);
 			await store.init();
-			const extraction = extractLessons(loopResult, def.loopConfig.workers.initial, def.loopConfig.cloners.count);
+			const extraction = extractLessons(loopResult, def.loopConfig.agents.initial, 0);
 			const runIdBase = `loop-${def.name}-${Date.now()}`;
 			const timestamp = new Date().toISOString();
 			const savedRunIds: string[] = [];

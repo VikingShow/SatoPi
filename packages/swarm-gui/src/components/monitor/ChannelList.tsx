@@ -48,7 +48,7 @@ export default function ChannelList() {
     // Sort channels within each group
     for (const [, chs] of groups) {
       chs.sort((a, b) => {
-        const order: Record<string, number> = { roundtable: 0, subgroup: 1, private: 2, steering: 3, deliberation: 4, cloner: 5, file: 6 };
+        const order: Record<string, number> = { roundtable: 0, subgroup: 1, private: 2, steering: 3, deliberation: 4, reviewer: 5, file: 6 };
         return (order[a.type] ?? 99) - (order[b.type] ?? 99);
       });
     }

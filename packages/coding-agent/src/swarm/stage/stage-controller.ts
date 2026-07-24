@@ -221,17 +221,31 @@ export class StageController {
 	// ────────────────────────────────────────────────────────────────────────
 
 	async #assignRoles(agents: ScoredAgent[]): Promise<Array<{ id: string; role: string }>> {
-		// Determine needed roles from plan analysis
-		const neededRoles = ["developer", "tester", "reviewer"];
-		if (agents.length === 1) {
-			return [{ id: agents[0].profileId, role: "developer" }];
+		const { planContent, roleAssetManager, activityLogger } = this.#opts;
+		const assignments: Array<{ id: string; role: string }> = [];
+
+		// 1. Derive needed roles from plan.md task types
+		const taskRoles = TaskQueue.parseFromPlan(planContent)
+			.map(t => t.assignedRole)
+			.filter(Boolean);
+
+		// 2. Fall back to approved roles from the role library
+		let availableRoles = [...new Set(taskRoles)];
+		if (availableRoles.length === 0) {
+			const allRoles = await roleAssetManager.list("approved");
+			availableRoles = allRoles
+				.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
+				.slice(0, Math.max(agents.length, 3))
+				.map(r => r.id);
 		}
 
-		// Simple assignment: match preferred roles, fallback to round-robin
-		const assignments: Array<{ id: string; role: string }> = [];
-		const availableRoles = [...neededRoles];
+		// 3. Single agent: pick the most-used approved role or "developer"
+		if (agents.length === 1) {
+			const fallbackRole = availableRoles[0] ?? "developer";
+			return [{ id: agents[0].profileId, role: fallbackRole }];
+		}
 
-		// First pass: agents with strong role preference get their role
+		// 4. First pass: agents with strong role preference
 		for (const agent of agents) {
 			const preferred = agent.preferredRoles.find(r => availableRoles.includes(r));
 			if (preferred) {
@@ -239,15 +253,15 @@ export class StageController {
 			}
 		}
 
-		// Second pass: remaining agents get remaining roles round-robin
+		// 5. Second pass: remaining agents get remaining roles round-robin
 		const remaining = agents.filter(a => !assignments.find(ra => ra.id === a.profileId));
 		const remainingRoles = availableRoles.filter(r => !assignments.find(a => a.role === r));
 		for (let i = 0; i < remaining.length; i++) {
-			const role = remainingRoles[i % remainingRoles.length] ?? "developer";
+			const role = remainingRoles[i % remainingRoles.length] ?? availableRoles[0] ?? "developer";
 			assignments.push({ id: remaining[i].profileId, role });
 		}
 
-		this.#opts.activityLogger.logBroadcast(
+		activityLogger.logBroadcast(
 			"system",
 			`Role assignments: ${assignments.map(a => `${a.id}=${a.role}`).join(", ")}`,
 		);

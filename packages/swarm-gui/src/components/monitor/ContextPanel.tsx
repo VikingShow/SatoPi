@@ -3,7 +3,7 @@ import { Crown, FileWarning, Bot, ListTodo, FileText, Brain, TrendingUp, Trendin
 import { useSwarmStore } from "../../stores/swarm-store";
 import PlanViewer from "./PlanViewer";
 import TodoList from "./TodoList";
-import AfterLoopPanel from "./CurtainPanel";
+import CurtainPanel from "./CurtainPanel";
 import { Button } from "../ui/button";
 
 function AgentCard({ name, praise, criticism, conflict, status, role }: {
@@ -92,8 +92,8 @@ export default function ContextPanel() {
   // panel vanish. We now always render the panel shell and derive data
   // defensively, showing an idle/empty state instead of disappearing.
   const agents = Object.entries(swarmState?.agents ?? {});
-  const allAgents = agents.filter(([_, a]) => a.role !== "reviewer" || !a.name.includes("-r"));
-  const reviewers = agents.filter(([_, a]) => a.role === "reviewer" || a.name.includes("-r"));
+  const allAgents = agents.filter(([_, a]) => a.role !== "reviewer");
+  const reviewers = agents.filter(([_, a]) => a.role === "reviewer");
   const lastVerdict = [...activities].reverse().find((a) => a.type === "verdict");
   const conflicts = activities.filter((a) => a.type === "conflict");
 
@@ -142,11 +142,11 @@ export default function ContextPanel() {
             </div>
           )}
 
-          {/* Workers */}
+          {/* Agents */}
           <div className="px-3 py-2 border-b border-border">
             <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">Agents ({allAgents.length})</span>
           </div>
-          {workers.length > 0 ? (
+          {allAgents.length > 0 ? (
             <div className="p-2 space-y-1">
               {allAgents.map(([id, agent]) => (
                 <AgentCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
@@ -214,7 +214,7 @@ export default function ContextPanel() {
           <ScalingEvents />
 
           {/* After Loop results */}
-          <AfterLoopPanel />
+          <CurtainPanel />
         </div>
       )}
 

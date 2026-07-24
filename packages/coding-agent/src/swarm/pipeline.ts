@@ -9,9 +9,31 @@
 import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { AgentExecutor } from "./executor";
 import { executeSwarmAgent } from "./executor";
-import type { ReviewVerdict } from "./review-council";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
+
+// ============================================================================
+// ReviewVerdict — result of a Cloner review phase (kept for backward compat
+// with existing hooks in LoopPipelineHooks, to be removed when StageController
+// fully replaces LoopController).
+// ============================================================================
+
+export interface ReviewVerdict {
+	passed: boolean;
+	approvalCount: number;
+	totalCount: number;
+	findings: string[];
+	/** Cloner-suggested worker count deltas for next iteration. */
+	workerCountSuggestions: number[];
+	/** True when findings across cloners diverge significantly. */
+	disagreed: boolean;
+	/** Cloner-suggested roles for workers (Round 2+). key=agentId, value=role name. */
+	roleSuggestions: Record<string, string>;
+	/** Worker IDs praised by cloners this round. */
+	praisedAgents: string[];
+	/** Worker IDs criticized by cloners this round. */
+	criticizedAgents: string[];
+}
 
 // ============================================================================
 // Types

@@ -60,7 +60,7 @@ export function deriveChannel(
       };
     }
 
-    // ── Per-cloner individual verdict → dedicated cloner channel ──
+    // ── Per-reviewer individual verdict → dedicated cloner channel ──
     case "reviewer_individual": {
       const id = `agent-${entry.from}`;
       const verdictLabel = entry.passed ? "PASS" : "FAIL";

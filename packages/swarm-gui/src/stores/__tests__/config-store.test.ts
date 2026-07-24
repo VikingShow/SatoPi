@@ -57,8 +57,8 @@ describe("ConfigStore: update actions", () => {
 
   it("updateReviewers updates count", () => {
     getStore().updateReviewers({ count: 5, reviewStrictness: "lenient" });
-    expect(getStore().agents.reviewerscount).toBe(5);
-    expect(getStore().agents.reviewersreviewStrictness).toBe("lenient");
+    expect(getStore().reviewers.count).toBe(5);
+    expect(getStore().reviewers.reviewStrictness).toBe("lenient");
   });
 
   it("updateLoop toggles human escalation", () => {

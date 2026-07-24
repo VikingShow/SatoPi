@@ -28,9 +28,9 @@ export type Chapter =
 export interface BlockerContext {
   iteration: number;
   lastFindings: string[];
-  lastWorkerOutput: string;
+  lastAgentOutput: string;
   stagnationCount: number;
-  workerCrashCounts: Record<string, number>;
+  agentCrashCounts: Record<string, number>;
   reason: string;
   /** Auto-continue timeout in ms (0 / undefined = no auto-continue). */
   timeoutMs?: number;
@@ -50,7 +50,6 @@ export interface ScriptState {
   selectedAgentId?: string;
   /** Extracted from planner recommendation output. */
   recommendedAgents?: number;
-  estimatedAgentHours?: number;
   estimatedAgentHours?: number;
 }
 
@@ -78,7 +77,7 @@ export interface AgentState {
   criticismCount: number;
   conflictCount: number;
   mentorId?: string;
-  role?: "reviewer";
+  role?: string;
   modelName?: string;
 }
 

@@ -35,7 +35,7 @@ export function getSessionOmpDir(swarmDir: string): string {
 
 /**
  * Workspace-scoped plan archive directory.
- * Historical plans persist here so Socrates can reference them in the
+ * Historical plans persist here so the Planner can reference them in the
  * Before Loop prompt across sessions.
  *
  * Path: {workspace}/.omp/plans/

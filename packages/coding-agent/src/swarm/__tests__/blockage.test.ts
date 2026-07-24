@@ -3,20 +3,20 @@ import { evaluateBlockage, STAGNATION_THRESHOLD, CRASH_THRESHOLD } from "../bloc
 
 describe("evaluateBlockage", () => {
 	it("does not block below both thresholds", () => {
-		const d = evaluateBlockage({ stagnationCount: 1, workerCrashCounts: { "worker-1": 1 } });
+		const d = evaluateBlockage({ stagnationCount: 1, agentCrashCounts: { "worker-1": 1 } });
 		expect(d.blocked).toBe(false);
 		expect(d.cause).toBeUndefined();
 	});
 
 	it("blocks on stagnation at the threshold", () => {
-		const d = evaluateBlockage({ stagnationCount: STAGNATION_THRESHOLD, workerCrashCounts: {} });
+		const d = evaluateBlockage({ stagnationCount: STAGNATION_THRESHOLD, agentCrashCounts: {} });
 		expect(d.blocked).toBe(true);
 		expect(d.cause).toBe("stagnation");
 		expect(d.reason).toContain("stagnated");
 	});
 
 	it("blocks on crash deadlock at the threshold", () => {
-		const d = evaluateBlockage({ stagnationCount: 0, workerCrashCounts: { "worker-2": CRASH_THRESHOLD } });
+		const d = evaluateBlockage({ stagnationCount: 0, agentCrashCounts: { "worker-2": CRASH_THRESHOLD } });
 		expect(d.blocked).toBe(true);
 		expect(d.cause).toBe("deadlock");
 		expect(d.reason).toContain("deadlock");
@@ -25,7 +25,7 @@ describe("evaluateBlockage", () => {
 	it("prefers stagnation cause when both conditions hold", () => {
 		const d = evaluateBlockage({
 			stagnationCount: STAGNATION_THRESHOLD + 2,
-			workerCrashCounts: { "worker-3": CRASH_THRESHOLD + 1 },
+			agentCrashCounts: { "worker-3": CRASH_THRESHOLD + 1 },
 		});
 		expect(d.blocked).toBe(true);
 		expect(d.cause).toBe("stagnation");
@@ -34,7 +34,7 @@ describe("evaluateBlockage", () => {
 	it("honors overridden thresholds", () => {
 		const d = evaluateBlockage({
 			stagnationCount: 2,
-			workerCrashCounts: {},
+			agentCrashCounts: {},
 			stagnationThreshold: 2,
 		});
 		expect(d.blocked).toBe(true);
@@ -44,7 +44,7 @@ describe("evaluateBlockage", () => {
 	it("ignores crash counts below threshold across many workers", () => {
 		const d = evaluateBlockage({
 			stagnationCount: 0,
-			workerCrashCounts: { a: 2, b: 2, c: 2 },
+			agentCrashCounts: { a: 2, b: 2, c: 2 },
 		});
 		expect(d.blocked).toBe(false);
 	});

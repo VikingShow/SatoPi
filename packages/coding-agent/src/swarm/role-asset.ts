@@ -23,8 +23,6 @@ export interface RoleAsset {
   version: number;
   author: string;
   status: RoleStatus;
-  /** P0-C: Role pool — "workers" for execution roles, "cloners" for review roles. */
-  pool: "workers" | "cloners";
   prompts: {
     system: string;
     guidelines: string[];
@@ -51,7 +49,6 @@ export interface RoleAssetSummary {
   name: string;
   description: string;
   status: RoleStatus;
-  pool: "workers" | "cloners";
   version: number;
   tags: string[];
   usage_count: number;
@@ -84,7 +81,6 @@ export interface RoleCreateInput {
   name: string;
   description: string;
   author?: string;
-  pool?: "workers" | "cloners";
   prompts: {
     system: string;
     guidelines: string[];
@@ -168,7 +164,6 @@ export class RoleAssetManager {
           name: role.name,
           description: role.description,
           status: role.status,
-          pool: role.pool ?? "workers",
           version: role.version,
           tags: role.tags,
           usage_count: role.usage_count,
@@ -183,11 +178,6 @@ export class RoleAssetManager {
     return roles;
   }
 
-  /** P0-C: List roles filtered by pool ("workers" | "cloners"). */
-  async listByPool(pool: "workers" | "cloners"): Promise<RoleAssetSummary[]> {
-    const all = await this.list();
-    return all.filter(r => r.pool === pool);
-  }
 
   /** Search roles by tag, status, and/or text query. */
   async search(params: RoleSearchParams): Promise<RoleAssetSummary[]> {
@@ -233,7 +223,6 @@ export class RoleAssetManager {
       version: 1,
       author: input.author ?? "human",
       status: "draft",
-      pool: input.pool ?? "workers",
       prompts: {
         system: input.prompts.system,
         guidelines: input.prompts.guidelines,
@@ -480,7 +469,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["architecture", "design", "system", "planning"],
-      pool: "workers",
     },
     {
       id: "backend-dev",
@@ -515,7 +503,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["backend", "typescript", "api", "database", "nodejs"],
-      pool: "workers",
     },
     {
       id: "frontend-dev",
@@ -549,7 +536,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["frontend", "react", "typescript", "ui", "css"],
-      pool: "workers",
     },
     {
       id: "code-reviewer",
@@ -582,7 +568,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "list_dir",
       ],
       tags: ["review", "quality", "security", "code-review"],
-      pool: "workers",
     },
     {
       id: "devops-engineer",
@@ -616,7 +601,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
         "search_file",
         "list_dir",
       ],
-      pool: "workers",
       tags: ["devops", "ci-cd", "docker", "infrastructure", "deployment"],
     },
 
@@ -627,7 +611,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       name: "Guardian Reviewer",
       description: "Reviews worker output against the plan for alignment, quality, safety, and completeness.",
       author: "swarm",
-      pool: "cloners",
       prompts: {
         system:
           "You are a Guardian Reviewer in the SatoPi swarm system.\n" +
@@ -656,7 +639,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       name: "Adversarial Reviewer",
       description: "Actively tries to find bugs, edge cases, and security vulnerabilities in worker output.",
       author: "swarm",
-      pool: "cloners",
       veto: true,
       prompts: {
         system:
@@ -688,7 +670,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       name: "Security Reviewer",
       description: "Focused security audit: OWASP, injection, authentication, data leaks, cryptography.",
       author: "swarm",
-      pool: "cloners",
       veto: true,
       prompts: {
         system:
@@ -721,7 +702,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       name: "Performance Reviewer",
       description: "Reviews output for performance issues: algorithmic complexity, N+1 queries, resource usage.",
       author: "swarm",
-      pool: "cloners",
       prompts: {
         system:
           "You are a Performance Reviewer in the SatoPi swarm system.\n" +
@@ -750,7 +730,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       name: "Architecture Reviewer",
       description: "Reviews output for structural integrity: API contracts, module boundaries, dependency direction.",
       author: "swarm",
-      pool: "cloners",
       prompts: {
         system:
           "You are an Architecture Reviewer in the SatoPi swarm system.\n" +
@@ -784,7 +763,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       description:
         "Facilitates planning sessions during the Script phase. Engages in Socratic dialogue with the user to clarify goals, constraints, and acceptance criteria, then produces a detailed plan.md.",
       author: "swarm",
-      pool: "workers",
       prompts: {
         system:
           "You are a Planner agent in the SatoPi system. Your role is to help the user clarify their goals and produce a comprehensive, executable plan.\n\n" +
@@ -813,7 +791,6 @@ export function getBuiltInRoles(): RoleCreateInput[] {
       description:
         "Reports build results to the user during the Curtain phase. Summarizes what was built, files changed, test results, and any known issues.",
       author: "swarm",
-      pool: "workers",
       prompts: {
         system:
           "You are a Reporter agent in the SatoPi system. Your role is to present the results of a completed build phase to the user clearly and concisely.\n\n" +

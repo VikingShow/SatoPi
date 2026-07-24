@@ -508,7 +508,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
         // P2-3: Steering ack — show delivery confirmation.
         if (entry.type === "steering_ack") {
-          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "worker"}`, { duration: 2000 });
+          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "agent"}`, { duration: 2000 });
         }
 
         // P2-10: Tool call — show in-line tool execution indicator.
@@ -887,7 +887,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const result = await api.pauseRun();
       if (result.success) {
         set({ phase: "paused" });
-        toast.info("Swarm Paused", { description: "Workers have been paused. Click Resume to continue." });
+        toast.info("Swarm Paused", { description: "Agents have been paused. Click Resume to continue." });
       } else {
         toast.error("Failed to pause", { description: result.error ?? "Unknown error" });
       }
@@ -901,7 +901,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       const result = await api.resumeRun();
       if (result.success) {
         set({ phase: "stage" });
-        toast.success("Swarm Resumed", { description: "Workers are continuing." });
+        toast.success("Swarm Resumed", { description: "Agents are continuing." });
       } else {
         toast.error("Failed to resume", { description: result.error ?? "Unknown error" });
       }
@@ -1193,7 +1193,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
 
         if (entry.type === "steering_ack") {
-          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "worker"}`, { duration: 2000 });
+          toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "agent"}`, { duration: 2000 });
         }
 
         if (entry.type === "tool_call" && entry.toolName) {

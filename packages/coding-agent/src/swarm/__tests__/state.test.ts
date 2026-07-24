@@ -2,7 +2,7 @@
  * Unit tests for StateTracker — robustness fixes.
  *
  * Tests:
- *   - getWorstWorker: candidates semantics (was excludeIds, now candidate filter)
+ *   - getWorstAgent: candidates semantics (was excludeIds, now candidate filter)
  *   - unregisterAgent: removes agent, prevents ID reuse pollution
  *   - resetAgentStatuses: clears all agent state for retry
  */
@@ -25,10 +25,10 @@ afterEach(async () => {
 });
 
 // ============================================================================
-// getWorstWorker — candidates semantics
+// getWorstAgent — candidates semantics
 // ============================================================================
 
-describe("getWorstWorker", () => {
+describe("getWorstAgent", () => {
 	it("finds worst among ALL agents when no candidates given", async () => {
 		const st = new StateTracker(tmpDir, "test");
 		await st.init(["worker-1", "worker-2", "worker-3"], 5, "loop");
@@ -37,7 +37,7 @@ describe("getWorstWorker", () => {
 		await st.incrementCriticism(["worker-2"]);   // score: -1
 		// worker-3: score 0
 
-		const worst = st.getWorstWorker();
+		const worst = st.getWorstAgent();
 		expect(worst).toBe("worker-2"); // lowest score
 	});
 
@@ -51,7 +51,7 @@ describe("getWorstWorker", () => {
 		// worker-4: score 0
 
 		// Only search among worker-1 and worker-4 (the best two)
-		const worst = st.getWorstWorker(["worker-1", "worker-4"]);
+		const worst = st.getWorstAgent(["worker-1", "worker-4"]);
 		expect(worst).toBe("worker-4"); // score 0 < score 1
 	});
 
@@ -59,7 +59,7 @@ describe("getWorstWorker", () => {
 		const st = new StateTracker(tmpDir, "test");
 		await st.init(["worker-1"], 5, "loop");
 
-		const worst = st.getWorstWorker([]);
+		const worst = st.getWorstAgent([]);
 		expect(worst).toBeNull();
 	});
 
@@ -67,7 +67,7 @@ describe("getWorstWorker", () => {
 		const st = new StateTracker(tmpDir, "test");
 		await st.init([], 5, "loop");
 
-		const worst = st.getWorstWorker();
+		const worst = st.getWorstAgent();
 		expect(worst).toBeNull();
 	});
 
@@ -77,7 +77,7 @@ describe("getWorstWorker", () => {
 
 		await st.incrementCriticism(["worker-1", "worker-2"]); // both score: -1
 
-		const worst = st.getWorstWorker();
+		const worst = st.getWorstAgent();
 		expect(worst).not.toBeNull();
 		// Both have the same score; either is acceptable
 		expect(["worker-1", "worker-2"]).toContain(worst!);
@@ -92,7 +92,7 @@ describe("getWorstWorker", () => {
 
 		// Search only among workers — cloner-1 should NOT be returned
 		// even though it has the lowest score globally.
-		const worst = st.getWorstWorker(["worker-1", "worker-2"]);
+		const worst = st.getWorstAgent(["worker-1", "worker-2"]);
 		expect(worst).not.toBe("cloner-1");
 		expect(["worker-1", "worker-2"]).toContain(worst!);
 	});

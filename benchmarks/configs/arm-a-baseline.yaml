@@ -10,7 +10,7 @@ swarm:
   auto_retry: false
   human_escalation: false
 
-  workers:
+  agents:
     initial: 1
     min: 1
     max: 1
@@ -20,8 +20,6 @@ swarm:
   plan_debate:
     enabled: false
 
-  cloners:
-    count: 0
 
   agents: {}
 

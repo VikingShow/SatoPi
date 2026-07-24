@@ -1,5 +1,5 @@
 /**
- * TaskComplexityAnalyzer — Dynamic worker/cloner count evaluation.
+ * TaskComplexityAnalyzer — Dynamic agent count evaluation.
  *
  * Runs after plan.md is produced, before the loop starts.
  * Replaces hardcoded YAML defaults with plan-driven recommendations.
@@ -147,8 +147,6 @@ function estimateAgentHours(signals: TaskComplexitySignals): {
 function recommendFromSignals(
 	signals: TaskComplexitySignals,
 	loopConfig: LoopSwarmConfig,
-): TaskComplexityRecommendation {
-	const defaultCloners = loopConfig.agents.reviewers;
 
 	// Complexity heuristic
 	let complexity: "low" | "medium" | "high";
@@ -165,10 +163,8 @@ function recommendFromSignals(
 	}
 
 	// Workers: driven by parallelism
-	const workers = signals.parallelism;
+	const agents = signals.parallelism;
 	// Cloners: base on default, increase for safety-critical
-	let cloners = defaultCloners;
-	if (signals.safetyCritical && cloners < 3) cloners = 3;
 	if (complexity === "low" && cloners > 1) cloners -= 1;
 
 	// maxRounds: complexity-driven, capped by config (0 = unlimited, honored)
@@ -234,7 +230,6 @@ export class TaskComplexityAnalyzer {
 		if (!planContent || planContent.trim().length === 0) {
 			return {
 				workers: loopConfig.agents.initial,
-				cloners: loopConfig.agents.reviewers,
 				maxRounds: loopConfig.agents.maxRounds,
 				roundsConvergenceThreshold: loopConfig.agents.roundsConvergenceThreshold,
 				complexity: "medium",

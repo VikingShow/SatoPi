@@ -81,8 +81,8 @@ describe("ActivityLogger", () => {
 			workerCountSuggestions: [1],
 			disagreed: false,
 			roleSuggestions: {},
-			praisedWorkers: ["worker-1"],
-			criticizedWorkers: ["worker-3"],
+			praisedAgents: ["worker-1"],
+			criticizedAgents: ["worker-3"],
 		});
 
 		const entries = await readEntries();
@@ -111,7 +111,7 @@ describe("ActivityLogger", () => {
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("scaling");
 		expect(entries[0].action).toBe("add");
-		expect(entries[0].worker).toBe("worker-4");
+		expect(entries[0].agentName).toBe("worker-4");
 	});
 
 	it("writes nomination events", async () => {
@@ -128,7 +128,7 @@ describe("ActivityLogger", () => {
 
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("crash");
-		expect(entries[0].worker).toBe("worker-3");
+		expect(entries[0].agentName).toBe("worker-3");
 		expect(entries[0].error).toBe("signal SIGTERM");
 	});
 

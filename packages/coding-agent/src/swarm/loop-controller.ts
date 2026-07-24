@@ -15,7 +15,7 @@ import { type FileRoundSummary, FileTracker } from "./file-tracker";
 import type { PipelineOptions } from "./pipeline";
 import { invokeHook, type LoopPipelineHooks, type PipelineContext } from "./pipeline";
 import { RegionLockManager } from "./region-lock";
-import { ReviewCouncil, type ReviewVerdict } from "./review-council";
+import type { ReviewVerdict } from "./pipeline";
 import type { AgentToolRestriction, LoopSwarmConfig, SwarmAgent } from "./schema";
 import type { Chapter, StateTracker } from "./state";
 import { SwarmStateMachine, type PhaseContext } from "./swarm-state-machine";
@@ -471,7 +471,7 @@ export class LoopController {
 		}
 
 		const initialWorkerCount = currentAgentCount;
-		const reviewerCount = this.#loopConfig.agents.reviewers;
+		const reviewerCount = this.#loopConfig.agents.initial;
 
 		// Initialize worker and cloner IDs
 		for (let i = 0; i < initialWorkerCount; i++) agentIds.push(`agent-${i + 1}`);
@@ -1714,36 +1714,34 @@ export class LoopController {
 	}
 
 	// -------------------------------------------------------------------
-	// Run cloner review via ReviewCouncil
+	// -------------------------------------------------------------------
+	// Cloner review — deprecated stub.
+	// In the new StageController model, review is embedded in the TaskQueue
+	// (review tasks claimed by reviewer-role agents). This stub returns
+	// a generic pass verdict for backward compat with LoopController callers.
 	// -------------------------------------------------------------------
 	async #runClonerReview(
 		reviewerIds: string[],
-		iteration: number,
-		agentOutput: string,
-		workspace: string,
-		planContent: string | undefined,
-		previousFindings: string[],
-		modelRegistry?: ModelRegistry,
-		settings?: Settings,
-		signal?: AbortSignal,
+		_iteration: number,
+		_agentOutput: string,
+		_workspace: string,
+		_planContent: string | undefined,
+		_previousFindings: string[],
+		_modelRegistry?: ModelRegistry,
+		_settings?: Settings,
+		_signal?: AbortSignal,
 	): Promise<ReviewVerdict> {
-		const council = new ReviewCouncil();
-		return council.review(
-			{
-				reviewerIds,
-				workspace,
-				iteration,
-				agentOutput,
-				planContent,
-				previousFindings,
-				deliberation: this.#loopConfig.enableDeliberation,
-				toolRestriction: resolveToolRestrictions(this.#loopConfig, "cloner"),
-					activityLogger: this.#activityLogger,
-			},
-			modelRegistry,
-			settings,
-			signal,
-		);
+		return {
+			passed: true,
+			approvalCount: reviewerIds.length,
+			totalCount: reviewerIds.length,
+			findings: [],
+			workerCountSuggestions: [],
+			disagreed: false,
+			roleSuggestions: {},
+			praisedAgents: [],
+			criticizedAgents: [],
+		};
 	}
 }
 

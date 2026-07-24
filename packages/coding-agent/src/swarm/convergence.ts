@@ -18,7 +18,7 @@ export interface RoundSummaryData {
 	accomplished: Record<string, string>;
 	issues: Array<{
 		severity: "blocker" | "major" | "minor";
-		workers: string[];
+		agentIds: string[];
 		file?: string;
 		description: string;
 		resolution?: string;

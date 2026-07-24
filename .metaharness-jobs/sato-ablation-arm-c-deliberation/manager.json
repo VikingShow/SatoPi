@@ -1,0 +1,18 @@
+{
+  "benchmark": "harbor",
+  "jobName": "sato-ablation-arm-c-deliberation",
+  "dataset": "custom-tasks",
+  "agent": "omp",
+  "models": [
+    "deepseek-v4-pro"
+  ],
+  "pid": 1087940,
+  "role": "variant",
+  "note": "3 workers + worker deliberation (peer debate), no cloner",
+  "config": {
+    "workerCount": 3,
+    "deliberation": true,
+    "clonerCount": 0,
+    "dynamicScaling": false
+  }
+}
