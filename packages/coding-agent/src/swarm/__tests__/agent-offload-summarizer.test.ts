@@ -28,7 +28,7 @@ describe("AgentOffloadSummarizer", () => {
 
 	// ── Basic extraction ────────────────────────────────────────────
 
-	test("extracts text from last assistant message", () => {
+	test("extracts text from last assistant message", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [
 				makeMsg("user", "What is 2+2?"),
@@ -38,13 +38,13 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.agentId).toBe("agent-1");
 		expect(entry.summary).toBe("The answer is 4.");
 		expect(entry.turnIndex).toBe(0);
 	});
 
-	test("uses only the LAST assistant message (skips earlier ones)", () => {
+	test("uses only the LAST assistant message (skips earlier ones)", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [
 				makeMsg("assistant", "First response"),
@@ -55,13 +55,13 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 1,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe("Second response");
 	});
 
 	// ── Array content blocks ─────────────────────────────────────────
 
-	test("handles array content blocks (multiple text parts)", () => {
+	test("handles array content blocks (multiple text parts)", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [
 				makeMsg("assistant", [
@@ -73,13 +73,13 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		// The summarizer joins array text parts with newlines
 		expect(entry.summary).toContain("Part one");
 		expect(entry.summary).toContain("Part two");
 	});
 
-	test("filters out non-text blocks from array content", () => {
+	test("filters out non-text blocks from array content", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [
 				makeMsg("assistant", [
@@ -92,13 +92,13 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe("I read the file.");
 	});
 
 	// ── Fallback to user message ─────────────────────────────────────
 
-	test("falls back to last user message when no assistant response", () => {
+	test("falls back to last user message when no assistant response", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [
 				makeMsg("user", "Please write a function."),
@@ -107,13 +107,13 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe("Please write a function.");
 	});
 
 	// ── Truncation ───────────────────────────────────────────────────
 
-	test("truncates summaries longer than 200 characters with ellipsis", () => {
+	test("truncates summaries longer than 200 characters with ellipsis", async () => {
 		const longText = "A".repeat(300);
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", longText)],
@@ -121,12 +121,12 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary.length).toBe(201); // 200 + "…"
 		expect(entry.summary).toEndWith("…");
 	});
 
-	test("does NOT truncate messages exactly at 200 chars", () => {
+	test("does NOT truncate messages exactly at 200 chars", async () => {
 		const exactText = "B".repeat(200);
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", exactText)],
@@ -134,39 +134,39 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe(exactText); // no ellipsis
 	});
 
 	// ── Empty output ─────────────────────────────────────────────────
 
-	test("returns [no output] + score=0 when messages are empty", () => {
+	test("returns [no output] + score=0 when messages are empty", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [],
 			agentId: "agent-8",
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe("[no output]");
 		expect(entry.score).toBe(0);
 	});
 
-	test("returns [no output] when last assistant has empty string", () => {
+	test("returns [no output] when last assistant has empty string", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "")],
 			agentId: "agent-9",
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.summary).toBe("[no output]");
 		expect(entry.score).toBe(0);
 	});
 
 	// ── Score handling ───────────────────────────────────────────────
 
-	test("uses external score when provided", () => {
+	test("uses external score when provided", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "Quality work.")],
 			agentId: "agent-10",
@@ -174,24 +174,24 @@ describe("AgentOffloadSummarizer", () => {
 			score: 9,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.score).toBe(9);
 	});
 
-	test("defaults score to 5 when not provided and output exists", () => {
+	test("defaults score to 5 when not provided and output exists", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "Work done.")],
 			agentId: "agent-11",
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.score).toBe(5);
 	});
 
 	// ── resultRef for large outputs ──────────────────────────────────
 
-	test("sets resultRef for outputs > 2000 chars", () => {
+	test("sets resultRef for outputs > 2000 chars", async () => {
 		const hugeText = "X".repeat(2500);
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", hugeText)],
@@ -199,24 +199,24 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 3,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.resultRef).toBe("artifact://offload/agent-12/3");
 	});
 
-	test("leaves resultRef undefined for small outputs", () => {
+	test("leaves resultRef undefined for small outputs", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "Short output")],
 			agentId: "agent-13",
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.resultRef).toBeUndefined();
 	});
 
 	// ── taskCall priority ────────────────────────────────────────────
 
-	test("uses taskDescription as taskCall when provided", () => {
+	test("uses taskDescription as taskCall when provided", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "done")],
 			agentId: "agent-14",
@@ -225,11 +225,11 @@ describe("AgentOffloadSummarizer", () => {
 			phaseHint: "backend",
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.taskCall).toBe("Implement login API");
 	});
 
-	test("falls back to phaseHint when no taskDescription", () => {
+	test("falls back to phaseHint when no taskDescription", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "done")],
 			agentId: "agent-15",
@@ -237,24 +237,24 @@ describe("AgentOffloadSummarizer", () => {
 			phaseHint: "frontend",
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.taskCall).toBe("frontend");
 	});
 
-	test("uses default taskCall format when neither taskDescription nor phaseHint", () => {
+	test("uses default taskCall format when neither taskDescription nor phaseHint", async () => {
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "done")],
 			agentId: "agent-16",
 			turnIndex: 5,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.taskCall).toBe("Agent turn 5: agent-16");
 	});
 
 	// ── Timestamp ───────────────────────────────────────────────────
 
-	test("includes ISO timestamp", () => {
+	test("includes ISO timestamp", async () => {
 		const before = new Date().toISOString();
 		const input: AgentOffloadSummarizeInput = {
 			messages: [makeMsg("assistant", "done")],
@@ -262,7 +262,7 @@ describe("AgentOffloadSummarizer", () => {
 			turnIndex: 0,
 		};
 
-		const entry = summarizer.summarize(input);
+		const entry = await summarizer.summarize(input);
 		expect(entry.timestamp).toBeString();
 		expect(new Date(entry.timestamp).getTime()).toBeGreaterThanOrEqual(
 			new Date(before).getTime(),
