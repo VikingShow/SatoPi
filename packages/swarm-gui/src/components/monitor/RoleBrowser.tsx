@@ -48,7 +48,7 @@ interface CreateForm {
 // ── Props ─────────────────────────────────────────────────────────────────
 
 interface RoleBrowserProps {
-  /** When provided, enables role selection mode (for before-loop). */
+  /** When provided, enables role selection mode (for script). */
   onSelect?: (roleId: string) => void;
   /** Currently selected role IDs (for selection mode). */
   selectedIds?: string[];

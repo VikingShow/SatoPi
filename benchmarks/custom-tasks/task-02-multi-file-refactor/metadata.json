@@ -1,0 +1,7 @@
+{
+  "category": "refactor",
+  "difficulty": "medium",
+  "difficulty_score": 2,
+  "file_path": "src/pricing.ts",
+  "tags": ["refactoring", "deduplication", "multi-file", "typescript"]
+}

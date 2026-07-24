@@ -14,7 +14,7 @@ import { create } from "zustand";
 import { api } from "../lib/api-client";
 import type { ModelOption } from "../lib/types";
 
-interface WorkersConfig {
+interface AgentsConfig {
   initial: number;
   min: number;
   max: number;
@@ -24,11 +24,6 @@ interface WorkersConfig {
   model: string;
 }
 
-interface ClonersConfig {
-  count: number;
-  model: string;
-  reviewStrictness: string;
-}
 
 interface ConvergenceConfig {
   threshold: number;
@@ -49,8 +44,7 @@ interface LoopConfig {
 interface ConfigStore {
   name: string;
   mode: string;
-  workers: WorkersConfig;
-  cloners: ClonersConfig;
+  agents: AgentsConfig;
   convergence: ConvergenceConfig;
   scaling: ScalingConfig;
   loop: LoopConfig;
@@ -62,8 +56,7 @@ interface ConfigStore {
   loadConfig: () => Promise<void>;
   loadModels: () => Promise<void>;
   saveConfig: () => Promise<void>;
-  updateWorkers: (patch: Partial<WorkersConfig>) => void;
-  updateCloners: (patch: Partial<ClonersConfig>) => void;
+  updateAgents: (patch: Partial<AgentsConfig>) => void;
   updateConvergence: (patch: Partial<ConvergenceConfig>) => void;
   updateScaling: (patch: Partial<ScalingConfig>) => void;
   updateLoop: (patch: Partial<LoopConfig>) => void;
@@ -72,14 +65,11 @@ interface ConfigStore {
 
 // Defaults match the current loop.yaml so the form opens with the configured
 // values if the YAML is unreadable.
-const defaultWorkers: WorkersConfig = {
+const defaultAgents: AgentsConfig = {
   initial: 3, min: 2, max: 8, auto: true,
   maxRounds: 3, roundsConvergenceThreshold: 2, model: "deepseek-v4-pro",
 };
 
-const defaultCloners: ClonersConfig = {
-  count: 3, model: "deepseek-v4-pro", reviewStrictness: "strict",
-};
 
 const defaultConvergence: ConvergenceConfig = {
   threshold: 0.85, approvalRatio: 0.67, iterationTimeoutMs: 600000,
@@ -107,26 +97,19 @@ function parseYamlToForm(yaml: string, prev: ConfigStore): Partial<ConfigStore> 
     const raw = Bun.YAML.parse(yaml) as { swarm?: Record<string, any> } | null;
     if (!raw?.swarm) return {};
     const s = raw.swarm;
-    const workers = s.workers ?? {};
-    const cloners = s.cloners ?? {};
+    const agentsSrc = s.agents ?? {};
     return {
       name: typeof s.name === "string" ? s.name : prev.name,
       mode: typeof s.mode === "string" ? s.mode : prev.mode,
-      workers: {
-        ...prev.workers,
-        initial: workers.initial ?? prev.workers.initial,
-        min: workers.min ?? prev.workers.min,
-        max: workers.max ?? prev.workers.max,
-        auto: typeof workers.auto === "boolean" ? workers.auto : prev.workers.auto,
-        maxRounds: workers.max_rounds ?? workers.maxRounds ?? prev.workers.maxRounds,
-        roundsConvergenceThreshold: workers.rounds_convergence_threshold ?? workers.roundsConvergenceThreshold ?? prev.workers.roundsConvergenceThreshold,
-        model: workers.model ?? prev.workers.model,
-      },
-      cloners: {
-        ...prev.cloners,
-        count: cloners.count ?? prev.cloners.count,
-        model: cloners.model ?? prev.cloners.model,
-        reviewStrictness: cloners.review_strictness ?? cloners.reviewStrictness ?? prev.cloners.reviewStrictness,
+      agents: {
+        ...prev.agents,
+        initial: agentsSrc.initial ?? prev.agents.initial,
+        min: agentsSrc.min ?? prev.agents.min,
+        max: agentsSrc.max ?? prev.agents.max,
+        auto: typeof agentsSrc.auto === "boolean" ? agentsSrc.auto : prev.agents.auto,
+        maxRounds: agentsSrc.max_rounds ?? prev.agents.maxRounds,
+        roundsConvergenceThreshold: agentsSrc.rounds_convergence_threshold ?? prev.agents.roundsConvergenceThreshold,
+        model: agentsSrc.model ?? prev.agents.model,
       },
       loop: {
         maxIterations: s.max_iterations ?? s.maxIterations ?? prev.loop.maxIterations,
@@ -159,26 +142,21 @@ function buildYaml(config: ConfigStore): string {
   workspace: .
   mode: ${config.mode}
   target_count: 1
-  model: ${config.workers.model}
+  model: ${config.agents.model}
   max_iterations: ${config.loop.maxIterations}
   auto_retry: true
   human_escalation: ${config.loop.humanEscalation}
 
   agents: {}
 
-  workers:
-    initial: ${config.workers.initial}
-    min: ${config.workers.min}
-    max: ${config.workers.max}
-    auto: ${config.workers.auto}
-    max_rounds: ${config.workers.maxRounds}
-    rounds_convergence_threshold: ${config.workers.roundsConvergenceThreshold}
-    model: ${config.workers.model}
-
-  cloners:
-    count: ${config.cloners.count}
-    model: ${config.cloners.model}
-    review_strictness: ${config.cloners.reviewStrictness}
+  agents:
+    initial: ${config.agents.initial}
+    min: ${config.agents.min}
+    max: ${config.agents.max}
+    auto: ${config.agents.auto}
+    max_rounds: ${config.agents.maxRounds}
+    rounds_convergence_threshold: ${config.agents.roundsConvergenceThreshold}
+    model: ${config.agents.model}
 
   convergence_threshold: ${config.convergence.threshold}
   approval_ratio: ${config.convergence.approvalRatio}
@@ -189,7 +167,7 @@ function buildYaml(config: ConfigStore): string {
     majority_threshold: ${config.scaling.majorityThreshold}
 
   agent_restrictions:
-    socrates:
+    planner:
       allowed: ["read", "write_file", "grep", "find", "glob"]
 `;
 }
@@ -197,8 +175,7 @@ function buildYaml(config: ConfigStore): string {
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   name: "SatoPi",
   mode: "loop",
-  workers: defaultWorkers,
-  cloners: defaultCloners,
+  agents: defaultAgents,
   convergence: defaultConvergence,
   scaling: defaultScaling,
   loop: defaultLoop,
@@ -237,15 +214,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set({ isDirty: false });
   },
 
-  updateWorkers: (patch) => {
-    set((s) => ({ workers: { ...s.workers, ...patch }, isDirty: true }));
+  updateAgents: (patch) => {
+    set((s) => ({ agents: { ...s.agents, ...patch }, isDirty: true }));
     get().setYamlFromForm();
   },
 
-  updateCloners: (patch) => {
-    set((s) => ({ cloners: { ...s.cloners, ...patch }, isDirty: true }));
-    get().setYamlFromForm();
-  },
 
   updateConvergence: (patch) => {
     set((s) => ({ convergence: { ...s.convergence, ...patch }, isDirty: true }));

@@ -5,11 +5,11 @@
  * Both modules import from here instead of each other.
  */
 
-import type { ActivityEntry } from "../activity-logger";
+import type { ActivityEntry } from "../hooks/activity-logger";
 
 // -- Broadcaster interface (decouples ActivityLogger from MonitorServer) --
 export interface ActivityBroadcaster {
-  broadcast(entry: ActivityEntry): void;
+  broadcast(sessionName: string, entry: ActivityEntry): void;
 }
 
 // -- AfterLoop result (shared between standalone.ts and api-routes.ts) --
@@ -36,8 +36,7 @@ export interface AfterLoopResult {
   stats: {
     totalIterations: number;
     finalStatus: string;
-    clonerApprovalRatio: number;
-    workerCount: number;
-    clonerCount: number;
+    reviewApprovalRatio: number;
+    agentCount: number;
   };
 }

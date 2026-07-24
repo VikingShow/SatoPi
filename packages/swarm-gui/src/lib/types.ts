@@ -10,27 +10,27 @@ export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "abor
 /**
  * Loop phase — high-level workflow stage.
  * Drives the frontend UI state machine.
- * idle → before-loop-dialog → before-loop-debate → before-loop-confirm → running → after-loop → idle
+ * idle → script-dialog → script-debate → script-confirm → running → curtain → idle
  * running can transition to "blocked" (stagnation/deadlock) → user resolves → running
  * running can transition to "paused" (manual pause) → user resumes → running
  */
-export type LoopPhase =
+export type Chapter =
   | "idle"
-  | "before-loop-dialog"
-  | "before-loop-debate"
-  | "before-loop-confirm"
-  | "running"
+  | "script"
+  | "script-debate"
+  | "script-confirm"
+  | "stage"
   | "paused"
   | "blocked"
-  | "after-loop";
+  | "curtain";
 
 /** Context payload broadcast when the loop is blocked awaiting user decision. */
 export interface BlockerContext {
   iteration: number;
   lastFindings: string[];
-  lastWorkerOutput: string;
+  lastAgentOutput: string;
   stagnationCount: number;
-  workerCrashCounts: Record<string, number>;
+  agentCrashCounts: Record<string, number>;
   reason: string;
   /** Auto-continue timeout in ms (0 / undefined = no auto-continue). */
   timeoutMs?: number;
@@ -40,16 +40,29 @@ export interface BlockerContext {
 
 export type BlockerResolution = "continue" | "skip" | "abort";
 
-export interface BeforeLoopState {
-  phase: LoopPhase;
+export interface ScriptState {
+  phase: Chapter;
   task: string;
   conversationLength: number;
   planReady: boolean;
   busy: boolean;
-  /** Extracted from Socrates recommendation output. */
-  recommendedWorkers?: number;
-  /** Extracted from Socrates recommendation output. */
-  recommendedCloners?: number;
+  /** The agent selected for the planning conversation. */
+  selectedAgentId?: string;
+  /** Extracted from planner recommendation output. */
+  recommendedAgents?: number;
+  estimatedAgentHours?: number;
+}
+
+export interface AgentSummary {
+  profileId: string;
+  name: string;
+  archetype: string;
+  score: number;
+  domains: string[];
+  totalTasks: number;
+  successRate: number;
+  preferredRoles: string[];
+  recommended: boolean;
 }
 
 export interface AgentState {
@@ -64,7 +77,7 @@ export interface AgentState {
   criticismCount: number;
   conflictCount: number;
   mentorId?: string;
-  role?: "reviewer";
+  role?: string;
   modelName?: string;
 }
 
@@ -92,7 +105,7 @@ export interface SwarmState {
   loopIteration?: number;
   roundtablePhase?: string;
   reviewVerdict?: string;
-  loopPhase?: LoopPhase;
+  phase?: Chapter;
   todos?: TodoItem[];
   /** P2-6: Cumulative input+output tokens across all agents. */
   totalTokens?: number;
@@ -106,7 +119,7 @@ export type ActivityEventType =
   | "tool_call" | "error_flag" | "file_change"
   | "stream_start" | "stream_delta" | "stream_end"
   | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
-  | "cloner_individual" | "file_coordination"
+  | "reviewer_individual" | "file_coordination"
   | "agent_state" | "pipeline_state";
 
 export interface ActivityEntry {
@@ -132,7 +145,7 @@ export interface ActivityEntry {
   writers?: string[];
   severity?: string;
   action?: string;
-  worker?: string;
+  agent?: string;
   reason?: string;
   elected?: string | null;
   votes?: Record<string, string[]>;
@@ -190,7 +203,7 @@ export interface ExperienceLesson {
   source: string;
 }
 
-export interface AfterLoopResult {
+export interface CurtainResult {
   runId: string;
   status: string;
   iterations: number;
@@ -206,9 +219,8 @@ export interface AfterLoopResult {
   stats: {
     totalIterations: number;
     finalStatus: string;
-    clonerApprovalRatio: number;
-    workerCount: number;
-    clonerCount: number;
+    reviewApprovalRatio: number;
+    agentCount: number;
   };
 }
 

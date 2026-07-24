@@ -2,7 +2,7 @@
  * Session store — manages swarm run sessions.
  *
  * A "session" is a single swarm run lifecycle:
- *   before-loop → running → after-loop
+ *   script → running → curtain
  *
  * A "historical session" is a `.swarm_<name>/` directory in the workspace
  * that contains persisted activity logs and state from a previous run.
@@ -27,7 +27,7 @@ export interface RunMeta {
   dir: string;
   lastActivity: string | null;
   messageCount: number;
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "stage" | "completed" | "failed";
 }
 
 interface SessionStore {
@@ -96,8 +96,8 @@ export const useSessionStore = create<SessionStore>()(
   },
 
   newSession: async () => {
-    // Cancel any active before-loop — ignore failures (none may be active).
-    try { await api.cancelBeforeLoop(); } catch {}
+    // Cancel any active script — ignore failures (none may be active).
+    try { await api.cancelScript(); } catch {}
     // Stop any running swarm — ignore "No run in progress" errors.
     try { await api.stopRun(); } catch {}
 

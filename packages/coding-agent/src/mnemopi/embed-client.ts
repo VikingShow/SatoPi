@@ -3,7 +3,7 @@ import {
 	createUnavailableWorker,
 	createWorkerHandle,
 	createWorkerSubprocess,
-	logWorkerMessage,
+	logAgentMessage,
 	resolveWorkerSpawnCmd,
 	SMOKE_TEST_TIMEOUT_MS,
 	type SpawnedSubprocess,
@@ -199,7 +199,7 @@ export class MnemopiEmbedClient {
 
 	#handleMessage(message: MnemopiEmbedWorkerOutbound): void {
 		if (message.type === "log") {
-			logWorkerMessage(message);
+			logAgentMessage(message);
 			return;
 		}
 		if (message.type === "pong") return;

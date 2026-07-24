@@ -8,7 +8,7 @@
  * Call setActiveSession(name) before making session-scoped calls.
  */
 
-import type { SwarmState, ModelOption, AfterLoopResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, BeforeLoopState, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
+import type { SwarmState, ModelOption, CurtainResult, ExperienceSearchResult, ExperienceStats, ExperienceLesson, ScriptState, TodoItem, BlockerResolution, RoleAsset, RoleAssetSummary, RoleCreateInput, RoleUpdateInput, RoleStatus } from "./types";
 import { fetchJson } from "@oh-my-pi/pi-web/fetch";
 
 /** Active session name — set by the session store on init / switch. */
@@ -30,7 +30,7 @@ export function getActiveSession(): string | null {
  */
 function sessionUrl(path: string): string {
   if (!activeSessionName) {
-    // path always starts with "/" (e.g. "/state", "/before-loop/start").
+    // path always starts with "/" (e.g. "/state", "/script/start").
     // Strip the leading slash to avoid a double-slash like /api//state.
     const cleanPath = path.replace(/^\/+/, "");
     console.warn(`[api] No active session set when calling /${cleanPath} — falling back to /api/${cleanPath}`);
@@ -58,6 +58,17 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  /** Fork an existing session. Parent must exist. */
+  forkSession: (parent: string, name: string) =>
+    fetchJson<{ name: string; parent: string }>("/api/sessions/fork", {
+      method: "POST",
+      body: JSON.stringify({ parent, name }),
+    }),
+
+  /** Get the session entry tree (for tree visualization). */
+  getSessionTree: () =>
+    fetchJson<{ tree: unknown[] }>(sessionUrl("/tree")),
+
   getState: () => fetchJson<SwarmState>(sessionUrl("/state")),
 
   getConfig: () => fetchJson<{ yaml: string; error?: string }>(sessionUrl("/config")),
@@ -82,7 +93,7 @@ export const api = {
         dir: string;
         lastActivity: string | null;
         messageCount: number;
-        status: "idle" | "running" | "completed" | "failed";
+        status: "idle" | "stage" | "completed" | "failed";
       }>;
     }>("/api/runs"),
 
@@ -138,8 +149,8 @@ export const api = {
 
   // -- After Loop (session-scoped) ------------------------------------------
 
-  getAfterLoopSummary: () =>
-    fetchJson<AfterLoopResult>(sessionUrl("/after-loop/summary")),
+  getCurtainSummary: () =>
+    fetchJson<CurtainResult>(sessionUrl("/curtain/summary")),
 
   // -- Experience (workspace-shared, global) ---------------------------------
 
@@ -152,40 +163,43 @@ export const api = {
   getRecentLessons: (limit = 20) =>
     fetchJson<{ lessons: Array<{ runId: string; timestamp: string; lesson: ExperienceLesson; stats: unknown }> }>(`/api/experience/recent?limit=${limit}`),
 
-  // -- Before Loop (session-scoped) ------------------------------------------
+  // -- Script phase (session-scoped) -----------------------------------------
 
-  startBeforeLoop: (task: string) =>
-    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/start"), {
+  getScriptAgents: () =>
+    fetchJson<{ agents: import("./types").AgentSummary[] }>(sessionUrl("/script/agents")),
+
+  startScript: (task: string, agentId?: string) =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/start"), {
       method: "POST",
-      body: JSON.stringify({ task }),
+      body: JSON.stringify({ task, agentId }),
     }),
 
-  sendBeforeLoopMessage: (text: string) =>
-    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/message"), {
+  sendScriptMessage: (text: string) =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/message"), {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
 
-  getBeforeLoopState: () =>
-    fetchJson<BeforeLoopState>(sessionUrl("/before-loop/state")),
+  getScriptState: () =>
+    fetchJson<ScriptState>(sessionUrl("/script/state")),
 
-  getBeforeLoopHistory: () =>
-    fetchJson<{ history: Array<{ role: string; content: string }> }>(sessionUrl("/before-loop/history")),
+  loadScriptHistory: () =>
+    fetchJson<{ history: Array<{ role: string; content: string }> }>(sessionUrl("/script/history")),
 
   runDebate: () =>
-    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/debate"), {
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/debate"), {
       method: "POST",
     }),
 
-  confirmBeforeLoop: (opts?: { workerCount?: number; clonerCount?: number }) =>
-    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/confirm"), {
+  confirmScript: (opts?: { agentCount?: number }) =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/confirm"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workerCount: opts?.workerCount, clonerCount: opts?.clonerCount }),
+      body: JSON.stringify({ agentCount: opts?.agentCount }),
     }),
 
-  cancelBeforeLoop: () =>
-    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/before-loop/cancel"), {
+  cancelScript: () =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/script/cancel"), {
       method: "POST",
     }),
 
@@ -203,6 +217,21 @@ export const api = {
     fetchJson<{ success: boolean; error?: string }>(sessionUrl("/run/resolve-blocker"), {
       method: "POST",
       body: JSON.stringify({ decision }),
+    }),
+
+  // -- Curtain (session-scoped) ----------------------------------------------
+
+  applaud: () =>
+    fetchJson<{ success: boolean; message?: string }>(sessionUrl("/curtain/applaud"), {
+      method: "POST",
+    }),
+
+  // -- Plan update-and-continue (session-scoped) -------------------------
+
+  updatePlanAndContinue: (content: string) =>
+    fetchJson<{ success: boolean; error?: string }>(sessionUrl("/plan/update-and-continue"), {
+      method: "POST",
+      body: JSON.stringify({ content }),
     }),
 
   // -- Role Asset Library (global) ------------------------------------------

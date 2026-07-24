@@ -1,11 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import {
 	extractRoundSummary,
-	parseNomination,
 	jaccardSimilarity,
 	findingsSimilarity,
 	parseRoundSummaryJson,
-} from "../convergence";
+} from "../core/convergence";
 
 describe("jaccardSimilarity", () => {
 	it("is 1 for two empty sets", () => {
@@ -48,18 +47,6 @@ describe("extractRoundSummary", () => {
 	});
 });
 
-describe("parseNomination", () => {
-	it("parses a nominated worker", () => {
-		const out = "## Nomination\nnominated: worker-3\nreason: expertise";
-		expect(parseNomination(out)).toEqual({ nominator: "", nominee: "worker-3" });
-	});
-	it("returns null without a nomination section", () => {
-		expect(parseNomination("no nomination")).toBeNull();
-	});
-	it("returns null when the section lacks a nominated line", () => {
-		expect(parseNomination("## Nomination\nreason: none")).toBeNull();
-	});
-});
 
 describe("parseRoundSummaryJson", () => {
 	it("parses a valid JSON round summary block", () => {

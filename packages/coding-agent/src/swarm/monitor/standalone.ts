@@ -3,7 +3,7 @@
  *
  * Bootstraps auth, ModelRegistry, Settings, ExperienceStore, and
  * RoleAssetManager as shared services.  Uses SessionRegistry to
- * create per-session service graphs (SwarmRunManager, BeforeLoopManager,
+ * create per-session service graphs (SwarmRunManager, ScriptManager,
  * ActivityLogger, etc.) on demand.
  *
  * Usage: bun run src/swarm/monitor/standalone.ts [workspace-dir]
@@ -12,30 +12,34 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { logger } from "@oh-my-pi/pi-utils";
-import { StateTracker } from "../state";
+import { StateTracker } from "../core/state";
 import { MonitorServer } from "./server";
-import { ActivityLogger } from "../activity-logger";
+import { ActivityLogger } from "../hooks/activity-logger";
 import type { RunManager, SteeringSink } from "./api-routes";
-import { parseSwarmYaml, validateSwarmDefinition } from "../schema";
-import { createLoopController } from "../loop-controller";
+import { parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
+import { createStageController } from "../stage/stage-controller";
 import { discoverAuthStorage } from "../../sdk";
 import { ModelRegistry } from "../../config/model-registry";
 import { Settings } from "../../config/settings";
-import { stampAndArchivePlanMd } from "../before-loop";
-import { getSessionPlanPath } from "../plan-paths";
-import { BeforeLoopManager } from "../before-loop-manager";
-import { ExperienceStore } from "../after-loop";
-import type { LoopResult } from "../loop-controller";
-import type { LoopSwarmConfig } from "../schema";
-import type { SwarmSessionManager } from "../swarm-session-manager";
-import { RoleAssetManager } from "../role-asset";
+import { stampAndArchivePlanMd } from "../script/script-planner";
+import { getSessionPlanPath } from "../script/plan-paths";
+import { ScriptManager } from "../script/script-manager";
+import { ExperienceStore } from "../curtain";
+import type { StageResult } from "../stage/stage-controller";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import { RoleAssetManager } from "../agent/role-asset";
 import type { AfterLoopResult } from "./types";
-import { runAfterLoopPipeline } from "./after-loop-runner";
+import { runCurtainPipeline } from "./curtain-runner";
 import {
 	SessionRegistry,
 	type SharedServices,
 	type SessionServices,
-} from "../session-registry";
+} from "../session/session-registry";
+import { ProfileRegistry } from "../agent/agent-profile";
+import { MarkEnvironment } from "../coordination/mark-environment";
+import { createStageFeedback } from "../hooks/swarm-hooks";
+
 
 // ============================================================================
 // Workspace setup
@@ -62,16 +66,15 @@ const DEFAULT_YAML = `swarm:
   agents: {}
   target_count: 1
   max_iterations: 10
-  workers:
+  stage:
     initial: 3
     min: 1
     max: 10
     auto: false
-  cloners:
-    count: 2
+    reviewers: 2
   plan_debate:
     enabled: true
-    cloner_count: 2
+    agent_count: 2
     max_rounds: 2
     convergence_threshold: 0.7
 `;
@@ -81,7 +84,6 @@ const DEFAULT_YAML = `swarm:
 // ============================================================================
 
 class SwarmRunManager implements RunManager {
-	#loopController: ReturnType<typeof createLoopController> | null = null;
 	#abortController: AbortController | null = null;
 	#modelRegistry: ModelRegistry;
 	#settings: Settings;
@@ -94,6 +96,12 @@ class SwarmRunManager implements RunManager {
 	#running = false;
 	#lastAfterLoopResult: AfterLoopResult | null = null;
 	#loopConfig: LoopSwarmConfig | null = null;
+	/** P7: Agent identity registry (workspace-scoped, shared). */
+	#profileRegistry: ProfileRegistry;
+	/** P7: Stigmergy mark environment (per-session). */
+	#markEnvironment: MarkEnvironment;
+	/** Role asset manager for role-based prompts and tools. */
+	#roleAssetManager: RoleAssetManager;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -104,6 +112,9 @@ class SwarmRunManager implements RunManager {
 		activityLogger: ActivityLogger;
 		experienceStore: ExperienceStore;
 		sessionManager?: SwarmSessionManager;
+		profileRegistry: ProfileRegistry;
+		markEnvironment: MarkEnvironment;
+		roleAssetManager: RoleAssetManager;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -113,6 +124,9 @@ class SwarmRunManager implements RunManager {
 		this.#activityLogger = opts.activityLogger;
 		this.#experienceStore = opts.experienceStore;
 		this.#sessionManager = opts.sessionManager;
+		this.#profileRegistry = opts.profileRegistry;
+		this.#markEnvironment = opts.markEnvironment;
+		this.#roleAssetManager = opts.roleAssetManager;
 	}
 
 
@@ -120,7 +134,7 @@ class SwarmRunManager implements RunManager {
 	get isRunning(): boolean { return this.#running; }
 	getLastAfterLoopResult(): AfterLoopResult | null { return this.#lastAfterLoopResult; }
 
-	async start(): Promise<{ success: boolean; error?: string }> {
+	async start(agentCount?: number): Promise<{ success: boolean; error?: string }> {
 
 			// Rotate session file so each Run gets a clean history slate.
 			try { await this.#sessionManager?.rotate(); } catch { /* best-effort */ }
@@ -132,7 +146,7 @@ class SwarmRunManager implements RunManager {
 			if (!def.loopConfig) return { success: false, error: "Swarm is not in loop mode" };
 
 			this.#loopConfig = def.loopConfig;
-			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
+			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
 			// Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md
@@ -152,33 +166,43 @@ class SwarmRunManager implements RunManager {
 
 			const agentNames = [...def.agents.keys()];
 			await this.#stateTracker.init(agentNames, def.targetCount, def.mode);
-			await this.#stateTracker.updatePipeline({ loopPhase: "running", status: "running" });
-
-			this.#loopController = createLoopController(this.#stateTracker, {
-				loopConfig: def.loopConfig,
-				workspace: this.#workspace,
-				activityLogger: this.#activityLogger,
-			});
+			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 
 			this.#abortController = new AbortController();
 			this.#running = true;
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
-			this.#loopController.runLoop({
+						// StageController: task-queue-based, event-driven, agent selection
+			const stageFeedback = createStageFeedback({
+				enabled: def.loopConfig.stigmergy?.enabled ?? true,
+				profileRegistry: this.#profileRegistry,
+				markEnvironment: this.#markEnvironment,
+			});
+
+			const stage = createStageController({
 				workspace: this.#workspace,
+				swarmName: def.name,
+				planContent: planContent ?? "",
+				loopConfig: def.loopConfig,
+				stateTracker: this.#stateTracker,
+				activityLogger: this.#activityLogger,
 				modelRegistry: this.#modelRegistry,
 				settings: this.#settings,
 				signal: this.#abortController.signal,
-				planContent,
-			}).then(async (result) => {
-				logger.info("[RunManager] Loop finished", { status: result.status, iterations: result.iterations });
-				if (result.errors.length > 0) logger.info("[RunManager] Loop errors", { errors: result.errors });
-				await this.#runAfterLoopPipeline(result);
+				profileRegistry: this.#profileRegistry,
+				roleAssetManager: this.#roleAssetManager,
+				callbacks: stageFeedback,
+				agentCount,
+			});
+
+			stage.run().then(async (result) => {
+				logger.info("[RunManager] Stage finished", { status: result.status });
+				if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
+				await this.#runCurtainPipeline(result);
 			}).catch((err) => {
-				logger.error("[RunManager] Loop failed", { error: String(err) });
+				logger.error("[RunManager] Stage failed", { error: String(err) });
 			}).finally(() => {
 				this.#running = false;
-				this.#loopController = null;
 				this.#abortController = null;
 			});
 
@@ -197,30 +221,25 @@ class SwarmRunManager implements RunManager {
 	}
 
 	async pause(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		this.#loopController.pause();
+		this.#abortController?.abort();
 		return { success: true };
 	}
 
 	async resume(): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		this.#loopController.resume();
-		return { success: true };
+		return { success: false, error: "Resume not supported in Stage mode. Restart the run instead." };
 	}
 
-	async updatePlanAndContinue(newPlan: string): Promise<{ success: boolean; error?: string }> {
-		if (!this.#loopController) return { success: false, error: "No loop controller available" };
-		await this.#loopController.updatePlan(newPlan, this.#stateTracker.swarmDir);
-		this.#loopController.resume();
-		return { success: true };
+	async updatePlanAndContinue(_newPlan: string): Promise<{ success: boolean; error?: string }> {
+		return { success: false, error: "Update-plan-and-continue not supported in Stage mode. Restart the run instead." };
 	}
 
 	resolveBlocker(decision: "continue" | "skip" | "abort"): boolean {
-		return this.#loopController?.resolveBlocker(decision) ?? false;
+		if (decision === "abort") this.#abortController?.abort();
+		return true;
 	}
 
-	async #runAfterLoopPipeline(result: LoopResult): Promise<void> {
-		const result_ = await runAfterLoopPipeline(result, {
+	async #runCurtainPipeline(result: StageResult): Promise<void> {
+		const result_ = await runCurtainPipeline(result, {
 			workspace: this.#workspace,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
@@ -228,8 +247,8 @@ class SwarmRunManager implements RunManager {
 			loopConfig: this.#loopConfig,
 			modelRegistry: this.#modelRegistry,
 			settings: this.#settings,
-			loopController: this.#loopController!,
-			abortController: this.#abortController,
+			roleAssetManager: this.#roleAssetManager,
+			profileRegistry: this.#profileRegistry,
 		});
 		if (result_) this.#lastAfterLoopResult = result_;
 	}
@@ -253,7 +272,7 @@ async function createSessionServices(
 	// without a 5s polling delay.
 	stateTracker.setStateChangeNotifier((event) => {
 		if (event.type === "agent_state") {
-			activityLogger.logAgentState(event.worker as string, {
+			activityLogger.logAgentState(event.agent as string, {
 				status: event.status as string | undefined,
 				iteration: event.iteration as number | undefined,
 				praiseCount: event.praiseCount as number | undefined,
@@ -273,6 +292,8 @@ async function createSessionServices(
 		}
 	});
 
+	const markEnvironment = new MarkEnvironment();
+
 	const runManager = new SwarmRunManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,
@@ -281,9 +302,12 @@ async function createSessionServices(
 		stateTracker,
 		activityLogger,
 		experienceStore: shared.experienceStore,
+		profileRegistry: shared.profileRegistry,
+		markEnvironment,
+		roleAssetManager: shared.roleAssetManager,
 	});
 
-	const beforeLoopManager = new BeforeLoopManager({
+	const scriptManager = new ScriptManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,
 		workspace: shared.workspace,
@@ -293,15 +317,17 @@ async function createSessionServices(
 		activityLogger,
 		experienceStore: shared.experienceStore,
 		runManager,
+		profileRegistry: shared.profileRegistry,
+		roleAssetManager: shared.roleAssetManager,
 	});
 
 	const steeringSink: SteeringSink = {
 		steer(text: string): void {
-			activityLogger.logSteering("operator", "all", text);
+			activityLogger.logSteering("human", "all", text);
 		},
 	};
 
-	return { name, swarmDir, stateTracker, activityLogger, runManager, beforeLoopManager, steeringSink };
+	return { name, swarmDir, stateTracker, activityLogger, runManager, scriptManager, steeringSink };
 }
 
 // ============================================================================
@@ -337,6 +363,10 @@ async function main() {
 	const seeded = await roleAssetManager.seedIfEmpty();
 	if (seeded > 0) logger.info(`Seeded ${seeded} built-in role assets`);
 
+	logger.info("Initializing ProfileRegistry (Agent identity system)...");
+	const profileRegistry = await ProfileRegistry.load(WORKSPACE_DIR);
+	logger.info(`Loaded ${profileRegistry.list().length} agent profiles`);
+
 	const shared: SharedServices = {
 		workspace: WORKSPACE_DIR,
 		yamlPath: YAML_PATH,
@@ -344,6 +374,7 @@ async function main() {
 		settings,
 		experienceStore,
 		roleAssetManager,
+		profileRegistry,
 	};
 
 	// Create SessionRegistry.  We delay session creation until AFTER the
@@ -387,12 +418,13 @@ async function main() {
 		`└──────────────────────────────────────────────────┘`,
 	].join("\n"));
 
-	const shutdown = () => {
+	const shutdown = async () => {
 		logger.info("Shutting down...");
 		if (session.runManager.isRunning) session.runManager.stop().catch(() => {});
 		registry.destroyAll().catch(() => {});
 		server.stop();
 		experienceStore.close();
+		await profileRegistry.save(WORKSPACE_DIR);
 		process.exit(0);
 	};
 	process.on("SIGINT", shutdown);

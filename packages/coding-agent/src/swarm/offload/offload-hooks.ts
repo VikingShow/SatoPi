@@ -22,13 +22,13 @@ import type {
 	PipelineContext,
 	PipelineResult,
 	WaveResult,
-} from "../pipeline";
+} from "../core/pipeline";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../roundtable";
+import type { ReviewVerdict } from "../core/pipeline";
 import type { SessionStorage } from "../../session/session-storage";
 import type { PlanPhase } from "./plan-node-attributor";
-import type { ExperienceStore } from "../after-loop/experience";
-import type { ExtractedLesson, LoopRunStats } from "../after-loop/extractor";
+import type { ExperienceStore } from "../curtain/experience";
+import type { ExtractedLesson, LoopRunStats } from "../curtain/extractor";
 import { getOffloadDir } from "./offload-paths";
 import { SwarmOffloadStore } from "./offload-store";
 import { OffloadPipeline, type OffloadPipelineConfig } from "./offload-pipeline";
@@ -153,12 +153,12 @@ export function createOffloadHooks(
 
 		// -- beforeWorkerRound ---------------------------------------------------
 
-		async beforeWorkerRound(round: number, workerIds: string[], ctx: PipelineContext) {
+		async beforeAgentRound(round: number, agentIds: string[], ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			// ── MMD 局部视图注入 ──────────────────────────────────────────
 			if (config.injectMermaid) {
-				const phases = workerIds
+				const phases = agentIds
 					.map((id) => workerPhases.get(id))
 					.filter((p): p is string => !!p);
 
@@ -170,7 +170,7 @@ export function createOffloadHooks(
 
 			// ── 历史经验注入 (ExperienceStore 桥接) ────────────────────────
 			if (experienceStore) {
-				for (const agentId of workerIds) {
+				for (const agentId of agentIds) {
 					try {
 						const phaseHint = workerPhases.get(agentId) ?? config.getPhaseHint?.(agentId) ?? "";
 						const query = `agent:${agentId} ${phaseHint}`;
@@ -194,7 +194,7 @@ export function createOffloadHooks(
 
 		// -- afterWorkerRound ----------------------------------------------------
 
-		async afterWorkerRound(round: number, results: SingleResult[], ctx: PipelineContext) {
+		async afterAgentRound(round: number, results: SingleResult[], ctx: PipelineContext) {
 			if (!config.enabled) return;
 
 			const resultMap = new Map<string, SingleResult>();
@@ -206,7 +206,7 @@ export function createOffloadHooks(
 				if (hint) { phaseHints.set(r.id, hint); workerPhases.set(r.id, hint); }
 			}
 
-			const l1Outputs = pipeline.runL1(resultMap, "worker", currentIteration, phaseHints);
+			const l1Outputs = await pipeline.runL1(resultMap, "worker", currentIteration, phaseHints);
 
 			// 持久化到 JSONL
 			for (const out of l1Outputs) {
@@ -219,7 +219,7 @@ export function createOffloadHooks(
 
 		// -- beforeClonerReview --------------------------------------------------
 
-		async beforeClonerReview(iteration: number, workerOutput: string, ctx: PipelineContext) {
+		async beforeReview(iteration: number, agentOutput: string, ctx: PipelineContext) {
 			if (!config.enabled || !config.injectMermaid) return;
 
 			if (currentMmd) {
@@ -230,7 +230,7 @@ export function createOffloadHooks(
 
 		// -- afterClonerReview ---------------------------------------------------
 
-		async afterClonerReview(iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) {
+		async afterReview(iteration: number, verdict: ReviewVerdict | null, ctx: PipelineContext) {
 			if (!config.enabled || !verdict) return;
 
 			const clonerResult: SingleResult = {
@@ -251,7 +251,7 @@ export function createOffloadHooks(
 			const scores = new Map<string, number>();
 			scores.set("cloner", verdict.passed ? 8 : verdict.approvalCount > 0 ? 4 : 2);
 
-			const l1Outputs = pipeline.runL1(resultMap, "cloner", iteration, undefined, scores);
+			const l1Outputs = await pipeline.runL1(resultMap, "cloner", iteration, undefined, scores);
 			for (const out of l1Outputs) {
 				await store.appendEntry(out.agentId, toOffloadEntry(out));
 			}
@@ -292,8 +292,8 @@ export function createOffloadHooks(
 			if (experienceStore) {
 				await bridgeToExperienceStore(store, experienceStore, {
 					iteration, sessionId,
-					workerCount: workerPhases.size,
-					clonerCount: 1, // Cloner Council 汇总为 1 个逻辑 agent
+					agentCount: workerPhases.size,
+					reviewerCount: 1, // Cloner Council 汇总为 1 个逻辑 agent
 					taskDescription: phases.map(p => p.title).join(", "),
 				});
 			}
@@ -372,8 +372,8 @@ function toOffloadEntry(output: OffloadPipeline.L1Output): {
 interface BridgeMeta {
 	iteration?: number;
 	sessionId?: string;
-	workerCount: number;
-	clonerCount: number;
+	agentCount: number;
+	reviewerCount: number;
 	taskDescription?: string;
 }
 
@@ -423,9 +423,9 @@ async function bridgeToExperienceStore(
 		const stats: LoopRunStats = {
 			totalIterations: meta.iteration ?? 0,
 			finalStatus: avgScore >= 7 ? "completed" : avgScore >= 4 ? "converged_partial" : "converged_failed",
-			clonerApprovalRatio: avgScore / 10,
-			workerCount: meta.workerCount,
-			clonerCount: meta.clonerCount,
+			reviewApprovalRatio: avgScore / 10,
+			agentCount: meta.agentCount,
+			reviewerCount: meta.reviewerCount,
 			taskDescription: meta.taskDescription,
 		};
 
@@ -473,9 +473,9 @@ async function bridgeSessionSummary(
 	const stats: LoopRunStats = {
 		totalIterations: 0,
 		finalStatus: meta.status as LoopRunStats["finalStatus"],
-		clonerApprovalRatio: avgScore / 10,
-		workerCount: 0,
-		clonerCount: meta.totalClonerTasks,
+		reviewApprovalRatio: avgScore / 10,
+		agentCount: 0,
+		reviewerCount: meta.totalClonerTasks,
 		taskDescription: `Offload session: ${meta.swarmDir}`,
 	};
 

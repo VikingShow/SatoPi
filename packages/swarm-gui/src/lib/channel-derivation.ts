@@ -31,7 +31,7 @@ export function deriveChannel(
     }
     case "steering": {
       // Operator steering to "all" → goes to roundtable (main chat)
-      if (entry.from === "operator" && entry.to === "all") {
+      if (entry.from === "human" && entry.to === "all") {
         const id = "roundtable";
         return {
           id,
@@ -60,14 +60,14 @@ export function deriveChannel(
       };
     }
 
-    // ── Per-cloner individual verdict → dedicated cloner channel ──
-    case "cloner_individual": {
-      const id = `cloner-${entry.from}`;
+    // ── Per-reviewer individual verdict → dedicated cloner channel ──
+    case "reviewer_individual": {
+      const id = `agent-${entry.from}`;
       const verdictLabel = entry.passed ? "PASS" : "FAIL";
       const body = `**${verdictLabel}**${entry.findings?.length ? `\n${(entry.findings as string[]).map((f: string) => `· ${f}`).join("\n")}` : ""}`;
       return {
         id,
-        channel: { id, type: "cloner", name: `${entry.from}`, participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
+        channel: { id, type: "reviewer", name: `${entry.from}`, participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
         message: { id: `${ts}-${entry.from}-${seq}`, channelId: id, from: entry.from ?? "", to: "all", body, timestamp: ts },
       };
     }
@@ -91,7 +91,7 @@ export function deriveChannel(
       return {
         id,
         channel: { id, type: "roundtable", name: "Roundtable", participants: [], unreadCount: 0, lastMessage: body, lastMessageTime: ts },
-        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.worker ?? "agent", to: "all", body, timestamp: ts },
+        message: { id: `${ts}-tool-${entry.toolName}-${seq}`, channelId: id, from: entry.agent ?? "agent", to: "all", body, timestamp: ts },
       };
     }
     default:

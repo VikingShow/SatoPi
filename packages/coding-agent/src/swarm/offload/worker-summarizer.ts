@@ -15,7 +15,7 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 export interface SummarizeInput {
 	/** Worker/Cloner 执行结果 */
 	result: SingleResult;
-	/** Agent 标识（如 "worker-1", "cloner-2"） */
+	/** Agent 标识（如 "agent-1", "agent-2"） */
 	agentId: string;
 	/** Agent 类型 */
 	agentType: "worker" | "cloner" | "orchestrator";

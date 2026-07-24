@@ -2,7 +2,7 @@
  * AgentTopology — Real-time swarm agent relationship graph.
  *
  * Uses React Flow (@xyflow/react) with dagre auto-layout to visualize
- * swarm agents (workers, cloners, reviewer, socrates) and their
+ * swarm agents (agents, reviewers, planner) and their
  * communication edges in real-time.
  */
 import { useCallback, useMemo } from "react";
@@ -21,10 +21,9 @@ import { useSwarmStore } from "../../stores/swarm-store";
 
 // ── Agent colors ────────────────────────────────────────────────
 const AGENT_COLORS: Record<string, string> = {
-  worker: "#10B981",
-  cloner: "#8B5CF6",
+  developer: "#10B981",
   reviewer: "#F59E0B",
-  socrates: "#3B82F6",
+  planner: "#3B82F6",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -118,7 +117,7 @@ export default function AgentTopology() {
       type: "agentNode",
       data: {
         label: name,
-        agentType: agent.role === "reviewer" ? "reviewer" : name.startsWith("cloner") ? "cloner" : name === "socrates" ? "socrates" : "worker",
+        agentType: agent.role === "reviewer" ? "reviewer" : "agent",
         status: agent.status,
         model: (agent as unknown as { modelName?: string }).modelName,
         iteration: agent.iteration ?? 0,

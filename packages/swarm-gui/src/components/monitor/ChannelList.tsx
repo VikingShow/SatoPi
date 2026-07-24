@@ -11,7 +11,7 @@ const CHANNEL_TYPE_META: Record<string, { icon: React.ReactNode; color: string; 
   private: { icon: <Lock size={14} className="text-muted-foreground" />, color: "text-muted-foreground", group: "Active" },
   steering: { icon: <Bot size={14} className="text-status-accent" />, color: "text-status-accent", group: "Review" },
   deliberation: { icon: <Swords size={14} className="text-amber-400" />, color: "text-amber-400", group: "Review" },
-  cloner: { icon: <ShieldCheck size={14} className="text-violet-400" />, color: "text-violet-400", group: "Review" },
+  reviewer: { icon: <ShieldCheck size={14} className="text-violet-400" />, color: "text-violet-400", group: "Review" },
   file: { icon: <FileText size={14} className="text-emerald-400" />, color: "text-emerald-400", group: "Coordination" },
 };
 
@@ -48,7 +48,7 @@ export default function ChannelList() {
     // Sort channels within each group
     for (const [, chs] of groups) {
       chs.sort((a, b) => {
-        const order: Record<string, number> = { roundtable: 0, subgroup: 1, private: 2, steering: 3, deliberation: 4, cloner: 5, file: 6 };
+        const order: Record<string, number> = { roundtable: 0, subgroup: 1, private: 2, steering: 3, deliberation: 4, reviewer: 5, file: 6 };
         return (order[a.type] ?? 99) - (order[b.type] ?? 99);
       });
     }

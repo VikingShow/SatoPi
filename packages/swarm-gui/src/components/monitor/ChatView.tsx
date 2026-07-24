@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy, Bot } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,13 +7,14 @@ import { remarkTreeToCode } from "../../lib/remark-tree-to-code";
 import { useSwarmStore } from "../../stores/swarm-store";
 import { useSessionStore } from "../../stores/session-store";
 import { shallow } from "zustand/shallow";
-import type { ChatMessage, LoopPhase } from "../../lib/types";
+import type { ChatMessage, Chapter } from "../../lib/types";
 import { highlightCode } from "@oh-my-pi/pi-web/shiki";
 import { EmptyState } from "../shared/EmptyState";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ActionBar } from "./ActionBar";
+import AgentSelector from "./AgentSelector";
 
 // ── Code block cache (LRU-bounded, shared module) ──────────────────────
 import { cacheKey, getCachedHtml, setCachedHtml } from "../../lib/code-cache";
@@ -161,16 +162,16 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
-  const isSteering = msg.body.startsWith("[CLONER STEERING]");
-  const isOperator = msg.from === "operator";
+  const isSteering = msg.body.startsWith("[AGENT STEERING]");
+  const isHuman = msg.from === "human";
   const isSystem = msg.from === "system";
-  const isSocrates = msg.from === "socrates";
+  const isPlanner = msg.from === "planner";
 
   return (
-    <div className={`flex flex-col gap-0.5 ${isOperator ? "items-end" : "items-start"}`}>
+    <div className={`flex flex-col gap-0.5 ${isHuman ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-1.5 px-1">
         <span className={`text-xs font-medium ${
-          isSocrates ? "text-primary" :
+          isPlanner ? "text-primary" :
           isSystem ? "text-muted-foreground" :
           "text-foreground/80"
         }`}>{msg.from}</span>
@@ -185,9 +186,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             ? "bg-status-accent/15 border border-status-accent/30 text-foreground"
             : isSystem
             ? "bg-card/50 text-muted-foreground italic text-xs"
-            : isOperator
+            : isHuman
             ? "bg-primary/20 text-foreground/90"
-            : isSocrates
+            : isPlanner
             ? "bg-primary/10 border border-primary/20 text-foreground/90"
             : "bg-background-elevated text-foreground"
         }`}
@@ -201,7 +202,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           </div>
         ) : (
           <ErrorBoundary fallbackText={msg.body}>
-            <MessageBody body={isSteering ? msg.body.replace("[CLONER STEERING] ", "") : msg.body} />
+            <MessageBody body={isSteering ? msg.body.replace("[AGENT STEERING] ", "") : msg.body} />
           </ErrorBoundary>
         )}
       </div>
@@ -232,29 +233,37 @@ export default function ChatView() {
   // ── Group B: low-frequency + stable method refs ──
   // 11 fields merged into 1 subscription.  Method references are created
   // once in zustand's create() so shallow comparison is a no-op on every
-  // token-level store update — only loopPhase / isRunning / beforeLoopState
+  // token-level store update — only phase / isRunning / scriptState
   // trigger re-render when they actually change.
   const {
-    activeChannelId, loopPhase, isRunning, beforeLoopState,
-    sendBeforeLoopMessage, sendSteering, startPlanning,
-    runDebate, confirmAndStart, stopRun, cancelBeforeLoop,
+    activeChannelId, phase, isRunning, scriptState,
+    sendScriptMessage, sendSteering, startPlanning,
+    runDebate, confirmAndStart, stopRun, cancelScript,
   } = useSwarmStore((s) => ({
     activeChannelId: s.activeChannelId,
-    loopPhase: s.loopPhase,
+    phase: s.phase,
     isRunning: s.isRunning,
-    beforeLoopState: s.beforeLoopState,
-    sendBeforeLoopMessage: s.sendBeforeLoopMessage,
+    scriptState: s.scriptState,
+    sendScriptMessage: s.sendScriptMessage,
     sendSteering: s.sendSteering,
     startPlanning: s.startPlanning,
     runDebate: s.runDebate,
     confirmAndStart: s.confirmAndStart,
     stopRun: s.stopRun,
-    cancelBeforeLoop: s.cancelBeforeLoop,
+    cancelScript: s.cancelScript,
   }), shallow);
 
   const viewingSession = useSessionStore((s) => s.viewingSession);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inputText, setInputText] = useState("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => scriptState?.selectedAgentId ?? "");
+
+  // Restore selectedAgentId from scriptState on mount (survives page refresh)
+  useEffect(() => {
+    if (scriptState?.selectedAgentId && !selectedAgentId) {
+      setSelectedAgentId(scriptState.selectedAgentId);
+    }
+  }, [scriptState?.selectedAgentId]);
 
   const channelMessages = messages.get(activeChannelId ?? "roundtable") ?? [];
 
@@ -336,30 +345,33 @@ export default function ChatView() {
     switch (a.type) {
       case "verdict": return `${a.passed ? "PASS" : "FAIL"} ${a.approval}/${a.total} ${a.findings?.[0] ?? ""}`;
       case "phase": return `Phase: ${a.phase}`;
-      case "scaling": return `${a.action === "add" ? "+" : "-"}${a.worker} (${a.reason})`;
+      case "scaling": return `${a.action === "add" ? "+" : "-"}${a.agent} (${a.reason})`;
       case "nomination": return `Reviewer elected: ${a.elected ?? "none"}`;
-      case "crash": return `${a.worker} crashed: ${a.error}`;
+      case "crash": return `${a.agent} crashed: ${a.error}`;
       default: return "";
     }
   }
 
-  // Determine input behavior based on loopPhase
-  const isIdle = loopPhase === "idle";
-  const isBeforeLoopDialog = loopPhase === "before-loop-dialog";
-  const isBeforeLoopConfirm = loopPhase === "before-loop-confirm";
-  const isLoopRunning = loopPhase === "running";
-  const canSend = isIdle || isBeforeLoopDialog || isLoopRunning;
-  const isBusy = beforeLoopState?.busy ?? false;
-  const planReady = beforeLoopState?.planReady ?? false;
+  // Determine input behavior based on phase
+  const isIdle = phase === "idle";
+  const isScriptDialog = phase === "script";
+  const isScriptConfirm = phase === "script-confirm";
+  const isLoopRunning = phase === "stage";
+  const canSend = isIdle || isScriptDialog || isLoopRunning;
+  const isBusy = scriptState?.busy ?? false;
+  const planReady = scriptState?.planReady ?? false;
 
   const placeholder = isIdle
     ? "Describe your task..."
-    : isBeforeLoopDialog
-    ? (isBusy ? "Socrates is thinking..." : "Reply...")
-    : isBeforeLoopConfirm
+    : isScriptDialog
+    ? (isBusy ? "Agent is thinking..." : "Reply...")
+    : isScriptConfirm
     ? "Plan is ready. Use the buttons above to confirm or refine."
     : isLoopRunning
     ? "Give feedback or guidance..."
+    : phase === "paused" ? "Stage is paused — click Resume to continue"
+    : phase === "blocked" ? "Stage is blocked — resolve the blocker to continue"
+    : phase === "curtain" ? "Curtain call — click Applaud to finish"
     : "";
 
   function handleSend() {
@@ -367,9 +379,9 @@ export default function ChatView() {
     if (!text || !canSend || isBusy) return;
 
     if (isIdle) {
-      startPlanning(text);
-    } else if (isBeforeLoopDialog) {
-      sendBeforeLoopMessage(text);
+      startPlanning(text, selectedAgentId || undefined);
+    } else if (isScriptDialog) {
+      sendScriptMessage(text);
     } else if (isLoopRunning) {
       sendSteering(text);
     }
@@ -387,7 +399,7 @@ export default function ChatView() {
   return (
     <div className="flex-1 flex flex-col bg-background">
       {/* ── Streaming indicator bar (always visible during active run) ── */}
-      {loopPhase === "running" && isRunning && (
+      {phase === "stage" && isRunning && (
         <div className="shrink-0 flex items-center justify-between gap-3 border-b border-emerald-500/20 bg-emerald-950/30 px-4 py-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse-ring" />
@@ -417,10 +429,10 @@ export default function ChatView() {
                 title="What would you like the swarm to build?"
                 description="Describe your task below to start planning. You can also paste a GitHub issue, spec, or error message."
               />
-            ) : isBeforeLoopDialog ? (
+            ) : isScriptDialog ? (
               <EmptyState
                 icon={<Loader2 size={32} className="animate-spin" />}
-                title="Discussing requirements with Socrates"
+                title="Discussing requirements with Planner"
                 description="Answer the questions to help refine the task. A plan will emerge from this dialogue."
               />
             ) : isLoopRunning ? (
@@ -461,19 +473,19 @@ export default function ChatView() {
       </div>
 
       {/* Context Action Bar — appears when plan is ready or debate is done */}
-      {((loopPhase === "before-loop-dialog" && planReady) || loopPhase === "before-loop-confirm") && !isBusy && (
+      {((phase === "script" && planReady) || phase === "script-confirm") && !isBusy && (
         <ActionBar
-          phase={loopPhase}
-          recommendedWorkers={beforeLoopState?.recommendedWorkers}
-          recommendedCloners={beforeLoopState?.recommendedCloners}
-          onConfirm={(wc, cc) => confirmAndStart({ workerCount: wc, clonerCount: cc })}
+          phase={phase}
+          recommendedAgents={scriptState?.recommendedAgents}
+          estimatedAgentHours={scriptState?.estimatedAgentHours}
+          onConfirm={(ac) => confirmAndStart({ agentCount: ac })}
           onDebate={runDebate}
         />
       )}
 
       {/* Input bar — right-side button morphs based on loop phase:
-            - idle / before-loop-confirm (with text) → Send
-            - before-loop-dialog / before-loop-confirm (idle) → Cancel planning
+            - idle / script-confirm (with text) → Send
+            - script / script-confirm (idle) → Cancel planning
             - running → Stop Swarm (red)
         */}
       <div className="border-t border-border px-4 py-2.5 bg-background-card">
@@ -484,10 +496,10 @@ export default function ChatView() {
                 <Shield size={12} />
                 <span>New Task</span>
               </>
-            ) : isBeforeLoopDialog ? (
+            ) : isScriptDialog ? (
               <>
                 <Shield size={12} />
-                <span>Operator → Socrates</span>
+                <span>Operator → Planner</span>
               </>
             ) : isRunning ? (
               <>
@@ -497,7 +509,7 @@ export default function ChatView() {
             ) : (
               <>
                 <Shield size={12} />
-                <span>Operator</span>
+                <span>Human</span>
               </>
             )}
           </div>
@@ -511,7 +523,7 @@ export default function ChatView() {
             className="flex-1"
           />
           {/* Right-side action button — morphs by phase */}
-          {loopPhase === "running" && isRunning ? (
+          {phase === "stage" && isRunning ? (
             <Button
               variant="destructive"
               size="sm"
@@ -521,11 +533,11 @@ export default function ChatView() {
               <Square size={14} fill="currentColor" />
               <span>Stop</span>
             </Button>
-          ) : (loopPhase === "before-loop-dialog" || loopPhase === "before-loop-confirm") && !isBusy ? (
+          ) : (phase === "script" || phase === "script-confirm") && !isBusy ? (
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => cancelBeforeLoop()}
+              onClick={() => cancelScript()}
               title="Cancel Before Loop planning"
             >
               <X size={14} />

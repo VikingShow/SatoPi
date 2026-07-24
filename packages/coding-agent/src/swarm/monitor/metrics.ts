@@ -36,7 +36,7 @@ export const metrics = {
 	agentSpawnsTotal: new Counter({
 		name: "satopi_agent_spawns_total",
 		help: "Total number of agent spawns",
-		labelNames: ["agent_type", "outcome"] as const, // worker|cloner|socrates ; success|crash|timeout
+		labelNames: ["agent_type", "outcome"] as const, // agent|planner ; success|crash|timeout
 		registers: [registry],
 	}),
 
@@ -121,8 +121,8 @@ export const gauges = {
 	}),
 
 	/** Number of active workers across all sessions. */
-	activeWorkers: new Gauge({
-		name: "satopi_active_workers",
+	activeAgents: new Gauge({
+		name: "satopi_active_agents",
 		help: "Number of currently running worker agents",
 		registers: [registry],
 	}),

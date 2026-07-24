@@ -649,7 +649,7 @@ function handleTabMessage(tab: WorkerTabSession, msg: WorkerOutbound): void {
 		void dispatchToolCall(tab, msg);
 		return;
 	}
-	if (msg.type === "log") logWorkerMessage(msg);
+	if (msg.type === "log") logAgentMessage(msg);
 }
 
 async function dispatchToolCall(
@@ -828,7 +828,7 @@ function errorFromPayload(payload: RunErrorPayload): Error {
 	return error;
 }
 
-function logWorkerMessage(msg: Extract<WorkerOutbound, { type: "log" }>): void {
+function logAgentMessage(msg: Extract<WorkerOutbound, { type: "log" }>): void {
 	if (msg.level === "debug") logger.debug(msg.msg, msg.meta);
 	else if (msg.level === "warn") logger.warn(msg.msg, msg.meta);
 	else logger.error(msg.msg, msg.meta);
@@ -943,7 +943,7 @@ async function initializeTabWorker(
 	const unlisten = worker.onMessage(msg => {
 		if (msg.type === "ready") resolve(msg.info);
 		else if (msg.type === "init-failed") reject(errorFromPayload(msg.error));
-		else if (msg.type === "log") logWorkerMessage(msg);
+		else if (msg.type === "log") logAgentMessage(msg);
 	});
 	const unlistenError = worker.onError(error => {
 		reject(new ToolError(`Tab worker failed during startup: ${error.message}`));

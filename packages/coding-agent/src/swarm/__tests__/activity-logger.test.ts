@@ -5,8 +5,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as path from "node:path";
 import * as os from "node:os";
-import { ActivityLogger, type ActivityEntry, type ActivityBroadcaster } from "../activity-logger";
-import { SwarmSessionManager } from "../swarm-session-manager";
+import { ActivityLogger, type ActivityEntry, type ActivityBroadcaster } from "../hooks/activity-logger";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 describe("ActivityLogger", () => {
 	let tmpDir: string;
@@ -78,11 +78,10 @@ describe("ActivityLogger", () => {
 			approvalCount: 1,
 			totalCount: 3,
 			findings: ["missing validation", "no error handling"],
-			workerCountSuggestions: [1],
+			agentCountSuggestions: [1],
 			disagreed: false,
-			roleSuggestions: {},
-			praisedWorkers: ["worker-1"],
-			criticizedWorkers: ["worker-3"],
+			praisedAgents: ["worker-1"],
+			criticizedAgents: ["worker-3"],
 		});
 
 		const entries = await readEntries();
@@ -111,7 +110,7 @@ describe("ActivityLogger", () => {
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("scaling");
 		expect(entries[0].action).toBe("add");
-		expect(entries[0].worker).toBe("worker-4");
+		expect(entries[0].agent).toBe("worker-4");
 	});
 
 	it("writes nomination events", async () => {
@@ -128,7 +127,7 @@ describe("ActivityLogger", () => {
 
 		const entries = await readEntries();
 		expect(entries[0].type).toBe("crash");
-		expect(entries[0].worker).toBe("worker-3");
+		expect(entries[0].agent).toBe("worker-3");
 		expect(entries[0].error).toBe("signal SIGTERM");
 	});
 

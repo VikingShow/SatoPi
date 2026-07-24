@@ -3,7 +3,7 @@ import {
 	createUnavailableWorker,
 	createWorkerHandle,
 	createWorkerSubprocess,
-	logWorkerMessage,
+	logAgentMessage,
 	type RefCountedWorkerHandle,
 	resolveWorkerSpawnCmd,
 	SMOKE_TEST_TIMEOUT_MS,
@@ -318,7 +318,7 @@ export class SttClient {
 
 	#handleMessage(message: SttWorkerOutbound): void {
 		if (message.type === "log") {
-			logWorkerMessage(message);
+			logAgentMessage(message);
 			return;
 		}
 		if (message.type === "progress") {

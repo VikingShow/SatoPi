@@ -1,0 +1,18 @@
+{
+  "benchmark": "harbor",
+  "jobName": "sato-ablation-arm-e-full",
+  "dataset": "custom-tasks",
+  "agent": "omp",
+  "models": [
+    "deepseek-v4-pro"
+  ],
+  "pid": 1087940,
+  "role": "variant",
+  "note": "Full swarm: 2-6 auto-scaled workers + deliberation + cloner + dynamic scaling",
+  "config": {
+    "workerCount": "auto(2-6)",
+    "deliberation": true,
+    "clonerCount": 2,
+    "dynamicScaling": true
+  }
+}

@@ -416,7 +416,7 @@ export function spawnWorkerOrUnavailable<Handle>(
 }
 
 /** Forward a worker's structured `log` message to the matching logger level. */
-export function logWorkerMessage(message: WorkerLogMessage): void {
+export function logAgentMessage(message: WorkerLogMessage): void {
 	if (message.level === "debug") logger.debug(message.msg, message.meta);
 	else if (message.level === "warn") logger.warn(message.msg, message.meta);
 	else logger.error(message.msg, message.meta);

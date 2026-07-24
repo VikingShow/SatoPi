@@ -1,0 +1,9 @@
+{
+  "category": "bug-fix",
+  "difficulty": "easy",
+  "difficulty_score": 1,
+  "file_path": "src/user-service.ts",
+  "original_snippet": "// BUG: should reject age <= 0, but currently allows negative and zero\n  return { valid: true };",
+  "mutated_snippet": "if (typeof age !== \"number\" || age <= 0) {\n    return { valid: false, message: \"Age must be a positive number\" };\n  }\n  return { valid: true };",
+  "tags": ["validation", "regex", "typescript", "backend"]
+}

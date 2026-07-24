@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "bun:test";
 import { EventBus } from "../monitor/event-bus";
-import type { ActivityEntry } from "../activity-logger";
+import type { ActivityEntry } from "../hooks/activity-logger";
 
 function fakeController() {
 	const frames: string[] = [];

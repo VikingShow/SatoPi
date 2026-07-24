@@ -1,0 +1,18 @@
+{
+  "benchmark": "harbor",
+  "jobName": "sato-ablation-arm-d-cloner",
+  "dataset": "custom-tasks",
+  "agent": "omp",
+  "models": [
+    "deepseek-v4-pro"
+  ],
+  "pid": 1087940,
+  "role": "variant",
+  "note": "3 workers + deliberation + cloner review (2 cloners)",
+  "config": {
+    "workerCount": 3,
+    "deliberation": true,
+    "clonerCount": 2,
+    "dynamicScaling": false
+  }
+}

@@ -12,13 +12,13 @@
  */
 
 import * as path from "node:path";
-import type { StateTracker } from "../state";
-import type { ExperienceStore } from "../after-loop/experience";
+import type { StateTracker } from "../core/state";
+import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
-import type { RoleAssetManager } from "../role-asset";
+import type { RoleAssetManager } from "../agent/role-asset";
 import type { AfterLoopResult } from "./types";
-import type { SessionRegistry, SessionServices, SharedServices } from "../session-registry";
-import { SwarmSessionManager } from "../swarm-session-manager";
+import type { SessionRegistry, SessionServices, SharedServices } from "../session/session-registry";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 export type { AfterLoopResult };
 
@@ -28,7 +28,7 @@ export type { AfterLoopResult };
 
 /** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
-		setSessionManager?(sm: import("../swarm-session-manager").SwarmSessionManager): void;
+		setSessionManager?(sm: import("../session/swarm-session-manager").SwarmSessionManager): void;
 	start(): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
 	pause(): Promise<{ success: boolean; error?: string }>;
@@ -39,20 +39,25 @@ export interface RunManager {
 	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
 }
 
-/** Manages the Before Loop interactive planning phase. */
-export interface BeforeLoopManager {
-		setSessionManager?(sm: SwarmSessionManager): void;
-	start(task: string): Promise<{ success: boolean; error?: string }>;
+/** Manages the Script (planning) phase. */
+export interface ScriptManager {
+	setSessionManager?(sm: SwarmSessionManager): void;
+	start(task: string, agentId?: string): Promise<{ success: boolean; error?: string }>;
 	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
 	runDebate(): Promise<{ success: boolean; error?: string }>;
-	confirm(workerCount?: number, clonerCount?: number): Promise<{ success: boolean; error?: string }>;
+	confirm(agentCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
-	getState(): { phase: string; task: string; conversationLength: number; planReady: boolean; busy: boolean };
+	getState(): {
+		phase: string; task: string; conversationLength: number;
+		planReady: boolean; busy: boolean;
+		selectedAgentId?: string; recommendedAgents?: number;
+		estimatedAgentHours?: number;
+	};
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
 	readonly isBusy: boolean;
 }
 
-/** Accepts steering messages from the operator during a running loop. */
+/** Accepts steering messages from the human during a running loop. */
 export interface SteeringSink {
 	steer(text: string): void;
 }
@@ -75,7 +80,7 @@ export interface ApiRouteContext {
 	/** Services — populated from the session or from shared services. */
 	services: {
 		runManager?: RunManager;
-		beforeLoopManager?: BeforeLoopManager;
+		scriptManager?: ScriptManager;
 		steeringSink?: SteeringSink;
 		experienceStore?: ExperienceStore;
 		modelRegistry?: ModelRegistry;
@@ -116,7 +121,7 @@ export function buildApiRouteContext(
 		experienceStore: shared.experienceStore,
 		roleAssetManager: shared.roleAssetManager,
 		runManager: session?.runManager,
-		beforeLoopManager: session?.beforeLoopManager,
+		scriptManager: session?.scriptManager,
 		steeringSink: session?.steeringSink,
 		sessionManager: session?.sessionManager,
 	};
@@ -201,6 +206,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ entries });
 	},
 
+
+		// -- Session tree (session-scoped) ------------------------------------
+		"GET/tree": async (_req, ctx) => {
+			if (!ctx.services.sessionManager) return json({ error: "Session manager not available" }, 503);
+			const tree = ctx.services.sessionManager.getTree();
+			return json({ tree });
+		},
+
 	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md -----------
 	"GET/plan": async (_req, ctx) => {
 		const planPath = path.join(ctx.paths.swarmDir, ".omp", "plan.md");
@@ -230,6 +243,28 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		return json({ todos: ctx.stateTracker.state.todos ?? [] });
 	},
 
+
+		// -- Agents (profile listing for agent selector) --------------------
+		"GET/script/agents": (_req, ctx) => {
+			const profileRegistry = ctx.registry.shared.profileRegistry;
+			const profiles = profileRegistry.list();
+			const agents = profiles.map(p => ({
+				profileId: p.profileId,
+				name: p.identity.name,
+				archetype: p.identity.archetype,
+				score: p.credit.score,
+				domains: p.expertise.domains,
+				totalTasks: p.credit.totalTasks,
+				successRate: p.credit.successRate,
+				preferredRoles: p.stats.preferredRoles,
+				recommended: p.stats.rolePerformance["planner"]
+					? p.stats.rolePerformance["planner"].successRate >= 0.7 && p.stats.rolePerformance["planner"].tasks >= 2
+					: p.credit.score >= 70,
+			}));
+			agents.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0) || b.score - a.score);
+			return json({ agents });
+		},
+
 	// -- Run control -----------------------------------------------------
 	"POST/run/start": async (_req, ctx) => {
 		if (!ctx.services.runManager) {
@@ -239,7 +274,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: "A swarm run is already in progress" }, 409);
 		}
 		// Guard: the only valid entry point for starting a run is
-		// POST /before-loop/confirm (via the BeforeLoop flow).
+		// POST /script/confirm (via the BeforeLoop flow).
 		return json({ error: "Use the Before Loop flow to start a run. Direct /run/start is not allowed." }, 400);
 	},
 
@@ -276,66 +311,64 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	},
 
 	// -- After Loop results ----------------------------------------------
-	"GET/after-loop/summary": (_req, ctx) => {
+	"GET/curtain/summary": (_req, ctx) => {
 		const result = ctx.services.runManager?.getLastAfterLoopResult?.();
 		if (!result) return json({ error: "No After Loop result available yet" });
 		return json(result);
 	},
 
 	// -- Before Loop (interactive planning) ------------------------------
-	"POST/before-loop/start": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+	"POST/script/start": async (req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Script manager not available" }, 503);
 		if (ctx.services.runManager?.isRunning) return json({ error: "A swarm run is already in progress" }, 409);
-		const body = (await req.json().catch(() => ({}))) as { task?: string };
+		const body = (await req.json().catch(() => ({}))) as { task?: string; agentId?: string };
 		if (!body.task || body.task.trim().length === 0) {
 			return json({ error: "Task description is required" }, 400);
 		}
-		const result = await ctx.services.beforeLoopManager.start(body.task);
+		const result = await ctx.services.scriptManager.start(body.task, body.agentId);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/message": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+	"POST/script/message": async (req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Script manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as { text?: string };
 		if (!body.text || body.text.trim().length === 0) {
 			return json({ error: "Message text is required" }, 400);
 		}
-		const result = await ctx.services.beforeLoopManager.sendMessage(body.text);
+		const result = await ctx.services.scriptManager.sendMessage(body.text);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"GET/before-loop/state": (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		return json(ctx.services.beforeLoopManager.getState());
+	"GET/script/state": (_req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json(ctx.services.scriptManager.getState());
 	},
 
-	"GET/before-loop/history": (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		return json({ history: ctx.services.beforeLoopManager.getHistory() });
+	"GET/script/history": (_req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		return json({ history: ctx.services.scriptManager.getHistory() });
 	},
 
-	"POST/before-loop/debate": async (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.runDebate();
+	"POST/script/debate": async (_req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.scriptManager.runDebate();
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/confirm": async (req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
+	"POST/script/confirm": async (req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
 		const body = (await req.json().catch(() => ({}))) as {
-			workerCount?: number;
-			clonerCount?: number;
+			agentCount?: number;
 		};
-		const result = await ctx.services.beforeLoopManager.confirm(
-			body.workerCount,
-			body.clonerCount,
+		const result = await ctx.services.scriptManager.confirm(
+			body.agentCount,
 		);
 		return json(result, result.success ? 200 : 500);
 	},
 
-	"POST/before-loop/cancel": async (_req, ctx) => {
-		if (!ctx.services.beforeLoopManager) return json({ error: "Before Loop manager not available" }, 503);
-		const result = await ctx.services.beforeLoopManager.cancel();
+	"POST/script/cancel": async (_req, ctx) => {
+		if (!ctx.services.scriptManager) return json({ error: "Before Loop manager not available" }, 503);
+		const result = await ctx.services.scriptManager.cancel();
 		return json(result, result.success ? 200 : 500);
 	},
 
@@ -362,6 +395,14 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const resolved = ctx.services.runManager.resolveBlocker(body.decision as "continue" | "skip" | "abort");
 		if (!resolved) return json({ error: "No active blockage to resolve" }, 409);
 		return json({ success: true });
+	},
+
+	// -- Applaud (Curtain phase confirmation) ------------------------------
+	"POST/curtain/applaud": async (_req, ctx) => {
+		if (!ctx.services.runManager) return json({ error: "Run manager not available" }, 503);
+		await ctx.stateTracker.updatePipeline({ phase: "idle", status: "completed" });
+		ctx.services.sessionManager?.logPhase("idle");
+		return json({ success: true, message: "Bravo! The curtain has fallen." });
 	},
 
 	// -- Terminal (xterm.js) ---------------------------------------------
@@ -435,11 +476,35 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	// Route key format: "METHOD /path"
 	// ══════════════════════════════════════════════════════════════════════
 
+		// -- Agent Profiles (global) -------------------------------------------
+		"GET /api/profiles": (_req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			return json({ profiles: registry.list() });
+		},
+		"POST /api/profiles": async (req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			const body = (await req.json()) as { profileId?: string; name?: string; archetype?: string };
+			if (!body.profileId) return json({ error: "profileId is required" }, 400);
+			const profile = registry.getOrCreate({
+				profileId: body.profileId,
+				name: body.name ?? body.profileId,
+				archetype: body.archetype ?? "worker",
+				description: `Agent: ${body.name ?? body.profileId}`,
+			});
+			return json(profile, 201);
+		},
+
+		"POST /api/profiles/save": async (_req, ctx) => {
+			const registry = ctx.registry.shared.profileRegistry;
+			await registry.save(ctx.registry.shared.workspace);
+			return json({ success: true, count: registry.list().length });
+		},
+
 	// -- Role Asset Library ----------------------------------------------
 	"GET /api/roles": (req, ctx) => {
 		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
 		const url = new URL(req.url);
-		const status = url.searchParams.get("status") as import("../role-asset").RoleStatus | null;
+		const status = url.searchParams.get("status") as import("../agent/role-asset").RoleStatus | null;
 		const tag = url.searchParams.get("tag") ?? undefined;
 		const q = url.searchParams.get("q") ?? undefined;
 		if (tag || q || status) {
@@ -462,7 +527,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 	"POST /api/roles": async (req, ctx) => {
 		if (!ctx.services.roleAssetManager) return json({ error: "Role asset manager not available" }, 503);
 		try {
-			const body = (await req.json()) as import("../role-asset").RoleCreateInput;
+			const body = (await req.json()) as import("../agent/role-asset").RoleCreateInput;
 			if (!body.id || !body.name || !body.prompts) return json({ error: "Missing required fields: id, name, prompts" }, 400);
 			const role = await ctx.services.roleAssetManager.create(body);
 			return json(role, 201);
@@ -476,7 +541,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 		const id = ctx.params.id;
 		if (!id) return json({ error: "Missing role ID" }, 400);
 		try {
-			const body = (await req.json()) as import("../role-asset").RoleUpdateInput;
+			const body = (await req.json()) as import("../agent/role-asset").RoleUpdateInput;
 			const role = await ctx.services.roleAssetManager.update(id, body);
 			return json(role);
 		} catch (err) {
@@ -576,6 +641,18 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ error: String(err) }, 500);
 		}
 	},
+
+		// -- Session fork (global) ----------------------------------------------
+		"POST /api/sessions/fork": async (req, ctx) => {
+			try {
+				const body = (await req.json()) as { parent: string; name: string };
+				if (!body.parent || !body.name) return json({ error: "parent and name are required" }, 400);
+				const session = await ctx.registry.forkSession(body.parent, body.name);
+				return json({ name: session.name, parent: body.parent }, 201);
+			} catch (err) {
+				return json({ error: String(err) }, 500);
+			}
+		},
 	// -- Runs (list all sessions) ----------------------------------------
 	"GET /api/runs": async (_req, ctx) => {
 		try {

@@ -3,16 +3,16 @@ import { Crown, FileWarning, Bot, ListTodo, FileText, Brain, TrendingUp, Trendin
 import { useSwarmStore } from "../../stores/swarm-store";
 import PlanViewer from "./PlanViewer";
 import TodoList from "./TodoList";
-import AfterLoopPanel from "./AfterLoopPanel";
+import CurtainPanel from "./CurtainPanel";
 import { Button } from "../ui/button";
 
-function WorkerCard({ name, praise, criticism, conflict, status, role }: {
+function AgentCard({ name, praise, criticism, conflict, status, role }: {
   name: string; praise: number; criticism: number; conflict: number;
   status: string; role?: string;
 }) {
   const score = praise - criticism - conflict;
   const scoreColor = score > 0 ? "text-success" : score < 0 ? "text-danger" : "text-muted-foreground";
-  const statusDot = status === "completed" ? "bg-success" : status === "running" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-background-overlay";
+  const statusDot = status === "completed" ? "bg-success" : status === "stage" ? "bg-warning" : status === "failed" ? "bg-danger" : "bg-background-overlay";
 
   return (
     <div className="bg-background-elevated rounded px-2.5 py-2 border border-border">
@@ -67,7 +67,7 @@ function ScalingEvents() {
                 ) : (
                   <TrendingDown size={10} className="text-status-danger flex-shrink-0" />
                 )}
-                <span className="font-mono text-foreground/80">{ev.worker}</span>
+                <span className="font-mono text-foreground/80">{ev.agent}</span>
                 <span>{ev.reason ?? (isAdd ? "added" : "removed")}</span>
               </div>
             );
@@ -92,8 +92,8 @@ export default function ContextPanel() {
   // panel vanish. We now always render the panel shell and derive data
   // defensively, showing an idle/empty state instead of disappearing.
   const agents = Object.entries(swarmState?.agents ?? {});
-  const workers = agents.filter(([_, a]) => !a.name.startsWith("cloner"));
-  const reviewers = agents.filter(([_, a]) => a.name.startsWith("cloner"));
+  const allAgents = agents.filter(([_, a]) => a.role !== "reviewer");
+  const reviewers = agents.filter(([_, a]) => a.role === "reviewer");
   const lastVerdict = [...activities].reverse().find((a) => a.type === "verdict");
   const conflicts = activities.filter((a) => a.type === "conflict");
 
@@ -142,14 +142,14 @@ export default function ContextPanel() {
             </div>
           )}
 
-          {/* Workers */}
+          {/* Agents */}
           <div className="px-3 py-2 border-b border-border">
-            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">Agents ({workers.length})</span>
+            <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">Agents ({allAgents.length})</span>
           </div>
-          {workers.length > 0 ? (
+          {allAgents.length > 0 ? (
             <div className="p-2 space-y-1">
-              {workers.map(([id, agent]) => (
-                <WorkerCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
+              {allAgents.map(([id, agent]) => (
+                <AgentCard key={id} name={agent.name} praise={agent.praiseCount} criticism={agent.criticismCount} conflict={agent.conflictCount} status={agent.status} role={agent.role} />
               ))}
             </div>
           ) : (
@@ -168,7 +168,7 @@ export default function ContextPanel() {
               </div>
               <div className="p-2 space-y-1">
                 {reviewers.map(([id, agent]) => (
-                  <WorkerCard key={id} name={agent.name} praise={0} criticism={0} conflict={0} status={agent.status} />
+                  <AgentCard key={id} name={agent.name} praise={0} criticism={0} conflict={0} status={agent.status} />
                 ))}
               </div>
             </>
@@ -210,11 +210,11 @@ export default function ContextPanel() {
             </div>
           )}
 
-          {/* Worker scaling events */}
+          {/* Agent scaling events */}
           <ScalingEvents />
 
           {/* After Loop results */}
-          <AfterLoopPanel />
+          <CurtainPanel />
         </div>
       )}
 
