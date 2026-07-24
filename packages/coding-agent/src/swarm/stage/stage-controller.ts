@@ -32,7 +32,28 @@ import type { StateTracker } from "../core/state";
 import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
 import { TaskComplexityAnalyzer } from "../script/task-analyzer";
 import type { ReviewVerdict } from "../core/pipeline";
-import type { VerificationResult } from "../core/verification-hook";
+
+// ============================================================================
+// StageCallbacks — feedback interface for Profile credit + Stigmergy marks
+// ============================================================================
+
+/**
+ * Callbacks invoked by StageController at key lifecycle points.
+ * Implementations wire ProfileRegistry credit updates and MarkEnvironment
+ * signal placement without StageController needing to know about them.
+ */
+export interface StageCallbacks {
+	/** Called after agent selection completes. */
+	onAgentsSelected(agents: ScoredAgent[]): void;
+	/** Called when an agent successfully completes a task. */
+	onTaskCompleted(agentId: string, task: Task, result: SingleResult): void;
+	/** Called when an agent fails a task. */
+	onTaskFailed(agentId: string, task: Task, error: string): void;
+	/** Called when the entire Stage finishes. */
+	onStageComplete(result: StageResult): void;
+	/** Called when building an agent's prompt. Return extra context to inject, or null. */
+	getAgentContext(agentId: string): string | null;
+}
 
 // ============================================================================
 // Types
@@ -54,20 +75,8 @@ export interface StageOptions {
 	executor?: AgentExecutor;
 	/** Pre-selected agent IDs (skip selection algorithm). */
 	agentIds?: string[];
-}
-
-/** Legacy alias for backward compat with curtain/monitor code. */
-export interface LoopResult {
-	status: "completed" | "failed" | "aborted" | "escalated" | "converged_failed" | "converged_partial";
-	iterations: number;
-	reviewVerdicts: ReviewVerdict[];
-	errors: string[];
-	escalationContext?: {
-		lastAgentOutput: string;
-		lastFindings: string[];
-		approvalRatio: number;
-	};
-	verificationResults?: VerificationResult;
+	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
+	callbacks?: StageCallbacks;
 }
 
 export interface StageResult {
@@ -176,6 +185,9 @@ export class StageController {
 		// Save profiles immediately so they persist across restarts
 		await registry.save(this.#opts.workspace).catch(() => {});
 
+		// P7: Notify callbacks that agents have been selected
+		this.#opts.callbacks?.onAgentsSelected(selectedAgents);
+
 		activityLogger.logBroadcast("system", `Selected ${selectedAgents.length} agents: ${selectedAgents.map(a => a.name).join(", ")}`);
 
 		// 3. Role assignment (roundtable or direct)
@@ -223,13 +235,18 @@ export class StageController {
 		await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Execution complete" });
 		activityLogger.logPhase("curtain", undefined, 1);
 
-		return {
+		const result: StageResult = {
 			status: errors.length > 0 ? "failed" : "completed",
 			agentResults,
 			errors,
 			agents: roleAssignments,
 			taskProgress: { total: progress.total, completed: progress.completed },
 		};
+
+		// P7: Notify callbacks that the stage is complete
+		this.#opts.callbacks?.onStageComplete(result);
+
+		return result;
 	}
 
 	// ────────────────────────────────────────────────────────────────────────
@@ -303,12 +320,14 @@ export class StageController {
 			roleDef = await roleAssetManager.get(agent.role);
 		} catch { /* use defaults */ }
 
-		// Build system prompt with profile context
+		// Build system prompt with profile context + P7 stigmergy context
 		const profileCtx = profileRegistry.getPromptContext(agent.id);
+		const stigmergyCtx = this.#opts.callbacks?.getAgentContext(agent.id) ?? "";
 		const systemPrompt = [
 			roleDef?.prompts?.system ??
 				`You are a ${agent.role} in the SatoPi system. Complete tasks assigned to you from the task queue.`,
 			profileCtx ?? "",
+			stigmergyCtx,
 			"",
 			"TASK QUEUE INSTRUCTIONS:",
 			"- You have a shared task queue. Use the queue to claim the next available task.",
@@ -361,14 +380,17 @@ export class StageController {
 
 				if (result.exitCode === 0) {
 					queue.complete(task.id);
+					this.#opts.callbacks?.onTaskCompleted(agent.id, task, result);
 					activityLogger.logBroadcast("system", `${agent.id} completed: ${task.title}`);
 				} else {
 					queue.block(task.id, `Agent ${agent.id} failed with exit ${result.exitCode}`);
+					this.#opts.callbacks?.onTaskFailed(agent.id, task, `exit code ${result.exitCode}`);
 					activityLogger.logBroadcast("system", `${agent.id} failed: ${task.title} (exit ${result.exitCode})`);
 				}
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
 				queue.block(task.id, msg);
+				this.#opts.callbacks?.onTaskFailed(agent.id, task, msg);
 				activityLogger.logCrash(agent.id, msg);
 			}
 		}

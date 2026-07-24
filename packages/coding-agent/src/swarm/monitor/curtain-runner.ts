@@ -15,7 +15,7 @@ import { ActivityLogger } from "../hooks/activity-logger";
 import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary } from "../curtain";
 import { VerificationHook } from "../core/verification-hook";
 import { streamAgentOutput } from "../render/streaming";
-import type { LoopResult } from "../stage/stage-controller";
+import type { StageResult } from "../stage/stage-controller";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { AfterLoopResult } from "./types";
 import type { RoleAssetManager } from "../agent/role-asset";
@@ -43,7 +43,7 @@ export interface CurtainRunnerOpts {
 export interface CurtainResultData {
 	runId: string;
 	status: string;
-	iterations: number;
+	totalTasks: number;
 	summaryMarkdown: string;
 	lessons: import("../curtain/experience").ExperienceLesson[];
 	reflection: {
@@ -70,7 +70,7 @@ export interface CurtainResultData {
  * Run the Curtain phase: reporter agent + parallel reflection.
  */
 export async function runCurtainPipeline(
-	result: LoopResult,
+	result: StageResult,
 	opts: CurtainRunnerOpts,
 ): Promise<CurtainResultData | null> {
 	const {
@@ -83,7 +83,7 @@ export async function runCurtainPipeline(
 
 	// ── Phase: curtain ──
 	await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Curtain: summarizing" });
-	activityLogger.logPhase("curtain", undefined, result.iterations);
+	activityLogger.logPhase("curtain", undefined, result.taskProgress.total);
 
 	// Agent counts
 	const agents = stateTracker.state.agents;
@@ -136,7 +136,7 @@ export async function runCurtainPipeline(
 	const curtainResult: CurtainResultData = {
 		runId,
 		status: result.status,
-		iterations: result.iterations,
+		totalTasks: result.taskProgress.total,
 		summaryMarkdown,
 		lessons: extraction.lessons,
 		reflection: extraction.deepReflection
@@ -158,7 +158,7 @@ export async function runCurtainPipeline(
 
 	// Phase complete — wait for applaud
 	await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Curtain: awaiting applaud" });
-	activityLogger.logPhase("curtain-done", undefined, result.iterations);
+	activityLogger.logPhase("curtain-done", undefined, result.taskProgress.total);
 
 	logger.info("[Curtain] Phase completed successfully");
 	return curtainResult;
@@ -170,7 +170,7 @@ export async function runCurtainPipeline(
 
 async function runReporterAgent(
 	workspace: string,
-	result: LoopResult,
+	result: StageResult,
 	opts: {
 		modelRegistry: ModelRegistry;
 		settings: Settings;
@@ -209,7 +209,7 @@ async function runReporterAgent(
 					"## Build Complete — Report to User",
 					"",
 					`Status: ${result.status}`,
-					`Iterations: ${result.iterations}`,
+					`Tasks: ${result.taskProgress.completed}/${result.taskProgress.total}`,
 					"",
 					"## Instructions",
 					"1. Check workspace for files created/modified",
@@ -249,7 +249,7 @@ interface ReflectionResult {
 }
 
 async function runReflectionPipeline(
-	result: LoopResult,
+	result: StageResult,
 	opts: {
 		agentCount: number;
 		

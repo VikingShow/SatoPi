@@ -13,9 +13,7 @@ import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
 
 // ============================================================================
-// ReviewVerdict — result of a review phase (kept for backward compat
-// with existing hooks in LoopPipelineHooks, to be removed when StageController
-// fully replaces LoopController).
+// ReviewVerdict — result of a review/debate phase.
 // ============================================================================
 
 export interface ReviewVerdict {

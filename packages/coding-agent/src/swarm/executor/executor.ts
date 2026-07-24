@@ -115,8 +115,7 @@ const defaultExecutor = new SubprocessAgentExecutor();
 /**
  * Execute a single swarm agent as an oh-my-pi subagent.
  *
- * Kept as a free function for backward compatibility. New code should
- * prefer `AgentExecutor.execute()` via the pipeline's executor injection.
+ * Used by both SubprocessAgentExecutor and PipelineController.
  */
 export async function executeSwarmAgent(
 	agent: SwarmAgent,

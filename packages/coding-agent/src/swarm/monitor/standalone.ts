@@ -25,7 +25,7 @@ import { stampAndArchivePlanMd } from "../script/script-planner";
 import { getSessionPlanPath } from "../script/plan-paths";
 import { ScriptManager } from "../script/script-manager";
 import { ExperienceStore } from "../curtain";
-import type { LoopResult } from "../stage/stage-controller";
+import type { StageResult } from "../stage/stage-controller";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import { RoleAssetManager } from "../agent/role-asset";
@@ -38,6 +38,7 @@ import {
 } from "../session/session-registry";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { MarkEnvironment } from "../coordination/mark-environment";
+import { createStageFeedback } from "../hooks/swarm-hooks";
 
 
 // ============================================================================
@@ -172,6 +173,12 @@ class SwarmRunManager implements RunManager {
 			logger.info("[RunManager] Starting swarm", { name: def.name, agentCount: agentNames.length });
 
 						// StageController: task-queue-based, event-driven, agent selection
+			const stageFeedback = createStageFeedback({
+				enabled: def.loopConfig.stigmergy?.enabled ?? true,
+				profileRegistry: this.#profileRegistry,
+				markEnvironment: this.#markEnvironment,
+			});
+
 			const stage = createStageController({
 				workspace: this.#workspace,
 				swarmName: def.name,
@@ -184,17 +191,13 @@ class SwarmRunManager implements RunManager {
 				signal: this.#abortController.signal,
 				profileRegistry: this.#profileRegistry,
 				roleAssetManager: this.#roleAssetManager,
+				callbacks: stageFeedback,
 			});
 
 			stage.run().then(async (result) => {
 				logger.info("[RunManager] Stage finished", { status: result.status });
 				if (result.errors.length > 0) logger.info("[RunManager] Stage errors", { errors: result.errors });
-				await this.#runCurtainPipeline({
-					status: result.status === "completed" ? "completed" : "failed",
-					iterations: 1,
-					reviewVerdicts: [],
-					errors: result.errors,
-				});
+				await this.#runCurtainPipeline(result);
 			}).catch((err) => {
 				logger.error("[RunManager] Stage failed", { error: String(err) });
 			}).finally(() => {
@@ -234,7 +237,7 @@ class SwarmRunManager implements RunManager {
 		return true;
 	}
 
-	async #runCurtainPipeline(result: LoopResult): Promise<void> {
+	async #runCurtainPipeline(result: StageResult): Promise<void> {
 		const result_ = await runCurtainPipeline(result, {
 			workspace: this.#workspace,
 			stateTracker: this.#stateTracker,

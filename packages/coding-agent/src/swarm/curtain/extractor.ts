@@ -1,7 +1,7 @@
 /**
  * After Loop — Rule-based lesson extraction.
  *
- * Analyzes LoopResult to extract structured lessons from agent output
+ * Analyzes StageResult to extract structured lessons from agent output
  * suitable for storage in the experience database.
  *
  * Extraction rules:
@@ -12,7 +12,7 @@
  *   - Review verdicts (alignment issues, safety flags)
  */
 
-import type { LoopResult } from "../stage/stage-controller";
+import type { StageResult } from "../stage/stage-controller";
 
 // ============================================================================
 // Types
@@ -52,37 +52,30 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
-export function extractLessons(result: LoopResult, agentCount: number, reviewerCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
+export function extractLessons(result: StageResult, agentCount: number, reviewerCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
 	const lessons: ExtractedLesson[] = [];
+
+	const taskCount = result.taskProgress.total;
+	const completedCount = result.taskProgress.completed;
 
 	// 1. Status-based insight
 	if (result.status === "completed") {
 		lessons.push({
 			type: "success",
-			summary: `Loop completed in ${result.iterations} iteration(s)`,
-			detail: `The swarm reached consensus after ${result.iterations} iteration(s) with ${agentCount} agents.`,
-			tags: ["completion", "consensus", `iterations:${result.iterations}`],
+			summary: `Stage completed: ${completedCount}/${taskCount} tasks done`,
+			detail: `All ${completedCount} tasks completed by ${agentCount} agents with no errors.`,
+			tags: ["completion", `tasks:${completedCount}`],
 			confidence: 0.9,
-			source: "loop-controller",
-		});
-	} else if (result.status === "escalated") {
-		lessons.push({
-			type: "warning",
-			summary: `Loop escalated to human after ${result.iterations} iteration(s)`,
-			detail:
-				"The swarm could not reach consensus. Reviewers disagreed or confidence was too low. Human intervention needed.",
-			tags: ["escalation", "no-consensus", "human-intervention"],
-			confidence: 0.8,
-			source: "loop-controller",
+			source: "stage-controller",
 		});
 	} else if (result.status === "failed") {
 		lessons.push({
 			type: "error",
-			summary: `Loop failed after ${result.iterations} iteration(s)`,
-			detail: `Max iterations (${result.iterations}) reached without passing review. Consider: clearer acceptance criteria, more agents, or task decomposition.`,
-			tags: ["failure", "max-iterations", "no-consensus"],
+			summary: `Stage failed: ${completedCount}/${taskCount} tasks done (${result.errors.length} error(s))`,
+			detail: `${completedCount} of ${taskCount} tasks completed before failure. ${result.errors.length} error(s) encountered.`,
+			tags: ["failure", `tasks:${completedCount}`],
 			confidence: 0.7,
-			source: "loop-controller",
+			source: "stage-controller",
 		});
 	}
 
@@ -102,32 +95,33 @@ export function extractLessons(result: LoopResult, agentCount: number, reviewerC
 		});
 	}
 
-	// 3. Review verdict insights
-	for (const verdict of result.reviewVerdicts) {
-		if (!verdict.passed) {
-			for (const finding of verdict.findings) {
-				const tags = parseFindingTags(finding);
+	// 3. Agent result insights — extract lessons from successes and failures
+	let totalAgentResults = 0;
+	let successfulResults = 0;
+	for (const [, results] of result.agentResults) {
+		for (const r of results) {
+			totalAgentResults++;
+			if (r.exitCode === 0) successfulResults++;
+			else if (r.output) {
 				lessons.push({
 					type: "insight",
-					summary: finding.slice(0, 200),
-					detail: `Review finding (${verdict.approvalCount}/${verdict.totalCount} passed): ${finding}`,
-					tags: [...tags, "review", "finding"],
+					summary: r.output.slice(0, 200),
+					detail: `Agent ${r.agent} task ${r.task} failed with exit ${r.exitCode}`,
+					tags: ["agent-failure", `agent:${r.agent}`],
 					confidence: 0.7,
-					source: "agent-review",
+					source: "agent-result",
 				});
 			}
 		}
 	}
 
 	// 4. Stats
-	const approvalCount = result.reviewVerdicts.reduce((sum, v) => sum + v.approvalCount, 0);
-	const totalReviews = result.reviewVerdicts.reduce((sum, v) => sum + v.totalCount, 0);
-	const approvalRatio = totalReviews > 0 ? approvalCount / totalReviews : 0;
+	const successRatio = totalAgentResults > 0 ? successfulResults / totalAgentResults : 0;
 
 	const stats: LoopRunStats = {
-		totalIterations: result.iterations,
+		totalIterations: taskCount,
 		finalStatus: result.status,
-		reviewApprovalRatio: Math.round(approvalRatio * 100) / 100,
+		reviewApprovalRatio: Math.round(successRatio * 100) / 100,
 		agentCount,
 	};
 

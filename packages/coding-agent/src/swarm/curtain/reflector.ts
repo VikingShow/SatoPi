@@ -1,7 +1,7 @@
 /**
  * After Loop — LLM Deep Reflection.
  *
- * Takes the completed LoopResult + extracted lessons and performs a single
+ * Takes the completed StageResult + extracted lessons and performs a single
  * cheap-model LLM call to identify root causes, effective patterns,
  * structural issues, and actionable recommendations.
  *
@@ -15,7 +15,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import reflectionSystemPrompt from "../../prompts/system/loop-reflection.md" with { type: "text" };
-import type { LoopResult } from "../stage/stage-controller";
+import type { StageResult } from "../stage/stage-controller";
 import type { ExtractedLesson, ExtractionResult } from "./extractor";
 
 // ============================================================================
@@ -59,7 +59,7 @@ const REFLECTION_MAX_TOKENS = 1024;
  *   but never throw — reflection is best-effort.
  */
 export async function reflectDeep(
-	result: LoopResult,
+	result: StageResult,
 	extraction: ExtractionResult,
 	deps: {
 		registry: ModelRegistry;
@@ -186,17 +186,16 @@ export function reflectionToLesson(reflection: DeepReflection, runId: string): E
  * Build the user-facing part of the reflection prompt from the loop result
  * and extracted lessons.
  */
-function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult): string {
+function buildReflectionPrompt(result: StageResult, extraction: ExtractionResult): string {
 	const { stats, lessons } = extraction;
 
 	const lines: string[] = [
-		"## Loop Run Summary",
+		"## Stage Run Summary",
 		"",
 		`- Status: ${result.status}`,
-		`- Iterations: ${result.iterations}`,
-		`- Workers: ${stats.agentCount}`,
+		`- Tasks completed: ${result.taskProgress.completed}/${result.taskProgress.total}`,
 		`- Agents: ${stats.agentCount}`,
-		`- Cloner approval ratio: ${stats.reviewApprovalRatio}`,
+		`- Success ratio: ${stats.reviewApprovalRatio}`,
 	];
 
 	if (result.errors.length > 0) {
@@ -204,9 +203,9 @@ function buildReflectionPrompt(result: LoopResult, extraction: ExtractionResult)
 	}
 
 	// Review findings
-	const findings = result.reviewVerdicts.flatMap(v => v.findings);
+	const findings = result.errors.map(e => e.slice(0, 300));
 	if (findings.length > 0) {
-		lines.push("", "### Review Findings", ...findings.slice(0, 10).map(f => `- ${f.slice(0, 300)}`));
+		lines.push("", "### Errors / Issues", ...findings.slice(0, 10).map(f => `- ${f.slice(0, 300)}`));
 	}
 
 	// Extracted lessons
