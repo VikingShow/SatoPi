@@ -1,3 +1,4 @@
+@import "@oh-my-pi/pi-web/tool-render/tool-render.css";
 @import 'tailwindcss';
 
 @custom-variant dark (&:is(.dark *));
@@ -390,3 +391,4 @@
     transition: none !important;
   }
 }
+@import "../../../web/src/tool-render/tool-render.css";

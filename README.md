@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="assets/hero.png" alt="SatoPi — Satori, a Team of Pi" width="320">
+  <img src="assets/hero.png" alt="SatoPi — Satori a team of Pi" width="320">
 </p>
 
 <p align="center">
-  <strong>Satori, a Team of Pi</strong> — Multi-agent swarm orchestration with roundtable debate.
+  <strong>Satori a team of Pi</strong> — Multi-agent swarm orchestration with roundtable debate.
+  &nbsp;·&nbsp; <a href="README-zh.md">中文</a>
 </p>
 
 <p align="center">
@@ -25,17 +26,54 @@
 
 ## Dev
 
+### Prerequisites
 
-  // 后端（端口 7878）：
-  
-  cd /root/workspace/SatoPi/packages/coding-agent
-  bun run src/swarm/monitor/standalone.ts
+**bun ≥ 1.3.14** · Rust nightly-2026-04-29
 
-  // 前端（端口 5173）：
-  
-  cd /root/workspace/SatoPi/packages/swarm-gui
-  npx vite --host 0.0.0.0
-  
+### Setup
+
+```sh
+git clone https://github.com/VikingShow/SatoPi.git
+cd SatoPi
+bun setup          # install deps + build Rust native addon + link CLI
+```
+
+### Swarm Backend (port 7878)
+
+```sh
+cd packages/coding-agent
+bun run src/swarm/monitor/standalone.ts [workspace-dir]
+```
+
+### Swarm Frontend (port 5173)
+
+```sh
+cd packages/swarm-gui
+bun run dev        # Vite HMR dev server
+```
+
+### omp CLI (from source)
+
+```sh
+bun dev            # interactive TUI
+bun dev -- -p "list .ts files"  # one-shot prompt
+```
+
+### Check & Test
+
+```sh
+bun check          # TypeScript + Biome + Rust type-check
+bun test           # full test suite (local mode)
+bun lint           # lint all
+bun fmt            # format all
+```
+
+### Native Rebuild
+
+```sh
+bun run build:native   # rebuild Rust N-API addon after crate changes
+```
+
 
 ## Install
 
@@ -86,7 +124,7 @@ eval "$(omp completions bash)"
 omp completions fish > ~/.config/fish/completions/omp.fish
 ```
 
-## SatoPi — Satori, a Team of Pi
+## SatoPi — Satori a team of Pi
 
 **SatoPi**（悟り + Pi）— *"A team of Pi agents reaching enlightenment through collective deliberation."*
 
@@ -97,7 +135,23 @@ The logo embodies three layers:
 - **Golden ring** — the light of emergent wisdom breaking through
 - **Bodhi leaf**（菩提葉）— enlightenment growing from collective deliberation
 
-SatoPi extends omp with a multi-agent swarm architecture featuring before-loop planning (Socratic dialogue), Cloner Roundtable debate, and auto-scaling worker agents.
+### The Opera Metaphor
+
+SatoPi models the entire swarm workflow as a **three-act opera**:
+
+```
+Script → Stage → Curtain
+```
+
+| Act | Phase | What happens |
+|-----|-------|--------------|
+| **Script** | `script` → `script-debate` → `script-confirm` | Socratic dialogue clarifies the task, then a multi-agent roundtable debate refines the plan into `.omp/plan.md` |
+| **Stage** | `stage` ⇄ `paused` / `blocked` | Agents claim tasks from a DAG queue and execute in parallel, coordinated via stigmergy (environment marks) and IRC (direct messaging) |
+| **Curtain** | `curtain` → `idle` | Experience extraction, root-cause analysis, and reflection — lessons persist for future runs |
+
+The state machine enforces this flow: `idle → script → script-debate → script-confirm → stage ⇄ (paused | blocked) → curtain → idle`. Illegal transitions are rejected — phase authority lives solely in the backend.
+
+SatoPi extends omp with a multi-agent swarm architecture: the **script** phase handles planning through Socratic dialogue and roundtable debate, the **stage** phase runs parallel agents against a shared DAG task queue, and the **curtain** phase performs retrospective analysis.
 
 ## SatoPi Swarm — Development Guide
 
@@ -107,23 +161,25 @@ SatoPi extends omp with a multi-agent swarm architecture featuring before-loop p
 # Clone and install dependencies
 git clone https://github.com/VikingShow/SatoPi.git
 cd SatoPi
-bun install
+bun setup          # install deps + build Rust native addon + link CLI
 
 # Start backend (Bun runtime, port 7878)
 cd packages/coding-agent
 bun run src/swarm/monitor/standalone.ts
 
-# Start frontend dev server (Vite HMR, port 80)
+# Start frontend dev server (Vite HMR, port 5173)
 cd packages/swarm-gui
-npx vite --host 0.0.0.0 --port 80
+bun run dev
 ```
 
 ### Architecture
 
+SatoPi models the swarm as a **three-act opera**: **Script** → **Stage** → **Curtain**.
+
 | Component | Port | Description |
 |-----------|------|-------------|
 | **Swarm Backend** | `7878` | MonitorServer — REST API + SSE events |
-| **Swarm Frontend** | `80` | Vite dev — React GUI with HMR |
+| **Swarm Frontend** | `5173` | Vite dev — React GUI with HMR |
 | **SSE Events** | `7878/events` | Real-time agent output streaming |
 
 ### Configuration
@@ -132,33 +188,55 @@ Edit `.swarm-workspace/loop.yaml` to configure the swarm:
 
 ```yaml
 swarm:
-  name: demo-swarm
-  model: deepseek-v4-pro       # Default model for all agents
+  name: demo-swarm              # Swarm name
+  model: deepseek-v4-pro        # Default model for all agents
+  mode: loop                    # pipeline | parallel | sequential | loop
   agents: {}                    # Required key (empty for loop mode)
-  max_iterations: 5
-  workers:
-    initial: 3
-    max_rounds: 5
-  cloners:
-    count: 2
-  agent_restrictions:
-    socrates:
-      allowed: [read, write_file, grep, find]
-    cloner:
-      blocked: [bash, write_file, edit]
+  max_iterations: 5             # Max review-retry iterations
+  convergence_threshold: 2      # Consecutive identical findings to stop
+  iteration_timeout_ms: 300000  # Per-iteration timeout (5 min default)
+
+  stage:                        # Stage (execution) phase config
+    initial: 3                  # Initial agent count
+    min: 1                      # Minimum agents
+    max: 10                     # Maximum agents
+    auto: false                 # Auto-analyze plan complexity
+    max_rounds: 5               # Deliberation rounds per iteration
+
+  plan_debate:                  # Plan debate (script-debate) config
+    enabled: true
+    agent_count: 2              # Debate participants
+    max_rounds: 3               # Max debate rounds
+    convergence_threshold: 2    # Consecutive rounds ≥85% similarity
+
+  verification:                 # Post-loop test commands
+    commands: ["bun test", "tsc --noEmit"]
+    blocking: true              # Failure → re-enter stage loop
+
+  offload:                      # Context offload pipeline (opt-in)
+    enabled: false
+    l1_trigger_threshold: 4
+
+  agent_restrictions:           # Per-agent tool restrictions
+    worker:
+      allowed: [read, write, edit, bash]
+    reviewer:
+      blocked: [bash, write]
 ```
 
-### Before Loop Flow
+### Script Phase
 
-1. **Start planning** — type task in chat input, Socrates begins Socratic dialogue
-2. **Plan emerges** — Socrates writes `.omp/plan.md` when sufficient clarity
-3. **Run Debate** — Cloner Roundtable refines the plan through multi-round debate
-4. **Confirm & Start** — launches the swarm loop with workers + cloners
+*"Writing the libretto before the performance."*
+
+1. **Start planning** — type a task in the chat input, the Planner agent begins Socratic dialogue
+2. **Plan emerges** — Planner writes `.omp/plan.md` when sufficient clarity is reached
+3. **Run Debate** — a multi-agent roundtable debate refines the plan over multiple rounds with Jaccard similarity convergence detection
+4. **Confirm & Start** — approved plan transitions to the stage phase, launching parallel agents against the DAG task queue
 5. **Cancel** — abort at any time (button always enabled)
 
 ### Model Configuration
 
-The model is read from `loop.yaml` → `swarm.model`. It applies to all agents (Socrates, workers, cloners). Change it at any time:
+The model is read from `loop.yaml` → `swarm.model`. It applies to all agents (planner, workers, reviewers). Change it at any time:
 
 ```sh
 sed -i 's/model: .*/model: YOUR-MODEL/' .swarm-workspace/loop.yaml
@@ -177,10 +255,10 @@ The frontend does NOT hardcode any model — it always reads from the backend's 
 
 | File | Purpose |
 |------|---------|
-| `packages/coding-agent/src/swarm/` | Backend swarm logic (38 .ts files) |
-| `packages/swarm-gui/src/` | React frontend (Zustand + Tailwind) |
+| `packages/coding-agent/src/swarm/` | Backend swarm logic (~80 .ts files across 15 subdirectories) |
+| `packages/swarm-gui/src/` | React frontend (Zustand + Tailwind + SSE streaming) |
 | `.swarm-workspace/loop.yaml` | Swarm configuration |
-| `.omp/plan.md` | Generated plan from before-loop |
+| `.omp/plan.md` | Generated plan from the script phase |
 
 ## Every tool, _benchmaxxed_.
 

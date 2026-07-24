@@ -4,6 +4,15 @@
 
 import type { ChatMessage as PiChatMessage, ChatChannel as PiChatChannel } from "@oh-my-pi/pi-web/types";
 
+// ── Message parts — typed content blocks for structured chat rendering ──
+
+export type MessagePart =
+  | { type: "thinking"; content: string; streaming?: boolean }
+  | { type: "tool-call"; name: string; file?: string; summary: string; detail?: string; duration?: number; exitCode?: number }
+  | { type: "step"; label: string }
+  | { type: "json"; content: unknown }
+  | { type: "markdown"; content: string };
+
 export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "failed";
 export type PipelineStatus = "idle" | "running" | "completed" | "failed" | "aborted";
 
@@ -117,7 +126,7 @@ export type ActivityEventType =
   | "broadcast" | "subgroup" | "steering" | "steering_ack" | "phase" | "convergence"
   | "verdict" | "conflict" | "scaling" | "nomination" | "crash"
   | "tool_call" | "error_flag" | "file_change"
-  | "stream_start" | "stream_delta" | "stream_end"
+  | "stream_start" | "stream_delta" | "stream_thinking" | "stream_end"
   | "deliberation_challenge" | "deliberation_rebuttal" | "deliberation_ruling"
   | "reviewer_individual" | "file_coordination"
   | "agent_state" | "pipeline_state";
@@ -183,6 +192,8 @@ export interface ChatMessage extends PiChatMessage {
   thinking?: string;
   /** True while a streaming message is still receiving deltas (no body yet → show loading indicator). */
   streaming?: boolean;
+	/** Typed content parts for structured rendering. When present, replaces flat body rendering. */
+	parts?: MessagePart[];
 }
 
 export interface ModelOption {

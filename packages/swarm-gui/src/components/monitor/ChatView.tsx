@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy, Bot } from "lucide-react";
+import { Send, Shield, Megaphone, Loader2, Check, Brain, Sparkles, ChevronDown, Square, Copy, Bot, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,21 +21,8 @@ import { cacheKey, getCachedHtml, setCachedHtml } from "../../lib/code-cache";
 
 // ── Shiki code block renderer with copy button ─────────────────────────
 
-function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
-  const [html, setHtml] = useState<string | null>(() => getCachedHtml(cacheKey(code, lang)));
+function CodeBlockWrapper({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ck = cacheKey(code, lang);
-    const cached = getCachedHtml(ck);
-    if (cached !== null) { setHtml(cached); return; }
-    highlightCode(code, lang).then((h) => {
-      if (!cancelled) { setCachedHtml(ck, h); setHtml(h); }
-    });
-    return () => { cancelled = true; };
-  }, [code, lang]);
-
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -44,38 +31,89 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
     } catch { /* clipboard denied */ }
   }, [code]);
 
-  const header = (
-    <div className="flex items-center justify-between px-3 py-1.5 bg-background border-b border-border rounded-t-lg">
-      <span className="text-[11px] text-muted-foreground font-mono">{lang || "text"}</span>
-      <Button
-        variant="ghost"
-        size="xs"
+  return (
+    <div className="relative group my-1.5">
+      <button
+        type="button"
         onClick={handleCopy}
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-0.5 rounded bg-background/80 text-xs text-muted-foreground hover:text-foreground"
       >
         {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
         <span>{copied ? "Copied" : "Copy"}</span>
-      </Button>
+      </button>
+      <div className="[&_.tv-out]:!my-0 [&_.tv-code]:!text-xs [&_pre]:!bg-[#0d0d0d] [&_pre]:!rounded-lg">
+        <PiCodeBlock code={code} lang={lang || "text"} maxLines={40} />
+      </div>
     </div>
   );
+}
 
-  if (html === null) {
+// ── JSON Tree View — renders any JSON as a collapsible tree ─────────────
+
+function JsonTree({ data, depth }: { data: unknown; depth?: number }) {
+  const d = depth ?? 0;
+  if (data === null) return <span className="text-muted-foreground italic">null</span>;
+  if (data === undefined) return <span className="text-muted-foreground italic">undefined</span>;
+  if (typeof data === "boolean") return <span className="text-status-accent">{String(data)}</span>;
+  if (typeof data === "number") return <span className="text-primary">{data}</span>;
+  if (typeof data === "string") {
+    if (data.length > 200) {
+      return <TreeLeaf label="" value={data} depth={d} />;
+    }
+    return <span className="text-foreground/80">"{data}"</span>;
+  }
+  if (Array.isArray(data)) {
+    if (data.length === 0) return <span className="text-muted-foreground">[]</span>;
     return (
-      <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
-        {header}
-        <pre className="p-3 overflow-x-auto text-xs font-mono bg-background">
-          <code>{code}</code>
-        </pre>
+      <div className="ml-0">
+        {data.map((item, i) => (
+          <TreeLeaf key={i} label={`[${i}]`} value={item} depth={d} />
+        ))}
       </div>
     );
   }
+  if (typeof data === "object") {
+    const entries = Object.entries(data as Record<string, unknown>);
+    if (entries.length === 0) return <span className="text-muted-foreground">{"{}"}</span>;
+    return (
+      <div className="ml-0">
+        {entries.map(([key, value]) => (
+          <TreeLeaf key={key} label={key} value={value} depth={d} />
+        ))}
+      </div>
+    );
+  }
+  return <span>{String(data)}</span>;
+}
+
+function TreeLeaf({ label, value, depth }: { label: string; value: unknown; depth: number }) {
+  const [open, setOpen] = useState(depth < 2);
+  const isExpandable =
+    (typeof value === "object" && value !== null) ||
+    (typeof value === "string" && value.length > 200);
 
   return (
-    <div className="my-1.5 rounded-lg overflow-hidden border border-border bg-background">
-      {header}
+    <div className="ml-0">
       <div
-        className="shiki-wrapper text-xs [&_pre]:bg-background! [&_pre]:p-3 [&_pre]:overflow-x-auto"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+        className={`flex items-start gap-1 cursor-pointer select-none hover:bg-background-overlay/50 rounded px-0.5 -ml-0.5 ${!isExpandable ? "cursor-default" : ""}`}
+        onClick={() => isExpandable && setOpen(!open)}
+      >
+        {isExpandable && (
+          <ChevronDown size={10} className={`mt-0.5 shrink-0 transition-transform ${open ? "rotate-0" : "-rotate-90"}`} />
+        )}
+        {label && <span className="text-xs font-medium text-primary/80 shrink-0">{label}</span>}
+        {!isExpandable && <span className="text-xs text-muted-foreground shrink-0">:</span>}
+        {!isExpandable && <span className="text-xs break-all"><JsonTree data={value} depth={depth + 1} /></span>}
+      </div>
+      {isExpandable && open && (
+        <div className="ml-3.5 pl-2.5 border-l border-border/60">
+          {typeof value === "string" ? (
+            <div className="text-xs text-foreground/80 whitespace-pre-wrap break-all py-0.5">{value}</div>
+          ) : (
+            <JsonTree data={value} depth={depth + 1} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -85,58 +123,16 @@ function ShikiCodeBlock({ code, lang }: { code: string; lang: string }) {
 function CodeRenderer({ className, children }: { className?: string; children?: React.ReactNode }) {
   const lang = className?.replace("language-", "") ?? "";
   const code = String(children ?? "").replace(/\n$/, "");
-  return <ShikiCodeBlock code={code} lang={lang} />;
-}
-
-function MessageBody({ body }: { body: string }) {
-  return (
-    <div className="prose prose-sm prose-invert max-w-none break-words 
-      [&_p]:my-1 [&_p]:leading-relaxed
-      [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
-      [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
-      [&_li]:my-0.5
-      [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-border [&_h1]:pb-1
-      [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
-      [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
-      [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_blockquote]:bg-card/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
-      [&_strong]:font-bold [&_strong]:text-foreground/90
-      [&_em]:italic
-      [&_del]:line-through [&_del]:text-muted-foreground
-      [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-primary/80
-      [&_code]:bg-background [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
-      [&_table]:w-full [&_table]:my-1.5 [&_table]:text-xs [&_table]:border-collapse
-      [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-background [&_th]:font-semibold [&_th]:text-left
-      [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1
-      [&_hr]:border-border [&_hr]:my-2
-      [&_img]:rounded-lg [&_img]:max-w-full
-    ">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkTreeToCode]}
-        components={{
-          code: ({ className, children, ...props }) => {
-            if (className) {
-              return <CodeRenderer className={className}>{children}</CodeRenderer>;
-            }
-            return <code className="bg-background text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
-          },
-          pre: ({ children }) => <>{children}</>,
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer">
-              {children}
-            </a>
-          ),
-        }}
-      >
-        {body}
-      </ReactMarkdown>
-    </div>
-  );
+  return <CodeBlockWrapper code={code} lang={lang} />;
 }
 
 // ── Thinking block ── collapsible chain-of-thought section ─────────────
 
-function ThinkingBlock({ thinking }: { thinking: string }) {
-  const [open, setOpen] = useState(false);
+function ThinkingBlock({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
+  const [open, setOpen] = useState(streaming ?? false);
+  useEffect(() => {
+    if (streaming) { setOpen(true); } else { setOpen(false); }
+  }, [streaming]);
   return (
     <div className="mb-1.5">
       <Button
@@ -145,8 +141,11 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
         onClick={() => setOpen(!open)}
         className="select-none"
       >
-        <Brain size={11} />
-        <span>Thinking</span>
+        <Brain size={11} className={streaming ? "text-primary" : ""} />
+        <span>{streaming ? "Thinking…" : "Thinking"}</span>
+        {streaming && (
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse ml-1" />
+        )}
         <ChevronDown
           size={10}
           className={`transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
@@ -159,6 +158,85 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
       )}
     </div>
   );
+}
+
+function PartRenderer({ parts }: { parts: MessagePart[] }) {
+  return (
+    <div className="flex flex-col gap-1">
+      {parts.map((part, i) => {
+        switch (part.type) {
+          case "thinking":
+            return <ThinkingBlock key={i} thinking={part.content} streaming={part.streaming} />;
+          case "tool-call":
+            return (
+              <ToolCard
+                key={i}
+                tool={part.name}
+                file={part.file}
+                summary={part.summary}
+                detail={part.detail}
+                duration={part.duration}
+                exitCode={part.exitCode}
+              />
+            );
+          case "step":
+            return <SystemEvent key={i} text={part.label} />;
+          case "json":
+            return (
+              <div key={i} className="my-1 bg-card/30 border border-border/60 rounded-lg px-3 py-2 text-xs font-mono">
+                <JsonTree data={part.content} />
+              </div>
+            );
+          case "markdown":
+            return (
+              <div key={i} className="prose prose-sm prose-invert max-w-none break-words 
+                [&_p]:my-1 [&_p]:leading-relaxed
+                [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5
+                [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5
+                [&_li]:my-0.5
+                [&_h1]:text-lg [&_h1]:font-bold [&_h1]:my-2 [&_h1]:border-b [&_h1]:border-border [&_h1]:pb-1
+                [&_h2]:text-base [&_h2]:font-semibold [&_h2]:my-1.5
+                [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:my-1
+                [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_blockquote]:bg-card/30 [&_blockquote]:py-1 [&_blockquote]:rounded-r
+                [&_strong]:font-bold [&_strong]:text-foreground/90
+                [&_em]:italic
+                [&_del]:line-through [&_del]:text-muted-foreground
+                [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-primary/80
+                [&_code]:bg-background [&_code]:text-primary/90 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
+                [&_table]:w-full [&_table]:my-1.5 [&_table]:text-xs [&_table]:border-collapse
+                [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1.5 [&_th]:bg-background [&_th]:font-semibold [&_th]:text-left
+                [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1
+                [&_hr]:border-border [&_hr]:my-2
+                [&_img]:rounded-lg [&_img]:max-w-full
+              ">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkTreeToCode]}
+                  components={{
+                    code: ({ className, children, ...props }) => {
+                      if (className) {
+                        return <CodeRenderer className={className}>{children}</CodeRenderer>;
+                      }
+                      return <code className="bg-background text-primary/90 px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+                    },
+                  }}
+                >
+                  {part.content}
+                </ReactMarkdown>
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+function MessageBody({ body, parts }: { body: string; parts?: MessagePart[] }) {
+  if (parts && parts.length > 0) {
+    return <PartRenderer parts={parts} />;
+  }
+  return <PartRenderer parts={[{ type: "markdown", content: body }]} />;
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
@@ -193,7 +271,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : "bg-background-elevated text-foreground"
         }`}
       >
-        {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} /> : null}
+        {(msg as any).thinking ? <ThinkingBlock thinking={(msg as any).thinking} streaming={msg.streaming} /> : null}
         {msg.streaming && !msg.body ? (
           <div className="flex items-center gap-1.5 py-0.5">
             <span className="inline-block w-2 h-2 rounded-full bg-background-overlay animate-pulse" style={{ animationDelay: "0ms" }} />
@@ -202,7 +280,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           </div>
         ) : (
           <ErrorBoundary fallbackText={msg.body}>
-            <MessageBody body={isSteering ? msg.body.replace("[AGENT STEERING] ", "") : msg.body} />
+            <MessageBody body={isSteering ? msg.body.replace("[AGENT STEERING] ", "") : msg.body}  parts={msg.parts} />
           </ErrorBoundary>
         )}
       </div>

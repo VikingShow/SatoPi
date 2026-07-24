@@ -284,9 +284,22 @@ export class ActivityLogger {
 		this.log({ ts: Date.now(), type: "stream_start", messageId: msgId, from, body: "" });
 	}
 
-	/** Incremental text chunk — frontend appends to the streaming bubble. */
+	/** Incremental text chunk — frontend appends to the streaming bubble.
+	 *  SSE-only: not persisted to session.jsonl (high-frequency; history
+	 *  replay reconstructs the full message from stream_end.body). */
 	logStreamDelta(msgId: string, from: string, delta: string): void {
-		this.log({ ts: Date.now(), type: "stream_delta", messageId: msgId, from, body: delta });
+		this.#broadcaster?.broadcast(this.#sessionName, {
+			ts: Date.now(), type: "stream_delta", messageId: msgId, from, body: delta,
+		});
+	}
+
+	/** Thinking/reasoning chunk streamed in real-time — frontend appends
+	 *  to the ThinkingBlock inside the streaming bubble.
+	 *  SSE-only (same rationale as logStreamDelta). */
+	logStreamThinking(msgId: string, from: string, delta: string): void {
+		this.#broadcaster?.broadcast(this.#sessionName, {
+			ts: Date.now(), type: "stream_thinking", messageId: msgId, from, body: delta,
+		});
 	}
 
 	/** End of a streaming response — frontend finalises the bubble. */

@@ -1065,6 +1065,7 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 	const emitProgressNow = () => {
 		progress.durationMs = Date.now() - startTime;
 		onProgress?.({ ...progress });
+		progress.thinkingDelta = undefined;
 		const activityGist =
 			progress.lastIntent ?? (progress.currentTool ? `running ${progress.currentTool}` : undefined);
 		if (activityGist) AgentRegistry.global().setActivity(id, activityGist);
@@ -1182,6 +1183,12 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 		for (const block of content) {
 			if (!block || typeof block !== "object") continue;
 			const record = block as { type?: unknown; text?: unknown };
+			const record2 = block as { type?: unknown; text?: unknown; thinking?: unknown };
+			if (record2.type === "thinking" && typeof record2.thinking === "string" && record2.thinking) {
+				thinkingChunks.push(record2.thinking);
+				progress.thinkingDelta = record2.thinking;
+				continue;
+			}
 			if (record.type !== "text" || typeof record.text !== "string") continue;
 			if (!record.text) continue;
 			recentOutputTail += record.text;
@@ -1356,6 +1363,12 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 					break;
 				}
 				if (assistantEvent && assistantEvent.type !== "text_delta") {
+					if (assistantEvent?.type === "thinking_delta" && typeof assistantEvent.delta === "string") {
+						thinkingChunks.push(assistantEvent.delta);
+						progress.thinkingDelta = assistantEvent.delta;
+						scheduleProgress(true);
+						break;
+					}
 					break;
 				}
 				const updateContent =

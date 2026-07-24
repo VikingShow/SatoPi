@@ -346,6 +346,8 @@ export interface AgentProgress {
 	currentToolStartMs?: number;
 	recentTools: Array<{ tool: string; args: string; endMs: number }>;
 	recentOutput: string[];
+	/** Incremental thinking/reasoning text captured during streaming. */
+	thinkingDelta?: string;
 	toolCount: number;
 	/** Count of assistant requests (assistant message_end events) across the run. Drives the soft request budget guard. */
 	requests: number;

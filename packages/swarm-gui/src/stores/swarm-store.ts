@@ -418,7 +418,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
       };
 
-      sseClient.on((entry) => {
+      const unsubInit = sseClient.on((entry) => {
         // Prevent a full Zustand equality check + selector re-eval on every
         // token-level stream_delta (20-30/s).  onConnectionChange is the
         // canonical authority for connection state; this catch-up guard runs
@@ -511,10 +511,31 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           toast.success(`Steering delivered to ${entry.acknowledgedBy ?? "agent"}`, { duration: 2000 });
         }
 
-        // P2-10: Tool call — show in-line tool execution indicator.
+        // P2-10: Tool call — add as tool-call part to streaming messages.
         if (entry.type === "tool_call" && entry.toolName) {
-          // Tool calls are captured via addActivity → deriveChannel for chat display.
-          // The toast provides a transient notification for long-running tools.
+          // Push a tool-call part into the current streaming bubble (if any)
+          const roundtableMsgs = get().messages.get("roundtable");
+          if (roundtableMsgs && roundtableMsgs.length > 0) {
+            const msgs = [...roundtableMsgs];
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].streaming) {
+                const parts = [...(msgs[i].parts ?? [])];
+                parts.push({
+                  type: "tool-call",
+                  name: entry.toolName,
+                  file: entry.file,
+                  summary: entry.toolOutput?.slice(0, 200) ?? entry.toolName,
+                  detail: entry.toolOutput,
+                  duration: entry.toolDurationMs,
+                  exitCode: entry.toolError ? 1 : 0,
+                });
+                msgs[i] = { ...msgs[i], parts };
+                set((s) => ({ messages: new Map(s.messages).set("roundtable", msgs) }));
+                break;
+              }
+            }
+          }
+          // Toast for long-running tools
           if (entry.toolDurationMs && entry.toolDurationMs > 3000) {
             toast(`${entry.agent ?? "agent"}: ${entry.toolName} (${(entry.toolDurationMs / 1000).toFixed(1)}s)`, {
               description: entry.toolError ? `Error: ${entry.toolError}` : entry.toolOutput?.slice(0, 200),
@@ -603,6 +624,9 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           }
         }
       });
+      // Store unsubscribe handle so switchToSession() can tear down init's
+      // listener before registering its own — prevents double event processing.
+      (get() as any).__sseUnsubscribeInit = unsubInit;
 
       // Poll state + run status every 5s.
       // Pause polling when the tab is hidden to avoid wasted requests;
@@ -654,6 +678,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           from: entry.from,
           to: "all",
           body: "",
+          parts: [] as MessagePart[],
           streaming: true as const,
           timestamp: entry.ts,
         } as ChatMessage);
@@ -669,13 +694,30 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       if (entry.type === "stream_delta" && entry.from) {
         const msgId = (entry as any).messageId ?? entry.from;
         const msgList = [...(messages.get("roundtable") ?? [])];
-        const lastMsg = msgList[msgList.length - 1];
-        if (lastMsg && lastMsg.id.startsWith(`stream-`)) {
-          // Replace with a new object so React.memo detects the prop change
-          msgList[msgList.length - 1] = {
-            ...lastMsg,
-            body: lastMsg.body + (entry.body ?? ""),
-          };
+        // Search backwards for the streaming bubble from this agent
+        let streamIdx = -1;
+        for (let i = msgList.length - 1; i >= 0; i--) {
+          if (msgList[i].from === entry.from && msgList[i].id.startsWith("stream-") && msgList[i].streaming) {
+            streamIdx = i;
+            break;
+          }
+        }
+        if (streamIdx >= 0) {
+          const msg = msgList[streamIdx];
+          const parts = [...(msg.parts ?? [])];
+          // When body text starts arriving, auto-collapse any streaming thinking parts
+          for (let pi = 0; pi < parts.length; pi++) {
+            if (parts[pi].type === "thinking" && parts[pi].streaming) {
+              parts[pi] = { ...parts[pi], streaming: false };
+            }
+          }
+          const lastPart = parts[parts.length - 1];
+          if (lastPart && lastPart.type === "markdown") {
+            parts[parts.length - 1] = { ...lastPart, content: lastPart.content + (entry.body ?? "") };
+          } else {
+            parts.push({ type: "markdown", content: entry.body ?? "" });
+          }
+          msgList[streamIdx] = { ...msg, parts, body: msg.body + (entry.body ?? "") };
         } else {
           msgList.push({
             id: `stream-${String(msgId)}`,
@@ -683,6 +725,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             from: entry.from,
             to: "all",
             body: entry.body ?? "",
+            parts: [{ type: "markdown", content: entry.body ?? "" }],
             streaming: true as const,
             timestamp: entry.ts,
           } as ChatMessage);
@@ -691,6 +734,41 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         return { activities, channels, messages };
       }
 
+
+      // ── Stream thinking: append to the streaming bubble's thinking field ──
+      if (entry.type === "stream_thinking" && entry.from) {
+        const msgList = [...(messages.get("roundtable") ?? [])];
+        let streamIdx = -1;
+        for (let i = msgList.length - 1; i >= 0; i--) {
+          if (msgList[i].from === entry.from && msgList[i].id.startsWith("stream-") && msgList[i].streaming) {
+            streamIdx = i;
+            break;
+          }
+        }
+        if (streamIdx >= 0) {
+          const msg = msgList[streamIdx];
+          const parts = [...(msg.parts ?? [])];
+          // When body text starts arriving, auto-collapse any streaming thinking parts
+          for (let pi = 0; pi < parts.length; pi++) {
+            if (parts[pi].type === "thinking" && parts[pi].streaming) {
+              parts[pi] = { ...parts[pi], streaming: false };
+            }
+          }
+          const lastPart = parts[parts.length - 1];
+          if (lastPart && lastPart.type === "thinking") {
+            parts[parts.length - 1] = { ...lastPart, content: lastPart.content + (entry.body ?? "") };
+          } else {
+            parts.push({ type: "thinking", content: entry.body ?? "", streaming: true });
+          }
+          msgList[streamIdx] = {
+            ...msg,
+            parts,
+            thinking: (msgList[streamIdx].thinking ?? "") + (entry.body ?? ""),
+          };
+        }
+        messages.set("roundtable", msgList);
+        return { activities, channels, messages };
+      }
       // ── Stream end: finalise the streaming bubble ──
       // During history replay: a stream_end carries the completed body and
       // optional thinking. Broadcast messages capture IRC-style messages,
@@ -763,20 +841,51 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         // the definitive content; stream_end body can be truncated/malformed
         // from a race in the backend stream accumulator).
         const msgList = [...(messages.get("roundtable") ?? [])];
-        const lastMsg = msgList[msgList.length - 1];
-        if (lastMsg && lastMsg.id.startsWith("stream-")) {
+        // Search backwards for the streaming bubble from this agent —
+        // a broadcast or other event could have arrived between the last
+        // delta flush and stream_end, pushing the streaming bubble off the tail.
+        let streamIdx2 = -1;
+        for (let i = msgList.length - 1; i >= 0; i--) {
+          if (msgList[i].from === entry.from && msgList[i].id.startsWith("stream-")) {
+            streamIdx2 = i;
+            break;
+          }
+        }
+        if (streamIdx2 >= 0) {
+          const lastMsg = msgList[streamIdx2];
           const finalBody =
             lastMsg.body && lastMsg.body.length > (entry.body?.length ?? 0)
               ? lastMsg.body
               : (entry.body || lastMsg.body);
-          msgList[msgList.length - 1] = {
+          // Build final parts: detect JSON in body, split into json + markdown
+          const parts = [...(lastMsg.parts ?? [])];
+          // Finalize any streaming thinking parts
+          for (let pi = 0; pi < parts.length; pi++) {
+            if (parts[pi].type === "thinking") parts[pi] = { ...parts[pi], streaming: false };
+          }
+          // Detect JSON blocks in the final body and add as json parts
+          const trimmed = finalBody.trim();
+          if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (typeof parsed === "object" && parsed !== null) {
+                parts.push({ type: "json", content: parsed });
+              }
+            } catch { /* not JSON */ }
+          }
+          // If no markdown part exists yet but there is body text, add one
+          const hasMarkdown = parts.some(p => p.type === "markdown");
+          if (!hasMarkdown && finalBody && !(trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+            parts.push({ type: "markdown", content: finalBody });
+          }
+          msgList[streamIdx2] = {
             ...lastMsg,
             body: finalBody,
+            parts,
             thinking: entry.thinking || (lastMsg as any).thinking,
             streaming: false as const,
           };
         }
-        messages.set("roundtable", msgList);
         return { activities, channels, messages };
       }
 
@@ -1060,8 +1169,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
    * bug that caused duplicate messages on repeated init() calls.
    */
   switchToSession: async (name: string, mode) => {
-    // 1. Tear down the existing SSE event listener so it never
-    //    accumulates (old init() pattern leaked one callback per call).
+    // 1. Tear down BOTH possible SSE listeners: init()'s and any
+    //    previous switchToSession()'s.  Without clearing init's listener,
+    //    every event is processed twice, doubling every message bubble.
+    const oldInit = (get() as any).__sseUnsubscribeInit as (() => void) | undefined;
+    if (oldInit) { oldInit(); (get() as any).__sseUnsubscribeInit = undefined; }
     const oldUnsub = (get() as any).__sseUnsubscribe as (() => void) | undefined;
     if (oldUnsub) { oldUnsub(); (get() as any).__sseUnsubscribe = undefined; }
 
