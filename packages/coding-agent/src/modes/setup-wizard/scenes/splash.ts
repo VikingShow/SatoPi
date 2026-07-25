@@ -175,7 +175,19 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 			col++;
 		}
 	});
-	// 4. skip hint on a cleared strip at the bottom so it stays legible over the water
+	// 4. SatoPi brand name + tagline (between mark and water)
+	const titleText = "S a t o P i";
+	const taglineText = "Satori a team of Pi · v0.0.1";
+	const titleRow = hy + LOGO_HEIGHT + 1;
+	const taglineRow = titleRow + 1;
+	const titleStart = Math.floor((w - visibleWidth(titleText)) / 2);
+	const taglineStart = Math.floor((w - visibleWidth(taglineText)) / 2);
+	let tiCol = titleStart;
+	for (const ch of titleText) put(tiCol++, titleRow, theme.bold(ch));
+	let tgCol = taglineStart;
+	for (const ch of taglineText) put(tgCol++, taglineRow, theme.fg("dim", ch));
+
+	// 5. skip hint on a cleared strip at the bottom so it stays legible over the water
 	const hintWidth = visibleWidth(SKIP_HINT);
 	const hintStart = Math.floor((w - hintWidth) / 2);
 	const hintRow = h - 1;
