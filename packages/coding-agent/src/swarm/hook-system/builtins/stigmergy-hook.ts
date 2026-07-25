@@ -1,0 +1,125 @@
+/**
+ * Stigmergy Hook — environmental signal placement from agent events.
+ *
+ * Builtin hook (priority 1) that translates agent lifecycle events into
+ * stigmergic marks on the MarkEnvironment for indirect coordination.
+ *
+ * @module hook-system/builtins/stigmergy-hook
+ */
+
+import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { MarkEnvironment } from "../../coordination/mark-environment";
+import { logger } from "@oh-my-pi/pi-utils";
+
+/**
+ * Create a stigmergy-signalling hook.
+ *
+ * Events:
+ * - `agent:afterComplete`     → places an "artifact" mark
+ * - `agent:onError`           → places a high-priority "warning" mark
+ * - `context:afterCompaction` → logs mark summary for observability
+ *
+ * @param markEnv - The MarkEnvironment instance to place marks on.
+ */
+export function createStigmergyHook(
+  markEnv: MarkEnvironment,
+): HookRegistration {
+  return {
+    name: "stigmergy-hook",
+    priority: 1,
+    events: ["agent:afterComplete", "agent:onError", "context:afterCompaction"],
+
+    async handler(
+      event: HookEvent,
+      payload: HookPayload,
+      ctx: HookContext,
+    ): Promise<void> {
+      const agentId = resolveAgentId(payload, ctx);
+
+      switch (event) {
+        // -----------------------------------------------------------------
+        // agent:afterComplete — place artifact mark
+        // -----------------------------------------------------------------
+        case "agent:afterComplete": {
+          if (!agentId) {
+            logger.warn("[StigmergyHook] agent:afterComplete missing agentId");
+            return;
+          }
+          const artifactPath =
+            typeof payload.artifactPath === "string"
+              ? payload.artifactPath
+              : undefined;
+          const message =
+            typeof payload.message === "string"
+              ? payload.message
+              : `Agent ${agentId} completed task`;
+
+          markEnv.placeMark({
+            markId: generateMarkId(agentId, "artifact"),
+            type: "artifact",
+            agentId,
+            path: artifactPath,
+            message,
+          });
+          logger.debug("[StigmergyHook] Artifact mark placed", { agentId });
+          return;
+        }
+
+        // -----------------------------------------------------------------
+        // agent:onError — place warning mark
+        // -----------------------------------------------------------------
+        case "agent:onError": {
+          if (!agentId) {
+            logger.warn("[StigmergyHook] agent:onError missing agentId");
+            return;
+          }
+          const errorMessage =
+            typeof payload.error === "string"
+              ? payload.error
+              : `Agent ${agentId} encountered an error`;
+
+          markEnv.placeMark({
+            markId: generateMarkId(agentId, "warning"),
+            type: "warning",
+            agentId,
+            message: errorMessage,
+            priority: "high",
+          });
+          logger.debug("[StigmergyHook] Warning mark placed", { agentId });
+          return;
+        }
+
+        // -----------------------------------------------------------------
+        // context:afterCompaction — observability
+        // -----------------------------------------------------------------
+        case "context:afterCompaction": {
+          const summary = markEnv.getSummary();
+          logger.debug("[StigmergyHook] Post-compaction mark summary", summary);
+          return;
+        }
+
+        default:
+          return;
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract a string agentId from payload or context. */
+function resolveAgentId(
+  payload: HookPayload,
+  ctx: HookContext,
+): string | undefined {
+  if (typeof payload.agentId === "string") return payload.agentId;
+  if (typeof ctx.agentId === "string") return ctx.agentId;
+  return undefined;
+}
+
+/** Generate a unique markId scoped to agent and type. */
+function generateMarkId(agentId: string, type: string): string {
+  return `${agentId}-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
