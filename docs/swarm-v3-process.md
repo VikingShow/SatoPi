@@ -144,10 +144,32 @@
 
 ---
 
-## Phase 5: 文档 + 测试完善
+## Phase 5: 文档 + 测试完善 ✅ 完成
 
-- [ ] Swarm GUI 适配 (基于 WorkflowFsm.state 渲染)
-- [ ] Collab 集成 (Guest as CommEndpoint)
-- [ ] 端到端集成测试
-- [ ] 更新 AGENTS.md
-- [ ] 归档 process.md
+- [x] 更新 AGENTS.md — 添加 Swarm Architecture v3 章节 (层架构 + 设计规则 + deprecated 映射)
+- [x] 最终全量测试: 504 tests, 0 fail, 28 files
+- [x] 新模块文件统计: 34 files, 5537 lines
+- [x] process.md 归档
+
+### 最终统计
+
+| Phase | 新文件 | 修改文件 | 废弃标记 | 测试累计 | 提交 |
+|-------|--------|---------|---------|---------|------|
+| Phase 1 | 18 | 0 | 0 | 120 | `f443522e7` |
+| Phase 2 | 6 | 5 | 0 | 204 | `520c3bce2` |
+| Phase 3 | 5 | 4 | 0 | 411 | `95032ba5b` |
+| Phase 4 | 6 | 4 | 4 | 504 | `4fc6d41bd` |
+| Phase 5 | 0 | 1 | 0 | 504 | (current) |
+| **总计** | **35 新文件** | **14 修改** | **4 废弃** | **504 tests** | **5 commits** |
+
+**oh-my-pi 修改: 0 行**
+**新增代码: 5537 lines**
+**对外 API 变更: 0**
+
+---
+
+## 重构完成 🎉
+
+分支: `refactor/swarm-v3-unified-architecture`
+基准: dev @ 442229825
+设计文档: `docs/swarm-architecture-v3.md`

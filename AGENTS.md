@@ -50,6 +50,40 @@ Unless user tells you exactly what to write:
   History: `with { type: "file" }` only copied the entry as a raw asset (workers crashed silently in compiled binaries — issues #1011, #1027), and the later literal-path + extra-entrypoint pattern required keeping spawn literals and two build scripts in sync (issue #1150). The smoke probe below is the live validation of this contract.
   Validate any new worker with the dedicated smoke probe: `omp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.
 
+## Swarm Architecture (v3 — `refactor/swarm-v3-unified-architecture`)
+
+The SatoPi swarm multi-agent orchestration follows a 6-layer unified architecture. See `docs/swarm-architecture-v3.md` for the full design.
+
+### Layer Overview
+
+| Layer | Directory | Purpose |
+|-------|-----------|---------|
+| WorkflowFSM | `swarm/core/workflow-fsm.ts` | Declarative PhaseDefinition (idle→script→stage→curtain), guarded transitions |
+| AgentRuntime | `swarm/agent-runtime/` | Declarative AgentSpec → AgentHandle spawning. Uses `Agent` + `AgentSession` directly (NOT `runSubprocess()`) for full `AgentLoopConfig` access |
+| CommBus | `swarm/comm-bus/` | Human=Agent peer endpoints, `CommChannel` (send/roundtable/vote) wraps `IrcBus` |
+| ContextManager | `swarm/context-manager/` | `ContextPipeline` (8 priority-ordered `ContextSource`), `OffloadManager` (L1→L3), `ContextCompactor` (3 strategies) |
+| HookPipeline | `swarm/hook-system/` | Priority-ordered lifecycle hooks (Profile→Stigmergy→Offload→Mnemopi→Experience→Verification). 23 `HookEvent` types |
+| PhaseBehavior | `swarm/behaviors/` | `ScriptBehavior` / `StageBehavior` / `CurtainBehavior` implement unified `PhaseBehavior` interface |
+
+### Key Design Rules
+
+- **Do NOT import from `runSubprocess()`** for new agent spawning — use `AgentRuntime.spawn()` which leverages `AgentLoopConfig` hooks
+- **Do NOT create `AgentChannel` directly** — use `CommBus.groupChannel()` / `CommChannel.roundtable()` / `CommChannel.vote()`
+- **Do NOT track phase manually** (`#phase`, `#busy`) — use `WorkflowFsm.transition()`
+- **Do NOT inline context assembly** — register a `ContextSource` on the `ContextPipeline`
+- **Do NOT create ad-hoc hook systems** — register on `HookPipeline` with proper priority
+- **All existing public APIs remain unchanged** — new layers are additive; old code delegates internally
+- **Zero oh-my-pi modifications** — all new code is in `swarm/` subdirectories
+
+### Deprecated (migrated internally)
+
+| Old | New |
+|-----|-----|
+| `SwarmStateMachine` | `WorkflowFsm` |
+| `AgentChannel` | `CommChannel` |
+| `RoleRoundtable` | `CommChannel.roundtable()` |
+| `ReporterElection` | `CommChannel.vote()` |
+
 ## Bun Over Node
 
 Use Bun APIs where they provide a cleaner alternative; fall back to `node:*` only for what Bun doesn't cover. **Never spawn shell commands for operations with proper APIs** (e.g., don't `Bun.spawnSync(["mkdir", "-p", dir])` — use `mkdirSync`).
