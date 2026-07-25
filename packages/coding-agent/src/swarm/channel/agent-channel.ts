@@ -40,6 +40,7 @@ export interface AgentChannelConfig {
 }
 
 // ============================================================================
+/** @deprecated Use CommChannel from '../comm-bus/comm-channel' instead. */
 export class AgentChannel {
 	readonly #ircBus: IrcBus;
 	readonly #agents = new Set<string>();

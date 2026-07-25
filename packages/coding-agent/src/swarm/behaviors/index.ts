@@ -1,0 +1,189 @@
+/**
+ * PhaseBehavior — Interface and context types for pluggable phase behaviors.
+ *
+ * Part of the swarm v3 unified architecture (Phase 4A).
+ *
+ * Each workflow phase (script, stage, curtain) is implemented as a
+ * PhaseBehavior that wraps the phase-specific coordination logic. The
+ * behaviors delegate to AgentRuntime, CommBus, HookPipeline, and
+ * ContextPipeline for agent lifecycle and communication.
+ */
+
+import type { Chapter } from "../core/state";
+import type { WorkflowFsm } from "../core/workflow-fsm";
+import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentRuntime } from "../agent-runtime";
+import type { CommBus } from "../comm-bus/comm-bus";
+import type { CommChannel } from "../comm-bus/comm-channel";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import type { LoopSwarmConfig } from "../core/schema";
+
+// ============================================================================
+// PhaseContext
+// ============================================================================
+
+/**
+ * Shared service context injected into every PhaseBehavior.enter() call.
+ *
+ * All six core services are provided so behaviors can spawn agents,
+ * create communication channels, assemble context, trigger hooks, and
+ * track state — without importing the concrete implementations directly.
+ */
+export interface PhaseContext {
+  /** Workflow state machine — manages phase transitions. */
+  fsm: WorkflowFsm;
+
+  /** Communication bus — creates channels and routes messages. */
+  commBus: CommBus;
+
+  /** Agent runtime — spawns agents and delivers steering messages. */
+  runtime: AgentRuntime;
+
+  /** Context pipeline — assembles agent context from registered sources. */
+  contextPipeline: ContextPipeline;
+
+  /** Hook pipeline — triggers lifecycle hooks at agent/phase boundaries. */
+  hookPipeline: HookPipeline;
+
+  /** State tracker — persists swarm pipeline state. */
+  stateTracker: StateTracker;
+
+  /** Activity logger — captures structured events for SSE + session.jsonl. */
+  activityLogger: ActivityLogger;
+
+  /** Absolute path to the project workspace directory. */
+  workspace: string;
+
+  /** Absolute path to the swarm workspace (.swarm_<name>). */
+  swarmDir: string;
+
+  /** Raw plan content (markdown) — populated after Script phase. */
+  planContent?: string;
+
+  /** Loop-mode configuration — set when the swarm mode is "loop". */
+  loopConfig: LoopSwarmConfig;
+
+  /** AbortSignal for cooperative cancellation of long-running operations. */
+  signal: AbortSignal;
+}
+
+// ============================================================================
+// PhaseEnterResult
+// ============================================================================
+
+/**
+ * Result returned by PhaseBehavior.enter().
+ *
+ * The orchestrator uses these handles and channels to wire up
+ * event listeners and track agent lifecycle after the phase begins.
+ */
+export interface PhaseEnterResult {
+  /** Agent handles for all agents spawned during phase entry. */
+  agents: AgentHandle[];
+
+  /** Communication channels created during phase entry. */
+  channels: CommChannel[];
+
+  /** Optional initial message to display in the UI. */
+  initialUIMessage?: string;
+}
+
+// ============================================================================
+// PhaseCompletion
+// ============================================================================
+
+/**
+ * Result returned by PhaseBehavior.checkCompletion() when the phase
+ * has finished and is ready to transition.
+ *
+ * Return `null` to indicate the phase is still running.
+ */
+export interface PhaseCompletion {
+  /** The next workflow phase to transition to. */
+  nextPhase: Chapter;
+
+  /** Whether the human needs to applaud before transitioning. */
+  needApplaud?: boolean;
+
+  /** Optional status message for the UI / activity log. */
+  message?: string;
+}
+
+// ============================================================================
+// PhaseBehavior
+// ============================================================================
+
+/**
+ * Pluggable behavior contract for a single workflow phase.
+ *
+ * Each phase (script, stage, curtain) implements this interface.
+ * The orchestrator calls the lifecycle methods in order:
+ *
+ *   1. enter(ctx) — set up agents, channels, and initial state
+ *   2. handleHumanMessage(msg) — route human input (repeatable)
+ *   3. handleAgentEvent(event) — react to agent lifecycle events (repeatable)
+ *   4. checkCompletion() — poll whether the phase is finished (repeatable)
+ *   5. exit() — tear down state
+ *
+ * Behaviors delegate to the injected services in PhaseContext rather
+ * than importing concrete implementations (ScriptManager, StageController,
+ * CurtainRunner) directly.
+ */
+export interface PhaseBehavior {
+  /** The workflow phase this behavior handles. */
+  readonly phase: Chapter;
+
+  /**
+   * Called when the FSM enters this phase.
+   *
+   * Spawns initial agents, creates communication channels, and returns
+   * handles + channels so the orchestrator can wire up event listeners.
+   */
+  enter(ctx: PhaseContext): Promise<PhaseEnterResult>;
+
+  /**
+   * Called when a human message is received through the CommBus.
+   *
+   * The behavior routes the message to the appropriate agent(s) —
+   * e.g. ScriptBehavior routes to the Planner, StageBehavior broadcasts
+   * as a steering directive to all workers.
+   */
+  handleHumanMessage(
+    msg: { from: string; body: string },
+    ctx: PhaseContext,
+  ): Promise<void>;
+
+  /**
+   * Called when an agent lifecycle event occurs.
+   *
+   * The HookPipeline handles low-level events (offload, profile,
+   * stigmergy) via agent:afterComplete.  This method handles higher-level
+   * coordination: conflict detection, task re-assignment, completion
+   * tracking.
+   */
+  handleAgentEvent(
+    event: { agentId: string; status: string; result?: unknown },
+    ctx: PhaseContext,
+  ): Promise<void>;
+
+  /**
+   * Check whether the phase is complete and ready to transition.
+   *
+   * Called periodically by the orchestrator.  Returns `null` while
+   * the phase is still running, or a PhaseCompletion with the next
+   * phase and any transition metadata.
+   */
+  checkCompletion(ctx: PhaseContext): Promise<PhaseCompletion | null>;
+
+  /**
+   * Called when the FSM exits this phase.
+   *
+   * Cleans up any internal state (agent handles, channels, timers).
+   * The orchestrator handles aborting any still-running agents before
+   * calling this method.
+   */
+  exit(): Promise<void>;
+}

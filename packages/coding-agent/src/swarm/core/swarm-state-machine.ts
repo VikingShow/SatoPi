@@ -1,6 +1,8 @@
 /**
  * SwarmStateMachine — explicit Chapter transition arbiter.
  *
+ * @deprecated Use WorkflowFSM from './workflow-fsm' instead.
+ *
  * ## Role: arbiter, NOT driver
  *
  * This machine does NOT drive execution. The long-running Stage phase in
@@ -65,6 +67,8 @@ export interface TransitionResult {
 /**
  * Explicit transition table — the single source of truth for legal moves.
  *
+ * @deprecated Use WorkflowFSM from './workflow-fsm' instead.
+ *
  * Lifecycle: idle → script ↔ script-debate ↔ script-confirm → stage ↔ (paused | blocked) → curtain → idle
  */
 export const WORKFLOW_TRANSITIONS: Record<Chapter, Chapter[]> = {
@@ -98,6 +102,7 @@ export interface StateMachineHooks {
 	onError?: (from: Chapter, to: Chapter, reason: string) => void;
 }
 
+/** @deprecated Use WorkflowFSM from './workflow-fsm' instead. */
 export class SwarmStateMachine {
 	#phase: Chapter;
 	#hooks: StateMachineHooks;

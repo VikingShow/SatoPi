@@ -52,6 +52,7 @@ export interface RoundtableConfig {
 // RoleRoundtable
 // ============================================================================
 
+/** @deprecated Use CommChannel.roundtable() from '../comm-bus/roundtable' instead. */
 export class RoleRoundtable {
 	readonly #ircBus: IrcBus;
 	readonly #activityLogger?: ActivityLogger;

@@ -54,6 +54,7 @@ export interface ElectionConfig {
 // ReporterElection
 // ============================================================================
 
+/** @deprecated Use CommChannel.vote() from '../comm-bus/vote' instead. */
 export class ReporterElection {
 	readonly #ircBus: IrcBus;
 	readonly #activityLogger?: ActivityLogger;

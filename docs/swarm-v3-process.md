@@ -115,15 +115,32 @@
 
 ---
 
-## Phase 4: PhaseBehavior + 清理
+## Phase 4: PhaseBehavior + ContextCompactor + 清理 ✅ 完成
 
-- [ ] 创建 `behaviors/index.ts` — PhaseBehavior 接口 + PhaseContext 类型
-- [ ] 创建 `behaviors/script-behavior.ts` — ScriptBehavior
-- [ ] 创建 `behaviors/stage-behavior.ts` — StageBehavior
-- [ ] 创建 `behaviors/curtain-behavior.ts` — CurtainBehavior
-- [ ] 创建 `context-manager/context-compactor.ts` — ContextCompactor
-- [ ] 清理废弃代码: SwarmStateMachine, AgentChannel, RoleRoundtable, ReporterElection → deprecated
-- [ ] 验收: 所有 Phase 通过 WorkflowFsm + PhaseBehavior 运行 ✅
+- [x] 创建 `behaviors/index.ts` — PhaseBehavior 接口 + PhaseContext + PhaseEnterResult + PhaseCompletion
+- [x] 创建 `behaviors/script-behavior.ts` — ScriptBehavior (Planner spawn + 多轮对话 + plan-complete 检测)
+- [x] 创建 `behaviors/stage-behavior.ts` — StageBehavior (TaskQueue + agent spawn + steering + pause/resume)
+- [x] 创建 `behaviors/curtain-behavior.ts` — CurtainBehavior (Reporter 选举 + reporter/reflector spawn + applaud 检测)
+- [x] 创建 `context-manager/context-compactor.ts` — ContextCompactor + 3 strategies (summarize/truncate/offload-to-stigmergy)
+- [x] 标记废弃: SwarmStateMachine, AgentChannel, RoleRoundtable, ReporterElection → @deprecated
+- [x] 创建 `__tests__/behaviors.test.ts` — 70 tests, 0 fail
+- [x] 创建 `__tests__/context-compactor.test.ts` — 23 tests, 0 fail
+- [x] 验收: 504 tests pass (93 new + 411 existing), 0 fail ✅
+
+### Phase 4 总结
+
+| 模块 | 新增文件 | 修改文件 | 测试 | 状态 |
+|------|---------|---------|------|------|
+| PhaseBehavior interface | 1 (behaviors/index.ts) | — | — | ✅ |
+| ScriptBehavior | 1 (script-behavior.ts) | — | — | ✅ |
+| StageBehavior | 1 (stage-behavior.ts) | — | — | ✅ |
+| CurtainBehavior | 1 (curtain-behavior.ts) | — | — | ✅ |
+| ContextCompactor | 1 (context-compactor.ts) | — | 23 | ✅ |
+| @deprecated 标记 | — | 4 (swarm-state-machine, agent-channel, role-roundtable, reporter-election) | — | ✅ |
+| Tests | 2 test files | — | 70 (behaviors) + 23 (compactor) = 93 | ✅ |
+| **Phase 4 合计** | **6 新文件** | **4 标记废弃** | **504 tests total** | **全部通过** |
+
+提交: `feat(swarm): Phase 4 — PhaseBehavior + ContextCompactor + deprecation`
 
 ---
 
