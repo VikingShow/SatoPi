@@ -24,6 +24,15 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { ReporterElection, type ContributionData } from "./reporter-election";
 
+// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
+let AgentRuntimeClass: any;
+try {
+  const mod = require("../agent-runtime");
+  AgentRuntimeClass = mod.AgentRuntime;
+} catch {
+  // AgentRuntime not yet available — keep existing code path
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -213,6 +222,8 @@ async function runReporterAgent(
 		/** Elected reporter agent ID override (from ReporterElection). Falls back to "reporter". */
 		reporterOverride?: string | null;
 	},
+	/** Phase 3B: AgentRuntime instance (optional, defaults to existing code path). */
+	runtime?: any,
 ): Promise<string | null> {
 	const { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride } = opts;
 	const reporterName = reporterOverride ?? "reporter";
@@ -231,37 +242,58 @@ async function runReporterAgent(
 
 	try {
 		const msgId = `curtain-${reporterName}-${Date.now()}`;
-		const report = await streamAgentOutput(
-			{ activityLogger, msgId, from: reporterName },
-			{
-				cwd: workspace,
-				agent: {
-					name: reporterName,
-					description: "Curtain phase reporter agent",
-					systemPrompt,
-					source: "project" as const,
-					tools: ["read", "grep", "glob"],
-				},
-				task: [
-					"## Build Complete — Report to User",
-					"",
-					`Status: ${result.status}`,
-					`Tasks: ${result.taskProgress.completed}/${result.taskProgress.total}`,
-					"",
-					"## Instructions",
-					"1. Check workspace for files created/modified",
-					"2. Report a summary: what was built, key files, test results, known issues",
-					"3. Be honest — if something is incomplete, say so",
-					"4. Structure for readability (sections, bullet points)",
-				].join("\n"),
-				index: 0,
-				id: msgId,
-				modelRegistry,
-				settings,
-			},
-		);
+		const reportTask = [
+			"## Build Complete — Report to User",
+			"",
+			`Status: ${result.status}`,
+			`Tasks: ${result.taskProgress.completed}/${result.taskProgress.total}`,
+			"",
+			"## Instructions",
+			"1. Check workspace for files created/modified",
+			"2. Report a summary: what was built, key files, test results, known issues",
+			"3. Be honest — if something is incomplete, say so",
+			"4. Structure for readability (sections, bullet points)",
+		].join("\n");
 
-		return report.output || null;
+		let reportOutput: string | null;
+
+		if (AgentRuntimeClass && runtime) {
+			// Phase 3B: NEW path — use AgentRuntime.spawn()
+			const [handle] = await runtime.spawn([{
+				id: reporterName,
+				role: reporterName,
+				roleSource: roleAssetManager ? "library" : "inline",
+				inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
+				task: reportTask,
+			}]);
+
+			const output = await handle.wait();
+			reportOutput = (output?.output ?? output) ?? null;
+		} else {
+			// FALLBACK: existing code path (keep exactly as-is)
+			const report = await streamAgentOutput(
+				{ activityLogger, msgId, from: reporterName },
+				{
+					cwd: workspace,
+					agent: {
+						name: reporterName,
+						description: "Curtain phase reporter agent",
+						systemPrompt,
+						source: "project" as const,
+						tools: ["read", "grep", "glob"],
+					},
+					task: reportTask,
+					index: 0,
+					id: msgId,
+					modelRegistry,
+					settings,
+				},
+			);
+
+			reportOutput = report.output || null;
+		}
+
+		return reportOutput;
 	} catch (err) {
 		logger.warn("[Curtain] Reporter agent failed", { error: String(err) });
 		return `Build completed (${result.status}). Unable to generate detailed report.`;

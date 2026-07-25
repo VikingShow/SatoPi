@@ -27,6 +27,15 @@ import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "../core/schema";
 import { CommBus } from "../comm-bus/comm-bus";
 
+// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
+let AgentRuntimeClass: any;
+try {
+  const mod = require("../agent-runtime");
+  AgentRuntimeClass = mod.AgentRuntime;
+} catch {
+  // AgentRuntime not yet available — keep existing code path
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -78,6 +87,8 @@ export class ScriptManager {
 	#planningPrompt = "";
 	/** AbortController for cancelling the in-flight Planner LLM call. */
 	#abortController: AbortController | null = null;
+	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
+	#runtime: any = undefined;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -290,37 +301,59 @@ export class ScriptManager {
 			const taskText = this.#buildTaskFromHistory();
 			const loopConfig = await this.#readLoopConfig();
 			const plannerRole = await this.#resolvePlannerRole();
-			const systemPrompt = this.#buildPlannerSystemPrompt(plannerRole);
 
-			const agentDef: AgentDefinition = {
-				name: this.#selectedAgentId ?? "planner",
-				description: "Script phase planning agent",
-				systemPrompt,
-				source: "project" as AgentSource,
-			};
-			if (plannerRole?.tools && plannerRole.tools.length > 0) agentDef.tools = plannerRole.tools;
+			let displayOutput: string;
 
-			const planPath = getSessionPlanPath(this.#swarmDir);
-			let planFileDetected = false;
-			planPoll = setInterval(() => {
-				try {
-					const file = Bun.file(planPath);
-					if (file.size > 0 && !planFileDetected) {
-						planFileDetected = true;
-						this.#activityLogger.logBroadcast("system",
-							"Writing plan.md... The draft will appear in the Plan panel when complete.");
-					}
-				} catch { /* file not yet created */ }
-			}, 500);
+			if (AgentRuntimeClass && this.#runtime) {
+				// Phase 3B: NEW path — use AgentRuntime.spawn()
+				const [planner] = await this.#runtime.spawn([{
+					id: this.#selectedAgentId ?? "planner",
+					role: "planner",
+					roleSource: plannerRole ? "library" : "inline",
+					inline: !plannerRole ? {
+						systemPrompt: this.#buildPlannerSystemPrompt(null),
+						tools: ["write", "read", "grep", "glob", "bash"],
+					} : undefined,
+					task: taskText,
+					modelPreference: "smartest",
+				}]);
 
-			const result = await streamAgentOutput(
-				{ activityLogger: this.#activityLogger, msgId, from: this.#selectedAgentId ?? "planner" },
-				{ cwd: this.#stateTracker.swarmDir, agent: agentDef, task: taskText, index: 0,
-					signal: this.#abortController.signal,
-					id: `planner-${Date.now()}`, modelRegistry: this.#modelRegistry, settings: this.#settings,
-					enableLsp: false, keepAlive: false, modelOverride: loopConfig?.model ?? undefined });
+				const result = await planner.wait();
+				displayOutput = (result?.output ?? result) ?? "(no output)";
+			} else {
+				// FALLBACK: existing code path (keep exactly as-is)
+				const systemPrompt = this.#buildPlannerSystemPrompt(plannerRole);
 
-			const displayOutput = result.output || "(no output)";
+				const agentDef: AgentDefinition = {
+					name: this.#selectedAgentId ?? "planner",
+					description: "Script phase planning agent",
+					systemPrompt,
+					source: "project" as AgentSource,
+				};
+				if (plannerRole?.tools && plannerRole.tools.length > 0) agentDef.tools = plannerRole.tools;
+
+				const planPath = getSessionPlanPath(this.#swarmDir);
+				let planFileDetected = false;
+				planPoll = setInterval(() => {
+					try {
+						const file = Bun.file(planPath);
+						if (file.size > 0 && !planFileDetected) {
+							planFileDetected = true;
+							this.#activityLogger.logBroadcast("system",
+								"Writing plan.md... The draft will appear in the Plan panel when complete.");
+						}
+					} catch { /* file not yet created */ }
+				}, 500);
+
+				const result = await streamAgentOutput(
+					{ activityLogger: this.#activityLogger, msgId, from: this.#selectedAgentId ?? "planner" },
+					{ cwd: this.#stateTracker.swarmDir, agent: agentDef, task: taskText, index: 0,
+						signal: this.#abortController?.signal,
+						id: `planner-${Date.now()}`, modelRegistry: this.#modelRegistry, settings: this.#settings,
+						enableLsp: false, keepAlive: false, modelOverride: loopConfig?.model ?? undefined });
+
+				displayOutput = result.output || "(no output)";
+			}
 
 			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*agents?/i);
 			if (recMatch) this.#recommendedAgents = parseInt(recMatch[1], 10);
@@ -340,13 +373,12 @@ export class ScriptManager {
 					"Click 'Run Debate' to refine with agent roundtable, or 'Confirm & Start' to begin.");
 			}
 		} catch (err) {
-				if (err instanceof Error && err.name === "AbortError") {
-					this.#activityLogger.logBroadcast("system", "Planning cancelled by user.");
-				} else {
-					throw err;
-				}
+			if (err instanceof Error && err.name === "AbortError") {
+				this.#activityLogger.logBroadcast("system", "Planning cancelled by user.");
+			} else {
+				throw err;
 			}
-		finally { if (planPoll) clearInterval(planPoll); this.#abortController = null; this.#busy = false; }
+		} finally { if (planPoll) clearInterval(planPoll); this.#abortController = null; this.#busy = false; }
 	}
 
 	async #resolvePlannerRole(): Promise<{ system: string; guidelines: string[]; tools?: string[] } | null> {

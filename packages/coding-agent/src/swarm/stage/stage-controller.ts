@@ -35,6 +35,15 @@ import type { ReviewVerdict } from "../core/pipeline";
 import { RoleRoundtable, type RoleCandidate } from "./role-roundtable";
 import { CommBus } from "../comm-bus/comm-bus";
 
+// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
+let AgentRuntimeClass: any;
+try {
+  const mod = require("../agent-runtime");
+  AgentRuntimeClass = mod.AgentRuntime;
+} catch {
+  // AgentRuntime not yet available — keep existing code path
+}
+
 // ============================================================================
 // StageCallbacks — feedback interface for Profile credit + Stigmergy marks
 // ============================================================================
@@ -101,6 +110,8 @@ export class StageController {
 	readonly #opts: StageOptions;
 	#executor: AgentExecutor;
 	#lockMgr = new RegionLockManager();
+	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
+	#runtime: any = undefined;
 	/** @deprecated Replaced by CommBus.groupChannel("role-negotiation", ...) */
 	// #sharedChannel?: AgentChannel;
 
@@ -389,31 +400,62 @@ export class StageController {
 
 			try {
 				const msgId = `stage-${agent.id}-${task.id}`;
-				const result = await streamAgentOutput(
-					{ activityLogger, msgId, from: agent.id },
-					{
-						cwd: workspace,
-						agent: {
-							name: agent.id,
-							description: `Stage agent: ${agent.id} (${agent.role})`,
-							systemPrompt,
-							source: "project" as const,
-							tools: [...(roleDef?.tools ?? []), "agent_fork"],
-						},
-						task: [
-							`## Task: ${task.title}`,
-							`Role: ${agent.role}`,
-							task.files ? `Files: ${task.files.join(", ")}` : "",
-							"",
-							"Complete this task. When done, report what you accomplished.",
-						].filter(Boolean).join("\n"),
+				const taskText = [
+					`## Task: ${task.title}`,
+					`Role: ${agent.role}`,
+					task.files ? `Files: ${task.files.join(", ")}` : "",
+					"",
+					"Complete this task. When done, report what you accomplished.",
+				].filter(Boolean).join("\n");
+
+				let result: SingleResult;
+
+				if (AgentRuntimeClass && this.#runtime) {
+					// Phase 3B: NEW path — use AgentRuntime.spawn()
+					const [handle] = await this.#runtime.spawn([{
+						id: agent.id,
+						role: agent.role,
+						roleSource: "library",
+						task: taskText,
+					}]);
+
+					const output = await handle.wait();
+					result = {
 						index: results.length,
 						id: msgId,
-						modelRegistry,
-						settings,
-						signal,
-					},
-				);
+						agent: agent.id,
+						agentSource: "project" as const,
+						task: taskText,
+						exitCode: 0,
+						output: (output?.output ?? output) ?? "(no output)",
+						stderr: "",
+						truncated: false,
+						durationMs: 0,
+						tokens: 0,
+						requests: 0,
+					};
+				} else {
+					// FALLBACK: existing code path (keep exactly as-is)
+					result = await streamAgentOutput(
+						{ activityLogger, msgId, from: agent.id },
+						{
+							cwd: workspace,
+							agent: {
+								name: agent.id,
+								description: `Stage agent: ${agent.id} (${agent.role})`,
+								systemPrompt,
+								source: "project" as const,
+								tools: [...(roleDef?.tools ?? []), "agent_fork"],
+							},
+							task: taskText,
+							index: results.length,
+							id: msgId,
+							modelRegistry,
+							settings,
+							signal,
+						},
+					);
+				}
 
 				results.push(result);
 

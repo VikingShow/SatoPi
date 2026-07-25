@@ -18,6 +18,15 @@ import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentToolRestriction } from "../core/schema";
 
+// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
+let AgentRuntimeClass: any;
+try {
+  const mod = require("../agent-runtime");
+  AgentRuntimeClass = mod.AgentRuntime;
+} catch {
+  // AgentRuntime not yet available — keep existing code path
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -84,6 +93,8 @@ function textSimilarity(a: string, b: string): number {
 export class DebateRoundtable {
 	readonly #config: Required<Omit<DebateRoundtableConfig, "toolRestriction">>;
 	readonly #toolRestriction?: AgentToolRestriction;
+	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
+	#runtime: any = undefined;
 
 	constructor(config: DebateRoundtableConfig) {
 		this.#config = {
@@ -122,37 +133,71 @@ export class DebateRoundtable {
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
 		// Spawn agents in parallel for this round
-		const settled = await Promise.allSettled(
-			Array.from({ length: agentCount }, (_, i) =>
-				runSubprocess({
-					cwd: workspace,
-					agent: (() => {
-						const def: AgentDefinition = {
-							name: `debate-agent-${i + 1}`,
-							description: `Plan debate agent ${i + 1}`,
-							systemPrompt: this.#debateAgentSystemPrompt(),
-							source: "project" as const,
-						};
-						if (this.#toolRestriction) {
-							if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
-								def.tools = this.#toolRestriction.allowed;
-							}
-							if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
-								def.blockedTools = this.#toolRestriction.blocked;
-							}
-						}
-						return def;
-					})(),
+		let results: SingleResult[];
+
+		if (AgentRuntimeClass && this.#runtime) {
+			// Phase 3B: NEW path — use AgentRuntime.spawn()
+			const debatePrompt = this.#debateAgentSystemPrompt();
+			const restrictedTools = this.#toolRestriction?.allowed ?? [];
+
+			const handles = await this.#runtime.spawn(
+				Array.from({ length: agentCount }, (_, i) => ({
+					id: `debate-agent-${i + 1}`,
+					role: "debater",
+					roleSource: "inline" as const,
+					inline: { systemPrompt: debatePrompt, tools: restrictedTools },
 					task: roundPrompt,
-					index: i,
-					id: `plan-debate-r${round}-c${i + 1}`,
-					modelRegistry,
-					settings,
-					signal,
-				}),
-			),
-		);
-			const results: SingleResult[] = settled.map((s, i) => {
+				})),
+			);
+
+			const outputs = await Promise.all(handles.map((h: any) => h.wait()));
+			results = outputs.map((output: any, i: number) => ({
+				index: i,
+				id: `plan-debate-r${round}-c${i + 1}`,
+				agent: `debate-agent-${i + 1}`,
+				agentSource: "project" as const,
+				task: roundPrompt,
+				exitCode: 0,
+				output: (output?.output ?? output) ?? "(no output)",
+				stderr: "",
+				truncated: false,
+				durationMs: 0,
+				tokens: 0,
+				requests: 0,
+			}));
+		} else {
+			// FALLBACK: existing code path (keep exactly as-is)
+			const settled = await Promise.allSettled(
+				Array.from({ length: agentCount }, (_, i) =>
+					runSubprocess({
+						cwd: workspace,
+						agent: (() => {
+							const def: AgentDefinition = {
+								name: `debate-agent-${i + 1}`,
+								description: `Plan debate agent ${i + 1}`,
+								systemPrompt: this.#debateAgentSystemPrompt(),
+								source: "project" as const,
+							};
+							if (this.#toolRestriction) {
+								if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
+									def.tools = this.#toolRestriction.allowed;
+								}
+								if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
+									def.blockedTools = this.#toolRestriction.blocked;
+								}
+							}
+							return def;
+						})(),
+						task: roundPrompt,
+						index: i,
+						id: `plan-debate-r${round}-c${i + 1}`,
+						modelRegistry,
+						settings,
+						signal,
+					}),
+				),
+			);
+			results = settled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 				return {
@@ -169,7 +214,8 @@ export class DebateRoundtable {
 					tokens: 0,
 					requests: 0,
 				};
-			});
+				});
+			}
 
 			const outputs = results.map(r => this.#extractPlanContent(r));
 			const similarity =
