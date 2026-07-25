@@ -291,24 +291,8 @@ export class MonitorServer implements ActivityBroadcaster {
 					return finalize(res);
 				}
 
-				// ── Static SPA ──────────────────────────────────────────
-				const distDir = path.resolve(import.meta.dir, "../../../../swarm-gui/dist");
-				let filePath = pathname === "/" ? "/index.html" : pathname;
-				const fullPath = path.join(distDir, filePath);
-
-				// Try exact file
-				try {
-					const file = Bun.file(fullPath);
-					if (await file.exists()) return finalize(new Response(file));
-				} catch { /* dist/ missing — dev mode */ }
-
-				// Fallback to index.html for SPA routing
-				try {
-					const indexFile = Bun.file(path.join(distDir, "index.html"));
-					if (await indexFile.exists()) return finalize(new Response(indexFile));
-				} catch { /* no dist yet */ }
-
-				return finalize(new Response("Not found", { status: 404 }));
+				// ── SatoPi v3 TUI only (swarm-gui removed) ──
+				return finalize(new Response("SatoPi v3 — TUI only. Use `omp` CLI.", { status: 200 }));
 			},
 		});
 	}
