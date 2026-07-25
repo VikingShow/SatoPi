@@ -8,11 +8,15 @@
  *   - tasksCompleted (权重 0.4): 完成的任务数
  *   - codeLinesChanged (权重 0.2): 修改的代码行数
  *   - peerVotes (权重 0.4): 其他 agent 的投票
+ *
+ * @remarks Vote collection delegates to {@link CommChannel.vote} which
+ * internally uses the standalone {@link runVote} pure function.
+ * Score computation and ranking logic remain in this class.
  */
 
 import { IrcBus } from "../../irc/bus";
-import { AgentChannel } from "../channel/agent-channel";
 import type { ActivityLogger } from "../hooks/activity-logger";
+import { CommChannel } from "../comm-bus/comm-channel";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================
@@ -61,6 +65,13 @@ export class ReporterElection {
 
 	/**
 	 * Conduct reporter election among agents.
+	 *
+	 * Vote collection delegates to {@link CommChannel.vote} (which internally
+	 * calls {@link runVote}).  The returned tallies are combined with task
+	 * and code contribution scores to produce the final ranking.
+	 *
+	 * @deprecated The manual AgentChannel + ircBus.collectResponses pattern
+	 * was replaced by CommChannel.vote().  Score computation stays here.
 	 */
 	async elect(config: ElectionConfig): Promise<ElectionResult> {
 		const { contributions, eligibleIds, timeoutMs = 15_000 } = config;
@@ -79,13 +90,7 @@ export class ReporterElection {
 			candidates: eligibleIds.length,
 		});
 
-		// 1. Collect peer votes via IRC query
-		const channel = new AgentChannel(
-			this.#ircBus,
-			{ agents: eligibleIds, observers: [] },
-			this.#activityLogger,
-		);
-
+		// 1. Collect peer votes via CommChannel.vote()
 		let peerVotes: Map<string, number> = new Map();
 		try {
 			const question = [
@@ -95,35 +100,33 @@ export class ReporterElection {
 				"- Who completed the most work?",
 				"- Whose output was highest quality?",
 				"- Who communicates most clearly?",
-				"",
-				"Reply with: `VOTE: <agent-id>` (just the ID of your chosen reporter)",
 			].join("\n");
 
-			await channel.broadcast("system", question);
-
-			const responses = await this.#ircBus.collectResponses(
-				"system", eligibleIds,
-				{ from: "system", body: question },
-				{}, timeoutMs,
+			const commChannel = new CommChannel(
+				this.#ircBus,
+				eligibleIds,
+				[],
+				this.#activityLogger,
 			);
 
-			// Tally votes
-			for (const [, msg] of responses) {
-				const match = msg.body.match(/VOTE:\s*(\S+)/i);
-				if (match) {
-					const votedFor = match[1];
-					peerVotes.set(votedFor, (peerVotes.get(votedFor) ?? 0) + 1);
-				}
-			}
+			// Delegate vote collection to CommChannel.vote() → runVote()
+			// eligibleIds serve as both voters and candidates
+			const voteResult = await commChannel.vote(question, {
+				eligibleIds,
+				candidates: eligibleIds,
+				timeoutMs,
+			});
 
-			this.#activityLogger?.logBroadcast("system", `Election: collected ${peerVotes.size} votes`);
+			peerVotes = voteResult.tallies;
+
+			this.#activityLogger?.logBroadcast("system", `Election: collected ${voteResult.totalVotes} votes`);
 		} catch (err) {
 			logger.warn("[ReporterElection] Vote collection failed — using contribution-only scores", {
 				error: String(err),
 			});
 		}
 
-		// 2. Compute final scores
+		// 2. Compute final scores (tasks + code + votes)
 		const allTasks = contributions.reduce((s, c) => s + c.tasksCompleted, 0) || 1;
 		const allCode = contributions.reduce((s, c) => s + c.codeLinesChanged, 0) || 1;
 

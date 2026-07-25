@@ -6,14 +6,19 @@
  *
  * 流程:
  *   1. 构建讨论提示（plan tasks + required roles）
- *   2. AgentChannel.conductRoundtable 多轮讨论
+ *   2. CommChannel.roundtable 多轮讨论
  *   3. LLM 解析讨论结果 → RoleAssignment[]
  *   4. 失败时 fallback 到算法分配
+ *
+ * @remarks Roundtable execution now delegates to {@link CommChannel.roundtable}
+ * which internally uses the standalone {@link runRoundtable} pure function
+ * with Jaccard-based convergence detection.
  */
 
-import { IrcBus, type IrcMessage } from "../../irc/bus";
+import { IrcBus } from "../../irc/bus";
 import { AgentChannel } from "../channel/agent-channel";
 import type { ActivityLogger } from "../hooks/activity-logger";
+import { CommChannel } from "../comm-bus/comm-channel";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================
@@ -50,6 +55,10 @@ export interface RoundtableConfig {
 export class RoleRoundtable {
 	readonly #ircBus: IrcBus;
 	readonly #activityLogger?: ActivityLogger;
+	/**
+	 * @deprecated Shared AgentChannel — kept for backward compatibility.
+	 * Roundtable execution now delegates to {@link CommChannel.roundtable}.
+	 */
 	#sharedChannel?: AgentChannel;
 
 	constructor(ircBus: IrcBus, activityLogger?: ActivityLogger, sharedChannel?: AgentChannel) {
@@ -60,6 +69,10 @@ export class RoleRoundtable {
 
 	/**
 	 * Conduct role assignment roundtable.
+	 *
+	 * Communication delegates to {@link CommChannel.roundtable} (which
+	 * internally calls the standalone {@link runRoundtable} function).
+	 * Response parsing and heuristic assignment logic stay in this class.
 	 *
 	 * @returns RoleAssignment[] — who gets which role
 	 * @returns null — roundtable failed, caller should fallback to algorithm
@@ -73,13 +86,6 @@ export class RoleRoundtable {
 		}
 
 		const agentIds = candidates.map(c => c.agentId);
-
-		// Use shared channel if provided, otherwise create a new one
-		const channel = this.#sharedChannel ?? new AgentChannel(
-			this.#ircBus,
-			{ agents: agentIds, observers: [] },
-			this.#activityLogger,
-		);
 
 		logger.info("[RoleRoundtable] Starting negotiation", {
 			agents: candidates.length, roles: availableRoles.length, rounds,
@@ -111,38 +117,19 @@ export class RoleRoundtable {
 		].join("\n");
 
 		try {
-			// Round 1: each agent states their preference
-			await channel.broadcast("system", topic);
+			// Delegate roundtable execution to CommChannel
+			const commChannel = new CommChannel(
+				this.#ircBus,
+				agentIds,
+				[],
+				this.#activityLogger,
+			);
 
-			const bus = this.#ircBus;
-			const allResponses: IrcMessage[] = [];
+			const result = await commChannel.roundtable(topic, { rounds, timeoutMs });
 
-			for (let r = 0; r < rounds; r++) {
-				const prompt = r === 0
-					? `[ROUNDTABLE R1/${rounds}] State your preferred role and reasoning.`
-					: `[ROUNDTABLE R${r + 1}/${rounds}] Respond to the discussion. Consider others' preferences.`;
-
-				await channel.broadcast("system", prompt);
-
-				const responses = await bus.collectResponses(
-					"system", agentIds,
-					{ from: "system", body: prompt },
-					{}, timeoutMs,
-				);
-
-				for (const [, msg] of responses) {
-					allResponses.push(msg);
-				}
-
-				// Early exit: if all agents agree, skip remaining rounds
-				if (r < rounds - 1) {
-					const parsed = this.#parseAssignments(allResponses, candidates);
-					if (parsed && parsed.length >= availableRoles.length) break;
-				}
-			}
-
-			// Parse final results
-			const assignments = this.#parseAssignments(allResponses, candidates);
+			// Parse the responses for role assignments
+			// (responses is string[] from runRoundtable's RoundtableResult)
+			const assignments = this.#parseAssignments(result.responses, candidates);
 			if (assignments && assignments.length > 0) {
 				logger.info("[RoleRoundtable] Negotiation complete", {
 					assignments: assignments.map(a => `${a.agentId}=${a.role}`),
@@ -161,14 +148,17 @@ export class RoleRoundtable {
 	/**
 	 * Parse roundtable responses into structured role assignments.
 	 * Tries to extract JSON block from discussion transcript.
+	 *
+	 * Accepts `string[]` (from {@link RoundtableResult.responses}) instead
+	 * of the previous `IrcMessage[]`.
 	 */
 	#parseAssignments(
-		responses: IrcMessage[],
+		responses: string[],
 		candidates: RoleCandidate[],
 	): RoleAssignment[] | null {
 		// Try to find JSON assignments in any response
-		for (const msg of responses) {
-			const jsonMatch = msg.body.match(/```json\s*\n?([\s\S]*?)```/);
+		for (const body of responses) {
+			const jsonMatch = body.match(/```json\s*\n?([\s\S]*?)```/);
 			if (jsonMatch) {
 				try {
 					const parsed = JSON.parse(jsonMatch[1]);
@@ -191,7 +181,7 @@ export class RoleRoundtable {
 
 		// Heuristic: match agent mentions with role mentions
 		const assignments: RoleAssignment[] = [];
-		const allText = responses.map(r => r.body.toLowerCase()).join(" ");
+		const allText = responses.join(" ").toLowerCase();
 
 		for (const c of candidates) {
 			const nameLower = c.name.toLowerCase();

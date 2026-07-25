@@ -33,7 +33,7 @@ import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
 import { TaskComplexityAnalyzer } from "../script/task-analyzer";
 import type { ReviewVerdict } from "../core/pipeline";
 import { RoleRoundtable, type RoleCandidate } from "./role-roundtable";
-import { AgentChannel } from "../channel/agent-channel";
+import { CommBus } from "../comm-bus/comm-bus";
 
 // ============================================================================
 // StageCallbacks — feedback interface for Profile credit + Stigmergy marks
@@ -101,7 +101,8 @@ export class StageController {
 	readonly #opts: StageOptions;
 	#executor: AgentExecutor;
 	#lockMgr = new RegionLockManager();
-	#sharedChannel?: AgentChannel;
+	/** @deprecated Replaced by CommBus.groupChannel("role-negotiation", ...) */
+	// #sharedChannel?: AgentChannel;
 
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
@@ -295,15 +296,11 @@ export class StageController {
 
 		// 5. Try roundtable negotiation (if IRC bus is available)
 		if (ircBus) {
-			// Create shared channel once and reuse across lifecycle
-			if (!this.#sharedChannel) {
-				this.#sharedChannel = new AgentChannel(
-					ircBus,
-					{ agents: candidates.map(c => c.agentId), observers: [] },
-					activityLogger,
-				);
-			}
-			const roundtable = new RoleRoundtable(ircBus, activityLogger, this.#sharedChannel);
+			// Register a shared channel via CommBus for cross-component access
+			const commBus = CommBus.ensureGlobal(ircBus, activityLogger);
+			commBus.groupChannel("role-negotiation", candidates.map(c => c.agentId), activityLogger);
+
+			const roundtable = new RoleRoundtable(ircBus, activityLogger);
 			const negotiated = await roundtable.negotiateRoles({
 				availableRoles,
 				candidates,

@@ -25,6 +25,7 @@ import { generatePlanningPrompt, runPlanDebate } from "./script-planner";
 import { streamAgentOutput } from "../render/streaming";
 import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "../core/schema";
+import { CommBus } from "../comm-bus/comm-bus";
 
 // ============================================================================
 // Types
@@ -102,6 +103,9 @@ export class ScriptManager {
 		this.#runManager = opts.runManager;
 		this.#profileRegistry = opts.profileRegistry;
 		this.#roleAssetManager = opts.roleAssetManager;
+		// Wire CommBus singleton with the activity logger for unified Human messaging
+		CommBus.global().setActivityLogger(opts.activityLogger);
+
 	}
 
 	async #saveConversation(): Promise<void> {
@@ -179,7 +183,8 @@ export class ScriptManager {
 		if (this.#phase !== "script") {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
-		this.#activityLogger.logBroadcast("human", text);
+		// Route through CommBus for unified Human message handling (logging included)
+		await CommBus.global().receiveFromHuman(text, "planner");
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
 		this.#planMtime = await this.#getPlanMtime();
@@ -502,31 +507,6 @@ function parsePlannerResponse(raw: string): string {
 
 			// 4. Fallback: simple status string
 			if (typeof obj?.status === "string") return `(${obj.status})`;
-
-		} catch { /* not parseable */ }
-		return raw;
-	}
-			if (typeof obj?.status === "string") return `(${obj.status})`;
-
-			// 3. Structured planning sections — convert to human-readable summary
-			const sections = ["goals", "constraints", "scope", "tasks", "acceptance_criteria", "tech_stack", "risks", "notes"];
-			const lines: string[] = [];
-			for (const section of sections) {
-				const items = obj[section];
-				if (!Array.isArray(items) || items.length === 0) continue;
-				lines.push(`## ${section.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`);
-				for (const item of items) {
-					if (typeof item !== "object" || !item) continue;
-					const status = (item as any).status ?? "";
-					const icon = status === "confirmed" ? "✅" : status === "awaiting_clarification" ? "🔍" : "📝";
-					const question = (item as any).question_asked || (item as any).question || (item as any).message || "";
-					const detail = (item as any).detail || (item as any).description || "";
-					const text = [question, detail].filter(Boolean).join(" — ");
-					lines.push(`- ${icon} ${text || "(no details yet)"}`);
-				}
-				lines.push("");
-			}
-			if (lines.length > 0) return lines.join("\n");
 
 		} catch { /* not parseable */ }
 		return raw;

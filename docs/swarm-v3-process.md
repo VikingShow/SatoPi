@@ -61,18 +61,31 @@
 
 ---
 
-## Phase 2: CommBus + CommChannel
+## Phase 2: CommBus + CommChannel ✅ 完成
 
-- [ ] 创建 `comm-bus/channel.ts` — CommChannel 类
-- [ ] 创建 `comm-bus/roundtable.ts` — roundtable() 实现
-- [ ] 创建 `comm-bus/vote.ts` — vote() 实现
-- [ ] 创建 `comm-bus/endpoint.ts` — CommEndpoint 类
-- [ ] 创建 `comm-bus/index.ts` — CommBus 类
-- [ ] AgentChannel 内部委托给 CommChannel
-- [ ] RoleRoundtable 内部委托给 CommChannel.roundtable()
-- [ ] ReporterElection 内部委托给 CommChannel.vote()
-- [ ] 创建测试文件
-- [ ] 验收: `bun test comm-bus/` 全部通过 + 现有测试不受影响 ✅
+- [x] 创建 `comm-bus/comm-channel.ts` — CommChannel 类 (send / roundtable / vote)
+- [x] 创建 `comm-bus/roundtable.ts` — runRoundtable() 纯函数 + Jaccard 收敛检测
+- [x] 创建 `comm-bus/vote.ts` — runVote() 纯函数 + VOTE: 模式解析
+- [x] 创建 `comm-bus/endpoint.ts` — CommEndpoint + createEndpoint()
+- [x] 创建 `comm-bus/comm-bus.ts` — CommBus 单例 (receiveFromHuman / groupChannel)
+- [x] 创建 `comm-bus/index.ts` — barrel 导出
+- [x] AgentChannel 内部委托给 CommChannel
+- [x] RoleRoundtable.negotiateRoles() 委托给 CommChannel.roundtable()
+- [x] ReporterElection.elect() 委托给 CommChannel.vote()
+- [x] ScriptManager.sendMessage() 路由通过 CommBus.receiveFromHuman()
+- [x] StageController.#assignRoles() 使用 CommBus.groupChannel()
+- [x] 创建 `__tests__/comm-channel.test.ts` — 59 tests, 0 fail
+- [x] 验收: 204 tests pass (59 new + 25 existing migration + 120 Phase 1), 0 fail ✅
+
+### Phase 2 总结
+
+| 模块 | 新增文件 | 修改文件 | 测试 | 状态 |
+|------|---------|---------|------|------|
+| CommBus + CommChannel | 6 (comm-bus/) | — | 59 | ✅ |
+| 迁移现有通信代码 | — | 5 (agent-channel, role-roundtable, reporter-election, script-manager, stage-controller) | — | ✅ |
+| **Phase 2 合计** | **6 新文件** | **5 修改** | **204 tests total** | **全部通过** 
+
+提交: `feat(swarm): Phase 2 — CommBus + CommChannel + migration`
 
 ---
 

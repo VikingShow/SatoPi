@@ -9,10 +9,14 @@
  *
  * Agents are unaware of observers — observer messages are delivered
  * via suppressRelay and never shown in the main relay.
+ *
+ * @remarks Internally delegates messaging to {@link CommChannel} for unified
+ * send / roundtable / vote logic.  The public API is unchanged.
  */
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import type { ActivityLogger } from "../hooks/activity-logger";
+import { CommChannel } from "../comm-bus/comm-channel";
 
 // ============================================================================
 // Types
@@ -42,10 +46,16 @@ export class AgentChannel {
 	readonly #observers = new Set<string>();
 	readonly #groups = new Map<string, Set<string>>();
 	readonly #activityLogger?: ActivityLogger;
+	/**
+	 * Internal CommChannel that backs the public messaging API.
+	 * Created during construction and kept in sync with agents/observers.
+	 */
+	readonly #commChannel: CommChannel;
 
 	constructor(ircBus: IrcBus, config: AgentChannelConfig, activityLogger?: ActivityLogger) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
+		this.#commChannel = new CommChannel(ircBus, config.agents, config.observers, activityLogger);
 		for (const a of config.agents) this.#agents.add(a);
 		for (const o of config.observers) this.#observers.add(o);
 	}
@@ -62,10 +72,12 @@ export class AgentChannel {
 
 	addAgent(agentId: string): void {
 		this.#agents.add(agentId);
+		this.#commChannel.addMember(agentId);
 	}
 
 	removeAgent(agentId: string): void {
 		this.#agents.delete(agentId);
+		this.#commChannel.removeMember(agentId);
 		for (const [, members] of this.#groups) {
 			members.delete(agentId);
 		}
@@ -73,29 +85,25 @@ export class AgentChannel {
 
 	addObserver(observerId: string): void {
 		this.#observers.add(observerId);
+		this.#commChannel.addObserver(observerId);
 	}
 
 	removeObserver(observerId: string): void {
 		this.#observers.delete(observerId);
+		this.#commChannel.removeObserver(observerId);
 	}
 
 	// -- messaging -------------------------------------------------------
 
 	/**
 	 * Broadcast to ALL agents (visible) + secret-CC all observers.
-	 * Agents see the message as coming from `from`, addressed to the agent group.
-	 * Observers receive a copy silently through suppressRelay.
+	 * Delegates to {@link CommChannel.send} for unified message routing.
+	 *
+	 * @deprecated The internal IrcBus loop is replaced by CommChannel.send().
+	 * This method's public signature is unchanged.
 	 */
 	async broadcast(from: string, body: string): Promise<void> {
-		this.#activityLogger?.logBroadcast(from, body);
-		const agentList = [...this.#agents];
-
-		await Promise.all(agentList.map(to => this.#ircBus.send({ from, to, body })));
-
-		// Secret CC to observers — suppressed from UI relay
-		await Promise.all([...this.#observers].map(to =>
-			this.#ircBus.send({ from, to, body }, { suppressRelay: true }),
-		));
+		await this.#commChannel.send(from, body);
 	}
 
 	// -- sub-groups ------------------------------------------------------
@@ -111,19 +119,14 @@ export class AgentChannel {
 
 	/**
 	 * Send to a named sub-group. Members + all observers receive it.
+	 * Delegates to {@link CommChannel.sendToGroup} for unified delivery.
 	 */
 	async sendToSubGroup(groupName: string, from: string, body: string): Promise<void> {
 		this.#activityLogger?.logSubGroup(groupName, from, body);
 		const members = this.#groups.get(groupName);
 		if (!members || members.size === 0) return;
 
-		const memberList = [...members];
-		await Promise.all(memberList.map(to => this.#ircBus.send({ from, to, body })));
-
-		// Observers monitor all sub-groups silently
-		await Promise.all([...this.#observers].map(to =>
-			this.#ircBus.send({ from, to, body }, { suppressRelay: true }),
-		));
+		await this.#commChannel.sendToGroup(from, body, [...members]);
 	}
 
 	addToSubGroup(groupName: string, agentId: string): void {
@@ -139,15 +142,10 @@ export class AgentChannel {
 
 	/**
 	 * An observer steps in to steer a specific agent.
-	 * The agent receives a high-priority message but does not stop.
+	 * Delegates to {@link CommChannel.interrupt} for unified steering.
 	 */
 	async interrupt(observerId: string, agentId: string, reason: string): Promise<void> {
-		this.#activityLogger?.logSteering(observerId, agentId, reason);
-		await this.#ircBus.send({
-			from: observerId,
-			to: agentId,
-			body: `[STEERING] ${reason}`,
-		});
+		await this.#commChannel.interrupt(observerId, agentId, reason);
 	}
 
 	/**
