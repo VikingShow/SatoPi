@@ -1582,7 +1582,38 @@ export class InteractiveMode implements InteractiveModeContext {
 			const base = this.editor.borderColor;
 			this.editor.borderColor = (str: string) => `\x1b[2m${base(str)}\x1b[22m`;
 		}
+
+		// Enso placeholder — dim Zen hint shown when the input box is empty.
+		this.editor.placeholder = this.#getEnsoPlaceholder();
+
 		this.ui.requestRender();
+	}
+
+	/** Return a context-aware Zen placeholder for the empty input box. */
+	#getEnsoPlaceholder(): string {
+		if (this.isBashMode)   return "! run a shell command…";
+		if (this.isPythonMode) return "$ evaluate python…";
+		if (this.session.isStreaming) return "↵ steer · type to redirect the agent";
+
+		// Idle — five classical Chinese phrases, each mapping to a SatoPi phase.
+		// Rotated by a stable hash of the session name so the same session always
+		// shows the same phrase (no random flicker across re-renders).
+		//
+		//  問道 — 問道於盲             idle / explore    seek the way
+		//  謀定 — 謀定而後動           script / plan     plan before you move
+		//  眾議 — 三人行必有我師       debate / roundtable  let the circle speak
+		//  知行 — 知行合一	       stage / execute   thought into action
+		//  三省 — 吾日三省吾身         curtain / reflect  reflect to see clearly
+		const PHRASES = [
+			"問道 · seek the way",
+			"謀定 · plan before you move",
+			"眾議 · let the circle speak",
+			"知行 · thought into action",
+			"三省 · reflect to see clearly",
+		];
+		const key = this.sessionManager.getSessionName() ?? "";
+		const idx = [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 0) % PHRASES.length;
+		return PHRASES[idx] ?? PHRASES[0]!;
 	}
 
 	/** Refresh the running-subagents status badge from the active local or collab registry. */

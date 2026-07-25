@@ -43,14 +43,16 @@ export const PHASE_DISPLAY: Record<Chapter, { color: typeof SATOPI_COLORS[keyof 
   curtain:          { color: SATOPI_COLORS.purple,   icon: "◈",  label: "Curtain" },
 };
 
-/** Pi ASCII art logo derived from assets/icon.svg */
+/** SatoPi logo — hand-crafted from hero.png shape using box-drawing & block chars */
 export const PI_LOGO_ASCII: string[] = [
-  "  ╭──────────────────╮  ",
-  "  │                  │  ",
-  "  │  ●            ●  │  ",
-  "  │  █            █  │  ",
-  "  │  █     ╭──╮   █  │  ",
-  "  │  █     ╰──╯   █  │  ",
-  "  │  █            █  │  ",
-  "  ╰──█────────────█──╯  ",
+  "              ●            ●              ",
+  "        ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄        ",
+  "        ██                        ██        ",
+  "        ██                        ██        ",
+  "        ██                        ██        ",
+  "        ██           ▄▄▄▄         ██        ",
+  "        ██           ████         ██        ",
+  "        ██           ▀▀▀▀         ██        ",
+  "        ██                        ██        ",
+  "        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀        ",
 ];

@@ -524,7 +524,7 @@ export const SETTINGS_SCHEMA = {
 	// Theme
 	"theme.dark": {
 		type: "string",
-		default: "titanium",
+		default: "satopi",
 		ui: {
 			tab: "appearance",
 			group: "Theme",

@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Usage } from "@oh-my-pi/pi-ai";
+import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { getStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
 import { type Component, Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
 import type { AdvisorMessageDetails } from "../../advisor";
@@ -686,7 +687,7 @@ export class UiHelpers {
 				theme.bold(theme.fg("warning", "Update Available")) +
 					"\n" +
 					theme.fg("muted", `New version ${newVersion} is available. Run: `) +
-					theme.fg("accent", "omp update"),
+					theme.fg("accent", `${APP_NAME} update`),
 				1,
 				0,
 			),

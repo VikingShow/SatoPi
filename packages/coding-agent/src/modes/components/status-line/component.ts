@@ -1306,12 +1306,20 @@ export class StatusLineComponent implements Component {
 	}
 
 	getTopBorder(width: number): { content: string; width: number } {
-		let content = this.#buildStatusLine(width);
-		if (this.#focusedAgentId && content) {
-			// Dim the whole bar while focus-proxied. Group/cap terminators emit full
-			// `\x1b[0m` resets that would cancel faint mid-bar, so re-open it after each.
-			content = `\x1b[2m${content.replaceAll("\x1b[0m", "\x1b[0m\x1b[2m")}\x1b[22m`;
+		// Enso ○ symbols: reserve 4 chars (○·space left + space·○ right) so the
+		// status bar content fills the remaining space between the two circles.
+		const ENSO_RESERVE = 4;
+		const innerWidth = Math.max(0, width - ENSO_RESERVE);
+
+		let statusContent = this.#buildStatusLine(innerWidth);
+		if (this.#focusedAgentId && statusContent) {
+			// Dim the whole bar while focus-proxied.
+			statusContent = `\x1b[2m${statusContent.replaceAll("\x1b[0m", "\x1b[0m\x1b[2m")}\x1b[22m`;
 		}
+
+		// ○ rendered in border color (amber-dark in satopi theme)
+		const circle = theme.fg("border", "○");
+		const content = `${circle} ${statusContent} ${circle}`;
 		return {
 			content,
 			width: visibleWidth(content),

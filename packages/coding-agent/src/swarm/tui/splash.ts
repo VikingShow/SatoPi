@@ -1,88 +1,61 @@
 import { SATOPI_COLORS, PI_LOGO_ASCII, ansiFg, ansiBold, ansiDim } from "./theme";
 
-const SATOPI_TEXT = ansiBold(ansiFg(SATOPI_COLORS.logoOrange.ansi256, "SatoPi"));
-const TAGLINE = `${ansiDim("Satori a team of Pi")} ${ansiDim("·")} ${ansiDim("v0.0.1")}`;
-const LOGO_WIDTH = 24; // width of PI_LOGO_ASCII lines in characters
-const MIN_WIDTH = 50;
+const LOGO_WIDTH = 41; // width of PI_LOGO_ASCII lines
+const LOGO_HEIGHT = PI_LOGO_ASCII.length; // 25
+const MIN_WIDTH = 60;
 
 /**
  * Render the SatoPi brand splash screen.
  *
- * Left column: amber "SatoPi" text.
- * Right column: Pi ASCII art logo (PI_LOGO_ASCII).
- * Golden border with box-drawing characters.
+ * Center: Pi logo ASCII art (rendered from hero.png).
+ * "SatoPi" text above the logo in amber bold.
  * Tagline below the box.
- *
- * @param width - Terminal width in columns (default 62, minimum 50).
- * @returns Array of ANSI-color-coded strings, one per line.
  */
-export function renderSplash(width: number = 62): string[] {
+export function renderSplash(width: number = 80): string[] {
   const w = Math.max(width, MIN_WIDTH);
-  const innerW = w - 2; // space between border corners
-
-  // Golden border ANSI code
+  const innerW = w - 2;
   const borderColor = SATOPI_COLORS.primary.ansi256;
-
-  // "SatoPi" text length (without ANSI escapes): 6
-  const leftLabel = "SatoPi";
-  // Right padding between "SatoPi" and the logo — at least 2 spaces
-  const gap = Math.max(2, innerW - 2 - leftLabel.length - LOGO_WIDTH - 2);
-  // Total content width used: 2 (left pad) + 6 (SatoPi) + gap + 22 (logo) + 2 (right pad)
-  const contentWidth = 2 + leftLabel.length + gap + LOGO_WIDTH + 2;
-
   const lines: string[] = [];
 
   // Top border
-  const topBorder = ansiFg(borderColor, `╔${"═".repeat(innerW)}╗`);
-  lines.push(topBorder);
+  lines.push(ansiFg(borderColor, `╔${"═".repeat(innerW)}╗`));
 
-  // Empty line after top border
+  // Empty line
   lines.push(ansiFg(borderColor, `║${" ".repeat(innerW)}║`));
 
-  // Build the content area: left label + spacing + logo
-  const logoHeight = PI_LOGO_ASCII.length;
-  const labelRow = Math.floor(logoHeight / 2); // center SatoPi vertically against logo
+  // "SatoPi" centered — rendered above the logo
+  const nameStr = "S a t o P i";
+  const namePad = Math.floor((w - 8) / 2); // 8 = visible width of "S a t o P i"
+  const nameLine = " ".repeat(Math.max(0, namePad - 6)) + ansiBold(ansiFg(SATOPI_COLORS.logoOrange.ansi256, nameStr));
+  lines.push(ansiFg(borderColor, "║") + nameLine + " ".repeat(Math.max(0, innerW - (namePad + 8))) + ansiFg(borderColor, "║"));
 
-  for (let i = 0; i < logoHeight; i++) {
-    const logoLine = PI_LOGO_ASCII[i];
-    // Ensure logo line is exactly LOGO_WIDTH chars (pad or trim if needed)
-    const logoPart = logoLine.length >= LOGO_WIDTH
-      ? logoLine.substring(0, LOGO_WIDTH)
-      : logoLine + " ".repeat(LOGO_WIDTH - logoLine.length);
+  // Empty line between name and logo
+  lines.push(ansiFg(borderColor, `║${" ".repeat(innerW)}║`));
 
-    let leftPart: string;
-    if (i === labelRow) {
-      // Render "SatoPi" in amber bold on this row
-      leftPart = `  ${SATOPI_TEXT}`;
-    } else {
-      leftPart = "        "; // 8 spaces = 2 pad + 6 for SatoPi text width
-    }
-
-    const gapStr = " ".repeat(gap);
-    const rightPad = " ".repeat(innerW - (leftPart.replace(/\x1b\[[0-9;]*m/g, "").length + gapStr.length + LOGO_WIDTH));
-
+  // Pi logo — centered horizontally
+  const logoPadLeft = Math.floor((innerW - LOGO_WIDTH) / 2);
+  for (const logoLine of PI_LOGO_ASCII) {
+    const trimmed = logoLine.length > LOGO_WIDTH ? logoLine.substring(0, LOGO_WIDTH) : logoLine.padEnd(LOGO_WIDTH);
+    const padRight = innerW - logoPadLeft - LOGO_WIDTH;
     lines.push(
       ansiFg(borderColor, "║") +
-      leftPart +
-      gapStr +
-      ansiDim(logoPart) +
-      rightPad +
+      " ".repeat(Math.max(0, logoPadLeft)) +
+      ansiDim(trimmed) +
+      " ".repeat(Math.max(0, padRight)) +
       ansiFg(borderColor, "║")
     );
   }
 
-  // Empty line before bottom border
+  // Empty line
   lines.push(ansiFg(borderColor, `║${" ".repeat(innerW)}║`));
 
   // Bottom border
-  const bottomBorder = ansiFg(borderColor, `╚${"═".repeat(innerW)}╝`);
-  lines.push(bottomBorder);
+  lines.push(ansiFg(borderColor, `╚${"═".repeat(innerW)}╝`));
 
   // Tagline below the box
-  // Center the tagline relative to the border width
-  const taglineRaw = "Satori a team of Pi · v0.0.1";
-  const taglinePadding = Math.max(0, Math.floor((w - taglineRaw.length) / 2));
-  lines.push(" ".repeat(taglinePadding) + TAGLINE);
+  const tagline = "Satori a team of Pi · v0.0.1";
+  const taglinePad = Math.max(0, Math.floor((w - tagline.length) / 2));
+  lines.push(" ".repeat(taglinePad) + ansiDim(tagline));
 
   return lines;
 }

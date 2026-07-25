@@ -387,6 +387,8 @@ export class Editor implements Component, Focusable {
 	cursorOverride: string | undefined;
 	/** Display width of the cursorOverride glyph (needed because override may contain ANSI escapes). */
 	cursorOverrideWidth: number | undefined;
+	/** Placeholder text shown as dim ghost text when the editor is empty. */
+	placeholder: string | null = null;
 	/** Optional hook that decorates displayed user text after source-text layout.
 	 *  Width-changing output is allowed on lines without the cursor; it is truncated
 	 *  to the content width rather than reflowed. Cursor glyphs and inline hints are excluded. */
@@ -3187,6 +3189,11 @@ export class Editor implements Component, Focusable {
 				this.#state.cursorLine,
 				this.#state.cursorCol,
 			);
+		}
+
+		// Placeholder — show as dim ghost text when editor is empty and no autocomplete
+		if (this.#isEditorEmpty() && this.placeholder) {
+			return this.placeholder;
 		}
 
 		return null;

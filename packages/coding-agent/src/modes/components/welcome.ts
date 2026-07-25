@@ -136,7 +136,7 @@ export interface LspServerInfo {
 }
 
 /**
- * Premium welcome screen with block-based OMP logo and two-column layout.
+ * Premium welcome screen with block-based SatoPi logo and two-column layout.
  */
 export class WelcomeComponent implements Component {
 	#animStart: number | null = null;
@@ -352,8 +352,8 @@ export class WelcomeComponent implements Component {
 
 		const lines: string[] = [];
 
-		// Top border with embedded title
-		const title = ` ${APP_NAME} v${this.version} `;
+		// Top border with embedded title — show product name "SatoPi", not the CLI bin "stp"
+		const title = ` SatoPi v${this.version} `;
 		const titlePrefixRaw = hChar.repeat(3);
 		const titleStyled = theme.fg("dim", titlePrefixRaw) + theme.fg("muted", title);
 		const titleVisLen = visibleWidth(titlePrefixRaw) + visibleWidth(title);
@@ -450,19 +450,43 @@ export class WelcomeComponent implements Component {
 	}
 }
 
-export const PI_LOGO = ["▀██████████▀", " ╘██    ██  ", "  ██    ██  ", "  ██    ██  ", " ▄██▄  ▄██▄ "];
-
-/** Multi-stop palette for the diagonal gradient. */
-const GRADIENT_STOPS: ReadonlyArray<readonly [number, number, number]> = [
-	[255, 92, 200], // hot pink
-	[200, 110, 255], // violet
-	[120, 130, 255], // periwinkle
-	[60, 200, 255], // bright cyan
-	[120, 255, 220], // mint
+/**
+ * SatoPi logo — meta-π (v3): 19-char wide, three visual layers:
+ *
+ *   ring  — circle outline of π chars, thickness varies by row:
+ *             arc(9π) → shoulder(3π) → side(2π)
+ *   fill  — · chars fill ring interior, giving the disc a solid presence
+ *   inner — large π: bar(9π) protrudes 1 col past each leg(3π)
+ *             bar cols 5-13,  left leg cols 6-8,  right leg cols 10-12
+ *
+ * Gradient: forest green → leaf green → GOLD PEAK → fresh green → teal.
+ * The gold stop creates a diagonal golden-glow band through the green —
+ * the "golden ring of emergent wisdom" shining through the Bodhi leaf.
+ */
+export const PI_LOGO = [
+	"     πππππππππ     ",  //  row 0 — top arc       9π (indent 5)
+	"   πππ·······πππ   ",  //  row 1 — shoulder 3π + 7· fill
+	"  ππ·πππππππππ·ππ  ",  //  row 2 — 2π side + 9π bar (extends past legs)
+	"  ππ··πππ·πππ··ππ  ",  //  row 3 — 2π side + 3π legs + · fill
+	"  ππ··πππ·πππ··ππ  ",  //  row 4
+	"  ππ··πππ·πππ··ππ  ",  //  row 5
+	"   πππ·······πππ   ",  //  row 6 — shoulder 3π + 7· fill
+	"     πππππππππ     ",  //  row 7 — bottom arc    9π (indent 5)
 ];
 
-/** 256-color ramp fallback when truecolor isn't available. */
-const GRADIENT_RAMP_256 = [199, 171, 135, 99, 75, 51, 87];
+/** Multi-stop palette — forest green → leaf green → GOLD PEAK → fresh green → teal.
+ *  The gold stop at position 2 creates a diagonal golden-glow band that cuts
+ *  through the green on every render — the "golden ring" layer from the brand. */
+const GRADIENT_STOPS: ReadonlyArray<readonly [number, number, number]> = [
+	[ 22, 101,  52], // #166534 forest-800   — deep shadow
+	[ 34, 197,  94], // #22C55E green-500    — leaf green
+	[252, 211,  77], // #FCD34D amber-300    — GOLDEN GLOW peak
+	[ 74, 222, 128], // #4ADE80 green-400    — fresh green
+	[ 20, 184, 166], // #14B8A6 teal-500     — sunlit canopy
+];
+
+/** 256-color ramp fallback — dark-green → gold → bright-green → teal */
+const GRADIENT_RAMP_256 = [22, 34, 220, 40, 48, 40, 34];
 
 /** Half-width of the shine highlight band, expressed in gradient-t units. */
 const SHINE_HALF_WIDTH = 0.18;

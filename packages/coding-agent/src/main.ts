@@ -106,13 +106,17 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 		return;
 	}
 	try {
-		const response = await fetch("https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/latest", {
-			signal: withTimeoutSignal(5_000),
-		});
+		// Use GitHub Releases API so SatoPi releases drive the update notification,
+		// not the upstream oh-my-pi npm package.
+		const response = await fetch(
+			"https://api.github.com/repos/VikingShow/SatoPi/releases/latest",
+			{ signal: withTimeoutSignal(5_000) },
+		);
 		if (!response.ok) return undefined;
 
-		const data = (await response.json()) as { version?: string };
-		const latestVersion = data.version;
+		const data = (await response.json()) as { tag_name?: string };
+		// GitHub tag_name is e.g. "v0.0.2" — strip the leading "v" for semver comparison.
+		const latestVersion = data.tag_name?.replace(/^v/, "");
 
 		if (latestVersion && Bun.semver.order(latestVersion, currentVersion) > 0) {
 			return latestVersion;

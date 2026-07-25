@@ -18,6 +18,7 @@ import { LRUCache } from "lru-cache/raw";
 import darkThemeJson from "./dark.json" with { type: "json" };
 import { defaultThemes } from "./defaults";
 import lightThemeJson from "./light.json" with { type: "json" };
+import satopiThemeJson from "./satopi.json" with { type: "json" };
 import { resolveMermaidAscii } from "./mermaid-cache";
 
 export { getLanguageFromPath } from "../../utils/lang-from-path";
@@ -1960,6 +1961,7 @@ export class Theme {
 const BUILTIN_THEMES: Record<string, ThemeJson> = {
 	dark: darkThemeJson as ThemeJson,
 	light: lightThemeJson as ThemeJson,
+	satopi: satopiThemeJson as ThemeJson,
 	...(defaultThemes as Record<string, ThemeJson>),
 };
 
@@ -2190,7 +2192,7 @@ var themeWatcher: fs.FSWatcher | undefined;
 var themeReloadTimer: NodeJS.Timeout | undefined;
 var sigwinchHandler: (() => void) | undefined;
 var autoDetectedTheme: boolean = false;
-var autoDarkTheme: string = "dark";
+var autoDarkTheme: string = "satopi";
 var autoLightTheme: string = "light";
 var onThemeChangeCallback: ((event: ThemeChangeEvent) => void) | undefined;
 var themeLoadRequestId: number = 0;
