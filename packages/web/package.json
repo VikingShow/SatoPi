@@ -12,7 +12,8 @@
     "./types": "./src/core/types.ts",
     "./fetch": "./src/core/fetch-wrapper.ts",
     "./styles": "./src/styles/globals.css",
-    "./tool-render": "./src/tool-render/index.ts"
+    "./tool-render": "./src/tool-render/index.ts",
+    "./tool-render/tool-render.css": "./src/tool-render/tool-render.css"
   },
   "dependencies": {
     "lucide-react": "catalog:",
