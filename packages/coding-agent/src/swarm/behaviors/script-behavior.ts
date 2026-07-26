@@ -168,6 +168,17 @@ export class ScriptBehavior implements PhaseBehavior {
         logger.error("[ScriptBehavior] Planner failed", { error });
         break;
       }
+      case "aborted": {
+        // SatoPi: handle aborted status — the planner was terminated
+        // externally (e.g. abort controller, timeout, or parent shutdown).
+        this.#plannerFinished = true;
+        const reason =
+          typeof event.result === "string"
+            ? event.result
+            : (event.result as { reason?: string })?.reason ?? "aborted";
+        logger.warn("[ScriptBehavior] Planner aborted", { reason });
+        break;
+      }
       default:
         break;
     }

@@ -130,8 +130,17 @@ export async function generatePlanningPrompt(
 	if (experienceStore && taskDescription) {
 		const lessons = experienceStore.search(taskDescription, 5);
 		if (lessons.length > 0) {
-			// Mark referenced lessons to boost their weight (experience decay feedback)
-			experienceStore.markReferenced(lessons.map(l => l.runId));
+			// SatoPi: mark referenced lessons to boost their weight (experience decay
+			// feedback).  Wrap in try-catch so a storage failure does not crash
+			// prompt generation.
+			try {
+				experienceStore.markReferenced(lessons.map(l => l.runId));
+			} catch (err) {
+				logger.warn(
+					"[ScriptPlanner] Failed to mark referenced lessons — continuing",
+					{ error: String(err) },
+				);
+			}
 
 			sections.push("");
 			sections.push("## Relevant Past Experience");

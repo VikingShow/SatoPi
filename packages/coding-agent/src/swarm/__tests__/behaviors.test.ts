@@ -365,6 +365,35 @@ describe("ScriptBehavior", () => {
       // Should not throw — internal state updated, plannerFinished set to true
     });
 
+    // SatoPi: verify aborted status is handled (C6 fix)
+    it("tracks planner abort", async () => {
+      await behavior.enter(ctx);
+
+      await behavior.handleAgentEvent(
+        { agentId: "planner", status: "aborted", result: "timeout" },
+        ctx,
+      );
+
+      // After abort, plannerFinished should be true — the phase is done.
+      // checkCompletion returns null because no completion signal in output,
+      // but the internal state correctly reflects that the planner stopped.
+      const result = await behavior.checkCompletion(ctx);
+      expect(result).toBeNull();
+    });
+
+    it("records abort reason from structured result", async () => {
+      await behavior.enter(ctx);
+
+      await behavior.handleAgentEvent(
+        { agentId: "planner", status: "aborted", result: { reason: "cancelled by user" } },
+        ctx,
+      );
+
+      // Should not throw — aborted with structured reason
+      const result = await behavior.checkCompletion(ctx);
+      expect(result).toBeNull();
+    });
+
     it("ignores events from non-planner agents", async () => {
       await behavior.enter(ctx);
 

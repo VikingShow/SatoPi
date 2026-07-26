@@ -7,8 +7,17 @@
  * registered explicitly at creation; finished agents stay registered as
  * `idle` (live) or `parked` (session disposed, ref + sessionFile retained for
  * revival) and are only removed on explicit release/teardown.
+ *
+ * **Instance injection is preferred** over the {@link global} singleton.
+ * Create a fresh AgentRegistry per session to isolate registrations:
+ *
+ * ```ts
+ * const registry = new AgentRegistry();            // preferred
+ * const registry = AgentRegistry.global();         // backward compat
+ * ```
  */
 
+import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
 import { oneLineLabel } from "../task/types";
 
@@ -72,6 +81,10 @@ export interface RegisterInput {
 export class AgentRegistry {
 	static #global: AgentRegistry | undefined;
 
+	/**
+	 * Returns the process-global singleton. Prefer creating a fresh instance
+	 * via `new AgentRegistry()` per session for isolation.
+	 */
 	static global(): AgentRegistry {
 		if (!AgentRegistry.#global) {
 			AgentRegistry.#global = new AgentRegistry();
@@ -79,15 +92,21 @@ export class AgentRegistry {
 		return AgentRegistry.#global;
 	}
 
-	/** Reset the global registry. Test-only. */
-	static resetGlobalForTests(): void {
-		AgentRegistry.#global = new AgentRegistry();
-	}
-
 	readonly #refs = new Map<string, AgentRef>();
 	readonly #listeners = new Set<RegistryListener>();
 
 	register(input: RegisterInput): AgentRef {
+		const existing = this.#refs.get(input.id);
+		if (existing) {
+			logger.warn("AgentRegistry.register: duplicate id — disposing old session", { id: input.id });
+			if (existing.session) {
+				existing.session.dispose().catch(err =>
+					logger.warn("AgentRegistry.register: failed to dispose old session", { id: input.id, error: String(err) }),
+				);
+			}
+			this.unregister(input.id);
+		}
+
 		const now = Date.now();
 		const ref: AgentRef = {
 			id: input.id,

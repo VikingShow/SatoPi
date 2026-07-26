@@ -477,7 +477,14 @@ export class ExperienceStore {
 				lesson: JSON.parse(row.lesson_json) as ExtractedLesson,
 				rank: row.rank * (1.0 / Math.max(0.01, row.weight ?? 1.0)),
 			}));
-		} catch {
+		} catch (err: unknown) {
+			// SatoPi: distinguish FTS5 syntax errors (retry with raw query is fine)
+			// from fatal DB errors (should log at error level, not silently swallow).
+			const msg = err instanceof Error ? err.message : String(err);
+			const isFts5SyntaxError = /fts5|syntax|malformed|match/i.test(msg);
+			if (!isFts5SyntaxError) {
+				logger.error("[ExperienceStore] Fatal error during FTS5 search, falling back to raw query", { error: msg });
+			}
 			// Fallback: try with raw query if expansion breaks FTS5 syntax
 			const sql = db.query(`
 				SELECT fts.run_id, l.timestamp, l.lesson_json, fts.rank, l.weight

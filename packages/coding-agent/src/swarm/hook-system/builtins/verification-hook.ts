@@ -9,7 +9,7 @@
  */
 
 import type { Chapter } from "../../core/state";
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
 import type { VerificationHook } from "../../core/verification-hook";
 import { logger } from "@oh-my-pi/pi-utils";
 
@@ -45,16 +45,17 @@ export function createVerificationHook(
     events: ["workflow:beforePhase"],
     phases: ACTIVE_PHASES,
 
-    async handler(
-      event: HookEvent,
-      payload: HookPayload,
+    async handler<K extends HookEvent>(
+      event: K,
+      payload: HookPayloadMap[K],
       _ctx: HookContext,
     ): Promise<void> {
       if (event !== "workflow:beforePhase") {
         return;
       }
 
-      const commands = extractCommandArray(payload.commands);
+      // payload is WorkflowBeforePhasePayload — commands is string[] | undefined
+      const commands = payload.commands ?? [];
 
       if (commands.length === 0) {
         logger.debug("[VerificationHook] No verification commands to run");
@@ -74,16 +75,4 @@ export function createVerificationHook(
       }
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Safely extract a string array of shell commands from the payload. */
-function extractCommandArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === "string");
-  }
-  return [];
 }

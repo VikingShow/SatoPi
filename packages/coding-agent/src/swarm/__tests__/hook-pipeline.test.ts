@@ -1,16 +1,17 @@
 /**
- * Unit tests for HookPipeline.
+ * Unit tests for HookPipeline and shared hook utilities.
  *
  * Covers: priority ordering, phase filtering, error isolation,
- * short-circuit on false return, register/unregister, and no-op
- * empty trigger.
+ * short-circuit on false return, register/unregister, no-op
+ * empty trigger, and resolveAgentId().
  *
  * @module __tests__/hook-pipeline.test
  */
 
 import { describe, expect, it } from "bun:test";
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../hook-system/types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../hook-system/types";
 import { HookPipeline } from "../hook-system/hook-pipeline";
+import { resolveAgentId } from "../hook-system/utils";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -19,11 +20,6 @@ import { HookPipeline } from "../hook-system/hook-pipeline";
 /** Build a minimal HookContext with an optional phase. */
 function ctx(phase?: string, extra?: Record<string, unknown>): HookContext {
   return { phase: phase as HookContext["phase"], ...extra };
-}
-
-/** Build a test payload. */
-function payload(overrides?: Record<string, unknown>): HookPayload {
-  return { ...overrides };
 }
 
 /**
@@ -95,7 +91,11 @@ describe("HookPipeline", () => {
       pipeline.register(makeRecordingHook("low", 10, order));
       pipeline.register(makeRecordingHook("high", 0, order));
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["high", "mid", "low"]);
     });
@@ -108,7 +108,11 @@ describe("HookPipeline", () => {
       pipeline.register(makeRecordingHook("b", 5, order));
       pipeline.register(makeRecordingHook("c", 5, order));
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       // All three executed
       expect(order).toContain("a");
@@ -143,7 +147,7 @@ describe("HookPipeline", () => {
       // Trigger in "stage" — only unfiltered hook should fire
       await pipeline.trigger(
         "workflow:beforePhase",
-        payload(),
+        {} as HookPayloadMap["workflow:beforePhase"],
         ctx("stage"),
       );
       expect(order).toEqual(["unfiltered"]);
@@ -154,7 +158,7 @@ describe("HookPipeline", () => {
       // Trigger in "script" — both should fire (filtered in order)
       await pipeline.trigger(
         "workflow:beforePhase",
-        payload(),
+        {} as HookPayloadMap["workflow:beforePhase"],
         ctx("script"),
       );
       expect(order).toEqual(["filtered", "unfiltered"]);
@@ -174,7 +178,7 @@ describe("HookPipeline", () => {
       // Trigger without phase — hook should be skipped
       await pipeline.trigger(
         "workflow:beforePhase",
-        payload(),
+        {} as HookPayloadMap["workflow:beforePhase"],
         ctx(undefined),
       );
 
@@ -199,7 +203,7 @@ describe("HookPipeline", () => {
 
       await pipeline.trigger(
         "workflow:beforePhase",
-        payload(),
+        {} as HookPayloadMap["workflow:beforePhase"],
         ctx("script"),
       );
 
@@ -225,7 +229,11 @@ describe("HookPipeline", () => {
       pipeline.register(makeRecordingHook("survivor", 1, order));
 
       // Should not throw
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["survivor"]);
     });
@@ -247,7 +255,11 @@ describe("HookPipeline", () => {
       );
       pipeline.register(makeRecordingHook("ok-2", 3, order));
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["ok-1", "ok-2"]);
     });
@@ -268,7 +280,11 @@ describe("HookPipeline", () => {
       );
       pipeline.register(makeRecordingHook("skipped", 2, order));
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["first"]);
       // "skipped" should NOT be in order
@@ -285,7 +301,11 @@ describe("HookPipeline", () => {
       );
       pipeline.register(makeRecordingHook("second", 2, order));
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["first", "second"]);
     });
@@ -356,7 +376,11 @@ describe("HookPipeline", () => {
 
       pipeline.unregister("to-remove");
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
 
       expect(order).toEqual(["keeper"]);
       expect(order).not.toContain("to-remove");
@@ -375,14 +399,22 @@ describe("HookPipeline", () => {
       pipeline.register(makeHook("other-event", 0));
 
       // Triggering an unmatched event should be a no-op
-      await pipeline.trigger("agent:afterComplete", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:afterComplete",
+        { agentId: "a1" } as HookPayloadMap["agent:afterComplete"],
+        ctx("script"),
+      );
       // No assertions needed — just ensuring no throw
     });
 
     it("is a no-op when no hooks are registered at all", async () => {
       const pipeline = new HookPipeline();
 
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
       // No assertions needed
     });
 
@@ -417,14 +449,97 @@ describe("HookPipeline", () => {
       );
 
       // Trigger spawn
-      await pipeline.trigger("agent:beforeSpawn", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:beforeSpawn",
+        { agentId: "a1", role: "worker", task: "test" },
+        ctx("script"),
+      );
       expect(order).toEqual(["spawn-only", "multi"]);
 
       order.length = 0;
 
       // Trigger error — no hooks match
-      await pipeline.trigger("agent:onError", payload(), ctx("script"));
+      await pipeline.trigger(
+        "agent:onError",
+        { agentId: "a1", error: "test error" },
+        ctx("script"),
+      );
       expect(order).toEqual([]);
     });
+  });
+});
+
+// ===========================================================================
+// resolveAgentId tests (Phase B1)
+// ===========================================================================
+
+describe("resolveAgentId", () => {
+  it("returns agentId from payload when it is a string", () => {
+    const result = resolveAgentId(
+      { agentId: "agent-1" },
+      { agentId: "agent-2" },
+    );
+    expect(result).toBe("agent-1");
+  });
+
+  it("falls back to ctx.agentId when payload.agentId is not a string", () => {
+    const result = resolveAgentId(
+      { agentId: 42 },
+      { agentId: "ctx-agent" },
+    );
+    expect(result).toBe("ctx-agent");
+  });
+
+  it("falls back to ctx.agentId when payload has no agentId", () => {
+    const result = resolveAgentId(
+      {},
+      { agentId: "ctx-agent" },
+    );
+    expect(result).toBe("ctx-agent");
+  });
+
+  it("returns undefined when neither source provides a string agentId", () => {
+    const result = resolveAgentId(
+      {},
+      {},
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when payload.agentId is null", () => {
+    const result = resolveAgentId(
+      { agentId: null },
+      {},
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when both payload and ctx agentId are numbers", () => {
+    const result = resolveAgentId(
+      { agentId: 123 },
+      { agentId: 456 },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when ctx has no agentId and payload agentId is not string", () => {
+    const result = resolveAgentId(
+      { agentId: true },
+      {},
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined with empty objects for both arguments", () => {
+    const result = resolveAgentId({}, {});
+    expect(result).toBeUndefined();
+  });
+
+  it("prefers payload.agentId even when ctx also has agentId", () => {
+    const result = resolveAgentId(
+      { agentId: "payload-agent" },
+      { agentId: "ctx-agent", phase: "stage" as HookContext["phase"] },
+    );
+    expect(result).toBe("payload-agent");
   });
 });

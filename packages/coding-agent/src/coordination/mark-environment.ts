@@ -326,6 +326,8 @@ export class MarkEnvironment {
 
 	/** 获取环境状态摘要 */
 	getSummary(): { total: number; byType: Record<string, number>; oldestAt: number } {
+		this.#decayExpired();
+
 		const byType: Record<string, number> = {};
 		let oldestAt = Date.now();
 
@@ -356,6 +358,8 @@ export class MarkEnvironment {
 	 * 可用于 session.jsonl 持久化，session 重启后通过 deserialize() 恢复。
 	 */
 	serialize(): MarkEnvironmentSnapshot {
+		this.#decayExpired();
+
 		const marks: SerializedMark[] = [];
 		for (const m of this.#marks.values()) {
 			marks.push({

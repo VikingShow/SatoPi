@@ -11,7 +11,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 
 import type {
   HookEvent,
-  HookPayload,
+  HookPayloadMap,
   HookContext,
   HookRegistration,
 } from "./types";
@@ -76,9 +76,9 @@ export class HookPipeline {
    * 4. Execute sequentially. If a handler returns `false`, stop remaining.
    * 5. If a handler throws, log the error and continue (isolation).
    */
-  async trigger(
-    event: HookEvent,
-    payload: HookPayload,
+  async trigger<K extends HookEvent>(
+    event: K,
+    payload: HookPayloadMap[K],
     ctx: HookContext,
   ): Promise<void> {
     const sorted = this.list();

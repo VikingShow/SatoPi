@@ -41,9 +41,9 @@ interface AdoptedAgent {
 export class AgentLifecycleManager {
 	static #global: AgentLifecycleManager | undefined;
 
-	static global(): AgentLifecycleManager {
+	static global(registry?: AgentRegistry): AgentLifecycleManager {
 		if (!AgentLifecycleManager.#global) {
-			AgentLifecycleManager.#global = new AgentLifecycleManager();
+			AgentLifecycleManager.#global = new AgentLifecycleManager(registry);
 		}
 		return AgentLifecycleManager.#global;
 	}
@@ -142,8 +142,9 @@ export class AgentLifecycleManager {
 				logger.warn("AgentLifecycleManager.park: session dispose failed", { id, error: String(error) });
 			}
 			this.#registry.detachSession(id);
-			this.#registry.setStatus(id, "parked");
 		} finally {
+			// Always mark parked — the session is gone regardless of dispose success.
+			this.#registry.setStatus(id, "parked");
 			this.#parking.delete(id);
 		}
 	}
@@ -216,6 +217,10 @@ export class AgentLifecycleManager {
 				await ref.session.dispose();
 			} catch (error) {
 				logger.warn("AgentLifecycleManager.release: session dispose failed", { id, error: String(error) });
+			}
+			// Detach from registry if the agent wasn't adopted (orphan session cleanup).
+			if (!adopted) {
+				this.#registry.detachSession(id);
 			}
 		}
 		this.#registry.unregister(id);

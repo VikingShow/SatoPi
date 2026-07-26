@@ -10,7 +10,6 @@ import { resetRegisteredArtifactDirsForTests } from "../registry-helpers";
 
 const tempDir = TempDir.createSync("stp-nested-agent-repro-");
 afterEach(() => {
-	AgentRegistry.resetGlobalForTests();
 	resetRegisteredArtifactDirsForTests();
 });
 afterAll(() => {

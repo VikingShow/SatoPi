@@ -252,7 +252,35 @@ export class SessionRegistry {
 		const session = await this.createSession(newName);
 		if (parent.sessionManager && session.sessionManager) {
 			try {
-				await parent.sessionManager.fork();
+				// SatoPi: fork() mutates the parent's SessionManager to point to
+				// the new session file.  Capture the result and give the child the
+				// forked file (newSessionFile), then restore the parent to its
+				// original file (oldSessionFile).
+				const forkResult = await parent.sessionManager.fork();
+				if (forkResult) {
+					// Close the child's auto-created session manager and reopen it
+					// with the forked file so the child inherits the parent's
+					// full session history.
+					await session.sessionManager.close();
+					session.sessionManager = await SwarmSessionManager.open(
+						forkResult.newSessionFile,
+						session.swarmDir,
+					);
+
+					// Restore parent to its original session file — fork()
+					// internally reopened the parent onto the new file.
+					await parent.sessionManager.close();
+					parent.sessionManager = await SwarmSessionManager.open(
+						forkResult.oldSessionFile,
+						parent.swarmDir,
+					);
+
+					// Re-seed child's StateTracker from the forked snapshot.
+					const snapshot = await SwarmSessionManager.readLatestState(session.swarmDir);
+					if (snapshot) {
+						session.stateTracker.updatePipeline(snapshot);
+					}
+				}
 				logger.info("[SessionRegistry] Forked session", { parent: parentName, child: newName });
 			} catch (err) {
 				logger.warn("[SessionRegistry] Session fork failed", { error: String(err) });

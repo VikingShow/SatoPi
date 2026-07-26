@@ -106,7 +106,11 @@ export class SwarmRunner implements RunManager {
 	}
 
 	async start(agentCount?: number): Promise<{ success: boolean; error?: string }> {
-		// Reset completion promise for each run
+		// Resolve any old completion promise before replacing it so callers
+		// waiting on a prior run don't hang forever.
+		if (this.#completionPromise) {
+			this.#completionPromise.resolve();
+		}
 		this.#completionPromise = Promise.withResolvers<void>();
 
 		try {
@@ -195,6 +199,7 @@ export class SwarmRunner implements RunManager {
 	}
 
 	async pause(): Promise<{ success: boolean; error?: string }> {
+		if (!this.#running) return { success: false, error: "No run in progress" };
 		this.#abortController?.abort();
 		return { success: true };
 	}

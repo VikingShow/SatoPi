@@ -186,3 +186,83 @@ describe("ActivityLogger", () => {
 		expect(entries.length).toBe(0); // nothing persisted
 	});
 });
+
+	// ============================================================================
+	// SatoPi: JSON resilience — readRawEntries survives malformed lines
+	// ============================================================================
+
+	describe("SwarmSessionManager JSON resilience", () => {
+		let tmpDir: string;
+
+		beforeEach(async () => {
+			tmpDir = path.join(os.tmpdir(), `json-resilience-\${Date.now()}`);
+		});
+
+		afterEach(async () => {
+			// Cleanup temp dirs — best effort
+		});
+
+		it("skips a single malformed JSON line and preserves good lines", async () => {
+			// Create a real SwarmSessionManager to get a proper session file,
+			// then dirty it with a bad JSON line and verify recovery.
+			const sm = await SwarmSessionManager.create(tmpDir);
+			// Log one good activity entry to get a second line in the session file
+			sm.logActivity({ ts: Date.now(), type: "broadcast", from: "agent-1", body: "hello" });
+			await sm.flush();
+			const sessionFile = sm.getSessionFile();
+			await sm.close();
+
+			// Append a malformed line to the session file on disk
+			const fsPromises = await import("node:fs/promises");
+			await fsPromises.appendFile(sessionFile!, "\nNOT VALID JSON{{{}}}\n", "utf-8");
+
+			// readRawEntries should skip the bad line and return the valid ones
+			const raw = await SwarmSessionManager.readRawEntries(tmpDir);
+			expect(raw.length).toBeGreaterThanOrEqual(2); // header + activity entry (bad line skipped)
+			const validTypes = raw.map(r => r.type);
+			expect(validTypes).toContain("session");
+			expect(validTypes).toContain("custom");
+			// Verify no bad data bled through
+			const nonJson = raw.filter(r => r.type === undefined || r.type === null);
+			expect(nonJson.length).toBe(0);
+		});
+
+		it("handles multiple consecutive bad lines without losing good data", async () => {
+			const sm = await SwarmSessionManager.create(tmpDir);
+			sm.logActivity({ ts: Date.now(), type: "broadcast", from: "agent-1", body: "msg1" });
+			sm.logActivity({ ts: Date.now(), type: "broadcast", from: "agent-2", body: "msg2" });
+			await sm.flush();
+			const sessionFile = sm.getSessionFile();
+			await sm.close();
+
+			// Append multiple bad lines interspersed
+			const fsPromises = await import("node:fs/promises");
+			await fsPromises.appendFile(sessionFile!, "\nINVALID1\nINVALID2\n", "utf-8");
+
+			const raw = await SwarmSessionManager.readRawEntries(tmpDir);
+			// Should have header + 2 activity entries (bad lines skipped)
+			expect(raw.length).toBeGreaterThanOrEqual(3);
+			const entries = raw.filter(r => r.type === "custom");
+			expect(entries.length).toBe(2);
+		});
+
+		it("returns empty array for a file with only bad lines", async () => {
+			// Create a session file manually with only bad content
+			const sessionDir = path.join(tmpDir, ".omp", "sessions");
+			const fsPromises = await import("node:fs/promises");
+			await fsPromises.mkdir(sessionDir, { recursive: true });
+			const filePath = path.join(sessionDir, "test.jsonl");
+			await fsPromises.writeFile(filePath, "not json\nstill not json\n", "utf-8");
+
+			// Mock findLatestSessionFile to point to our bad file
+			const origFindLatest = SwarmSessionManager.findLatestSessionFile;
+			SwarmSessionManager.findLatestSessionFile = async () => filePath;
+
+			try {
+				const raw = await SwarmSessionManager.readRawEntries(tmpDir);
+				expect(raw).toEqual([]);
+			} finally {
+				SwarmSessionManager.findLatestSessionFile = origFindLatest;
+			}
+		});
+	});

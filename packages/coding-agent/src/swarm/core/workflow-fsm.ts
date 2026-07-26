@@ -64,6 +64,9 @@ export interface PhaseDefinition {
   capabilities: PhaseCapabilities;
   /** Default timeout before auto-transition (0 = no timeout). */
   defaultTimeoutMs: number;
+  /** Optional explicit target for timed auto-transition. When set, overrides the
+   * default heuristic of picking the first allowedTo entry. */
+  timedTransitionTarget?: Chapter;
 }
 
 /** Read-only snapshot of the current FSM state. */
@@ -310,6 +313,8 @@ export class WorkflowFsm {
 
   /** Pending human-decision resolver — set by waitForHumanDecision(). */
   #humanResolve: ((value: unknown) => void) | null = null;
+  /** Pending human-decision rejecter — paired with #humanResolve for cancellation. */
+  #humanReject: ((reason: Error) => void) | null = null;
 
   /** Active timed-transition timer handle. */
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -461,7 +466,11 @@ export class WorkflowFsm {
     });
 
     // Log the phase transition (fire-and-forget — non-blocking).
-    this.#activityLogger.logPhase(to, undefined, this.#iteration);
+    try {
+      this.#activityLogger.logPhase(to, undefined, this.#iteration);
+    } catch {
+      // Swallow logPhase errors — logging is best-effort and must not break the FSM.
+    }
 
     // Notify listeners.
     const event = { from, to, meta };
@@ -477,6 +486,7 @@ export class WorkflowFsm {
     if (this.#humanResolve) {
       const resolve = this.#humanResolve;
       this.#humanResolve = null;
+      this.#humanReject = null;
       resolve(to);
     }
 
@@ -504,17 +514,25 @@ export class WorkflowFsm {
    * @returns A promise that resolves with the next Chapter on transition.
    */
   async waitForHumanDecision<T = Chapter>(timeoutMs?: number): Promise<T> {
-    // Cancel any previous waiter.
-    this.#humanResolve = null;
+    // Cancel any previous waiter — reject the old promise with a cancellation
+    // error so callers don't leave dangling promises that never settle.
+    if (this.#humanReject) {
+      const oldReject = this.#humanReject;
+      this.#humanReject = null;
+      this.#humanResolve = null;
+      oldReject(new Error("Human decision cancelled: replaced by a new waiter"));
+    }
 
     const { promise, resolve, reject } = Promise.withResolvers<T>();
     this.#humanResolve = resolve as (value: unknown) => void;
+    this.#humanReject = reject as (reason: Error) => void;
 
     if (timeoutMs && timeoutMs > 0) {
       const capturedResolve = this.#humanResolve;
       setTimeout(() => {
         if (this.#humanResolve === capturedResolve) {
           this.#humanResolve = null;
+          this.#humanReject = null;
           reject(new Error(`Human decision timed out after ${timeoutMs}ms`));
         }
       }, timeoutMs);
@@ -560,12 +578,18 @@ export class WorkflowFsm {
       this.#timer = null;
       if (this.#phase !== armedPhase) return;
 
-      // Determine the target: peek at the first allowedTo entry that isn't
-      // the current phase (or fall back to the first allowedTo entry).
       const def = this.#phases.get(armedPhase);
       if (!def) return;
-      const targets = def.allowedTo.filter((p) => p !== armedPhase);
-      const to = targets[0];
+
+      // Use the explicit timedTransitionTarget if configured, otherwise pick
+      // the first allowedTo that isn't the current phase.
+      let to: Chapter | undefined;
+      if (def.timedTransitionTarget) {
+        to = def.timedTransitionTarget;
+      } else {
+        const targets = def.allowedTo.filter((p) => p !== armedPhase);
+        to = targets[0];
+      }
       if (!to) return;
 
       void this.transition(to, {
@@ -579,5 +603,26 @@ export class WorkflowFsm {
       clearTimeout(this.#timer);
       this.#timer = null;
     }
+  }
+
+  // -- Lifecycle ---------------------------------------------------------------
+
+  /**
+   * Dispose the FSM: clear the timer, unsubscribe all listeners, and reject
+   * any pending human-decision promise. After dispose the FSM must not be used.
+   */
+  dispose(): void {
+    this.#clearTimer();
+
+    // Reject any pending human-decision promise.
+    if (this.#humanReject) {
+      const reject = this.#humanReject;
+      this.#humanReject = null;
+      this.#humanResolve = null;
+      reject(new Error("WorkflowFsm disposed"));
+    }
+
+    // Clear all listeners.
+    this.#listeners.clear();
   }
 }

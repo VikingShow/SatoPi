@@ -8,8 +8,9 @@
  */
 
 import type { Chapter } from "../../core/state";
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
 import type { IOffloadManager } from "../../../offload/manager"
+import { resolveAgentId } from "../utils";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ---------------------------------------------------------------------------
@@ -42,9 +43,9 @@ export function createOffloadHook(
     events: ["agent:afterComplete", "workflow:beforePhase", "roundtable:afterRound"],
     phases: ACTIVE_PHASES,
 
-    async handler(
-      event: HookEvent,
-      payload: HookPayload,
+    async handler<K extends HookEvent>(
+      event: K,
+      payload: HookPayloadMap[K],
       ctx: HookContext,
     ): Promise<void> {
       const agentId = resolveAgentId(payload, ctx);
@@ -58,6 +59,7 @@ export function createOffloadHook(
             logger.warn("[OffloadHook] agent:afterComplete missing agentId");
             return;
           }
+          // payload is AgentAfterCompletePayload
           await offloadManager.summarizeL1(agentId, payload);
           logger.debug("[OffloadHook] L1 summarize triggered", { agentId });
           return;
@@ -82,6 +84,7 @@ export function createOffloadHook(
             logger.warn("[OffloadHook] roundtable:afterRound missing agentId");
             return;
           }
+          // payload is RoundtableAfterRoundPayload
           await offloadManager.summarizeL1(agentId, payload);
           logger.debug("[OffloadHook] Roundtable L1 summarize", { agentId });
           return;
@@ -92,18 +95,4 @@ export function createOffloadHook(
       }
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Extract a string agentId from payload or context. */
-function resolveAgentId(
-  payload: HookPayload,
-  ctx: HookContext,
-): string | undefined {
-  if (typeof payload.agentId === "string") return payload.agentId;
-  if (typeof ctx.agentId === "string") return ctx.agentId;
-  return undefined;
 }

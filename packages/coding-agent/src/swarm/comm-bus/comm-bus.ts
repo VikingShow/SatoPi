@@ -5,8 +5,13 @@
  * - receiveFromHuman: route Human messages through unified bus
  * - groupChannel: named, reusable communication channels for agent groups
  *
- * Singleton pattern (like IrcBus) — one bus per process, accessible
- * from any component without constructor injection.
+ * **Instance injection is preferred** over the {@link global} singleton.
+ * Create a fresh CommBus per session:
+ *
+ * ```ts
+ * const bus = new CommBus(ircBus, activityLogger);  // preferred
+ * const bus = CommBus.global();                      // backward compat
+ * ```
  */
 
 import type { IrcBus } from "../../irc/bus";
@@ -49,16 +54,11 @@ export class CommBus {
 		return CommBus.#global;
 	}
 
-	/** Reset the global bus. Test-only. */
-	static resetGlobalForTests(): void {
-		CommBus.#global = undefined;
-	}
-
 	#ircBus: IrcBus | null = null;
 	#activityLogger: ActivityLogger | undefined;
 	readonly #channels = new Map<string, CommChannel>();
 
-	private constructor(ircBus?: IrcBus, activityLogger?: ActivityLogger) {
+	constructor(ircBus?: IrcBus, activityLogger?: ActivityLogger) {
 		this.#ircBus = ircBus ?? null;
 		this.#activityLogger = activityLogger;
 	}

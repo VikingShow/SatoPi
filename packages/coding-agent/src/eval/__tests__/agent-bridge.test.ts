@@ -158,7 +158,7 @@ function spyConcurrencyBarrier(limit: number): { maxInFlight: () => number } {
 describe("runEvalAgent", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
-		AgentRegistry.resetGlobalForTests();
+
 		resetRegisteredArtifactDirsForTests();
 	});
 
@@ -341,7 +341,7 @@ describe("runEvalAgent", () => {
 	});
 
 	it("unregisters eval subagents through the bridge cleanup path", async () => {
-		AgentRegistry.resetGlobalForTests();
+
 		mockAgents();
 		let disposed = false;
 		const cleanupSession = {

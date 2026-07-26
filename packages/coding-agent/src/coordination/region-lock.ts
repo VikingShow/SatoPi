@@ -13,7 +13,18 @@
  *
  * Intent declaration (tier 1) is handled through structured IRC broadcasts
  * emitted by the lock manager so other workers can see who is editing what.
+ *
+ * **Instance injection is preferred** over the {@link global} singleton.
+ * Create a fresh RegionLockManager per session so workers in different
+ * sessions cannot block each other's file edits:
+ *
+ * ```ts
+ * const locks = new RegionLockManager();          // preferred
+ * const locks = RegionLockManager.global();       // backward compat
+ * ```
  */
+
+import * as path from "node:path";
 
 // ============================================================================
 // Types
@@ -43,7 +54,7 @@ export interface LockCheckResult {
 
 export class RegionLockManager {
 	// -------------------------------------------------------------------
-	// Static singleton (for tests and global access)
+	// Static singleton (for backward-compat global access)
 	// -------------------------------------------------------------------
 
 	static #instance: RegionLockManager | null = null;
@@ -52,15 +63,15 @@ export class RegionLockManager {
 		return new RegionLockManager();
 	}
 
+	/**
+	 * Returns the process-global singleton. Prefer creating a fresh instance
+	 * per session via `new RegionLockManager()` or {@link create}.
+	 */
 	static global(): RegionLockManager {
 		if (!RegionLockManager.#instance) {
 			RegionLockManager.#instance = new RegionLockManager();
 		}
 		return RegionLockManager.#instance;
-	}
-
-	static reset(): void {
-		RegionLockManager.#instance = null;
 	}
 
 	// -------------------------------------------------------------------
@@ -69,6 +80,13 @@ export class RegionLockManager {
 
 	/** Active locks, keyed by normalized file path. One lock per file at a time. */
 	readonly #locks = new Map<string, LockEntry>();
+
+	/** TTL in ms before a lock is considered expired (default 5 minutes). */
+	readonly #ttlMs: number;
+
+	constructor(ttlMs: number = 300_000) {
+		this.#ttlMs = ttlMs;
+	}
 
 	// -------------------------------------------------------------------
 	// Lock operations
@@ -82,6 +100,7 @@ export class RegionLockManager {
 	 * updates range).
 	 */
 	tryLock(agentId: string, file: string, range?: string): boolean {
+		this.#cleanupExpired();
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
 
@@ -109,6 +128,7 @@ export class RegionLockManager {
 	 * Release a specific lock, only if held by `agentId`.
 	 */
 	release(agentId: string, file: string): void {
+		this.#cleanupExpired();
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
 		if (existing && existing.agentId === agentId) {
@@ -120,6 +140,7 @@ export class RegionLockManager {
 	 * Release all locks held by a worker. Called on session teardown.
 	 */
 	releaseAll(agentId: string): void {
+		this.#cleanupExpired();
 		for (const [file, lock] of this.#locks) {
 			if (lock.agentId === agentId) {
 				this.#locks.delete(file);
@@ -131,6 +152,7 @@ export class RegionLockManager {
 	 * Check if `file` is locked by someone other than `agentId`.
 	 */
 	checkLock(file: string, agentId: string): LockCheckResult {
+		this.#cleanupExpired();
 		const normalized = this.#normalizePath(file);
 		const existing = this.#locks.get(normalized);
 		if (existing && existing.agentId !== agentId) {
@@ -143,6 +165,7 @@ export class RegionLockManager {
 	 * Return all active locks for diagnostics.
 	 */
 	getActiveLocks(): LockEntry[] {
+		this.#cleanupExpired();
 		return [...this.#locks.values()];
 	}
 
@@ -158,9 +181,18 @@ export class RegionLockManager {
 	// Helpers
 	// -------------------------------------------------------------------
 
-	/** Normalize a file path for consistent keying. */
+	/** Normalize a file path for consistent keying using Node's path module. */
 	#normalizePath(file: string): string {
-		// Strip leading ./ and normalize slashes
-		return file.replace(/^\.\//, "").replace(/\/+/g, "/");
+		return path.normalize(file).replace(/\\/g, "/");
+	}
+
+	/** Remove locks whose age exceeds the configured TTL. */
+	#cleanupExpired(): void {
+		const now = Date.now();
+		for (const [file, entry] of this.#locks) {
+			if (now - entry.acquiredAt > this.#ttlMs) {
+				this.#locks.delete(file);
+			}
+		}
 	}
 }

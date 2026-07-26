@@ -118,6 +118,20 @@ export interface LaunchContext {
   createToolSession?: () => Partial<ToolSession>;
 }
 
+/**
+ * Minimal ToolSession for SatoPi swarm agents (Phase B1).
+ *
+ * Documents the required ToolSession fields that the AgentLauncher
+ * always provides when constructing a session for {@link createTools}.
+ * Callers may supply additional ToolSession fields via the optional
+ * `LaunchContext.createToolSession` callback.
+ */
+export interface MinimalToolSession extends Partial<ToolSession> {
+  cwd: string;
+  settings: Settings;
+  modelRegistry: ModelRegistry;
+}
+
 // ============================================================================
 // AgentLauncher
 // ============================================================================
@@ -377,7 +391,7 @@ export class AgentLauncher {
     // ── Path A: createTools()-based real tool creation (Phase A1) ──────────
     if (builtinToolNames && builtinToolNames.length > 0) {
       const partial = createToolSession?.() ?? {};
-      const session: ToolSession = {
+      const session = {
         ...partial,
         // Launcher-provided fields — always take precedence
         settings: this.#settings,
@@ -387,7 +401,7 @@ export class AgentLauncher {
         hasUI: partial.hasUI ?? false,
         getSessionFile: partial.getSessionFile ?? (() => null),
         getSessionSpawns: partial.getSessionSpawns ?? (() => null),
-      };
+      } satisfies MinimalToolSession;
 
       const tools = await createTools(session, builtinToolNames);
       logger.debug("[AgentLauncher] Resolved tools via createTools()", {

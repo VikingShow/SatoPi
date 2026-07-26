@@ -676,3 +676,102 @@ describe("WorkflowFsm — edge cases", () => {
     expect(res.reason).toContain("idle");
   });
 });
+
+// ============================================================================
+// dispose()
+// ============================================================================
+
+describe("WorkflowFsm.dispose", () => {
+  it("clears all listeners", async () => {
+    const { fsm } = createFsm("idle");
+    const listener = mock(() => {});
+    fsm.onChange(listener);
+    fsm.dispose();
+    // Transition after dispose still works, but listener won't fire.
+    await fsm.transition("script");
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("rejects pending human decision promise", async () => {
+    const { fsm } = createFsm("blocked");
+    const decisionPromise = fsm.waitForHumanDecision();
+    fsm.dispose();
+    await expect(decisionPromise).rejects.toThrow("WorkflowFsm disposed");
+  });
+
+  it("cancels pending timed transition", async () => {
+    const st = mockStateTracker("stage");
+    const al = mockActivityLogger();
+    const fsm = new WorkflowFsm(st, al, "stage");
+    for (const def of PHASES) {
+      if (def.phase === "blocked") {
+        fsm.registerPhase({ ...def, defaultTimeoutMs: 15 });
+      } else {
+        fsm.registerPhase(def);
+      }
+    }
+
+    await fsm.transition("blocked");
+    expect(fsm.phase).toBe("blocked");
+
+    fsm.dispose();
+
+    // Wait long enough that the timed transition would have fired.
+    await new Promise((r) => setTimeout(r, 30));
+    // Still blocked — timer was cancelled by dispose.
+    expect(fsm.phase).toBe("blocked");
+  });
+});
+
+// ============================================================================
+// waitForHumanDecision — Promise leak
+// ============================================================================
+
+describe("WorkflowFsm.waitForHumanDecision — Promise leak", () => {
+  it("rejects old promise when a new waiter replaces it", async () => {
+    const { fsm } = createFsm("blocked");
+    const first = fsm.waitForHumanDecision();
+    const second = fsm.waitForHumanDecision();
+
+    // First promise should be rejected (cancelled).
+    await expect(first).rejects.toThrow("cancelled");
+
+    // Second promise should still work.
+    setTimeout(() => {
+      void fsm.transition("stage");
+    }, 5);
+    const result = await second;
+    expect(result).toBe("stage");
+  });
+});
+
+// ============================================================================
+// timedTransitionTarget — configurable auto-transition target
+// ============================================================================
+
+describe("WorkflowFsm — timedTransitionTarget", () => {
+  it("uses explicit timedTransitionTarget when configured", async () => {
+    const st = mockStateTracker("stage");
+    const al = mockActivityLogger();
+    const fsm = new WorkflowFsm(st, al, "stage");
+    // Register blocked with a fast timeout and explicit target to curtain.
+    for (const def of PHASES) {
+      if (def.phase === "blocked") {
+        fsm.registerPhase({
+          ...def,
+          defaultTimeoutMs: 15,
+          timedTransitionTarget: "curtain",
+        });
+      } else {
+        fsm.registerPhase(def);
+      }
+    }
+
+    await fsm.transition("blocked");
+    expect(fsm.phase).toBe("blocked");
+
+    await new Promise((r) => setTimeout(r, 40));
+    // Auto-transition should go to curtain (explicit target), not stage (default).
+    expect(fsm.phase).toBe("curtain");
+  });
+});

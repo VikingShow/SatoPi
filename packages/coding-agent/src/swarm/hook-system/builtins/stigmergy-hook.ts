@@ -7,8 +7,9 @@
  * @module hook-system/builtins/stigmergy-hook
  */
 
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
 import type { MarkEnvironment } from "../../../coordination"
+import { resolveAgentId } from "../utils";
 import { logger } from "@oh-my-pi/pi-utils";
 
 /**
@@ -29,9 +30,9 @@ export function createStigmergyHook(
     priority: 1,
     events: ["agent:afterComplete", "agent:onError", "context:afterCompaction"],
 
-    async handler(
-      event: HookEvent,
-      payload: HookPayload,
+    async handler<K extends HookEvent>(
+      event: K,
+      payload: HookPayloadMap[K],
       ctx: HookContext,
     ): Promise<void> {
       const agentId = resolveAgentId(payload, ctx);
@@ -45,14 +46,9 @@ export function createStigmergyHook(
             logger.warn("[StigmergyHook] agent:afterComplete missing agentId");
             return;
           }
-          const artifactPath =
-            typeof payload.artifactPath === "string"
-              ? payload.artifactPath
-              : undefined;
-          const message =
-            typeof payload.message === "string"
-              ? payload.message
-              : `Agent ${agentId} completed task`;
+          // payload is AgentAfterCompletePayload
+          const artifactPath = payload.artifactPath;
+          const message = payload.message ?? `Agent ${agentId} completed task`;
 
           markEnv.placeMark({
             markId: generateMarkId(agentId, "artifact"),
@@ -73,10 +69,8 @@ export function createStigmergyHook(
             logger.warn("[StigmergyHook] agent:onError missing agentId");
             return;
           }
-          const errorMessage =
-            typeof payload.error === "string"
-              ? payload.error
-              : `Agent ${agentId} encountered an error`;
+          // payload is AgentOnErrorPayload — error is always a string
+          const errorMessage = payload.error;
 
           markEnv.placeMark({
             markId: generateMarkId(agentId, "warning"),
@@ -108,16 +102,6 @@ export function createStigmergyHook(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Extract a string agentId from payload or context. */
-function resolveAgentId(
-  payload: HookPayload,
-  ctx: HookContext,
-): string | undefined {
-  if (typeof payload.agentId === "string") return payload.agentId;
-  if (typeof ctx.agentId === "string") return ctx.agentId;
-  return undefined;
-}
 
 /** Generate a unique markId scoped to agent and type. */
 function generateMarkId(agentId: string, type: string): string {

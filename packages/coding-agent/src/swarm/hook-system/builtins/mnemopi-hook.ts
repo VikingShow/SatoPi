@@ -8,7 +8,7 @@
  * @module hook-system/builtins/mnemopi-hook
  */
 
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
 import type { SwarmMnemopiAdapter } from "../../hooks/mnemopi-adapter";
 import { logger } from "@oh-my-pi/pi-utils";
 
@@ -32,9 +32,9 @@ export function createMnemopiHook(
     priority: 3,
     events: ["agent:beforeSpawn", "agent:afterComplete"],
 
-    async handler(
-      event: HookEvent,
-      payload: HookPayload,
+    async handler<K extends HookEvent>(
+      event: K,
+      payload: HookPayloadMap[K],
       _ctx: HookContext,
     ): Promise<void> {
       switch (event) {
@@ -42,14 +42,9 @@ export function createMnemopiHook(
         // agent:beforeSpawn — recall historical context
         // -----------------------------------------------------------------
         case "agent:beforeSpawn": {
-          const planSummary =
-            typeof payload.planSummary === "string"
-              ? payload.planSummary
-              : "";
-          const taskSummary =
-            typeof payload.taskSummary === "string"
-              ? payload.taskSummary
-              : "";
+          // payload is AgentBeforeSpawnPayload
+          const planSummary = payload.planSummary ?? "";
+          const taskSummary = payload.taskSummary ?? "";
 
           try {
             const recallResult = await adapter.recallForIteration(
@@ -73,12 +68,12 @@ export function createMnemopiHook(
         // agent:afterComplete — store iteration results
         // -----------------------------------------------------------------
         case "agent:afterComplete": {
-          if (typeof payload.summary !== "string") {
+          // payload is AgentAfterCompletePayload
+          if (!payload.summary) {
             return;
           }
           const summary: string = payload.summary;
-          const score: number =
-            typeof payload.score === "number" ? payload.score : 0;
+          const score: number = payload.score ?? 0;
 
           try {
             await adapter.storeAfterIteration(summary, score);
@@ -100,5 +95,3 @@ export function createMnemopiHook(
     },
   };
 }
-
-

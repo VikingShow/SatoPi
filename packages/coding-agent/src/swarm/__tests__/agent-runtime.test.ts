@@ -100,10 +100,9 @@ function makeRoleAsset(overrides?: Partial<RoleAsset>): RoleAsset {
   };
 }
 
-/** Create a fresh CommBus singleton (resets global state). */
+/** Create a fresh CommBus instance. */
 function makeCommBus(): CommBus {
-  CommBus.resetGlobalForTests();
-  return CommBus.global();
+  return new CommBus();
 }
 
 // ============================================================================
@@ -453,9 +452,6 @@ describe("AgentRuntime", () => {
   let settings: Settings;
 
   beforeEach(() => {
-    // Reset singletons
-    CommBus.resetGlobalForTests();
-
     const roleMgr = mockRoleAssetManager({
       planner: makeRoleAsset({ id: "planner" }),
       "backend-dev": makeRoleAsset({ id: "backend-dev" }),
@@ -463,7 +459,7 @@ describe("AgentRuntime", () => {
     roleProvider = new RoleProvider(roleMgr);
     contextPipeline = new ContextPipeline();
     hookPipeline = new HookPipeline();
-    commBus = CommBus.global();
+    commBus = new CommBus();
 
     modelRegistry = {
       getAvailable: () => [
@@ -669,8 +665,7 @@ describe("Error handling", () => {
 
     const contextPipeline = new ContextPipeline();
     const hookPipeline = new HookPipeline();
-    CommBus.resetGlobalForTests();
-    const commBus = CommBus.global();
+    const commBus = new CommBus();
 
     const modelRegistry = {
       getAvailable: () => [],
@@ -699,8 +694,7 @@ describe("Error handling", () => {
       mockRoleAssetManager({ planner: makeRoleAsset() }),
     );
     const hookPipeline = new HookPipeline();
-    CommBus.resetGlobalForTests();
-    const commBus = CommBus.global();
+    const commBus = new CommBus();
 
     const modelRegistry = {
       getAvailable: () => [
@@ -780,12 +774,14 @@ describe("AgentHandle callbacks", () => {
 // ============================================================================
 
 describe("AgentRegistry integration", () => {
+  let registry: AgentRegistry;
+
   beforeEach(() => {
-    AgentRegistry.resetGlobalForTests();
+    registry = new AgentRegistry();
   });
 
   test("registers persistent agent with profileId", () => {
-    const ref = AgentRegistry.global().register({
+    const ref = registry.register({
       id: "persistent-architect",
       displayName: "Architect v3",
       kind: "persistent",
@@ -800,7 +796,7 @@ describe("AgentRegistry integration", () => {
   });
 
   test("setSession attaches session to existing ref", () => {
-    AgentRegistry.global().register({
+    registry.register({
       id: "with-session",
       displayName: "Session Test",
       kind: "persistent",
@@ -808,15 +804,42 @@ describe("AgentRegistry integration", () => {
     });
 
     const mockSession = { id: "s1" } as AgentSession;
-    AgentRegistry.global().setSession("with-session", mockSession);
+    registry.setSession("with-session", mockSession);
 
-    const ref = AgentRegistry.global().get("with-session");
+    const ref = registry.get("with-session");
     expect(ref?.session).toBe(mockSession);
   });
 
   test("setSession is no-op for unknown id", () => {
     expect(() => {
-      AgentRegistry.global().setSession("unknown", {} as AgentSession);
+      registry.setSession("unknown", {} as AgentSession);
     }).not.toThrow();
+  });
+
+  test("register warns and replaces duplicate id", () => {
+    const mockDispose = mock(async () => {});
+    const first = registry.register({
+      id: "dup-agent",
+      displayName: "First",
+      kind: "persistent",
+      session: { dispose: mockDispose } as unknown as AgentSession,
+    });
+    expect(first.displayName).toBe("First");
+
+    // Register again with same id — should warn and replace.
+    const second = registry.register({
+      id: "dup-agent",
+      displayName: "Second",
+      kind: "persistent",
+      session: null,
+    });
+    expect(second.displayName).toBe("Second");
+    // Old session should have been disposed.
+    expect(mockDispose).toHaveBeenCalled();
+
+    // Only one entry for this id.
+    const list = registry.list().filter(r => r.id === "dup-agent");
+    expect(list).toHaveLength(1);
+    expect(list[0]!.displayName).toBe("Second");
   });
 });

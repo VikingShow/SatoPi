@@ -7,10 +7,6 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { RegionLockManager } from "../../coordination/region-lock";
 
 describe("RegionLockManager", () => {
-	afterEach(() => {
-		RegionLockManager.reset();
-	});
-
 	it("acquires a lock when file is free", () => {
 		const mgr = RegionLockManager.create();
 		expect(mgr.tryLock("worker-1", "src/foo.ts")).toBe(true);
@@ -106,5 +102,44 @@ describe("RegionLockManager", () => {
 		expect(a).not.toBe(b);
 		// create() does NOT affect the global singleton (P0-8 fix)
 		expect(RegionLockManager.global()).not.toBe(b);
+	});
+
+	it("expires locks after TTL", async () => {
+		const mgr = new RegionLockManager(10); // 10ms TTL
+		expect(mgr.tryLock("worker-1", "src/expired.ts")).toBe(true);
+		expect(mgr.getActiveLocks()).toHaveLength(1);
+
+		// Wait for TTL to pass.
+		await new Promise((r) => setTimeout(r, 20));
+
+		// getActiveLocks calls cleanup -> expired lock removed.
+		expect(mgr.getActiveLocks()).toHaveLength(0);
+	});
+
+	it("cleanupExpired runs before checkLock", async () => {
+		const mgr = new RegionLockManager(10);
+		mgr.tryLock("worker-1", "src/stale.ts");
+		await new Promise((r) => setTimeout(r, 20));
+		// After TTL, the lock is stale -- checkLock cleans up, so file appears free.
+		expect(mgr.checkLock("src/stale.ts", "worker-2").locked).toBe(false);
+	});
+
+	it("re-acquire refreshes acquiredAt for same worker", async () => {
+		const mgr = new RegionLockManager(30);
+		expect(mgr.tryLock("worker-1", "src/refresh.ts")).toBe(true);
+		// Sleep a bit, then re-acquire to refresh the timestamp.
+		await new Promise((r) => setTimeout(r, 15));
+		expect(mgr.tryLock("worker-1", "src/refresh.ts")).toBe(true);
+		// Wait past original TTL but well before refreshed expiry.
+		await new Promise((r) => setTimeout(r, 20));
+		// Lock should still be active because re-acquire refreshed the timestamp.
+		expect(mgr.getActiveLocks()).toHaveLength(1);
+	});
+
+	it("normalizes .. using path.normalize", () => {
+		const mgr = new RegionLockManager();
+		expect(mgr.tryLock("w1", "src/foo/../bar.ts")).toBe(true);
+		// After normalization, the path should be equivalent to "src/bar.ts".
+		expect(mgr.checkLock("src/bar.ts", "w2").locked).toBe(true);
 	});
 });

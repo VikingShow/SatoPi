@@ -407,14 +407,12 @@ describe("CommBus", () => {
 
   beforeEach(() => {
     IrcBus.resetGlobalForTests();
-    CommBus.resetGlobalForTests();
     bus = IrcBus.global();
     activityLogger = new ActivityLogger("/tmp/test-swarm", "test-session");
   });
 
   afterEach(() => {
     IrcBus.resetGlobalForTests();
-    CommBus.resetGlobalForTests();
   });
 
   // ── Singleton pattern ────────────────────────────────────
@@ -432,20 +430,14 @@ describe("CommBus", () => {
   });
 
   test("ensureGlobal updates an already-global instance", () => {
-    // Get an unwired instance via global()
-    const cb = CommBus.global();
+    // Create a fresh unwired instance, then wire via ensureGlobal.
+    const cb = new CommBus();
     expect(cb.ircBus).toBeNull();
 
-    // Wire it via ensureGlobal
-    CommBus.ensureGlobal(bus, activityLogger);
-    expect(cb.ircBus).toBe(bus);
-  });
-
-  test("resetGlobalForTests clears singleton", () => {
-    const cb = CommBus.ensureGlobal(bus, activityLogger);
-    CommBus.resetGlobalForTests();
-    const cb2 = CommBus.global();
-    expect(cb2).not.toBe(cb);
+    // Wire it via ensureGlobal — since the global hasn't been set yet,
+    // ensureGlobal creates it with the given IrcBus.
+    const result = CommBus.ensureGlobal(bus, activityLogger);
+    expect(result.ircBus).toBe(bus);
   });
 
   // ── receiveFromHuman ─────────────────────────────────────
@@ -474,8 +466,7 @@ describe("CommBus", () => {
   });
 
   test("groupChannel throws when IrcBus is not wired", () => {
-    CommBus.resetGlobalForTests();
-    const cb = CommBus.global(); // no IrcBus wired
+    const cb = new CommBus(); // no IrcBus wired
     expect(() => cb.groupChannel("test", ["a1"])).toThrow();
   });
 

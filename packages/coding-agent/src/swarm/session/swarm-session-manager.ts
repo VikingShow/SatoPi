@@ -233,11 +233,33 @@ export class SwarmSessionManager {
 	 * don't interleave in the same file.
 	 */
 	async rotate(): Promise<void> {
+		// SatoPi: save a reference to the old session before closing.
+		// If create() throws after close() succeeds, attempt to recover
+		// by reopening the old session file so the instance is not left
+		// with a closed session.
+		const oldSession = this.#session;
 		await this.#session.flush();
 		await this.#session.close();
-		const created = await SwarmSessionManager.create(this.#swarmDir);
-		this.#session = created.#session;
-		logger.debug("[SwarmSessionManager] rotated to new session file", { swarmDir: this.#swarmDir });
+		try {
+			const created = await SwarmSessionManager.create(this.#swarmDir);
+			this.#session = created.#session;
+			logger.debug("[SwarmSessionManager] rotated to new session file", { swarmDir: this.#swarmDir });
+		} catch (err) {
+			logger.error("[SwarmSessionManager] rotate failed to create new session — reopening old session", { error: String(err) });
+			try {
+				const oldFilePath = (oldSession as any).getSessionFile?.() as string | undefined;
+				if (oldFilePath) {
+					const reopened = await SwarmSessionManager.open(oldFilePath, this.#swarmDir);
+					// SatoPi: within the same class body, JavaScript #private fields
+					// are accessible on other instances.
+					this.#session = reopened.#session;
+				}
+			} catch (reopenErr) {
+				logger.error("[SwarmSessionManager] rotate recovery also failed", { error: String(reopenErr) });
+				throw err;
+			}
+			throw err;
+		}
 	}
 
 	// -- Static Query Helpers ------------------------------------------------
@@ -267,7 +289,21 @@ export class SwarmSessionManager {
 		if (!filePath) return [];
 		try {
 			const content = await fs.readFile(filePath, "utf-8");
-			return content.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+			// SatoPi: parse line-by-line with per-line error handling.
+			// A single malformed JSON line should NOT discard the entire file.
+			const entries: Array<Record<string, unknown>> = [];
+			for (const line of content.trim().split("\n")) {
+				if (!line) continue;
+				try {
+					entries.push(JSON.parse(line));
+				} catch {
+					logger.warn("[SwarmSessionManager] Skipping malformed JSON line in session file", {
+						file: filePath,
+						line: line.slice(0, 120),
+					});
+				}
+			}
+			return entries;
 		} catch {
 			return [];
 		}

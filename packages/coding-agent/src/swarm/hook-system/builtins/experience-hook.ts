@@ -9,7 +9,7 @@
  */
 
 import type { Chapter } from "../../core/state";
-import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
 import type { ExperienceStore } from "../../curtain/experience";
 import { logger } from "@oh-my-pi/pi-utils";
 
@@ -42,9 +42,9 @@ export function createExperienceHook(
     events: ["offload:afterFlush", "workflow:afterPhase"],
     phases: ACTIVE_PHASES,
 
-    async handler(
-      event: HookEvent,
-      payload: HookPayload,
+    async handler<K extends HookEvent>(
+      event: K,
+      payload: HookPayloadMap[K],
       _ctx: HookContext,
     ): Promise<void> {
       switch (event) {
@@ -52,8 +52,7 @@ export function createExperienceHook(
         // offload:afterFlush — bridge offload data to experience store
         // -----------------------------------------------------------------
         case "offload:afterFlush": {
-          // The offload flush carries experience entries to persist.
-          // During Phase 1, the payload is treated as an ExperienceEntry.
+          // payload is OffloadFlushPayload
           if (payload.entry) {
             try {
               await experienceStore.saveLesson(payload.entry as Parameters<ExperienceStore["saveLesson"]>[0]);
@@ -73,7 +72,7 @@ export function createExperienceHook(
         // workflow:afterPhase — save session summary + decay unreferenced
         // -----------------------------------------------------------------
         case "workflow:afterPhase": {
-          // Save the session summary as an experience lesson
+          // payload is WorkflowAfterPhasePayload
           if (payload.sessionSummary) {
             try {
               await experienceStore.saveLesson(payload.sessionSummary as Parameters<ExperienceStore["saveLesson"]>[0]);
@@ -85,8 +84,8 @@ export function createExperienceHook(
             }
           }
 
-          // Mark referenced run IDs and decay those not referenced
-          const runIds = extractStringArray(payload.runIds);
+          // runIds is typed as string[] | undefined — use directly
+          const runIds = payload.runIds ?? [];
           if (runIds.length > 0) {
             try {
               await experienceStore.markReferenced(runIds);
@@ -114,16 +113,4 @@ export function createExperienceHook(
       }
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Safely extract a string array from an unknown payload value. */
-function extractStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === "string");
-  }
-  return [];
 }

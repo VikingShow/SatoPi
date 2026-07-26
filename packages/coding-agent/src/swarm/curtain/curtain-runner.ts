@@ -196,6 +196,10 @@ export async function runCurtainPipeline(
 	await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Curtain: awaiting applaud" });
 	activityLogger.logPhase("curtain-done", undefined, result.taskProgress.total);
 
+	// SatoPi: release the SQLite connection after the curtain pipeline
+	// completes so we do not leak database handles across runs.
+	try { experienceStore.close(); } catch { /* best-effort */ }
+
 	logger.info("[Curtain] Phase completed successfully");
 	return curtainResult;
 }
