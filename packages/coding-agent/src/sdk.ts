@@ -44,7 +44,7 @@ import {
 	resolveConfiguredModelPatterns,
 	resolveModelRoleValue,
 } from "./config/model-resolver";
-import { MarkEnvironment } from "./coordination/mark-environment";
+import { MarkEnvironment } from "./coordination";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
 import { buildServiceTierByFamily } from "./config/service-tier";
 import { Settings, type SkillsSettings } from "./config/settings";
@@ -2824,16 +2824,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				}
 
 				// Only place marks for production operations
-				const fileOp = ctx.toolName === "write" || ctx.toolName === "edit" || ctx.toolName === "bash";
+				const fileOp = ctx.toolCall.name === "write" || ctx.toolCall.name === "edit" || ctx.toolCall.name === "bash";
 				if (!fileOp) return;
 
-				const path = ctx.result?.path ?? ctx.arguments?.path;
+				const argsPath = ctx.args?.path;
 				markEnv.placeMark({
-					markId: `tool-${ctx.toolCallId}`,
-					type: ctx.toolName === "bash" ? "signal" : "claim",
+					markId: `tool-${ctx.toolCall.id}`,
+					type: ctx.toolCall.name === "bash" ? "signal" : "claim",
 					agentId: "main",
-					path: typeof path === "string" ? path : undefined,
-					message: `${ctx.toolName}: ${ctx.result?.summary ?? ctx.result?.output?.slice(0, 80) ?? "completed"}`,
+					path: typeof argsPath === "string" ? argsPath : undefined,
+					message: `${ctx.toolCall.name}: completed`,
 					ttlMs: 30 * 60_000, // 30 min TTL
 				});
 			},

@@ -93,6 +93,7 @@ const PROJECT_CONFIG_BASES = priorityList.map(({ dir }) => ({
 export interface ConfigDirEntry {
 	path: string;
 	source: string; // e.g., ".stp", ".claude"
+	level: "user" | "project";
 }
 
 export interface GetConfigDirsOptions {

@@ -59,6 +59,7 @@ export class OffloadStore {
 	 *
 	 * Uses {@link SessionStorage.openWriter} with `flags: "a"` for O(1) append.
 	 * Write failures are logged at warn level but never thrown (fire-and-forget).
+	 */
 	async appendEntry(agentId: string, sessionId: string, entry: OffloadEntry): Promise<void> {
 		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
 

@@ -7,7 +7,7 @@ Read files, directories, archives, SQLite, images, documents, internal resources
 
 ## Parameters
 
-- `path` — required. Local path, internal URI (`skill://`, `agent://`, `artifact://`, `memory://`, `rule://`, `local://`, `vault://`, `mcp://`, `omp://`, `issue://`, `pr://`, `ssh://`), or URL. Inline `:<sel>` still works for ranges/modes (e.g. `src/foo.ts:50-200`, `src/foo.ts:raw`, `db.sqlite:users:42`).
+- `path` — required. Local path, internal URI (`skill://`, `agent://`, `artifact://`, `memory://`, `rule://`, `local://`, `vault://`, `mcp://`, `stp://`, `issue://`, `pr://`, `ssh://`), or URL. Inline `:<sel>` still works for ranges/modes (e.g. `src/foo.ts:50-200`, `src/foo.ts:raw`, `db.sqlite:users:42`).
 - `selector` — optional selector without leading `:` (e.g. `"50-200"`, `"raw"`, `"raw:50-100"`, `"conflicts"`). Use when `path` contains literal colons: `{"path":"test:1-2","selector":"1-2"}`.
 
 ## Selectors

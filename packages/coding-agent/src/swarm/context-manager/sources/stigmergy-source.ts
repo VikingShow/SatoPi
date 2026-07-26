@@ -12,7 +12,7 @@
 
 import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
 import type { Chapter } from "../../core/state";
-import type { MarkEnvironment } from "../../coordination"
+import type { MarkEnvironment } from "../../../coordination"
 
 export class StigmergySource implements ContextSource {
   readonly name = "stigmergy";

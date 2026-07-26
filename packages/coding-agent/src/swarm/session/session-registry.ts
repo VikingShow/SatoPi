@@ -18,7 +18,7 @@ import * as fs from "node:fs/promises";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger, ActivityBroadcaster } from "../hooks/activity-logger";
 import type { RunManager, SteeringSink } from "../core/services";
-import type { MarkEnvironment } from "../coordination";
+import type { MarkEnvironment } from "../../coordination";
 import type { ScriptManager } from "../core/services";
 import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
@@ -52,7 +52,7 @@ export interface SharedServices {
 }
 
 /** The complete per-session service graph. */
-
+export interface SessionServices {
 	name: string;
 	swarmDir: string;
 	stateTracker: StateTracker;

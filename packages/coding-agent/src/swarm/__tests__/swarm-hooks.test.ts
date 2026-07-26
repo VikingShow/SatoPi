@@ -13,7 +13,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { createStageFeedback } from "../hooks/swarm-hooks";
 import { ProfileRegistry } from "../agent/agent-profile";
-import { MarkEnvironment } from "../coordination"
+import { MarkEnvironment } from "../../coordination"
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { Task } from "../executor/task-queue";
 import type { ScoredAgent } from "../agent/agent-selector";
@@ -33,8 +33,11 @@ describe("createStageFeedback (StageController callbacks)", () => {
 			name: id,
 			archetype,
 			score: 0.8,
-			role: "implementer",
-			reason: "test",
+			creditScore: 0.5,
+			domainMatch: 0.8,
+			successRate: 0.7,
+			recencyBonus: 0,
+			preferredRoles: [archetype],
 		};
 	}
 
@@ -42,9 +45,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 		return {
 			id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
 			title: "Test task",
-			type: "implementation",
-			description: "Do something",
-			dependencies: [],
+			type: "develop",
+			dependsOn: [],
+			estimatedMinutes: 0,
 			assignedRole: "implementer",
 			status: "pending" as const,
 			...overrides,
@@ -108,10 +111,15 @@ describe("createStageFeedback (StageController callbacks)", () => {
 			index: 0,
 			id: "test-result",
 			agent: "w1",
-			agentSource: "pool" as any,
+			agentSource: "bundled",
 			task: "implementation",
 			exitCode: 0,
 			output: "done",
+			stderr: "",
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
 		};
 
 		fb.onTaskCompleted("w1", task, result);
@@ -120,7 +128,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 		expect(profile.credit.score).toBe(initialScore + 3);
 		expect(profile.credit.totalTasks).toBe(1);
 
-		const marks = markEnvironment.queryMarks({ type: "artifact" });
+		const marks = markEnvironment.queryMarks({ types: ["artifact"] });
 		expect(marks.length).toBeGreaterThanOrEqual(1);
 	});
 
@@ -142,7 +150,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 		expect(profile.credit.score).toBe(initialScore);
 		expect(profile.credit.totalTasks).toBe(1);
 
-		const marks = markEnvironment.queryMarks({ type: "warning" });
+		const marks = markEnvironment.queryMarks({ types: ["warning"] });
 		expect(marks.length).toBeGreaterThanOrEqual(1);
 		expect(marks[0].message).toContain("compilation error");
 	});

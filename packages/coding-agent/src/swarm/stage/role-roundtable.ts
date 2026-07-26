@@ -23,6 +23,7 @@
 
 import { IrcBus } from "../../irc/bus";
 import { CommChannel } from "../comm-bus/comm-channel";
+import type { ActivityLogger } from "../hooks/activity-logger";
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================

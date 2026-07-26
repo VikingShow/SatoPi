@@ -1,5 +1,4 @@
 // TUI rendering and streaming output
-export { renderSwarmProgress } from "./render";
 export { createStreamProgressHandler, streamAgentOutput } from "./streaming";
 
 // SatoPi v3 TUI dashboard

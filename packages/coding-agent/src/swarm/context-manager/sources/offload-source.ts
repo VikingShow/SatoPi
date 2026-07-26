@@ -9,7 +9,7 @@
 
 import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
 import type { Chapter } from "../../core/state";
-import type { IOffloadManager } from "../../offload/manager"
+import type { IOffloadManager } from "../../../offload/manager"
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================

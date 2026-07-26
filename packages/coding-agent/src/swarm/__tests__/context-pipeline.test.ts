@@ -20,6 +20,8 @@ import {
   type BuildContext,
   type PhaseInfo,
 } from "../context-manager/context-pipeline";
+import type { AssistantMessage, UserMessage } from "@oh-my-pi/pi-ai";
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 
 // ============================================================================
 // Helpers
@@ -42,15 +44,14 @@ function mockSource(opts: {
     appliesTo: opts.appliesTo ?? (() => true),
     build:
       opts.build ??
-      (async () => ({
+      (async (_spec, _base) => ({
         systemPromptAddition: `[${opts.name}] system prompt`,
         taskPromptAddition: `[${opts.name}] task prompt`,
         tools: [`tool-${opts.name}`],
         injectedMessages: [
-          { role: "user", content: `[${opts.name}] injected message` },
+          { role: "user", content: `[${opts.name}] injected message`, timestamp: 0 },
         ],
       })),
-    // Override build for throwing sources
     ...(opts.throws
       ? {
           build: async () => {
@@ -303,8 +304,8 @@ describe("ContextPipeline", () => {
       mockSource({
         name: "source-a",
         priority: 1,
-        build: async () => ({
-          injectedMessages: [{ role: "user", content: "Message A1" }, { role: "user", content: "Message A2" }],
+        build: async (_spec, _base) => ({
+          injectedMessages: [{ role: "user", content: "Message A1", timestamp: 0 }, { role: "user", content: "Message A2", timestamp: 0 }],
         }),
       }),
     );
@@ -312,8 +313,8 @@ describe("ContextPipeline", () => {
       mockSource({
         name: "source-b",
         priority: 2,
-        build: async () => ({
-          injectedMessages: [{ role: "user", content: "Message B1" }],
+        build: async (_spec, _base) => ({
+          injectedMessages: [{ role: "user", content: "Message B1", timestamp: 0 }],
         }),
       }),
     );
@@ -321,9 +322,9 @@ describe("ContextPipeline", () => {
     const result = await pipeline.assemble(DEFAULT_SPEC, DEFAULT_PHASE, DEFAULT_BUILD_CONTEXT);
 
     expect(result.injectedMessages).toHaveLength(3);
-    expect(result.injectedMessages[0].content).toBe("Message A1");
-    expect(result.injectedMessages[1].content).toBe("Message A2");
-    expect(result.injectedMessages[2].content).toBe("Message B1");
+    expect((result.injectedMessages[0] as UserMessage).content).toBe("Message A1");
+    expect((result.injectedMessages[1] as UserMessage).content).toBe("Message A2");
+    expect((result.injectedMessages[2] as UserMessage).content).toBe("Message B1");
   });
 
   test("metadata tracks contributions from each source", async () => {
@@ -359,10 +360,10 @@ describe("ContextPipeline", () => {
       mockSource({
         name: "injector",
         priority: 1,
-        build: async () => ({
+        build: async (_spec, _base) => ({
           injectedMessages: [
-            { role: "user", content: "Injected context 1" },
-            { role: "user", content: "Injected context 2" },
+            { role: "user", content: "Injected context 1", timestamp: 0 },
+            { role: "user", content: "Injected context 2", timestamp: 0 },
           ],
         }),
       }),
@@ -372,17 +373,17 @@ describe("ContextPipeline", () => {
     const transform = pipeline.toTransformContext(assembled);
 
     const originalMessages = [
-      { role: "user", content: "Original message 1" },
-      { role: "assistant", content: "Original response" },
-    ];
+      { role: "user" as const, content: "Original message 1", timestamp: 0 },
+      { role: "assistant" as const, content: "Original response", timestamp: 0 },
+    ] as AgentMessage[];
 
     const result = await transform(originalMessages);
 
     expect(result).toHaveLength(4);
-    expect(result[0].content).toBe("Injected context 1");
-    expect(result[1].content).toBe("Injected context 2");
-    expect(result[2].content).toBe("Original message 1");
-    expect(result[3].content).toBe("Original response");
+    expect((result[0] as UserMessage).content).toBe("Injected context 1");
+    expect((result[1] as UserMessage).content).toBe("Injected context 2");
+    expect((result[2] as UserMessage).content).toBe("Original message 1");
+    expect((result[3] as { content: string }).content).toBe("Original response");
   });
 
   test("toTransformContext returns original messages when no injectedMessages", async () => {
@@ -397,8 +398,8 @@ describe("ContextPipeline", () => {
     const transform = pipeline.toTransformContext(assembled);
 
     const originalMessages = [
-      { role: "user", content: "hello" },
-    ];
+      { role: "user", content: "hello", timestamp: 0 },
+    ] as AgentMessage[];
 
     const result = await transform(originalMessages);
 
@@ -410,7 +411,7 @@ describe("ContextPipeline", () => {
       systemPrompt: "test",
       taskPrompt: "test",
       tools: [],
-      injectedMessages: [{ role: "user", content: "injected" }],
+      injectedMessages: [{ role: "user", content: "injected", timestamp: 0 }] as AgentMessage[],
       metadata: {},
     };
 

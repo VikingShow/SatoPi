@@ -8,7 +8,7 @@
  */
 
 import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
-import type { MarkEnvironment } from "../../coordination"
+import type { MarkEnvironment } from "../../../coordination"
 import { logger } from "@oh-my-pi/pi-utils";
 
 /**

@@ -23,7 +23,7 @@ import type { ActivityLogger } from "../hooks/activity-logger";
 import type { AgentExecutor } from "../executor/executor";
 import { SubprocessAgentExecutor } from "../executor/executor";
 import { streamAgentOutput } from "../render/streaming";
-import { RegionLockManager } from "../coordination/region-lock";
+import { RegionLockManager } from "../../coordination/region-lock";
 import { TaskQueue, type Task } from "../executor/task-queue";
 import { type ScoredAgent, selectAgents, extractDomains } from "../agent/agent-selector";
 import type { ProfileRegistry } from "../agent/agent-profile";

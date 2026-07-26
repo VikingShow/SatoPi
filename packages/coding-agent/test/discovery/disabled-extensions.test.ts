@@ -22,7 +22,7 @@ describe("disabledExtensions runtime filtering", () => {
 	let tempHomeDir = "";
 	let originalHome: string | undefined;
 	let originalAgentDirEnv: string | undefined;
-	let originalOmpProfileEnv: string | undefined;
+	let originalStpProfileEnv: string | undefined;
 	let originalPiProfileEnv: string | undefined;
 
 	beforeEach(async () => {

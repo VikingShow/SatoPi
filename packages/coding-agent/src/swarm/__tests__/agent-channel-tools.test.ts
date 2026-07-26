@@ -11,6 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock, vi } from "bun:test";
+import type { TextContent } from "@oh-my-pi/pi-ai";
 import { IrcBus } from "../../irc/bus";
 import { CommChannel } from "../comm-bus/comm-channel";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
@@ -50,7 +51,7 @@ describe("AgentBroadcastTool", () => {
 		const result = await tool.execute("t1", { body: "hello swarm" }, undefined, undefined, ctx);
 
 		expect(result.isError).toBeUndefined();
-		expect(result.content[0].text).toContain("agents");
+		expect((result.content[0] as TextContent).text).toContain("agents");
 	});
 
 	test("returns error when IrcBus global not available", async () => {
@@ -64,7 +65,7 @@ describe("AgentBroadcastTool", () => {
 		const result = await tool.execute("t1", { body: "hello" });
 		// With global IrcBus present → fallback channel with 0 agents
 		expect(result.isError).toBeUndefined();
-		expect(result.content[0].text).toContain("agents");
+		expect((result.content[0] as TextContent).text).toContain("agents");
 	});
 
 	// ── Metadata ────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ describe("AgentPeersTool", () => {
 		const result = await tool.execute("t1", {}, undefined, undefined, ctx);
 
 		expect(result.isError).toBeUndefined();
-		expect(result.content[0].text).toContain("3 peer");
+		expect((result.content[0] as TextContent).text).toContain("3 peer");
 		expect(result.details!.length).toBe(3);
 	});
 
@@ -107,7 +108,7 @@ describe("AgentPeersTool", () => {
 
 		const result = await tool.execute("t1", {}, undefined, undefined, ctx);
 
-		expect(result.content[0].text).toContain("0 peer");
+		expect((result.content[0] as TextContent).text).toContain("0 peer");
 		expect(result.details).toEqual([]);
 	});
 
@@ -141,7 +142,7 @@ describe("AgentQueryAllTool", () => {
 		);
 
 		expect(result.isError).toBeUndefined();
-		expect(result.content[0].text).toContain("did not respond");
+		expect((result.content[0] as TextContent).text).toContain("did not respond");
 	});
 
 	test("has correct metadata", () => {
@@ -174,7 +175,7 @@ describe("AgentQueryMajorityTool", () => {
 		);
 
 		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("No agents responded");
+		expect((result.content[0] as TextContent).text).toContain("No agents responded");
 	});
 
 	test("has correct metadata", () => {

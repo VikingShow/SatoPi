@@ -748,7 +748,7 @@ function splitPdfImageMemberReadPath(readPath: string): { pdfPath: string; membe
 
 const readSchema = type({
 	path: type("string").describe(
-		'Local path, internal URI (e.g. "omp://", "issue://123", "pr://123"), or URL. Inline :<sel> is still accepted for compatibility.',
+		'Local path, internal URI (e.g. "stp://", "issue://123", "pr://123"), or URL. Inline :<sel> is still accepted for compatibility.',
 	),
 	"selector?": type("string").describe(
 		'selector without a leading colon (e.g. "50-100", "raw", "raw:50-100", "conflicts"); keeps `path` literal when filenames contain colons',
@@ -1091,7 +1091,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			const sessionFile = this.session.getSessionFile();
 			root = sessionFile?.endsWith(".jsonl")
 				? sessionFile.slice(0, -6)
-				: path.join(os.tmpdir(), "omp-read-pdf-images");
+				: path.join(os.tmpdir(), "stp-read-pdf-images");
 		}
 		const basename = path.basename(absolutePdfPath).replace(/[^A-Za-z0-9._-]/g, "_");
 		return path.join(root, "read-pdf-images", `${basename}-${Bun.hash(absolutePdfPath).toString(36)}`);
@@ -2198,7 +2198,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			return executeReadUrl(this.session, { path: parsedUrlTarget.path, raw: urlRaw }, signal);
 		}
 
-		// Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://, mcp://, omp://, issue://, pr://).
+		// Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://, mcp://, stp://, issue://, pr://).
 		// Use the internal-URL-aware splitter so malformed selectors are peeled
 		// off the URL and surfaced via parseSel rather than confusing handlers.
 		const internalRouter = InternalUrlRouter.instance();

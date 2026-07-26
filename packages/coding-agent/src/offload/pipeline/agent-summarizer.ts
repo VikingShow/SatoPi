@@ -174,11 +174,13 @@ export class AgentOffloadSummarizer {
 	}
 
 	#messageToText(m: AgentMessage): string {
-		if (typeof m.content === "string") {
-			return m.content;
+		if (!("content" in m)) return "";
+		const content = m.content;
+		if (typeof content === "string") {
+			return content;
 		}
-		if (Array.isArray(m.content)) {
-			return m.content
+		if (Array.isArray(content)) {
+			return content
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
 				.map(c => c.text)
 				.join("\n");

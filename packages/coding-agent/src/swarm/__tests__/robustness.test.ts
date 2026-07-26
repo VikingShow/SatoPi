@@ -12,7 +12,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { StateTracker } from "../core/state";
-import { RegionLockManager } from "../coordination/region-lock";
+import { RegionLockManager } from "../../coordination/region-lock";
 
 let tmpDir: string;
 
