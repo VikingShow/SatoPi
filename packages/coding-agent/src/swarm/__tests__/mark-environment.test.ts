@@ -13,7 +13,7 @@
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { MarkEnvironment } from "../../coordination/mark-environment"
+import { MarkEnvironment } from "../coordination"
 
 describe("MarkEnvironment", () => {
 	let env: MarkEnvironment;
