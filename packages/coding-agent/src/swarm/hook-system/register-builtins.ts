@@ -18,7 +18,7 @@ import { createOffloadHook } from "./builtins/offload-hook";
 import { createMnemopiHook } from "./builtins/mnemopi-hook";
 import { createExperienceHook } from "./builtins/experience-hook";
 import { createVerificationHook } from "./builtins/verification-hook";
-import type { ProfileRegistry } from "../agent/agent-profile";
+import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { MarkEnvironment } from "../coordination"
 import type { ExperienceStore } from "../curtain/experience";
 import type { SwarmMnemopiAdapter } from "../hooks/mnemopi-adapter";

@@ -14,7 +14,7 @@
  */
 
 import * as fs from "node:fs/promises";
-import { getProfilesDir } from "../../offload/paths"
+import { getProfilesDir } from "../offload/paths"
 
 // ============================================================================
 // Types

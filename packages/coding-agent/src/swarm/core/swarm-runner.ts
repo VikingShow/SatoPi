@@ -31,9 +31,9 @@ import { getSessionPlanPath } from "../script/plan-paths";
 import type { WorkflowFsm } from "../core/workflow-fsm";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { AgentRuntime } from "../agent-runtime";
-import type { ProfileRegistry } from "../agent/agent-profile";
+import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { MarkEnvironment } from "../coordination"
-import type { RoleAssetManager } from "../agent/role-asset";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================

@@ -16,9 +16,9 @@ import { SwarmRunner } from "../swarm/core/swarm-runner";
 import type { RunManager, ScriptManager, SteeringSink } from "../swarm/core/services";
 import { ActivityLogger } from "../swarm/hooks/activity-logger";
 import { ExperienceStore } from "../swarm/curtain/experience";
-import { ProfileRegistry } from "../swarm/agent/agent-profile";
+import { ProfileRegistry } from "../agent/agent-profile";
 import { MarkEnvironment } from "../coordination/mark-environment"
-import { RoleAssetManager } from "../swarm/agent/role-asset";
+import { RoleAssetManager } from "../agent/role-asset";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
 import { NoopOffloadManager } from "../offload/manager"
