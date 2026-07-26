@@ -19,8 +19,8 @@ import { engines, version } from "../package.json" with { type: "json" };
 /** App name (e.g. "omp") */
 export const APP_NAME: string = "stp";
 
-/** Config directory name (e.g. ".omp") */
-export const CONFIG_DIR_NAME: string = ".omp";
+/** Config directory name (e.g. ".stp") */
+export const CONFIG_DIR_NAME: string = ".stp";
 
 /** Ordered main settings filenames: canonical write target first, legacy-compatible YAML fallback second. */
 export const MAIN_CONFIG_FILENAMES = ["config.yml", "config.yaml"] as const;
