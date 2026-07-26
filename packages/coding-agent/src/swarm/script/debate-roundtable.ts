@@ -43,8 +43,9 @@ export interface DebateRoundtableConfig {
 	 * convergence. Default: 2.
 	 */
 	convergenceThreshold: number;
-	/** Tool restriction to apply to agent agents (config-as-constraint). */
 	toolRestriction?: AgentToolRestriction;
+	/** Optional: AgentRuntime for v3 agent spawning. When provided, skip runSubprocess. */
+	runtime?: AgentRuntime;
 }
 
 export interface DebateRoundtableResult {
@@ -96,6 +97,7 @@ export class DebateRoundtable {
 			convergenceThreshold: config.convergenceThreshold,
 		};
 		this.#toolRestriction = config.toolRestriction;
+		this.#runtime = config.runtime;
 	}
 
 	/**
