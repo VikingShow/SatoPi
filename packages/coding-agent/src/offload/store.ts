@@ -29,6 +29,7 @@ export interface OffloadEntry {
 	score: number;               // 0-10
 	result_ref?: string;         // artifact:// 引用
 	dependencies?: string[];     // 依赖的其他 node_id
+	source_offset?: number;      // byte offset in JSONL for O(1) original retrieval
 }
 
 // ============================================================================
@@ -58,12 +59,20 @@ export class OffloadStore {
 	 *
 	 * Uses {@link SessionStorage.openWriter} with `flags: "a"` for O(1) append.
 	 * Write failures are logged at warn level but never thrown (fire-and-forget).
-	 */
 	async appendEntry(agentId: string, sessionId: string, entry: OffloadEntry): Promise<void> {
 		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
 
 		// Ensure parent directory exists synchronously (fast, no await needed).
 		this.#storage.ensureDirSync(path.dirname(filePath));
+
+		// Record byte offset for O(1) original retrieval.
+		let offset = 0;
+		try {
+			offset = (await this.#storage.readText(filePath)).length;
+		} catch {
+			// File doesn't exist yet — offset is 0.
+		}
+		entry.source_offset = offset;
 
 		const writer = this.#storage.openWriter(filePath, { flags: "a" });
 		try {
@@ -103,10 +112,55 @@ export class OffloadStore {
 		const sessionIds = await this.listAgentIds();
 		const results: OffloadEntry[] = [];
 		for (const sessionId of sessionIds) {
-			const entries = await this.readEntries(sessionId, sessionId);
+			const entries = await this.readAllFileEntries(sessionId);
 			results.push(...entries);
 		}
 		return results;
+	}
+
+	/**
+	 * Read every offload entry from a session file without agent_id filtering.
+	 */
+	async readAllFileEntries(sessionId: string): Promise<OffloadEntry[]> {
+		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
+		return this.#readJsonlFile(filePath);
+	}
+
+	/**
+	 * Read a single offload entry at a specific byte offset in the JSONL file.
+	 *
+	 * Reads the file from `offset` to the next newline, parses that line as
+	 * JSON, and returns the entry. Returns `null` if the file doesn't exist,
+	 * the offset is out of range, or the line can't be parsed.
+	 */
+	async readEntryAtOffset(sessionId: string, offset: number): Promise<OffloadEntry | null> {
+		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
+
+		let text: string;
+		try {
+			text = await this.#storage.readText(filePath);
+		} catch {
+			return null;
+		}
+
+		if (offset >= text.length) return null;
+
+		const fromOffset = text.slice(offset);
+		const newlineIdx = fromOffset.indexOf("\n");
+		const line = newlineIdx >= 0 ? fromOffset.slice(0, newlineIdx) : fromOffset;
+
+		if (!line.trim()) return null;
+
+		try {
+			return JSON.parse(line) as OffloadEntry;
+		} catch {
+			logger.warn("[OffloadStore] Failed to parse entry at offset", {
+				filePath,
+				offset,
+				line: line.slice(0, 200),
+			});
+			return null;
+		}
 	}
 
 	// -- Listing --------------------------------------------------------------

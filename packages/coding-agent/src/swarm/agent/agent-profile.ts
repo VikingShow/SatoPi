@@ -95,6 +95,30 @@ export interface AgentProfile {
 		preferredRoles: string[];
 		rolePerformance: Record<string, { tasks: number; successRate: number }>;
 	};
+
+	// ── 卸载引用 (P2: 指向卸载上下文的指针) ──────────────────
+	offloadRefs: {
+		/** L1 历史摘要引用 */
+		l1History: Array<{
+			timestamp: string;
+			sessionDir: string;
+			entryIndex: number;
+			taskCall: string;
+			score: number;
+		}>;
+		/** L2 归因引用 */
+		l2Attributions: Array<{
+			nodeId: string;
+			sessionDir: string;
+			entryRange: [number, number];
+		}>;
+		/** L3 图谱引用 */
+		l3GraphRefs: Array<{
+			timestamp: string;
+			mmdPath: string;
+			nodeCount: number;
+		}>;
+	};
 }
 
 // ============================================================================
@@ -131,6 +155,21 @@ export class ProfileRegistry {
 	#creditRankCache: { key: string; text: string; ttl: number } | null = null;
 	/** 排名缓存有效期 (ms) */
 	static readonly #RANK_CACHE_TTL = 2000;
+
+	// ── Global singleton ─────────────────────────────────────────────
+
+	static #global: ProfileRegistry | undefined;
+
+	static global(): ProfileRegistry {
+		if (!ProfileRegistry.#global) {
+			ProfileRegistry.#global = new ProfileRegistry();
+		}
+		return ProfileRegistry.#global;
+	}
+
+	static resetGlobalForTests(): void {
+		ProfileRegistry.#global = undefined;
+	}
 
 	// ── Create ────────────────────────────────────────────────────────
 
@@ -185,6 +224,11 @@ export class ProfileRegistry {
 				tasksCompletedByDomain: {},
 				preferredRoles: [],
 				rolePerformance: {},
+			},
+			offloadRefs: {
+				l1History: [],
+				l2Attributions: [],
+				l3GraphRefs: [],
 			},
 		};
 
@@ -468,6 +512,21 @@ export class ProfileRegistry {
 		this.#creditRankCache = null;
 	}
 
+
+	// ── Offload Refs ──────────────────────────────────────────────────
+
+	/**
+	 * Append an L1 history reference to a profile's offloadRefs.
+	 */
+	appendL1Ref(
+		profileId: string,
+		ref: AgentProfile["offloadRefs"]["l1History"][number],
+	): void {
+		const profile = this.#profiles.get(profileId);
+		if (!profile) return;
+		profile.offloadRefs.l1History.push(ref);
+		this.#bumpVersion(profileId);
+	}
 	// ── Persistence ──────────────────────────────────────────────────
 
 	/** Serialize all profiles to a JSON-serializable snapshot. */

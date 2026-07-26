@@ -90,7 +90,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 		const experienceStore = new ExperienceStore(cwd);
 		await experienceStore.init();
 
-		const profileRegistry = new ProfileRegistry();
+		const profileRegistry = ProfileRegistry.global();
 		const markEnvironment = new MarkEnvironment();
 		const roleAssetManager = new RoleAssetManager(cwd);
 		await roleAssetManager.init();
