@@ -32,6 +32,8 @@ import type { ContextPipeline, AssembledContext, PhaseInfo } from "../context-ma
 import type { CommBus } from "../comm-bus/comm-bus";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../hooks/activity-logger";
+import { AgentRegistry } from "../../registry/agent-registry";
+import type { AgentSession } from "../../session/agent-session";
 
 // ============================================================================
 // Types
@@ -322,6 +324,19 @@ export class AgentRuntime {
       },
     };
 
+    // 4.5 Register persistent agent in global AgentRegistry
+    if (spec.profileId) {
+      AgentRegistry.global().register({
+        id: spec.id,
+        displayName: spec.id,
+        kind: "persistent",
+        parentId: "Main",
+        session: null,
+        sessionFile: null,
+        profileId: spec.profileId,
+        role: spec.role,
+      });
+    }
     // 5. Build launch context and launch
     const launchContext: LaunchContext = {
       spec,
@@ -350,6 +365,17 @@ export class AgentRuntime {
       { agentId, role: spec.role, handle },
       { agentId, phase: "stage" },
     );
+
+    // 6.5 Attach session and wire lifecycle callbacks
+    if (spec.profileId) {
+      AgentRegistry.global().setSession(spec.id, handle.session as AgentSession);
+      handle.onComplete = () => {
+        AgentRegistry.global().setStatus(spec.id, "idle");
+      };
+      handle.onError = () => {
+        AgentRegistry.global().setStatus(spec.id, "aborted");
+      };
+    }
 
     return handle;
   }
