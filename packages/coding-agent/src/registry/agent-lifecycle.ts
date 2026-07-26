@@ -98,6 +98,8 @@ export class AgentLifecycleManager {
 	 */
 	adopt(id: string, opts: AdoptOptions): void {
 		if (id === MAIN_AGENT_ID) return;
+		const ref = this.#registry.get(id);
+		if (ref?.kind === "persistent") return; // Persistent agents manage their own lifecycle
 		if (!this.#registry.get(id)) {
 			logger.warn("AgentLifecycleManager.adopt: unknown agent id", { id });
 			return;
