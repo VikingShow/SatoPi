@@ -44,6 +44,7 @@ import {
 	resolveConfiguredModelPatterns,
 	resolveModelRoleValue,
 } from "./config/model-resolver";
+import { MarkEnvironment } from "./coordination/mark-environment";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
 import { buildServiceTierByFamily } from "./config/service-tier";
 import { Settings, type SkillsSettings } from "./config/settings";
@@ -2809,6 +2810,31 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					? new AppendOnlyContextManager()
 					: undefined
 				: undefined,
+			// Stigmergy: place marks on tool execution (auto-gated by context ratio 0.5)
+			afterToolCall: (ctx, _signal) => {
+				const markEnv = MarkEnvironment.global();
+
+				// Gate: only active when context > 50% of window (estimated)
+				const messages = agent.state.messages;
+				const totalChars = messages.reduce((sum: number, m: {}) => sum + JSON.stringify(m).length, 0);
+				const estimatedTokens = Math.ceil(totalChars / 4);
+				const cw = agent.state.model?.contextWindow ?? 128_000;
+				if (cw > 0 && estimatedTokens / cw < 0.5) return;
+
+				// Only place marks for production operations
+				const fileOp = ctx.toolName === "write" || ctx.toolName === "edit" || ctx.toolName === "bash";
+				if (!fileOp) return;
+
+				const path = ctx.result?.path ?? ctx.arguments?.path;
+				markEnv.placeMark({
+					markId: `tool-${ctx.toolCallId}`,
+					type: ctx.toolName === "bash" ? "signal" : "claim",
+					agentId: "main",
+					path: typeof path === "string" ? path : undefined,
+					message: `${ctx.toolName}: ${ctx.result?.summary ?? ctx.result?.output?.slice(0, 80) ?? "completed"}`,
+					ttlMs: 30 * 60_000, // 30 min TTL
+				});
+			},
 		});
 
 		cursorEventEmitter = event => agent.emitExternalEvent(event);

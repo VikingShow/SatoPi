@@ -88,6 +88,20 @@ export interface MarkQuery {
 // ============================================================================
 
 export class MarkEnvironment {
+	static #global: MarkEnvironment | undefined;
+
+	/** Get or create the process-global singleton. */
+	static global(): MarkEnvironment {
+		if (!MarkEnvironment.#global) {
+			MarkEnvironment.#global = new MarkEnvironment();
+		}
+		return MarkEnvironment.#global;
+	}
+
+	/** Reset the global singleton. Test-only. */
+	static resetGlobalForTests(): void {
+		MarkEnvironment.#global = undefined;
+	}
 	readonly #marks = new Map<string, Mark>();
 	/** markId → agentId 反查索引，用于 forceRemove 验证 */
 	readonly #ownerIndex = new Map<string, string>();
