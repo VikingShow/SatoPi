@@ -2,33 +2,15 @@
  * Offload Hook — L1 summarization and flush triggers.
  *
  * Builtin hook (priority 2) that wires agent completion, phase transitions,
- * and roundtable rounds into the offload pipeline. Uses a placeholder
- * OffloadManager interface until the full offload system is refactored.
+ * and roundtable rounds into the offload pipeline via the unified IOffloadManager.
  *
  * @module hook-system/builtins/offload-hook
  */
 
 import type { Chapter } from "../../core/state";
 import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
+import type { IOffloadManager } from "../../offload/offload-manager";
 import { logger } from "@oh-my-pi/pi-utils";
-
-// ---------------------------------------------------------------------------
-// Placeholder OffloadManager interface
-// ---------------------------------------------------------------------------
-
-/**
- * Placeholder interface for the offload subsystem.
- *
- * Will be replaced by the actual OffloadManager when the offload refactor
- * is complete. Both methods are intentionally fire-and-forget — the hook
- * does not block on offload results.
- */
-export interface OffloadManager {
-  /** Perform an L1 (lightweight) summarize for an agent's output. */
-  summarizeL1(agentId: string, content: unknown): Promise<void>;
-  /** Force-flush all pending offload data to persistent storage. */
-  forceFlush(): Promise<void>;
-}
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -52,7 +34,7 @@ const ACTIVE_PHASES: Chapter[] = ["script", "script-debate", "stage", "curtain"]
  * @param offloadManager - The offload subsystem instance.
  */
 export function createOffloadHook(
-  offloadManager: OffloadManager,
+  offloadManager: IOffloadManager,
 ): HookRegistration {
   return {
     name: "offload-hook",

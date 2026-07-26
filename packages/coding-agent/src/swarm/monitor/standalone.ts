@@ -39,9 +39,18 @@ import {
 import { ProfileRegistry } from "../agent/agent-profile";
 import { MarkEnvironment } from "../coordination/mark-environment";
 import { createStageFeedback } from "../hooks/swarm-hooks";
+import { CommBus } from "../comm-bus/comm-bus";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { HookRegistration } from "../hook-system/types";
+import { AgentRuntime } from "../agent-runtime";
+import { RoleProvider } from "../agent-runtime/role-provider";
+import { AgentLauncher } from "../agent-runtime/agent-launcher";
+import { ContextPipeline } from "../context-manager/context-pipeline";
+import { ContextCompactor } from "../context-manager/context-compactor";
+import { NoopOffloadManager } from "../offload/offload-manager";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 
 
 // ============================================================================
@@ -110,6 +119,8 @@ class SwarmRunManager implements RunManager {
 	#fsm: WorkflowFsm | undefined;
 	/** v3: Hook pipeline (per-session). */
 	#hookPipeline: HookPipeline | undefined;
+	/** v3: AgentRuntime (per-session). */
+	#runtime: AgentRuntime | undefined;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -125,6 +136,7 @@ class SwarmRunManager implements RunManager {
 		roleAssetManager: RoleAssetManager;
 		fsm?: WorkflowFsm;
 		hookPipeline?: HookPipeline;
+		runtime?: AgentRuntime;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -139,6 +151,7 @@ class SwarmRunManager implements RunManager {
 		this.#roleAssetManager = opts.roleAssetManager;
 		this.#fsm = opts.fsm;
 		this.#hookPipeline = opts.hookPipeline;
+		this.#runtime = opts.runtime;
 	}
 
 
@@ -207,6 +220,7 @@ class SwarmRunManager implements RunManager {
 				agentCount,
 				hookPipeline: this.#hookPipeline,
 				fsm: this.#fsm,
+				runtime: this.#runtime,
 			});
 
 			stage.run().then(async (result) => {
@@ -313,13 +327,40 @@ async function createSessionServices(
 	for (const def of PHASES) fsm.registerPhase(def);
 
 	const hookPipeline = new HookPipeline();
+	const offloadManager = new NoopOffloadManager();
+
 	const registeredHooks = registerBuiltinHooks(hookPipeline, {
 		profileRegistry: shared.profileRegistry,
 		markEnvironment,
 		experienceStore: shared.experienceStore,
+		offloadManager,
 	});
 	logger.info("[Session] HookPipeline initialized", { hooks: registeredHooks, session: name });
-	// ─────────────────────────────────────────────────────────────────────────
+
+	// ── v3: AgentRuntime (ContextPipeline + RoleProvider + AgentLauncher) ──────────
+	const roleProvider = new RoleProvider(shared.roleAssetManager);
+	const contextPipeline = new ContextPipeline();
+	const launcher = new AgentLauncher(
+		shared.modelRegistry,
+		shared.settings,
+		activityLogger,
+	);
+	contextPipeline.register(new OffloadSource(offloadManager));
+	const runtime = new AgentRuntime({
+		roleProvider,
+		contextPipeline,
+		launcher,
+		commBus: CommBus.global(),
+		hookPipeline,
+		modelRegistry: shared.modelRegistry,
+		settings: shared.settings,
+		activityLogger,
+	});
+
+	// Register ContextCompactor hook so long-running stage agents get context compaction
+	const compactor = new ContextCompactor();
+	hookPipeline.register(compactor.createHook() as unknown as HookRegistration);
+	// ────────────────────────────────────────────────────────────────────────────
 
 	const runManager = new SwarmRunManager({
 		modelRegistry: shared.modelRegistry,
@@ -334,6 +375,7 @@ async function createSessionServices(
 		roleAssetManager: shared.roleAssetManager,
 		fsm,
 		hookPipeline,
+		runtime,
 	});
 
 	const scriptManager = new ScriptManager({
@@ -349,6 +391,7 @@ async function createSessionServices(
 		profileRegistry: shared.profileRegistry,
 		roleAssetManager: shared.roleAssetManager,
 	});
+	scriptManager.setRuntime(runtime);
 
 	const steeringSink: SteeringSink = {
 		steer(text: string): void {

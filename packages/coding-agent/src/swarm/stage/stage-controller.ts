@@ -88,6 +88,8 @@ export interface StageOptions {
 	hookPipeline?: HookPipeline;
 	/** v3: Workflow FSM for authoritative phase transitions. */
 	fsm?: WorkflowFsm;
+	/** v3: AgentRuntime for v3 agent spawning. */
+	runtime?: AgentRuntime;
 }
 
 export interface StageResult {
@@ -116,6 +118,7 @@ export class StageController {
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
 		this.#executor = opts.executor ?? new SubprocessAgentExecutor();
+		if (opts.runtime) this.#runtime = opts.runtime;
 	}
 
 	/**

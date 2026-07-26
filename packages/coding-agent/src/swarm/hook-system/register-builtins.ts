@@ -23,6 +23,7 @@ import type { MarkEnvironment } from "../coordination/mark-environment";
 import type { ExperienceStore } from "../curtain/experience";
 import type { SwarmMnemopiAdapter } from "../hooks/mnemopi-adapter";
 import type { VerificationHook } from "../core/verification-hook";
+import type { IOffloadManager } from "../offload/offload-manager";
 
 /** Dependencies for the built-in hook set. All fields are optional. */
 export interface BuiltinHookDeps {
@@ -30,11 +31,8 @@ export interface BuiltinHookDeps {
   profileRegistry?: ProfileRegistry;
   /** Needed by StigmergyHook (priority 1). */
   markEnvironment?: MarkEnvironment;
-  /** Needed by OffloadHook (priority 2). Must satisfy the OffloadManager interface. */
-  offloadManager?: {
-    summarizeL1(agentId: string, content: unknown): Promise<void>;
-    forceFlush(): Promise<void>;
-  };
+  /** Needed by OffloadHook (priority 2). Must satisfy the IOffloadManager interface. */
+  offloadManager?: IOffloadManager;
   /** Needed by MnemopiHook (priority 3). */
   mnemopiAdapter?: SwarmMnemopiAdapter;
   /** Needed by ExperienceHook (priority 4). */

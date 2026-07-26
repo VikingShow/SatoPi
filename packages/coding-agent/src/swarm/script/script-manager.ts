@@ -82,6 +82,11 @@ export class ScriptManager {
 	/** Optional AgentRuntime injected at construction time for v3 agent spawning. */
 	#runtime: AgentRuntime | undefined = undefined;
 
+	/** Wire the v3 AgentRuntime (called once during session bootstrap). */
+	setRuntime(runtime: AgentRuntime): void {
+		this.#runtime = runtime;
+	}
+
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
 		settings: Settings;

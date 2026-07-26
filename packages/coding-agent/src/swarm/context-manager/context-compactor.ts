@@ -150,16 +150,38 @@ export class ContextCompactor {
     return strategy.compact(messages);
   }
 
-  /** Register as a HookPipeline hook (agent:beforeLaunch event) */
+  /**
+   * Register on the HookPipeline to automatically compact agent context
+   * when token pressure is detected during agent:beforeLaunch events.
+   */
   createHook() {
     return {
       name: "context-compactor",
       priority: 3,  // After mnemopi, before experience
       events: ["agent:beforeLaunch" as const],
       phases: ["stage" as const],  // Only stage has long-running agents
-      handler: async (event: string, payload: any) => {
-        // payload would contain the agent's message history and token estimates
-        // This is a placeholder for future integration
+      handler: async (_event: string, payload: Record<string, unknown>, _ctx: unknown) => {
+        const messages = payload.messages as AgentMessage[] | undefined;
+        const tokensUsed = payload.tokensUsed as number | undefined;
+        const tokenBudget = payload.tokenBudget as number | undefined;
+
+        if (!messages || tokensUsed === undefined || tokenBudget === undefined) {
+          // Payload does not carry compaction data yet —
+          // consumer (AgentRuntime.spawn) still needs to pass it when triggering this event.
+          return;
+        }
+
+        const result = await this.compactIfNeeded(messages, tokensUsed, tokenBudget);
+        if (!result) return;
+
+        // Mutate the payload so the caller can use the compacted messages.
+        (payload as Record<string, unknown>).compactedMessages = result.messages;
+        if (result.stigmergyMark) {
+          (payload as Record<string, unknown>).stigmergyMark = result.stigmergyMark;
+        }
+        if ("offloadEntries" in result) {
+          (payload as Record<string, unknown>).compactedOffload = (result as Record<string, unknown>).offloadEntries;
+        }
       },
     };
   }
