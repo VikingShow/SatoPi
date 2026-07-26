@@ -36,6 +36,12 @@ export {
 	type TaskBoundary,
 } from "./pipeline/deduplicator";
 export {
+	TaskBoundaryJudge,
+	type L15Judgment,
+	type L15MmdEntry,
+	type L15Input,
+} from "./pipeline/l15-judge";
+export {
 	PlanNodeAttributor,
 	type PlanPhase,
 	type AttributionEntry,
@@ -48,6 +54,12 @@ export {
 	MermaidSynthesizer,
 	type MmdSynthesizeInput,
 } from "./mermaid/synthesizer";
+export {
+	LlmMermaidSynthesizer,
+	type L2NewEntry,
+	type L2MermaidOutput,
+	type L2ReplaceBlock,
+} from "./mermaid/llm-synthesizer";
 export {
 	MmdInjector,
 	type MmdInjectConfig,
