@@ -29,6 +29,10 @@ import type {
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ActivityLogger } from "../hooks/activity-logger";
 import type { AssembledContext } from "../context-manager/context-pipeline";
+
+import { compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
+import type { MmdInjector } from "../../offload/mermaid/injector";
+import type { IOffloadManager } from "../../offload/manager";
 import type { AgentSpec } from "./agent-spec";
 import type { ResolvedRole } from "./role-provider";
 import { AgentHandle } from "./agent-handle";
@@ -75,6 +79,15 @@ export interface LaunchContext {
 
   /** Optional activity logger for streaming output. */
   activityLogger?: ActivityLogger;
+
+  /** Offload manager for L3 compact context summaries. */
+  offloadManager?: IOffloadManager;
+  /** MMD injector for per-turn Mermaid injection. */
+  mmdInjector?: MmdInjector;
+  /** Active MMD content (from OffloadManager). */
+  activeMmd?: string;
+  /** Context window for compaction threshold (in tokens). */
+  contextWindow?: number;
 }
 
 // ============================================================================
@@ -152,10 +165,42 @@ export class AgentLauncher {
         })) as unknown as AgentTool<any, any, unknown>[],
       },
       // ContextPipeline injection via transformContext
-      transformContext: async (messages: AgentMessage[], _signal?: AbortSignal) => {
+      transformContext: async (messages: AgentMessage[], signal?: AbortSignal) => {
+        // Step 1: Inject external context (existing)
         const injected = assembledContext.injectedMessages as AgentMessage[];
-        if (injected.length === 0) return messages;
-        return [...injected, ...messages];
+        let result = injected.length > 0 ? [...injected, ...messages] : messages;
+
+        // Step 2: Inject MMD per-turn (Phase 5)
+        if (ctx.mmdInjector && ctx.activeMmd && result.length > 0) {
+          try {
+            const userIdx = result.findIndex(m => m.role === "user");
+            if (userIdx >= 0) {
+              const mmdMsg: AgentMessage = {
+                role: "user",
+                content: [{ type: "text", text: ctx.activeMmd }],
+                timestamp: Date.now(),
+              } as AgentMessage;
+              result.splice(userIdx + 1, 0, mmdMsg);
+            }
+          } catch (err) {
+            logger.debug("[AgentLauncher] MMD injection skipped", { error: String(err) });
+          }
+        }
+
+        // Step 3: Apply L3 compact context (fusion with oh-my-pi compaction)
+        if (ctx.offloadManager && ctx.contextWindow) {
+          try {
+            const compacted = compactContext(result, new Map(), {
+              ...DEFAULT_COMPACT_CONFIG,
+              contextWindow: ctx.contextWindow,
+            });
+            result = compacted.messages;
+          } catch (err) {
+            logger.debug("[AgentLauncher] Compact context skipped", { error: String(err) });
+          }
+        }
+
+        return result;
       },
       // Human steering via CommBus
       steeringMode: "one-at-a-time",

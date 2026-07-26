@@ -15,6 +15,8 @@ import type { AgentMessage, AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type { Chapter } from "../core/state";
 import { logger } from "@oh-my-pi/pi-utils";
 
+import { compactContext, DEFAULT_COMPACT_CONFIG, type CompactContextConfig } from "../../offload/compact";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -217,11 +219,20 @@ export class ContextPipeline {
    */
   toTransformContext(
     assembled: AssembledContext,
+    opts?: { compactWindow?: number },
   ): Exclude<AgentLoopConfig["transformContext"], undefined> {
     const injected = assembled.injectedMessages;
     return async (messages: AgentMessage[], _signal?: AbortSignal): Promise<AgentMessage[]> => {
-      if (injected.length === 0) return messages;
-      return [...injected, ...messages];
+      let result = injected.length === 0 ? messages : [...injected, ...messages];
+      // L3 compact context if configured
+      if (opts?.compactWindow) {
+        const compacted = compactContext(result, new Map(), {
+          ...DEFAULT_COMPACT_CONFIG,
+          contextWindow: opts.compactWindow,
+        });
+        result = compacted.messages;
+      }
+      return result;
     };
   }
 
