@@ -17,7 +17,7 @@ import { VerificationHook } from "../core/verification-hook";
 import { streamAgentOutput } from "../render/streaming";
 import type { StageResult } from "../stage/stage-controller";
 import type { LoopSwarmConfig } from "../core/schema";
-import type { AfterLoopResult } from "./types";
+import type { CurtainResult } from "./types";
 import type { RoleAssetManager } from "../agent/role-asset";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";

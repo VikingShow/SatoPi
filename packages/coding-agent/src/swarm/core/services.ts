@@ -8,7 +8,7 @@
 
 import type { ExecutorOptions, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
-import type { AfterLoopResult } from "../curtain/types";
+import type { CurtainResult } from "../curtain/types";
 
 // ============================================================================
 // Agent execution & communication
@@ -49,7 +49,7 @@ export interface RunManager {
 	resume(): Promise<{ success: boolean; error?: string }>;
 	updatePlanAndContinue(content: string): Promise<{ success: boolean; error?: string }>;
 	readonly isRunning: boolean;
-	getLastAfterLoopResult?: () => AfterLoopResult | null;
+	getLastCurtainResult?: () => CurtainResult | null;
 	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
 }
 

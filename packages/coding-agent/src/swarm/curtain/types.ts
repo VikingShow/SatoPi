@@ -3,7 +3,7 @@
  */
 
 /** AfterLoop result — shared between loop controller and curtain pipeline. */
-export interface AfterLoopResult {
+export interface CurtainResult {
 	runId: string;
 	status: string;
 	iterations: number;
