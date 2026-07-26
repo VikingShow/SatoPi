@@ -2814,12 +2814,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			afterToolCall: (ctx, _signal) => {
 				const markEnv = MarkEnvironment.global();
 
-				// Gate: only active when context > 50% of window (estimated)
-				const messages = agent.state.messages;
-				const totalChars = messages.reduce((sum: number, m: {}) => sum + JSON.stringify(m).length, 0);
-				const estimatedTokens = Math.ceil(totalChars / 4);
-				const cw = agent.state.model?.contextWindow ?? 128_000;
-				if (cw > 0 && estimatedTokens / cw < 0.5) return;
+				// Gate: always active for subagents OR context > 50% for main agent
+				const isSubagent = (options.taskDepth ?? 0) > 0;
+				if (!isSubagent) {
+					const msgChars = agent.state.messages.reduce((sum: number, m: {}) => sum + JSON.stringify(m).length, 0);
+					const estTokens = Math.ceil(msgChars / 4);
+					const cw = agent.state.model?.contextWindow ?? 128_000;
+					if (cw > 0 && estTokens / cw < 0.5) return;
+				}
 
 				// Only place marks for production operations
 				const fileOp = ctx.toolName === "write" || ctx.toolName === "edit" || ctx.toolName === "bash";
