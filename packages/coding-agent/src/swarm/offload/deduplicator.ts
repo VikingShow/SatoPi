@@ -1,7 +1,7 @@
 /**
  * Deduplicator — L1.5 去重 + 任务边界检测
  *
- * 对 L1 WorkerSummarizer 产生的摘要条目进行去重，
+ * 对 L1 AgentSummarizer 产生的摘要条目进行去重，
  * 过滤噪声（低分条目），并根据 Cloner ReviewVerdict 检测任务边界。
  */
 

@@ -29,7 +29,7 @@ export type { AfterLoopResult };
 /** Controls the swarm loop lifecycle.  Implemented by SwarmRunManager. */
 export interface RunManager {
 		setSessionManager?(sm: import("../session/swarm-session-manager").SwarmSessionManager): void;
-	start(): Promise<{ success: boolean; error?: string }>;
+	start(agentCount?: number): Promise<{ success: boolean; error?: string }>;
 	stop(): Promise<{ success: boolean; error?: string }>;
 	pause(): Promise<{ success: boolean; error?: string }>;
 	resume(): Promise<{ success: boolean; error?: string }>;

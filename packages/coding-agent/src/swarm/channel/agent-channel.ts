@@ -10,6 +10,11 @@
  * Agents are unaware of observers — observer messages are delivered
  * via suppressRelay and never shown in the main relay.
  *
+ * @deprecated Use {@link CommBus.groupChannel} + {@link CommChannel} instead.
+ * `CommBus.groupChannel(name, members)` returns a `CommChannel` that supports
+ * `send`, `roundtable`, and `vote` natively without this wrapper.
+ * Internal delegation to CommChannel is preserved for backwards compatibility.
+ *
  * @remarks Internally delegates messaging to {@link CommChannel} for unified
  * send / roundtable / vote logic.  The public API is unchanged.
  */

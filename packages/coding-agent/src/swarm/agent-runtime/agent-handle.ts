@@ -125,8 +125,18 @@ export class AgentHandle {
     this.#status = "aborted";
     this.#agent.abort(reason ?? "aborted by swarm pipeline");
     this.#resolveCompletion({
+      index: 0,
+      id: "aborted",
+      agent: this.id,
+      agentSource: "project" as const,
+      task: "",
+      exitCode: 1,
       output: `[Aborted] ${reason ?? "aborted by swarm pipeline"}`,
-      thinking: undefined,
+      stderr: "",
+      truncated: false,
+      durationMs: 0,
+      tokens: 0,
+      requests: 0,
     });
   }
 
@@ -144,7 +154,7 @@ export class AgentHandle {
     const unsubscribe = this.#agent.subscribe((event: AgentEvent) => {
       switch (event.type) {
         case "message_update": {
-          const content = event.message.content;
+          const content = (event.message as { content?: unknown }).content;
           let text = "";
           if (typeof content === "string") {
             text = content;
@@ -163,7 +173,7 @@ export class AgentHandle {
           break;
         }
         case "message_end": {
-          const content = event.message.content;
+          const content = (event.message as { content?: unknown }).content;
           let text = "";
           if (typeof content === "string") {
             text = content;
@@ -233,7 +243,7 @@ export class AgentHandle {
           break;
 
         case "message_update": {
-          const content = event.message.content;
+          const content = (event.message as { content?: unknown }).content;
           if (typeof content === "string") {
             messages.push(content);
           } else if (Array.isArray(content)) {
@@ -252,8 +262,18 @@ export class AgentHandle {
             this.#status = "completed";
           }
           this.#resolveCompletion({
+            index: 0,
+            id: this.id,
+            agent: this.id,
+            agentSource: "project" as const,
+            task: "",
+            exitCode: 0,
             output,
-            thinking: undefined,
+            stderr: "",
+            truncated: false,
+            durationMs: 0,
+            tokens: 0,
+            requests: 0,
           });
           break;
         }

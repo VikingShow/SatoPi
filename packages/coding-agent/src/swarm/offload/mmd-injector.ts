@@ -24,8 +24,6 @@ export interface MmdInjectConfig {
 }
 
 export interface MmdView {
-	/** 目标 agent 类型 */
-	agentType: "worker" | "cloner" | "orchestrator";
 	/** 该视图的 MMD 片段 */
 	mmdFragment: string;
 	/** 文本摘要（fallback 用） */
@@ -69,7 +67,6 @@ export class MmdInjector {
 		});
 
 		return {
-			agentType: "worker",
 			mmdFragment: filtered,
 			summaryText,
 			injectBlock,
@@ -95,7 +92,6 @@ export class MmdInjector {
 		});
 
 		return {
-			agentType: "cloner",
 			mmdFragment: fullMmd,
 			summaryText,
 			injectBlock,
@@ -132,7 +128,6 @@ export class MmdInjector {
 		});
 
 		return {
-			agentType: "orchestrator",
 			mmdFragment: fullMmd,
 			summaryText,
 			injectBlock,

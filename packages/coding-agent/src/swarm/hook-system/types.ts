@@ -32,6 +32,7 @@ export type HookEvent =
   | "workflow:phaseTimeout"
   // Agent lifecycle
   | "agent:beforeSpawn"
+  | "agent:afterSpawn"
   | "agent:afterComplete"
   | "agent:onError"
   // Context window management

@@ -81,7 +81,7 @@ export class DissatisfactionLoop {
 		// 1. Transition to script phase for re-planning
 		await stateTracker.updatePipeline({
 			phase: "script",
-			status: "replanning",
+			status: "running",
 			roundtablePhase: "User dissatisfied — re-planning",
 		});
 

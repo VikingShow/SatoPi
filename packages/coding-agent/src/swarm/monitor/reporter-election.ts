@@ -9,6 +9,11 @@
  *   - codeLinesChanged (权重 0.2): 修改的代码行数
  *   - peerVotes (权重 0.4): 其他 agent 的投票
  *
+ * @deprecated Use {@link CommChannel.vote} directly via `CommBus.groupChannel(name, agentIds).vote(...)`.
+ * `CurtainBehavior` already uses this pattern for reporter election.
+ * This class is retained for callers that have not yet migrated to the v3
+ * PhaseBehavior architecture.
+ *
  * @remarks Vote collection delegates to {@link CommChannel.vote} which
  * internally uses the standalone {@link runVote} pure function.
  * Score computation and ranking logic remain in this class.

@@ -2,7 +2,7 @@
  * OffloadPipeline — L1→L1.5→L2 流水线编排器
  *
  * 将 TencentDB-Agent-Memory 的四层 offload pipeline 映射到 SatoPi Swarm 循环：
- *   L1 (WorkerSummarizer) → L1.5 (Deduplicator) → L2 (PlanNodeAttributor)
+ *   L1 (AgentSummarizer) → L1.5 (Deduplicator) → L2 (PlanNodeAttributor)
  *
  * L3 (MermaidSynthesizer) 由独立模块 `mermaid-synthesizer.ts` 处理。
  */
@@ -10,7 +10,7 @@
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { ReviewVerdict } from "../core/pipeline";
-import { WorkerSummarizer, type SummarizeOutput } from "./worker-summarizer";
+import { AgentSummarizer, type SummarizeOutput } from "./agent-summarizer";
 import type { AgentOffloadEntry } from "./agent-offload-summarizer";
 import {
 	Deduplicator,
@@ -41,7 +41,6 @@ export interface OffloadPipelineConfig {
 export namespace OffloadPipeline {
 	export interface L1Output {
 		agentId: string;
-		agentType: "worker" | "cloner" | "orchestrator";
 		summary: string;
 		score: number;
 		taskCall: string;
@@ -64,7 +63,7 @@ export namespace OffloadPipeline {
 
 export class OffloadPipeline {
 	readonly #config: OffloadPipelineConfig;
-	readonly #summarizer = new WorkerSummarizer();
+	readonly #summarizer = new AgentSummarizer();
 	readonly #deduplicator = new Deduplicator();
 	readonly #attributor = new PlanNodeAttributor();
 
@@ -84,17 +83,15 @@ export class OffloadPipeline {
 	// -- L1: Worker/Cloner 产出摘要 ------------------------------------------
 
 	/**
-	 * 处理单个 Wave 的 Worker 或 Cloner 产出。
+	 * 处理单个 Wave 的 Agent 产出。
 	 *
-	 * @param results   Wave 产出结果
-	 * @param agentType "worker" | "cloner"
-	 * @param iteration 当前迭代编号
+	 * @param results    Wave 产出结果
+	 * @param iteration  当前迭代编号
 	 * @param phaseHints agentId → phase 名称映射（可选）
-	 * @param scores     agentId → Cloner 评分映射（可选，cloner 场景）
+	 * @param scores     agentId → 评分映射（可选）
 	 */
 	async runL1(
 		results: Map<string, SingleResult>,
-		agentType: "worker" | "cloner" | "orchestrator",
 		iteration: number,
 		phaseHints?: Map<string, string>,
 		scores?: Map<string, number>,
@@ -108,7 +105,6 @@ export class OffloadPipeline {
 			const summ = await this.#summarizer.summarize({
 				result,
 				agentId,
-				agentType,
 				iteration,
 				phaseHint,
 				score,
@@ -116,7 +112,6 @@ export class OffloadPipeline {
 
 			outputs.push({
 				agentId,
-				agentType,
 				summary: summ.summary,
 				score: summ.score,
 				taskCall: summ.taskCall,
@@ -128,7 +123,6 @@ export class OffloadPipeline {
 
 		this.#pendingL1.push(...outputs);
 		logger.debug("[OffloadPipeline] L1 complete", {
-			agentType,
 			iteration,
 			outputs: outputs.length,
 			pendingTotal: this.#pendingL1.length,
@@ -144,7 +138,6 @@ export class OffloadPipeline {
 	runL1FromEntries(entries: AgentOffloadEntry[]): OffloadPipeline.L1Output[] {
 		const outputs: OffloadPipeline.L1Output[] = entries.map(e => ({
 			agentId: e.agentId,
-			agentType: "worker" as const,
 			summary: e.summary,
 			score: e.score,
 			taskCall: e.taskCall,

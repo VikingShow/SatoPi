@@ -55,6 +55,7 @@ export class MnemopiSource implements ContextSource {
 
       const injectedMessage = {
         role: "user" as const,
+        timestamp: Date.now(),
         content: [
           "<semantic_memories>",
           `Recalled ${items.length} relevant semantic memories for task: "${base.taskDescription}"`,

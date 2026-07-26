@@ -48,6 +48,12 @@ export class CurtainBehavior implements PhaseBehavior {
   /** Whether the human has applauded / acknowledged the report. */
   #humanApplauded = false;
 
+  /** Whether the human expressed dissatisfaction (triggers re-plan path). */
+  #humanDissatisfied = false;
+
+  /** Raw dissatisfaction feedback text (forwarded to ScriptBehavior on re-entry). */
+  #dissatisfactionFeedback = "";
+
   /** Whether the reporter has finished. */
   #reporterCompleted = false;
 
@@ -183,7 +189,7 @@ export class CurtainBehavior implements PhaseBehavior {
   // ==========================================================================
 
   async handleHumanMessage(
-    msg: { from: string; body: string },
+    msg: { from: string; body: string; type?: "applaud" | "dissatisfied" | "feedback" | "steer" },
     _ctx: PhaseContext,
   ): Promise<void> {
     const trimmed = msg.body.trim().toLowerCase();
@@ -211,6 +217,12 @@ export class CurtainBehavior implements PhaseBehavior {
     if (applaudPatterns.some((p) => p.test(trimmed))) {
       this.#humanApplauded = true;
       logger.info("[CurtainBehavior] Human applauded");
+      return;
+    }
+
+    if (msg.type === "dissatisfied") {
+      this.#humanDissatisfied = true;
+      this.#dissatisfactionFeedback = msg.body;
       return;
     }
 
@@ -278,6 +290,17 @@ export class CurtainBehavior implements PhaseBehavior {
       return null;
     }
 
+    // Dissatisfaction path — send human back to Script phase for re-planning.
+    // The feedback text is embedded in the message so ScriptBehavior can
+    // inject it as an initial prompt when the Planner re-enters.
+    if (this.#humanDissatisfied) {
+      return {
+        nextPhase: "script",
+        needConfirmRetry: true,
+        message: "User expressed dissatisfaction. Confirm re-planning?",
+      };
+    }
+
     // If human has already applauded, transition to idle
     if (this.#humanApplauded) {
       return {
@@ -316,6 +339,8 @@ export class CurtainBehavior implements PhaseBehavior {
     this.#agents = [];
     this.#electionChannel = undefined;
     this.#humanApplauded = false;
+    this.#humanDissatisfied = false;
+    this.#dissatisfactionFeedback = "";
     this.#reporterCompleted = false;
     this.#reflectorCompleted = false;
     this.#electedReporterId = undefined;

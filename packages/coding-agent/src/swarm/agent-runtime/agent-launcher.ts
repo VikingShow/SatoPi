@@ -17,6 +17,7 @@ import { Agent } from "@oh-my-pi/pi-agent-core";
 import type {
   AgentLoopConfig,
   AgentMessage,
+  AgentTool,
   AsideMessage,
 } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
@@ -148,7 +149,7 @@ export class AgentLauncher {
           execute: async () => ({
             content: [{ type: "text" as const, text: `Tool ${name} executed (mock)` }],
           }),
-        })),
+        })) as unknown as AgentTool<any, any, unknown>[],
       },
       // ContextPipeline injection via transformContext
       transformContext: async (messages: AgentMessage[], _signal?: AbortSignal) => {
@@ -220,9 +221,8 @@ export class AgentLauncher {
 
     // Pick based on preference
     if (spec.modelPreference === "cheapest") {
-      return (
-        available.find((m) => m.costPerMTok?.output !== undefined) ?? available[0]
-      );
+      // No reliable pricing field — return first available as cheapest heuristic
+      return available[0];
     }
 
     if (spec.modelPreference === "smartest") {
@@ -232,7 +232,8 @@ export class AgentLauncher {
           .slice()
           .sort(
             (a, b) =>
-              (b.contextWindow?.input ?? 0) - (a.contextWindow?.input ?? 0),
+              (typeof b.contextWindow === "number" ? b.contextWindow : 0) -
+              (typeof a.contextWindow === "number" ? a.contextWindow : 0),
           )[0] ?? available[0]
       );
     }

@@ -26,15 +26,7 @@ import { streamAgentOutput } from "../render/streaming";
 import { getSessionPlanPath } from "./plan-paths";
 import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "../core/schema";
 import { CommBus } from "../comm-bus/comm-bus";
-
-// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
-let AgentRuntimeClass: any;
-try {
-  const mod = require("../agent-runtime");
-  AgentRuntimeClass = mod.AgentRuntime;
-} catch {
-  // AgentRuntime not yet available — keep existing code path
-}
+import type { AgentRuntime } from "../agent-runtime";
 
 // ============================================================================
 // Types
@@ -87,8 +79,8 @@ export class ScriptManager {
 	#planningPrompt = "";
 	/** AbortController for cancelling the in-flight Planner LLM call. */
 	#abortController: AbortController | null = null;
-	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
-	#runtime: any = undefined;
+	/** Optional AgentRuntime injected at construction time for v3 agent spawning. */
+	#runtime: AgentRuntime | undefined = undefined;
 
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
@@ -279,7 +271,6 @@ export class ScriptManager {
 	async cancel(): Promise<{ success: boolean; error?: string }> {
 		this.#conversation = [];
 		this.#planningPrompt = "";
-		this./** AbortController for cancelling the in-flight Planner LLM call. */
 		this.#taskDescription = "";
 		this.#planReady = false;
 		this.#busy = false;
@@ -304,8 +295,8 @@ export class ScriptManager {
 
 			let displayOutput: string;
 
-			if (AgentRuntimeClass && this.#runtime) {
-				// Phase 3B: NEW path — use AgentRuntime.spawn()
+			if (this.#runtime) {
+				// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
 				const [planner] = await this.#runtime.spawn([{
 					id: this.#selectedAgentId ?? "planner",
 					role: "planner",

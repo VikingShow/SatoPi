@@ -20,7 +20,6 @@ import { getOffloadDir, getOffloadPath } from "./offload-paths";
 
 export interface SwarmOffloadEntry {
 	timestamp: string;           // ISO 8601
-	agent_type: "worker" | "cloner" | "orchestrator";
 	agent_id: string;            // "worker-a1", "cloner-guardian"
 	iteration: number;
 	phase_id?: string;           // L2 填充

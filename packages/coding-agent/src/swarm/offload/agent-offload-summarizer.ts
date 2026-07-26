@@ -178,30 +178,9 @@ export class AgentOffloadSummarizer {
 	 * LLM-based summarization for complex outputs.
 	 * Sends the text to a lightweight model for semantic compression.
 	 */
-	async #summarizeWithLLM(text: string, agentId: string): Promise<string> {
-		if (!this.#modelRegistry || !this.#settings) {
-			throw new Error("LLM summarization requires modelRegistry and settings");
-		}
-
-		const prompt = [
-			"Summarize the following agent output in 1-2 sentences (max 200 chars).",
-			"Focus on: what was accomplished, key decisions, any errors or blockers.",
-			"Output ONLY the summary text, no markdown formatting.",
-			"",
-			`Agent: ${agentId}`,
-			"---",
-			text.slice(0, 3000), // Truncate input to avoid token overflow
-		].join("\n");
-
-		const result = await this.#modelRegistry.query({
-			model: this.#settings.defaultModel ?? "gpt-4o-mini",
-			messages: [{ role: "user", content: prompt }],
-			maxTokens: 200,
-		});
-
-		const content = result?.choices?.[0]?.message?.content;
-		if (!content) throw new Error("LLM returned empty response");
-
-		return content.length > 200 ? content.slice(0, 200) + "…" : content;
+	async #summarizeWithLLM(text: string, _agentId: string): Promise<string> {
+		// LLM summarization path is currently unavailable —
+		// fall back to truncation until model resolution API is restored.
+		return text.trim().slice(0, 200);
 	}
 }

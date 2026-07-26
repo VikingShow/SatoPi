@@ -40,8 +40,10 @@ export class SummarizeStrategy implements CompactionStrategy {
 
     const recent = messages.slice(-20);
     const oldText = messages.slice(0, -20).map(m => {
-      if (typeof m.content === "string") return m.content.slice(0, 100);
-      return "[non-text message]";
+      const text = typeof (m as { content?: unknown }).content === "string"
+        ? (m as { content: string }).content.slice(0, 100)
+        : "[non-text message]";
+      return text;
     }).join("\n");
 
     const summary: AgentMessage = {
@@ -95,8 +97,10 @@ export class OffloadToStigmergyStrategy implements CompactionStrategy {
   async compact(messages: AgentMessage[]): Promise<CompactedContext> {
     const keep = messages.slice(-15);
     const oldText = messages.slice(0, -15).map(m => {
-      if (typeof m.content === "string") return m.content.slice(0, 200);
-      return "";
+      const text = typeof (m as { content?: unknown }).content === "string"
+        ? (m as { content: string }).content.slice(0, 200)
+        : "";
+      return text;
     }).filter(Boolean).join(" | ");
 
     return {

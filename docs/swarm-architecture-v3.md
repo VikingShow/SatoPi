@@ -424,7 +424,10 @@ const PHASES: PhaseDefinition[] = [
   },
   {
     phase: "stage",
-    allowedFrom: ["script-confirm", "paused", "blocked"],
+    // Extra inbound edges beyond "script-confirm":
+    //   idle → stage:    /swarm run non-interactive mode (plan file provided directly)
+    //   curtain → stage: loop-mode re-run without resetting to idle
+    allowedFrom: ["script-confirm", "paused", "blocked", "idle", "curtain"],
     allowedTo: ["paused", "blocked", "curtain"],
     capabilities: {
       multiAgent: true, roundtable: true, vote: true,

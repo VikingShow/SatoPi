@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { StateTracker } from "../core/state";
 import { ActivityLogger } from "../hooks/activity-logger";
-import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary } from "../curtain";
+import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary, type ExtractedLesson, type LoopRunStats } from "../curtain";
 import { VerificationHook } from "../core/verification-hook";
 import { streamAgentOutput } from "../render/streaming";
 import type { StageResult } from "../stage/stage-controller";
@@ -22,16 +22,9 @@ import type { RoleAssetManager } from "../agent/role-asset";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { ReporterElection, type ContributionData } from "./reporter-election";
-
-// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
-let AgentRuntimeClass: any;
-try {
-  const mod = require("../agent-runtime");
-  AgentRuntimeClass = mod.AgentRuntime;
-} catch {
-  // AgentRuntime not yet available — keep existing code path
-}
+import type { ContributionData } from "./reporter-election";
+import { CommBus } from "../comm-bus";
+import type { AgentRuntime } from "../agent-runtime";
 
 // ============================================================================
 // Types
@@ -58,7 +51,7 @@ export interface CurtainResultData {
 	status: string;
 	totalTasks: number;
 	summaryMarkdown: string;
-	lessons: import("../curtain/experience").ExperienceLesson[];
+	lessons: ExtractedLesson[];
 	reflection: {
 		rootCauses: string[];
 		effectivePatterns: string[];
@@ -116,10 +109,10 @@ export async function runCurtainPipeline(
 				});
 			}
 			const eligibleIds = contributions.map(c => c.agentId);
-			const election = new ReporterElection(ircBus, activityLogger);
-			const electionResult = await election.elect({ contributions, eligibleIds });
-			electedReporter = electionResult.reporterId;
-			activityLogger.logBroadcast("system", `Elected reporter: ${electedReporter} (deputies: ${electionResult.deputyIds.join(", ")})`);
+			const channel = CommBus.global().groupChannel("election", eligibleIds, activityLogger);
+			const voteResult = await channel.vote("elect reporter", { eligibleIds, timeoutMs: 15000 });
+			electedReporter = voteResult.winner;
+			activityLogger.logBroadcast("system", `Elected reporter: ${electedReporter} (deputies: ${voteResult.deputyIds.join(", ")})`);
 			logger.info("[Curtain] Reporter elected", { reporter: electedReporter });
 		} catch (err) {
 			logger.warn("[Curtain] Reporter election failed, falling back to default reporter", { error: String(err) });
@@ -222,8 +215,8 @@ async function runReporterAgent(
 		/** Elected reporter agent ID override (from ReporterElection). Falls back to "reporter". */
 		reporterOverride?: string | null;
 	},
-	/** Phase 3B: AgentRuntime instance (optional, defaults to existing code path). */
-	runtime?: any,
+	/** Optional AgentRuntime for v3 agent spawning. */
+	runtime?: AgentRuntime,
 ): Promise<string | null> {
 	const { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride } = opts;
 	const reporterName = reporterOverride ?? "reporter";
@@ -257,8 +250,8 @@ async function runReporterAgent(
 
 		let reportOutput: string | null;
 
-		if (AgentRuntimeClass && runtime) {
-			// Phase 3B: NEW path — use AgentRuntime.spawn()
+		if (runtime) {
+			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
 			const [handle] = await runtime.spawn([{
 				id: reporterName,
 				role: reporterName,
@@ -305,13 +298,8 @@ async function runReporterAgent(
 // ============================================================================
 
 interface ReflectionResult {
-	lessons: import("../curtain/experience").ExperienceLesson[];
-	stats: {
-		totalIterations: number;
-		finalStatus: string;
-		reviewApprovalRatio: number;
-		agentCount: number;
-	};
+	lessons: ExtractedLesson[];
+	stats: LoopRunStats;
 	reflectionSummary: string;
 	deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null;
 }

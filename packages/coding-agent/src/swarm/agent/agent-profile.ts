@@ -13,6 +13,8 @@
  * - AgentState 通过 profileId 引用 AgentProfile
  */
 
+import * as fs from "node:fs/promises";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -502,7 +504,7 @@ export class ProfileRegistry {
 	static async load(workspaceDir: string): Promise<ProfileRegistry> {
 		const registry = new ProfileRegistry();
 		try {
-			const file = Bun.file(`${workspaceDir}/.swarm-workspace/profiles.json`);
+			const file = Bun.file(`${workspaceDir}/profiles.json`);
 			if (await file.exists()) {
 				const data = await file.json();
 				if (Array.isArray(data)) registry.deserialize(data);
@@ -511,11 +513,13 @@ export class ProfileRegistry {
 		return registry;
 	}
 
-	/** Save profiles to workspace disk. */
+	/** Save profiles to workspace disk (atomic: tmp + rename). */
 	async save(workspaceDir: string): Promise<void> {
 		try {
 			const path = `${workspaceDir}/profiles.json`;
-			await Bun.write(path, JSON.stringify(this.serialize(), null, 2));
+			const tmp = `${path}.tmp`;
+			await Bun.write(tmp, JSON.stringify(this.serialize(), null, 2));
+			await fs.rename(tmp, path);
 		} catch (err) {
 			// Best-effort — never crash on persistence failure
 		}

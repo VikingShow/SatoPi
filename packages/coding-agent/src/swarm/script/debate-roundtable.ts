@@ -17,15 +17,8 @@ import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentToolRestriction } from "../core/schema";
-
-// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
-let AgentRuntimeClass: any;
-try {
-  const mod = require("../agent-runtime");
-  AgentRuntimeClass = mod.AgentRuntime;
-} catch {
-  // AgentRuntime not yet available — keep existing code path
-}
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentHandle } from "../agent-runtime/agent-handle";
 
 // ============================================================================
 // Types
@@ -93,8 +86,8 @@ function textSimilarity(a: string, b: string): number {
 export class DebateRoundtable {
 	readonly #config: Required<Omit<DebateRoundtableConfig, "toolRestriction">>;
 	readonly #toolRestriction?: AgentToolRestriction;
-	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
-	#runtime: any = undefined;
+	/** Optional AgentRuntime injected for v3 agent spawning. */
+	#runtime: AgentRuntime | undefined = undefined;
 
 	constructor(config: DebateRoundtableConfig) {
 		this.#config = {
@@ -135,12 +128,12 @@ export class DebateRoundtable {
 		// Spawn agents in parallel for this round
 		let results: SingleResult[];
 
-		if (AgentRuntimeClass && this.#runtime) {
-			// Phase 3B: NEW path — use AgentRuntime.spawn()
+		if (this.#runtime) {
+			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
 			const debatePrompt = this.#debateAgentSystemPrompt();
 			const restrictedTools = this.#toolRestriction?.allowed ?? [];
 
-			const handles = await this.#runtime.spawn(
+			const handles: AgentHandle[] = await this.#runtime.spawn(
 				Array.from({ length: agentCount }, (_, i) => ({
 					id: `debate-agent-${i + 1}`,
 					role: "debater",
@@ -150,15 +143,15 @@ export class DebateRoundtable {
 				})),
 			);
 
-			const outputs = await Promise.all(handles.map((h: any) => h.wait()));
-			results = outputs.map((output: any, i: number) => ({
+			const outputs = await Promise.all(handles.map((h) => h.wait()));
+			results = outputs.map((output: SingleResult, i: number) => ({
 				index: i,
 				id: `plan-debate-r${round}-c${i + 1}`,
 				agent: `debate-agent-${i + 1}`,
 				agentSource: "project" as const,
 				task: roundPrompt,
 				exitCode: 0,
-				output: (output?.output ?? output) ?? "(no output)",
+				output: output?.output ?? "(no output)",
 				stderr: "",
 				truncated: false,
 				durationMs: 0,

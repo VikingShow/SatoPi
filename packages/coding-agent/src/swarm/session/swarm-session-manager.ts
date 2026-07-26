@@ -313,12 +313,12 @@ export class SwarmSessionManager {
 
 	/** Return the session tree structure (entries with parentId → tree). */
 	getTree(): Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }> {
-		return this.#session.getTree() as Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }>;
+		return this.#session.getTree() as unknown as Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }>;
 	}
 
 	/** Return the full branch path from root to leaf. */
 	getBranch(leafId?: string): Array<Record<string, unknown>> {
-		return this.#session.getBranch(leafId) as Array<Record<string, unknown>>;
+		return this.#session.getBranch(leafId) as unknown as Array<Record<string, unknown>>;
 	}
 
 	/** Get the session header including parentSession information. */

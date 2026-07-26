@@ -69,6 +69,7 @@ export class AgentBroadcastTool implements AgentTool<typeof broadcastSchema, Age
 	readonly name = "agent_broadcast";
 	readonly approval = "write" as const;
 	readonly label = "Agent Broadcast";
+	readonly parameters = broadcastSchema;
 	readonly summary = "Broadcast a message to all agents in the swarm";
 	readonly description = [
 		"Broadcast a message to ALL agents in the current swarm.",
@@ -80,7 +81,7 @@ export class AgentBroadcastTool implements AgentTool<typeof broadcastSchema, Age
 		"- `body`: The message text to broadcast.",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ description: "Announce completion of a task phase", params: { body: "Phase backend-complete. All API endpoints implemented and tested." }, result: "Broadcast sent to 4 agents" },
+		{ caption: "Announce completion of a task phase", call: { body: "Phase backend-complete. All API endpoints implemented and tested." } },
 	];
 
 	readonly concurrency = "exclusive" as const;
@@ -134,6 +135,7 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 	readonly approval = "read" as const;
 	readonly label = "Query All Agents";
 	readonly summary = "Ask all agents a question and collect all answers";
+	readonly parameters = queryAllSchema;
 	readonly description = [
 		"Ask ALL agents in the swarm a question and wait for ALL of their answers.",
 		"",
@@ -145,7 +147,7 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 		"- `timeout` (optional): Max wait time in ms (default 30 seconds).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ description: "Ask all agents which file is most critical", params: { question: "Which file in the workspace do you think needs the most refactoring and why?" }, result: "collected 3/3 answers" },
+		{ caption: "Ask all agents which file is most critical", call: { question: "Which file in the workspace do you think needs the most refactoring and why?" } },
 	];
 
 	readonly concurrency = "shared" as const;
@@ -218,6 +220,7 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 	readonly approval = "read" as const;
 	readonly label = "Query Majority";
 	readonly summary = "Ask all agents a question and return the majority answer";
+	readonly parameters = queryMajoritySchema;
 	readonly description = [
 		"Ask ALL agents a question and return the MOST COMMON answer (majority vote).",
 		"",
@@ -229,7 +232,7 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 		"- `timeout` (optional): Max wait time in ms (default 30 seconds).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ description: "Vote on approach", params: { question: "Should we use Approach A (incremental) or Approach B (complete rewrite)? Answer with 'A' or 'B'." }, result: "majority='A' (3/4 votes)" },
+		{ caption: "Vote on approach", call: { question: "Should we use Approach A (incremental) or Approach B (complete rewrite)? Answer with 'A' or 'B'." } },
 	];
 
 	readonly concurrency = "shared" as const;
@@ -307,6 +310,7 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 	readonly approval = "write" as const;
 	readonly label = "Roundtable Discussion";
 	readonly summary = "Conduct a structured multi-round discussion among agents";
+	readonly parameters = roundtableSchema;
 	readonly description = [
 		"Initiate a structured multi-round roundtable discussion among swarm agents.",
 		"",
@@ -319,7 +323,7 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 		"- `rounds` (optional): Number of discussion rounds (default 2, max 5).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ description: "Role negotiation roundtable", params: { topic: "Let's assign roles for this project. Each agent, state which role you believe you are best suited for and why." }, result: "roundtable complete — roles assigned" },
+		{ caption: "Role negotiation roundtable", call: { topic: "Let's assign roles for this project. Each agent, state which role you believe you are best suited for and why." } },
 	];
 
 	readonly concurrency = "exclusive" as const;
@@ -385,12 +389,14 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 // ============================================================================
 
 const peersSchema = type({});
+type PeersParams = typeof peersSchema.infer;
 
 export class AgentPeersTool implements AgentTool<typeof peersSchema, Array<{ id: string; role?: string }>> {
 	readonly name = "agent_peers";
 	readonly approval = "read" as const;
 	readonly label = "List Peers";
 	readonly summary = "List all online peer agents in the swarm";
+	readonly parameters = peersSchema;
 	readonly description = [
 		"List all online peer agents in the current swarm.",
 		"",
@@ -398,13 +404,14 @@ export class AgentPeersTool implements AgentTool<typeof peersSchema, Array<{ id:
 		"Returns an array of { id, role? } for each peer.",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ description: "List peers before deciding who to DM", params: {}, result: "3 peers: agent-1 (worker), agent-2 (worker), agent-3 (reviewer)" },
+		{ caption: "List peers before deciding who to DM", call: {} },
 	];
 
 	readonly concurrency = "shared" as const;
 	readonly loadMode = "essential" as const;
 	readonly lenientArgValidation = false;
 
+	// @ts-expect-error TS2416: parameter variance between AgentTool<typeof peersSchema> and AgentPeersTool.execute
 	async execute(
 		toolCallId: string,
 		_params: Record<string, never>,
@@ -444,10 +451,10 @@ export interface AgentChannelToolsOptions {
  * Register these via Agent.setTools().
  */
 export function createAgentChannelTools(opts: AgentChannelToolsOptions): AgentTool<any, any>[] {
-	const context: AgentToolContext = {
+	const context = {
 		agentChannel: opts.channel,
 		activityLogger: opts.activityLogger,
-	};
+	} as unknown as AgentToolContext;
 
 	// Bind context by wrapping execute
 	function withContext<T>(tool: AgentTool<any, any>): AgentTool<any, any> {

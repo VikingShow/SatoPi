@@ -32,17 +32,11 @@ import type { StateTracker } from "../core/state";
 import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
 import { TaskComplexityAnalyzer } from "../script/task-analyzer";
 import type { ReviewVerdict } from "../core/pipeline";
-import { RoleRoundtable, type RoleCandidate } from "./role-roundtable";
+import type { RoleCandidate } from "./role-roundtable";
 import { CommBus } from "../comm-bus/comm-bus";
-
-// Phase 3B: Try to import AgentRuntime (may not exist yet if Phase 3A is incomplete)
-let AgentRuntimeClass: any;
-try {
-  const mod = require("../agent-runtime");
-  AgentRuntimeClass = mod.AgentRuntime;
-} catch {
-  // AgentRuntime not yet available — keep existing code path
-}
+import type { AgentRuntime } from "../agent-runtime";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { WorkflowFsm } from "../core/workflow-fsm";
 
 // ============================================================================
 // StageCallbacks — feedback interface for Profile credit + Stigmergy marks
@@ -90,6 +84,10 @@ export interface StageOptions {
 	agentCount?: number;
 	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
 	callbacks?: StageCallbacks;
+	/** v3: Unified hook pipeline for lifecycle events. */
+	hookPipeline?: HookPipeline;
+	/** v3: Workflow FSM for authoritative phase transitions. */
+	fsm?: WorkflowFsm;
 }
 
 export interface StageResult {
@@ -111,7 +109,7 @@ export class StageController {
 	#executor: AgentExecutor;
 	#lockMgr = new RegionLockManager();
 	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
-	#runtime: any = undefined;
+	#runtime: AgentRuntime | undefined = undefined;
 	/** @deprecated Replaced by CommBus.groupChannel("role-negotiation", ...) */
 	// #sharedChannel?: AgentChannel;
 
@@ -127,9 +125,15 @@ export class StageController {
 		const { workspace, planContent, loopConfig, stateTracker, activityLogger, signal } = this.#opts;
 		const errors: string[] = [];
 
-		// ── Phase: stage ──
-		await stateTracker.updatePipeline({ phase: "stage", status: "running" });
-		activityLogger.logPhase("stage-start");
+		// ── Phase: stage ─────────────────────────────────────────────────────────
+		// Use WorkflowFsm (single authority) when available; fall back to direct
+		// StateTracker update for callers that haven't wired the FSM yet.
+		if (this.#opts.fsm) {
+			await this.#opts.fsm.transition("stage", { reason: "running" });
+		} else {
+			await stateTracker.updatePipeline({ phase: "stage", status: "running" });
+			activityLogger.logPhase("stage-start");
+		}
 
 		// 1. Analyse complexity → recommendations
 		const analyzer = new TaskComplexityAnalyzer();
@@ -253,8 +257,12 @@ export class StageController {
 
 		// 6. All tasks complete — transition to curtain
 		const progress = queue.progress;
-		await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Execution complete" });
-		activityLogger.logPhase("curtain", undefined, 1);
+		if (this.#opts.fsm) {
+			await this.#opts.fsm.transition("curtain", { reason: "Execution complete" });
+		} else {
+			await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Execution complete" });
+			activityLogger.logPhase("curtain", undefined, 1);
+		}
 
 		const result: StageResult = {
 			status: errors.length > 0 ? "failed" : "completed",
@@ -310,20 +318,8 @@ export class StageController {
 			// Register a shared channel via CommBus for cross-component access
 			const commBus = CommBus.ensureGlobal(ircBus, activityLogger);
 			commBus.groupChannel("role-negotiation", candidates.map(c => c.agentId), activityLogger);
-
-			const roundtable = new RoleRoundtable(ircBus, activityLogger);
-			const negotiated = await roundtable.negotiateRoles({
-				availableRoles,
-				candidates,
-			});
-
-			if (negotiated && negotiated.length > 0) {
-				activityLogger.logBroadcast(
-					"system",
-					`Roundtable role assignments: ${negotiated.map(a => `${a.agentId}=${a.role}`).join(", ")}`,
-				);
-				return negotiated;
-			}
+			// TODO: implement roundtable role negotiation via channel.roundtable() when
+			// response parsing to extract { agentId, role }[] assignments is available.
 		}
 
 		// 6. Fallback: algorithm-based assignment
@@ -410,8 +406,8 @@ export class StageController {
 
 				let result: SingleResult;
 
-				if (AgentRuntimeClass && this.#runtime) {
-					// Phase 3B: NEW path — use AgentRuntime.spawn()
+				if (this.#runtime) {
+					// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
 					const [handle] = await this.#runtime.spawn([{
 						id: agent.id,
 						role: agent.role,
@@ -462,10 +458,22 @@ export class StageController {
 				if (result.exitCode === 0) {
 					queue.complete(task.id);
 					this.#opts.callbacks?.onTaskCompleted(agent.id, task, result);
+					// v3: also fire HookPipeline event for Profile + Stigmergy hooks
+					void this.#opts.hookPipeline?.trigger(
+						"agent:afterComplete",
+						{ agentId: agent.id, taskId: task.id, success: true, result },
+						{ phase: "stage" },
+					);
 					activityLogger.logBroadcast("system", `${agent.id} completed: ${task.title}`);
 				} else {
 					queue.block(task.id, `Agent ${agent.id} failed with exit ${result.exitCode}`);
 					this.#opts.callbacks?.onTaskFailed(agent.id, task, `exit code ${result.exitCode}`);
+					// v3: also fire HookPipeline error event
+					void this.#opts.hookPipeline?.trigger(
+						"agent:onError",
+						{ agentId: agent.id, taskId: task.id, error: `exit code ${result.exitCode}` },
+						{ phase: "stage" },
+					);
 					activityLogger.logBroadcast("system", `${agent.id} failed: ${task.title} (exit ${result.exitCode})`);
 				}
 			} catch (err) {

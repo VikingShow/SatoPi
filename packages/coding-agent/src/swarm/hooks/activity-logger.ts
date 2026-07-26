@@ -37,6 +37,7 @@ export type ActivityEventType =
 	| "stream_start"
 	| "stream_delta"
 	| "stream_end"
+	| "stream_thinking"
 	| "deliberation_challenge"
 	| "deliberation_rebuttal"
 	| "deliberation_ruling"

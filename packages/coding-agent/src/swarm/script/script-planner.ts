@@ -299,14 +299,14 @@ export async function runPlanDebate(
 	}
 
 	const table = new DebateRoundtable({
-		reviewerCount: debateConfig.reviewerCount,
+		agentCount: debateConfig.agentCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
 		toolRestriction: loopConfig.agentRestrictions?.reviewer ?? loopConfig.agentRestrictions?.["*"],
 	});
 
 	logger.info("Starting plan debate", {
-		reviewerCount: debateConfig.reviewerCount,
+		agentCount: debateConfig.agentCount,
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
 	});

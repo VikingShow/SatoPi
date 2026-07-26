@@ -164,6 +164,11 @@ export const PHASES: PhaseDefinition[] = [
   },
   {
     phase: "stage",
+    // Extra inbound edges beyond "script-confirm":
+    //   idle → stage:    /swarm run <file.yaml> non-interactive mode — caller
+    //                    supplies plan.md directly, skipping the Script phase.
+    //   curtain → stage: loop-mode re-run — after a finished curtain, the
+    //                    orchestrator starts a new Stage without resetting to idle.
     allowedFrom: ["script-confirm", "paused", "blocked", "idle", "curtain"],
     allowedTo: ["paused", "blocked", "curtain"],
     capabilities: {
@@ -502,21 +507,20 @@ export class WorkflowFsm {
     // Cancel any previous waiter.
     this.#humanResolve = null;
 
-    return new Promise<T>((resolve, reject) => {
-      this.#humanResolve = resolve as (value: unknown) => void;
+    const { promise, resolve, reject } = Promise.withResolvers<T>();
+    this.#humanResolve = resolve as (value: unknown) => void;
 
-      if (timeoutMs && timeoutMs > 0) {
-        const capturedResolve = this.#humanResolve;
-        setTimeout(() => {
-          if (this.#humanResolve === capturedResolve) {
-            this.#humanResolve = null;
-            reject(
-              new Error(`Human decision timed out after ${timeoutMs}ms`),
-            );
-          }
-        }, timeoutMs);
-      }
-    });
+    if (timeoutMs && timeoutMs > 0) {
+      const capturedResolve = this.#humanResolve;
+      setTimeout(() => {
+        if (this.#humanResolve === capturedResolve) {
+          this.#humanResolve = null;
+          reject(new Error(`Human decision timed out after ${timeoutMs}ms`));
+        }
+      }, timeoutMs);
+    }
+
+    return promise;
   }
 
   // -- Listeners --------------------------------------------------------------

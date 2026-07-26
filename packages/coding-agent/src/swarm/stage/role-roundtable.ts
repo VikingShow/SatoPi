@@ -10,6 +10,12 @@
  *   3. LLM 解析讨论结果 → RoleAssignment[]
  *   4. 失败时 fallback 到算法分配
  *
+ * @deprecated Use {@link CommChannel.roundtable} directly via
+ * `CommBus.groupChannel(name, agentIds).roundtable(topic, config)`.
+ * `StageBehavior` already uses this pattern for role assignment.
+ * This class is retained for callers that have not yet migrated to the v3
+ * PhaseBehavior architecture.
+ *
  * @remarks Roundtable execution now delegates to {@link CommChannel.roundtable}
  * which internally uses the standalone {@link runRoundtable} pure function
  * with Jaccard-based convergence detection.

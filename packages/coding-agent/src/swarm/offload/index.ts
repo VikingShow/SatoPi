@@ -23,7 +23,7 @@ export {
 	OffloadPipeline,
 	type OffloadPipelineConfig,
 } from "./offload-pipeline";
-export { WorkerSummarizer, type SummarizeInput, type SummarizeOutput } from "./worker-summarizer";
+export { AgentSummarizer, type SummarizeInput, type SummarizeOutput } from "./agent-summarizer";
 export {
 	Deduplicator,
 	type DedupEntry,

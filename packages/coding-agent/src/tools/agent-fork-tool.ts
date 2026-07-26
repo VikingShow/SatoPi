@@ -10,7 +10,7 @@ import type { ToolExample } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import { AgentForkManager, type ForkResult } from "../../swarm/agent/agent-fork-manager";
+import { AgentForkManager, type ForkResult } from "../swarm/agent/agent-fork-manager";
 
 // ============================================================================
 // Context extension
@@ -46,6 +46,7 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 	readonly approval = "write" as const;
 	readonly label = "Fork Agent";
 	readonly summary = "Fork yourself into multiple child agents to handle complex tasks in parallel";
+	readonly parameters = forkSchema;
 	readonly description = [
 		"FORK yourself into multiple child agents to handle a complex task in parallel.",
 		"",
@@ -66,13 +67,12 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 	].join("\n");
 	readonly examples: ToolExample[] = [
 		{
-			description: "Fork to handle complex multi-module task",
-			params: {
+			caption: "Fork to handle complex multi-module task",
+			call: {
 				reason: "Need parallel work on backend API, frontend UI, and database schema",
 				count: 3,
 				task: "Implement full-stack feature: REST API + React UI + DB migration",
 			},
-			result: "3 child agents created, working in parallel",
 		},
 	];
 

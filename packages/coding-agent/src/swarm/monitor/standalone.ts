@@ -39,6 +39,9 @@ import {
 import { ProfileRegistry } from "../agent/agent-profile";
 import { MarkEnvironment } from "../coordination/mark-environment";
 import { createStageFeedback } from "../hooks/swarm-hooks";
+import { HookPipeline } from "../hook-system/hook-pipeline";
+import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
+import { registerBuiltinHooks } from "../hook-system/register-builtins";
 
 
 // ============================================================================
@@ -103,6 +106,11 @@ class SwarmRunManager implements RunManager {
 	/** Role asset manager for role-based prompts and tools. */
 	#roleAssetManager: RoleAssetManager;
 
+	/** v3: Workflow FSM (per-session). */
+	#fsm: WorkflowFsm | undefined;
+	/** v3: Hook pipeline (per-session). */
+	#hookPipeline: HookPipeline | undefined;
+
 	constructor(opts: {
 		modelRegistry: ModelRegistry;
 		settings: Settings;
@@ -115,6 +123,8 @@ class SwarmRunManager implements RunManager {
 		profileRegistry: ProfileRegistry;
 		markEnvironment: MarkEnvironment;
 		roleAssetManager: RoleAssetManager;
+		fsm?: WorkflowFsm;
+		hookPipeline?: HookPipeline;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -127,6 +137,8 @@ class SwarmRunManager implements RunManager {
 		this.#profileRegistry = opts.profileRegistry;
 		this.#markEnvironment = opts.markEnvironment;
 		this.#roleAssetManager = opts.roleAssetManager;
+		this.#fsm = opts.fsm;
+		this.#hookPipeline = opts.hookPipeline;
 	}
 
 
@@ -193,6 +205,8 @@ class SwarmRunManager implements RunManager {
 				roleAssetManager: this.#roleAssetManager,
 				callbacks: stageFeedback,
 				agentCount,
+				hookPipeline: this.#hookPipeline,
+				fsm: this.#fsm,
 			});
 
 			stage.run().then(async (result) => {
@@ -250,7 +264,7 @@ class SwarmRunManager implements RunManager {
 			roleAssetManager: this.#roleAssetManager,
 			profileRegistry: this.#profileRegistry,
 		});
-		if (result_) this.#lastAfterLoopResult = result_;
+		if (result_) this.#lastAfterLoopResult = { ...result_, iterations: result_.totalTasks };
 	}
 }
 
@@ -294,6 +308,19 @@ async function createSessionServices(
 
 	const markEnvironment = new MarkEnvironment();
 
+	// ── v3: WorkflowFsm + HookPipeline (one instance per session) ────────────
+	const fsm = new WorkflowFsm(stateTracker, activityLogger);
+	for (const def of PHASES) fsm.registerPhase(def);
+
+	const hookPipeline = new HookPipeline();
+	const registeredHooks = registerBuiltinHooks(hookPipeline, {
+		profileRegistry: shared.profileRegistry,
+		markEnvironment,
+		experienceStore: shared.experienceStore,
+	});
+	logger.info("[Session] HookPipeline initialized", { hooks: registeredHooks, session: name });
+	// ─────────────────────────────────────────────────────────────────────────
+
 	const runManager = new SwarmRunManager({
 		modelRegistry: shared.modelRegistry,
 		settings: shared.settings,
@@ -305,6 +332,8 @@ async function createSessionServices(
 		profileRegistry: shared.profileRegistry,
 		markEnvironment,
 		roleAssetManager: shared.roleAssetManager,
+		fsm,
+		hookPipeline,
 	});
 
 	const scriptManager = new ScriptManager({

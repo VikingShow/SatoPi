@@ -231,7 +231,6 @@ export function createOffloadAgentHooks(
 function toOffloadJsonlEntry(entry: AgentOffloadEntry) {
 	return {
 		timestamp: entry.timestamp,
-		agent_type: "worker" as const,
 		agent_id: entry.agentId,
 		iteration: entry.turnIndex,
 		phase_id: entry.phaseHint,

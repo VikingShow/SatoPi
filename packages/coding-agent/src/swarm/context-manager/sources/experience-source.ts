@@ -44,6 +44,7 @@ export class ExperienceSource implements ContextSource {
 
       const injectedMessage = {
         role: "user" as const,
+        timestamp: Date.now(),
         content: [
           "<past_experience>",
           `The following ${results.length} relevant lessons were recalled from past runs for task: "${base.taskDescription}"`,

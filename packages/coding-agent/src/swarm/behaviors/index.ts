@@ -108,6 +108,9 @@ export interface PhaseCompletion {
   /** Whether the human needs to applaud before transitioning. */
   needApplaud?: boolean;
 
+  /** Whether the orchestrator should confirm before re-planning (re-plan gate). */
+  needConfirmRetry?: boolean;
+
   /** Optional status message for the UI / activity log. */
   message?: string;
 }
