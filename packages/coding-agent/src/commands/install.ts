@@ -1,10 +1,10 @@
 /**
- * `omp install <target>` — top-level convenience over `omp plugin install` /
- * `omp plugin link`.
+ * `stp install <target>` — top-level convenience over `stp plugin install` /
+ * `stp plugin link`.
  *
  * The docs (omp.sh/docs/extension-authoring) advertise
  *
- *   omp install ./my-extension
+ *   stp install ./my-extension
  *
  * as a third loading mechanism that "symlinks the directory into the plugin
  * set and watches it for changes". Before this command existed, `install` was
@@ -25,7 +25,7 @@ import { type PluginAction, type PluginCommandArgs, runPluginCommand } from "../
 import { initTheme } from "../modes/theme/theme";
 
 /**
- * Heuristic used to decide whether `omp install <target>` should `link` a
+ * Heuristic used to decide whether `stp install <target>` should `link` a
  * local directory or `install` a remote spec. Exported for tests.
  */
 export function looksLikeLocalPath(target: string, cwd?: string): boolean {
@@ -66,7 +66,7 @@ export default class Install extends Command {
 		const targets = Array.isArray(args.targets) ? args.targets : args.targets ? [args.targets] : [];
 
 		if (targets.length === 0) {
-			process.stderr.write("Usage: omp install <path | npm-spec | name@marketplace> [...]\n");
+			process.stderr.write("Usage: stp install <path | npm-spec | name@marketplace> [...]\n");
 			process.exit(1);
 		}
 

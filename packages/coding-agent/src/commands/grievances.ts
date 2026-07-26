@@ -9,7 +9,7 @@ export default class Grievances extends Command {
 
 	static args = {
 		// Positional action: "list" (default), "clean", or "push". A positional
-		// arg keeps the historical `omp grievances` invocation working unchanged
+		// arg keeps the historical `stp grievances` invocation working unchanged
 		// while reusing the same command surface for the clean/push verbs.
 		action: Args.string({
 			description: "list (default), clean, or push",
@@ -28,12 +28,12 @@ export default class Grievances extends Command {
 	};
 
 	static examples = [
-		"omp grievances",
-		"omp grievances list --tool find",
-		"omp grievances clean --id 209",
-		"omp grievances clean --tool find",
-		"omp grievances clean --all",
-		"omp grievances push",
+		"stp grievances",
+		"stp grievances list --tool find",
+		"stp grievances clean --id 209",
+		"stp grievances clean --tool find",
+		"stp grievances clean --all",
+		"stp grievances push",
 	];
 
 	async run(): Promise<void> {

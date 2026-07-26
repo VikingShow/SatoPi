@@ -28,7 +28,7 @@ describe("disabledExtensions runtime filtering", () => {
 	beforeEach(async () => {
 		resetSettingsForTest();
 		originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
-		originalOmpProfileEnv = process.env.OMP_PROFILE;
+		originalStpProfileEnv = process.env.STP_PROFILE;
 		originalPiProfileEnv = process.env.PI_PROFILE;
 		originalHome = process.env.HOME;
 		tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-ext-home-"));
@@ -53,7 +53,7 @@ describe("disabledExtensions runtime filtering", () => {
 		resetSettingsForTest();
 		vi.restoreAllMocks();
 		restoreEnvValue("HOME", originalHome);
-		restoreEnvValue("OMP_PROFILE", originalOmpProfileEnv);
+		restoreEnvValue("STP_PROFILE", originalStpProfileEnv);
 		restoreEnvValue("PI_PROFILE", originalPiProfileEnv);
 		restoreEnvValue("PI_CODING_AGENT_DIR", originalAgentDirEnv);
 		__resetDirsFromEnvForTests();

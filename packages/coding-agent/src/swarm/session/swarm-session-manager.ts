@@ -17,7 +17,7 @@
  * Each SwarmSessionManager creates a SessionManager with FileSessionStorage.
  * The session file lives at:
  *
- *   .swarm_{name}/.omp/session.jsonl
+ *   .swarm_{name}/.stp/session.jsonl
  *
  * This is the SINGLE source of truth for all session activity — replacing:
  *   - pipeline.json       (StateTracker)
@@ -70,7 +70,7 @@ export const CTX = {
 export class SwarmSessionManager {
 	#session: SessionManager;
 	readonly #swarmDir: string;
-	/** Session data dir: .swarm_{name}/.omp/sessions/ */
+	/** Session data dir: .swarm_{name}/.stp/sessions/ */
 	readonly #sessionDir: string;
 
 	private constructor(session: SessionManager, swarmDir: string, sessionDir: string) {

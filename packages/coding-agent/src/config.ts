@@ -77,8 +77,8 @@ export function getChangelogPath(): string | undefined {
 
 /**
  * Config directory bases in priority order (highest first).
- * User-level: ~/.omp/agent, ~/.claude, ~/.codex, ~/.gemini
- * Project-level: .omp, .claude, .codex, .gemini
+ * User-level: ~/.stp/agent, ~/.claude, ~/.codex, ~/.gemini
+ * Project-level: .stp, .claude, .codex, .gemini
  */
 const USER_CONFIG_BASES = priorityList.map(({ dir, globalAgentDir }) => ({
 	base: () => path.join(os.homedir(), globalAgentDir ? globalAgentDir() : dir),
@@ -92,14 +92,13 @@ const PROJECT_CONFIG_BASES = priorityList.map(({ dir }) => ({
 
 export interface ConfigDirEntry {
 	path: string;
-	source: string; // e.g., ".omp", ".claude"
-	level: "user" | "project";
+	source: string; // e.g., ".stp", ".claude"
 }
 
 export interface GetConfigDirsOptions {
-	/** Include user-level directories (~/.omp/agent/...). Default: true */
+	/** Include user-level directories (~/.stp/agent/...). Default: true */
 	user?: boolean;
-	/** Include project-level directories (.omp/...). Default: true */
+	/** Include project-level directories (.stp/...). Default: true */
 	project?: boolean;
 	/** Current working directory for project paths. Default: getProjectDir() */
 	cwd?: string;
@@ -117,7 +116,7 @@ export interface GetConfigDirsOptions {
  * @example
  * // Get all command directories
  * getConfigDirs("commands")
- * // → [{ path: "~/.omp/agent/commands", source: ".omp", level: "user" }, ...]
+ * // → [{ path: "~/.stp/agent/commands", source: ".stp", level: "user" }, ...]
  *
  * @example
  * // Get only existing project skill directories

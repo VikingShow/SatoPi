@@ -97,7 +97,7 @@ describe("WorkerCore", () => {
 
 		const gate = Promise.withResolvers<void>();
 		const entered = Promise.withResolvers<void>();
-		(globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__omp_worker_core_gate = {
+		(globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__stp_worker_core_gate = {
 			entered: () => entered.resolve(),
 			wait: gate.promise,
 		};
@@ -105,7 +105,7 @@ describe("WorkerCore", () => {
 			first.send({
 				type: "run",
 				runId: "hold-first-runtime",
-				code: "globalThis.__omp_worker_core_gate.entered(); await globalThis.__omp_worker_core_gate.wait;",
+				code: "globalThis.__stp_worker_core_gate.entered(); await globalThis.__stp_worker_core_gate.wait;",
 				filename: "[same-realm-first].js",
 				snapshot: { cwd, sessionId: "same-realm-first", localRoots: {} },
 			});
@@ -131,8 +131,8 @@ describe("WorkerCore", () => {
 			});
 		} finally {
 			gate.resolve();
-			delete (globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
-				.__omp_worker_core_gate;
+			delete (globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
+				.__stp_worker_core_gate;
 			first.send({ type: "close" });
 			second.send({ type: "close" });
 		}
@@ -147,7 +147,7 @@ describe("WorkerCore", () => {
 
 		const gate = Promise.withResolvers<void>();
 		const entered = Promise.withResolvers<void>();
-		(globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__omp_worker_core_gate = {
+		(globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__stp_worker_core_gate = {
 			entered: () => entered.resolve(),
 			wait: gate.promise,
 		};
@@ -157,7 +157,7 @@ describe("WorkerCore", () => {
 			first.send({
 				type: "run",
 				runId: "hold-for-reinit",
-				code: "globalThis.__omp_worker_core_gate.entered(); await globalThis.__omp_worker_core_gate.wait;",
+				code: "globalThis.__stp_worker_core_gate.entered(); await globalThis.__stp_worker_core_gate.wait;",
 				filename: "[reinit-first].js",
 				snapshot: { cwd, sessionId: "reinit-first", localRoots: {} },
 			});
@@ -196,8 +196,8 @@ describe("WorkerCore", () => {
 		} finally {
 			uninstall();
 			gate.resolve();
-			delete (globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
-				.__omp_worker_core_gate;
+			delete (globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
+				.__stp_worker_core_gate;
 			first.send({ type: "close" });
 			second.send({ type: "close" });
 		}
@@ -214,7 +214,7 @@ describe("WorkerCore", () => {
 
 		const gate = Promise.withResolvers<void>();
 		const entered = Promise.withResolvers<void>();
-		(globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__omp_worker_core_gate = {
+		(globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__stp_worker_core_gate = {
 			entered: () => entered.resolve(),
 			wait: gate.promise,
 		};
@@ -224,7 +224,7 @@ describe("WorkerCore", () => {
 			first.send({
 				type: "run",
 				runId: "hold-for-multi-init",
-				code: "globalThis.__omp_worker_core_gate.entered(); await globalThis.__omp_worker_core_gate.wait;",
+				code: "globalThis.__stp_worker_core_gate.entered(); await globalThis.__stp_worker_core_gate.wait;",
 				filename: "[init-live-first].js",
 				snapshot: { cwd, sessionId: "init-live-first", localRoots: {} },
 			});
@@ -283,8 +283,8 @@ describe("WorkerCore", () => {
 		} finally {
 			uninstall();
 			gate.resolve();
-			delete (globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
-				.__omp_worker_core_gate;
+			delete (globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
+				.__stp_worker_core_gate;
 			first.send({ type: "close" });
 			second.send({ type: "close" });
 			third.send({ type: "close" });
@@ -299,7 +299,7 @@ describe("WorkerCore", () => {
 
 		const gate = Promise.withResolvers<void>();
 		const entered = Promise.withResolvers<void>();
-		(globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__omp_worker_core_gate = {
+		(globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } }).__stp_worker_core_gate = {
 			entered: () => entered.resolve(),
 			wait: gate.promise,
 		};
@@ -317,7 +317,7 @@ describe("WorkerCore", () => {
 			first.send({
 				type: "run",
 				runId: "hold-for-first-init",
-				code: "globalThis.__omp_worker_core_gate.entered(); await globalThis.__omp_worker_core_gate.wait; __omp_session__.sessionId;",
+				code: "globalThis.__stp_worker_core_gate.entered(); await globalThis.__stp_worker_core_gate.wait; __omp_session__.sessionId;",
 				filename: "[first-init-live-first].js",
 				snapshot: { cwd, sessionId: "first-init-live-first", localRoots: {} },
 			});
@@ -351,8 +351,8 @@ describe("WorkerCore", () => {
 		} finally {
 			uninstall();
 			gate.resolve();
-			delete (globalThis as { __omp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
-				.__omp_worker_core_gate;
+			delete (globalThis as { __stp_worker_core_gate?: { entered(): void; wait: Promise<void> } })
+				.__stp_worker_core_gate;
 			first.send({ type: "close" });
 			second.send({ type: "close" });
 		}

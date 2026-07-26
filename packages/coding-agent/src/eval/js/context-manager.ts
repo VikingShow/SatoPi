@@ -149,7 +149,7 @@ export async function disposeAllVmContexts(): Promise<void> {
  * fallback). Catches the silent worker-load and init-message-drop regressions
  * that otherwise strand every cell on the init timeout in a distribution build —
  * the failure mode that motivated `installWorkerInbox`. Wired into
- * `omp --smoke-test` so binary / source / tarball installs all exercise it.
+ * `stp --smoke-test` so binary / source / tarball installs all exercise it.
  */
 export async function smokeTestJsEvalWorker(): Promise<void> {
 	const worker = spawnJsWorker();
@@ -483,7 +483,7 @@ function spawnJsWorker(): WorkerHandle {
 	try {
 		const hostEntry = workerHostEntry();
 		const worker = hostEntry
-			? new Worker(hostEntry, { type: "module", argv: ["__omp_worker_js_eval"] })
+			? new Worker(hostEntry, { type: "module", argv: ["__stp_worker_js_eval"] })
 			: new Worker(new URL("./worker-entry.ts", import.meta.url).href, { type: "module" });
 		return wrapBunWorker(worker);
 	} catch (err) {

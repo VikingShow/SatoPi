@@ -198,8 +198,8 @@ describe("auth-broker import (broker-routed)", () => {
 	const savedEnv: Record<string, string | undefined> = {};
 
 	beforeEach(async () => {
-		savedEnv.OMP_AUTH_BROKER_URL = process.env.OMP_AUTH_BROKER_URL;
-		savedEnv.OMP_AUTH_BROKER_TOKEN = process.env.OMP_AUTH_BROKER_TOKEN;
+		savedEnv.STP_AUTH_BROKER_URL = process.env.STP_AUTH_BROKER_URL;
+		savedEnv.STP_AUTH_BROKER_TOKEN = process.env.STP_AUTH_BROKER_TOKEN;
 		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-client-"));
 		brokerAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-broker-"));
 		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-cliproxy-broker-"));
@@ -214,8 +214,8 @@ describe("auth-broker import (broker-routed)", () => {
 			bearerTokens: [token],
 			disableRefresher: true,
 		});
-		process.env.OMP_AUTH_BROKER_URL = handle.url;
-		process.env.OMP_AUTH_BROKER_TOKEN = token;
+		process.env.STP_AUTH_BROKER_URL = handle.url;
+		process.env.STP_AUTH_BROKER_TOKEN = token;
 	});
 
 	afterEach(async () => {
@@ -225,7 +225,7 @@ describe("auth-broker import (broker-routed)", () => {
 		await removeWithRetries(agentDir);
 		await removeWithRetries(brokerAgentDir);
 		await removeWithRetries(cliproxyDir);
-		for (const key of ["OMP_AUTH_BROKER_URL", "OMP_AUTH_BROKER_TOKEN"] as const) {
+		for (const key of ["STP_AUTH_BROKER_URL", "STP_AUTH_BROKER_TOKEN"] as const) {
 			if (savedEnv[key] === undefined) delete process.env[key];
 			else process.env[key] = savedEnv[key];
 		}

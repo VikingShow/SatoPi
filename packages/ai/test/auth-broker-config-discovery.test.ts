@@ -7,8 +7,8 @@ import { removeWithRetries } from "../../utils/src/temp";
 import { withEnv } from "./helpers";
 
 const SUPPRESS_AUTH_BROKER_ENV = {
-	OMP_AUTH_BROKER_URL: undefined,
-	OMP_AUTH_BROKER_TOKEN: undefined,
+	STP_AUTH_BROKER_URL: undefined,
+	STP_AUTH_BROKER_TOKEN: undefined,
 } as const;
 
 describe("resolveAuthBrokerConfig config discovery", () => {

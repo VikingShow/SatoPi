@@ -2,8 +2,8 @@
  * Agent discovery from filesystem.
  *
  * Discovers agent definitions from OMP-native task-agent roots:
- *   - ~/.omp/agent/agents/*.md (user-level)
- *   - .omp/agents/*.md (project-level)
+ *   - ~/.stp/agent/agents/*.md (user-level)
+ *   - .stp/agents/*.md (project-level)
  *   - <ext>/agents/*.md for every OMP extension package wired through
  *     `listOmpExtensionRoots` (CLI `--extension` roots, `extensions:` in
  *     settings, and enabled npm/link plugins under `<plugins>/node_modules/`).
@@ -60,7 +60,7 @@ async function loadAgentsFromDir(dir: string, source: AgentSource): Promise<Agen
 
 /**
  * Discover agents from filesystem and merge with bundled agents.
- * Precedence (highest wins): project `.omp/agents`, user `.omp/agents`,
+ * Precedence (highest wins): project `.stp/agents`, user `.stp/agents`,
  * OMP extension-package agents in `listOmpExtensionRoots` source order
  * (CLI roots > project `extensions:` settings > user `extensions:` settings >
  * installed npm/link plugins), Claude marketplace plugin agents (project

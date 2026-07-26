@@ -2,10 +2,10 @@
  * ExperienceStore — Persistent loop experience storage.
  *
  * Layers:
- *   1. .omp/experience/lessons.jsonl   — append-only raw lessons
- *   2. .omp/experience/index.sqlite    — full-text search index (FTS5)
- *   3. .omp/experience/summaries/*.md  — human-readable summaries
- *   4. .omp/experience/principles.jsonl — aggregated wisdom principles
+ *   1. .stp/experience/lessons.jsonl   — append-only raw lessons
+ *   2. .stp/experience/index.sqlite    — full-text search index (FTS5)
+ *   3. .stp/experience/summaries/*.md  — human-readable summaries
+ *   4. .stp/experience/principles.jsonl — aggregated wisdom principles
  *
  * Design goals:
  *   - Efficient retrieval: sqlite FTS for keyword/concept search

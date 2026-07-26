@@ -72,10 +72,10 @@ export function normalizeProfileName(profile: string | undefined): string | unde
 }
 
 /**
- * Resolve the active profile from the two profile env vars. `OMP_PROFILE` is the
+ * Resolve the active profile from the two profile env vars. `STP_PROFILE` is the
  * canonical variable and takes precedence; `PI_PROFILE` is the legacy
- * compatibility fallback, consulted only when `OMP_PROFILE` is undefined. An
- * explicitly-empty `OMP_PROFILE` therefore selects the default profile rather
+ * compatibility fallback, consulted only when `STP_PROFILE` is undefined. An
+ * explicitly-empty `STP_PROFILE` therefore selects the default profile rather
  * than silently inheriting `PI_PROFILE`. Delegates validation/normalization to
  * {@link normalizeProfileName} (which throws on a syntactically invalid value).
  */
@@ -84,16 +84,16 @@ export function resolveProfileEnv(omp: string | undefined, pi: string | undefine
 }
 
 function getProfileFromEnv(): string | undefined {
-	return resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE);
+	return resolveProfileEnv(process.env.STP_PROFILE, process.env.PI_PROFILE);
 }
 
 /**
  * Module-load profile resolution. Unlike {@link getProfileFromEnv}, an invalid
- * OMP_PROFILE/PI_PROFILE value does NOT throw here — a bad env var must not
+ * STP_PROFILE/PI_PROFILE value does NOT throw here — a bad env var must not
  * crash a bare `import` of this module with an uncaught stack trace before the
  * CLI's error handling is in scope. The default profile is used instead; the
  * CLI re-validates the env (see `runCli` in coding-agent/src/cli.ts) so the
- * user still gets a clean "Invalid OMP profile" message.
+ * user still gets a clean "Invalid STP profile" message.
  */
 function readProfileFromEnvSafe(): string | undefined {
 	try {
@@ -328,9 +328,9 @@ class DirResolver {
  * (propagated by a parent's `setProfile`), so it must NOT be snapshotted as the
  * default-mode baseline — otherwise default mode would resolve to the profile's
  * agent dir. The profile source can be the active profile or a lower-priority
- * `PI_PROFILE` that was bypassed because `OMP_PROFILE` explicitly selected the
+ * `PI_PROFILE` that was bypassed because `STP_PROFILE` explicitly selected the
  * default profile. Returns `undefined` in those cases so reset falls back to the
- * standard `~/.omp/agent`.
+ * standard `~/.stp/agent`.
  */
 function resolvePreProfileAgentDir(
 	profile: string | undefined,
@@ -464,7 +464,7 @@ export function setProfile(profile: string | undefined): void {
 	activeProfile = next;
 	if (activeProfile) {
 		dirs = new DirResolver({ profile: activeProfile });
-		process.env.OMP_PROFILE = activeProfile;
+		process.env.STP_PROFILE = activeProfile;
 		process.env.PI_PROFILE = activeProfile;
 		process.env.PI_CODING_AGENT_DIR = dirs.agentDir;
 	} else {
@@ -672,11 +672,11 @@ export function getGithubCacheDbPath(): string {
 
 /**
  * Get the encrypted auth-broker snapshot cache path (~/.omp/cache/auth-broker-snapshot.enc).
- * Honors the `OMP_AUTH_BROKER_SNAPSHOT_CACHE` env var when set so tests and
+ * Honors the `STP_AUTH_BROKER_SNAPSHOT_CACHE` env var when set so tests and
  * operators can isolate or relocate the cache file.
  */
 export function getAuthBrokerSnapshotCachePath(): string {
-	const override = process.env.OMP_AUTH_BROKER_SNAPSHOT_CACHE;
+	const override = process.env.STP_AUTH_BROKER_SNAPSHOT_CACHE;
 	if (override) return override;
 	return dirs.rootSubdir(path.join("cache", "auth-broker-snapshot.enc"), "cache");
 }

@@ -1,12 +1,12 @@
 /**
  * Plan-paths — canonical plan.md path utilities.
  *
- * plan.md is per-session: {swarmDir}/.omp/plan.md
- * Plan archives are workspace-scoped: {workspace}/.omp/plans/plan-*.md
+ * plan.md is per-session: {swarmDir}/.stp/plan.md
+ * Plan archives are workspace-scoped: {workspace}/.stp/plans/plan-*.md
  *
  * This module is the SINGLE source of truth for plan.md location.
  * Every plan.md consumer MUST use these functions — never hardcode a
- * path.join(…, ".omp", "plan.md") anywhere else.
+ * path.join(…, ".stp", "plan.md") anywhere else.
  */
 
 import * as path from "node:path";
@@ -19,14 +19,14 @@ import * as path from "node:path";
  * durable across sessions, it belongs in the session directory, not at
  * the workspace root.
  *
- * Path: .swarm_{name}/.omp/plan.md
+ * Path: .swarm_{name}/.stp/plan.md
  */
 export function getSessionPlanPath(swarmDir: string): string {
 	return path.join(swarmDir, ".omp", "plan.md");
 }
 
 /**
- * Per-session .omp directory (contains plan.md and session.jsonl).
+ * Per-session .stp directory (contains plan.md and session.jsonl).
  * Created lazily on first write.
  */
 export function getSessionOmpDir(swarmDir: string): string {
@@ -38,7 +38,7 @@ export function getSessionOmpDir(swarmDir: string): string {
  * Historical plans persist here so the Planner can reference them in the
  * Before Loop prompt across sessions.
  *
- * Path: {workspace}/.omp/plans/
+ * Path: {workspace}/.stp/plans/
  */
 export function getPlanArchiveDir(workspace: string): string {
 	return path.join(workspace, ".omp", "plans");

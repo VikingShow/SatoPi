@@ -174,7 +174,7 @@ class SwarmRunManager implements RunManager {
 			await this.#stateTracker.updatePipeline({ phase: "stage", status: "running" });
 			this.#activityLogger.logPhase("loop-start");
 
-			// Read & stamp plan.md — per-session: {swarmDir}/.omp/plan.md
+			// Read & stamp plan.md — per-session: {swarmDir}/.stp/plan.md
 			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);
 			let planContent: string | undefined;
 			try {

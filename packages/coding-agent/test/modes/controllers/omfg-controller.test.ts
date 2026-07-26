@@ -11,8 +11,8 @@ import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/typ
 import { Container, type TUI } from "@oh-my-pi/pi-tui";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
 
-const PROJECT_OPTION = "This project (.omp/rules)";
-const GLOBAL_OPTION = "Global — all projects (~/.omp/agent/rules)";
+const PROJECT_OPTION = "This project (.stp/rules)";
+const GLOBAL_OPTION = "Global — all projects (~/.stp/agent/rules)";
 const AMEND_OPTION = "Amend with feedback…";
 
 const usage: Usage = {

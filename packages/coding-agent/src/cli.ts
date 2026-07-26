@@ -104,13 +104,13 @@ async function runSmokeTest(): Promise<void> {
 	process.stdout.write("smoke-test: ok\n");
 }
 
-const TINY_WORKER_ARG = "__omp_worker_tiny_inference";
-const STATS_SYNC_WORKER_ARG = "__omp_worker_stats_sync";
-const TAB_WORKER_ARG = "__omp_worker_tab";
-const JS_EVAL_WORKER_ARG = "__omp_worker_js_eval";
-const STT_WORKER_ARG = "__omp_worker_stt";
-const TTS_WORKER_ARG = "__omp_worker_tts";
-const MNEMOPI_EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
+const TINY_WORKER_ARG = "__stp_worker_tiny_inference";
+const STATS_SYNC_WORKER_ARG = "__stp_worker_stats_sync";
+const TAB_WORKER_ARG = "__stp_worker_tab";
+const JS_EVAL_WORKER_ARG = "__stp_worker_js_eval";
+const STT_WORKER_ARG = "__stp_worker_stt";
+const TTS_WORKER_ARG = "__stp_worker_tts";
+const MNEMOPI_EMBED_WORKER_ARG = "__stp_worker_mnemopi_embed";
 
 async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === TINY_WORKER_ARG) {
@@ -276,20 +276,20 @@ export async function runCli(argv: string[]): Promise<void> {
 		if (extracted.profile !== undefined) {
 			setProfile(extracted.profile);
 		} else {
-			// No explicit --profile: activate any OMP_PROFILE/PI_PROFILE inherited
+			// No explicit --profile: activate any STP_PROFILE/PI_PROFILE inherited
 			// from the environment. Module-load resolution deliberately swallows an
 			// invalid value to avoid an uncaught throw before this try/catch is in
 			// scope (see `readProfileFromEnvSafe` in dirs.ts), and callers may set
-			// OMP_PROFILE after importing this module (profile aliases/tests). Surfacing
-			// validation here turns `OMP_PROFILE=.. omp --version` into a clean error;
+			// STP_PROFILE after importing this module (profile aliases/tests). Surfacing
+			// validation here turns `STP_PROFILE=.. omp --version` into a clean error;
 			// calling setProfile keeps every later path helper on the env-selected
 			// profile instead of the default agent directory.
-			setProfile(resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE));
+			setProfile(resolveProfileEnv(process.env.STP_PROFILE, process.env.PI_PROFILE));
 		}
 		if (extracted.aliasName !== undefined) {
 			const profile = extracted.profile ?? getActiveProfile();
 			if (!profile) {
-				throw new Error("--alias requires --profile <name> or OMP_PROFILE");
+				throw new Error("--alias requires --profile <name> or STP_PROFILE");
 			}
 			const result = await installProfileAlias({
 				profile,
@@ -315,7 +315,7 @@ export async function runCli(argv: string[]): Promise<void> {
 	// synchronous prefix of `runWorkerEntrypoint`, and Bun flushes the
 	// worker's parked initial messages as soon as the entry module's
 	// top-level evaluation finishes.
-	if (resolvedArgv[0]?.startsWith("__omp_worker_")) {
+	if (resolvedArgv[0]?.startsWith("__stp_worker_")) {
 		await runWorkerEntrypoint(resolvedArgv[0]);
 		return;
 	}
@@ -325,7 +325,7 @@ export async function runCli(argv: string[]): Promise<void> {
 	// `@oh-my-pi/pi-utils/env` here would snapshot the wrong agent `.env`.
 	// Gated on `isProcessEntry`: only the real CLI process entry is a valid
 	// worker host. Worker-thread re-entry already returned above at the
-	// `__omp_worker_` dispatch, and importers (`runCli` in profile-CLI tests,
+	// `__stp_worker_` dispatch, and importers (`runCli` in profile-CLI tests,
 	// SDK embedding) have `import.meta.main === false` — declaring there would
 	// poison `workerHostEntry()` for the whole test process, forcing eval/stats/
 	// browser workers onto the same-realm inline fallback.

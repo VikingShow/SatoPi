@@ -290,7 +290,7 @@ describe("advisor watchdog prompt discovery", () => {
 			expect(dump).toContain(nativeWatchdogContent);
 			expect(dump).toContain(standaloneWatchdogContent);
 
-			// Check ordering: user-level should appear first, then native project level (.omp/WATCHDOG.md has depth 0),
+			// Check ordering: user-level should appear first, then native project level (.stp/WATCHDOG.md has depth 0),
 			// then standalone project level (cwd/WATCHDOG.md has depth 0).
 			// Between native and standalone, they both have depth 0, so their relative order doesn't strictly matter
 			// as long as user-level comes before both of them.

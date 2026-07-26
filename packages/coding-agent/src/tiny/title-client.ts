@@ -64,14 +64,14 @@ function normalizeTinyTitleGenerateOptions(
  * Hidden subcommand on the main CLI that boots the tiny-model worker in the
  * spawned subprocess. Kept in sync with the dispatch in `cli.ts`.
  */
-export const TINY_WORKER_ARG = "__omp_worker_tiny_inference";
+export const TINY_WORKER_ARG = "__stp_worker_tiny_inference";
 
 function readTinyModelSetting(path: "providers.tinyModelDevice" | "providers.tinyModelDtype"): string | undefined {
 	try {
 		const value = settings.get(path);
 		return typeof value === "string" ? value : undefined;
 	} catch {
-		// Settings may be uninitialized (e.g. `omp --smoke-test`); fall back to env/default.
+		// Settings may be uninitialized (e.g. `stp --smoke-test`); fall back to env/default.
 		return undefined;
 	}
 }

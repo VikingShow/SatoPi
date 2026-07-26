@@ -13,8 +13,8 @@
  *   注入 agent 对话流中。Human 回复后，Planner 自然引导至 plan.md 产出。
  *   当 plan.md 就绪 → runPlanDebate() → human 确认 → handler 执行实际循环。
  *
- * plan.md is per-session: {swarmDir}/.omp/plan.md
- * Archives are workspace-scoped: {workspace}/.omp/plans/
+ * plan.md is per-session: {swarmDir}/.stp/plan.md
+ * Archives are workspace-scoped: {workspace}/.stp/plans/
  */
 
 import * as fs from "node:fs/promises";
@@ -59,7 +59,7 @@ export interface ScriptResult {
  * Planner engages the human in a Socratic dialogue to clarify goals,
  * constraints, and acceptance criteria, then produces plan.md.
  *
- * plan.md path (per-session): {swarmDir}/.omp/plan.md
+ * plan.md path (per-session): {swarmDir}/.stp/plan.md
  *
  * @param experienceStore Optional store to query past loop experience.
  */
@@ -110,7 +110,7 @@ export async function generatePlanningPrompt(
 		"",
 		"- One turn = ask about one aspect, OR confirm a decision and write it to plan.md",
 		"- Write incrementally — append confirmed decisions, never rewrite the whole file",
-		"- Past plans are archived at `.omp/plans/`. Review for iteration history",
+		"- Past plans are archived at `.stp/plans/`. Review for iteration history",
 		"- Agents need clear acceptance criteria, constraints, and scope boundaries",
 			"## When Ready",
 			"",
@@ -197,7 +197,7 @@ export async function stampAndArchivePlanMd(swarmDir: string, workspace: string)
 }
 
 /**
- * Archive the current plan.md to .omp/plans/ for historical reference.
+ * Archive the current plan.md to .stp/plans/ for historical reference.
  *
  * Called at the END of a loop run, this saves the plan that was just
  * executed. The stamp comment is stripped so archived plans contain
@@ -206,7 +206,7 @@ export async function stampAndArchivePlanMd(swarmDir: string, workspace: string)
  * This MUST be called before the next Cloner run overwrites plan.md.
  *
  * @param swarmDir — per-session swarm directory (where plan.md lives)
- * @param workspace — workspace root (where .omp/plans/ lives)
+ * @param workspace — workspace root (where .stp/plans/ lives)
  */
 export async function archivePlanForHistory(swarmDir: string, workspace: string): Promise<void> {
 	const planPath = getSessionPlanPath(swarmDir);
@@ -237,7 +237,7 @@ export async function archivePlanForHistory(swarmDir: string, workspace: string)
  * List archived plans in reverse chronological order (newest first).
  * Returns absolute paths to each archived plan file.
  *
- * Archives are workspace-scoped (e.g. .omp/plans/) — they survive
+ * Archives are workspace-scoped (e.g. .stp/plans/) — they survive
  * across sessions so Planner can reference past plans.
  */
 export async function listArchivedPlans(workspace: string): Promise<string[]> {

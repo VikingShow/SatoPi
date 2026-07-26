@@ -214,7 +214,7 @@ export const apiRoutes: Record<string, RouteHandler> = {
 			return json({ tree });
 		},
 
-	// -- Plan (plan.md) — per-session: {swarmDir}/.omp/plan.md -----------
+	// -- Plan (plan.md) — per-session: {swarmDir}/.stp/plan.md -----------
 	"GET/plan": async (_req, ctx) => {
 		const planPath = path.join(ctx.paths.swarmDir, ".omp", "plan.md");
 		try {

@@ -521,7 +521,7 @@ export async function discoverExtensionPaths(
 		}
 	};
 
-	// 1. Discover extension modules via capability API (native .omp/.pi only).
+	// 1. Discover extension modules via capability API (native .stp/.pi only).
 	// Scope the load to the native provider — the extension-module capability
 	// also has claude/codex/gemini/opencode providers, and their items were
 	// discarded here anyway (see #4198). The provider filter skips the walk

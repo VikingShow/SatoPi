@@ -3,7 +3,7 @@
  *
  * Each agent writes its offload entries to a dedicated JSONL file:
  *
- *   {swarmDir}/.omp/offload/{agentId}.jsonl
+ *   {swarmDir}/.stp/offload/{agentId}.jsonl
  *
  * Entries are written fire-and-forget (errors logged, not thrown) using
  * SessionStorage's `openWriter(path, { flags: "a" })` for O(1) append.

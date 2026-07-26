@@ -59,7 +59,7 @@ describe("consoleAttachedViaTTY (FFI fallback heuristic)", () => {
 		expect(consoleAttachedViaTTY({ stdinIsTTY: true, stdoutIsTTY: true, stderrIsTTY: true })).toBe(true);
 	});
 
-	it("treats `omp -p '...' > out.txt` (stdout-only redirect) as console-attached", () => {
+	it("treats `stp -p '...' > out.txt` (stdout-only redirect) as console-attached", () => {
 		// The reviewer's first-pass repro: stdout off the terminal, stdin
 		// and stderr still attached. OR keeps the console.
 		expect(consoleAttachedViaTTY({ stdinIsTTY: true, stdoutIsTTY: false, stderrIsTTY: true })).toBe(true);
@@ -75,7 +75,7 @@ describe("consoleAttachedViaTTY (FFI fallback heuristic)", () => {
 
 	it("returns false only when none of stdin/stdout/stderr is a TTY", () => {
 		// This is the gap: a real Windows Terminal session with all three
-		// streams redirected (`omp ... < in > out 2> err`) lands here.
+		// streams redirected (`stp ... < in > out 2> err`) lands here.
 		// `hostHasInheritableConsole` uses the Win32 FFI probe to recover
 		// the right answer in that scenario; this helper is the fallback.
 		expect(consoleAttachedViaTTY({ stdinIsTTY: false, stdoutIsTTY: false, stderrIsTTY: false })).toBe(false);

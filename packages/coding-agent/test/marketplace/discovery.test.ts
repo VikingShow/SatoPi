@@ -70,7 +70,7 @@ function makeEntry(installPath: string, version = "1.0.0"): InstalledPluginEntry
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 let tmpHome: string;
-/** ~/.omp/plugins/installed_plugins.json inside tmpHome */
+/** ~/.stp/plugins/installed_plugins.json inside tmpHome */
 let ompRegistryPath: string;
 
 beforeEach(() => {
@@ -86,7 +86,7 @@ afterEach(() => {
 // ── Path contract ─────────────────────────────────────────────────────────────
 
 describe("OMP registry path contract", () => {
-	it("OMP registry lives at home/.omp/plugins/installed_plugins.json", () => {
+	it("OMP registry lives at home/.stp/plugins/installed_plugins.json", () => {
 		// This is the path that listClaudePluginRoots reads.
 		// Any change to this path must be reflected in helpers.ts.
 		const expected = path.join(tmpHome, ".omp", "plugins", "installed_plugins.json");

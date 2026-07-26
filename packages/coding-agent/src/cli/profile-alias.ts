@@ -20,10 +20,10 @@ export interface ProfileAliasCommand {
 }
 
 const DEFAULT_ALIAS_COMMAND: ProfileAliasCommand = {
-	display: "omp",
-	posix: "omp",
-	fish: "omp",
-	powerShell: "omp",
+	display: "stp",
+	posix: "stp",
+	fish: "stp",
+	powerShell: "stp",
 };
 
 export interface ProfileAliasInstallOptions {
@@ -147,8 +147,8 @@ function validateAliasName(aliasName: string, shell: ProfileAliasShell): string 
 	if (!ALIAS_NAME_RE.test(normalized)) {
 		throw new Error(`Invalid alias "${aliasName}". Alias names must match ${ALIAS_NAME_RE.source}.`);
 	}
-	if (normalized.toLowerCase() === "omp") {
-		throw new Error('Invalid alias "omp". Refusing to shadow the base omp command.');
+	if (normalized.toLowerCase() === "stp") {
+		throw new Error('Invalid alias "stp". Refusing to shadow the base stp command.');
 	}
 	if (getReservedAliasNames(shell).has(normalized.toLowerCase())) {
 		throw new Error(`Invalid alias "${aliasName}". Refusing to create a ${shell} reserved word.`);
@@ -272,13 +272,13 @@ function renderAliasBlock(
 	command: ProfileAliasCommand,
 ): { block: string; command: string } {
 	const profiledCommand = `${command.display} --profile=${profile}`;
-	const start = `# >>> omp profile alias: ${aliasName} >>>`;
-	const end = `# <<< omp profile alias: ${aliasName} <<<`;
+	const start = `# >>> stp profile alias: ${aliasName} >>>`;
+	const end = `# <<< stp profile alias: ${aliasName} <<<`;
 	let body: string;
 	switch (shell) {
 		case "fish":
 			body = [
-				`function ${aliasName} --wraps omp --description 'OMP profile ${profile}'`,
+				`function ${aliasName} --wraps stp --description 'STP profile ${profile}'`,
 				`    command ${command.fish} --profile=${profile} $argv`,
 				"end",
 			].join("\n");
@@ -295,8 +295,8 @@ function renderAliasBlock(
 }
 
 function upsertBlock(content: string, aliasName: string, block: string): string {
-	const start = `# >>> omp profile alias: ${aliasName} >>>`;
-	const end = `# <<< omp profile alias: ${aliasName} <<<`;
+	const start = `# >>> stp profile alias: ${aliasName} >>>`;
+	const end = `# <<< stp profile alias: ${aliasName} <<<`;
 	const startIndex = content.indexOf(start);
 	if (startIndex !== -1) {
 		const endIndex = content.indexOf(end, startIndex + start.length);

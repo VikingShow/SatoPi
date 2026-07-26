@@ -491,7 +491,7 @@ async function runInteractiveMode(
 		}
 	}
 
-	// `omp join <link>`: dispatch through the same builtin path as a typed
+	// `stp join <link>`: dispatch through the same builtin path as a typed
 	// `/join` so collab guards and error rendering stay in one place.
 	if (joinLink !== undefined) {
 		await executeBuiltinSlashCommand(`/join ${joinLink}`, { ctx: mode });
@@ -660,7 +660,7 @@ export async function createSessionManager(
 		if (!match) {
 			throw new SessionResolutionError(
 				`Session "${forkSource}" not found.`,
-				"Run `omp --resume` without an argument to pick from recent sessions, or `omp` to start a new one.",
+				"Run `stp --resume` without an argument to pick from recent sessions, or `stp` to start a new one.",
 			);
 		}
 		return await SessionManager.forkFrom(match.session.path, cwd, parsed.sessionDir);
@@ -678,7 +678,7 @@ export async function createSessionManager(
 		if (!match) {
 			throw new SessionResolutionError(
 				`Session "${sessionArg}" not found.`,
-				"Run `omp --resume` without an argument to pick from recent sessions, or `omp` to start a new one.",
+				"Run `stp --resume` without an argument to pick from recent sessions, or `stp` to start a new one.",
 			);
 		}
 		if (match.scope === "local") {
@@ -755,7 +755,7 @@ export async function createSessionManager(
 
 /** Discover SYSTEM.md file if no CLI system prompt was provided */
 function discoverSystemPromptFile(): string | undefined {
-	// Check project-local first (.omp/SYSTEM.md, .pi/SYSTEM.md legacy)
+	// Check project-local first (.stp/SYSTEM.md, .pi/SYSTEM.md legacy)
 	const projectPath = findConfigFile("SYSTEM.md", { user: false });
 	if (projectPath) {
 		return projectPath;
@@ -1390,7 +1390,7 @@ export async function runRootCommand(
 			},
 		};
 		const initialArgs = applyExtensionFlags(extensionFlagSink, rawArgs) ?? parsedArgs;
-		// Fail fast on stale/typo flags (e.g. `omp --list-models`) now that we
+		// Fail fast on stale/typo flags (e.g. `stp --list-models`) now that we
 		// know the real extension flag set. Without this check the unrecognized
 		// token gets silently consumed and any following positional leaks as the
 		// initial prompt — kicking off a real LLM session, MCP connection, and

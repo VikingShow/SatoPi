@@ -1,7 +1,7 @@
 /**
  * Regression tests for #1496.
  *
- * The native `omp` discovery provider only walks `.omp/` and `~/.omp/agent/`.
+ * The native `omp` discovery provider only walks `.omp/` and `~/.stp/agent/`.
  * Extension packages registered via `extensions:` in settings or
  * `--extension` on the CLI ship their own `skills/`, `hooks/`, `tools/`,
  * `commands/`, `rules/`, `prompts/`, and `.mcp.json`. The `omp-plugins`

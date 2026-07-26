@@ -46,7 +46,7 @@ describe("monorepo skill discovery", () => {
 		removeSyncWithRetries(tempDir);
 	});
 
-	test("finds skills in ancestor .omp/skills/ directories", async () => {
+	test("finds skills in ancestor .stp/skills/ directories", async () => {
 		// Root has a skill
 		writeSkill(path.join(repoRoot, ".omp", "skills"), "root-skill", "From repo root");
 		// Sub-project has a skill

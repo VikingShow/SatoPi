@@ -178,7 +178,7 @@ async function createPrFixture(): Promise<PrFixture> {
 /**
  * Stub `os.homedir()` AND rebuild the cached `dirs` resolver in pi-utils so
  * `getWorktreesDir()` resolves under an isolated temp home instead of the
- * user's real `~/.omp/wt`. Returns the temp home and a cleanup hook.
+ * user's real `~/.stp/wt`. Returns the temp home and a cleanup hook.
  */
 interface TempHome {
 	home: string;

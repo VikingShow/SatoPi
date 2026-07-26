@@ -91,7 +91,7 @@ describe("discoverAgents", () => {
 		expect(projectAgentsDir).toBe(path.join(projectDir, ".omp", "agents"));
 	});
 
-	test("loads agents from OMP npm plugins under <home>/.omp/plugins/node_modules", async () => {
+	test("loads agents from OMP npm plugins under <home>/.stp/plugins/node_modules", async () => {
 		await writeOmpPluginAgent(tempHome);
 
 		const { agents } = await discoverAgents(projectDir, tempHome);

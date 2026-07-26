@@ -292,7 +292,7 @@ export class MonitorServer implements ActivityBroadcaster {
 				}
 
 				// ── SatoPi v3 TUI only (swarm-gui removed) ──
-				return finalize(new Response("SatoPi v3 — TUI only. Use `omp` CLI.", { status: 200 }));
+				return finalize(new Response("SatoPi v3 — TUI only. Use `stp` CLI.", { status: 200 }));
 			},
 		});
 	}

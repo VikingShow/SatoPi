@@ -1,5 +1,5 @@
 /**
- * `omp auth-broker` — manage the omp credential vault.
+ * `stp auth-broker` — manage the omp credential vault.
  */
 import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
 import {
