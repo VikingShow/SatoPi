@@ -2672,7 +2672,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 		const transformContext = async (messages: AgentMessage[], _signal?: AbortSignal) => {
 			const withContext = await extensionRunner.emitContext(messages);
-			return wrapSteeringForModel(withContext);
+			let result = wrapSteeringForModel(withContext);
+			// Inject stigmergy environment context for all agents
+			const markEnv = MarkEnvironment.global();
+			const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
+			if (markCtx) {
+				result = [
+					{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
+					...result,
+				];
+			}
+			return result;
 		};
 		// Per-request provider-context transforms. Obfuscate FIRST so secrets are
 		// redacted from text before snapcompact rasterizes it into PNG frames, then
