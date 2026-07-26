@@ -386,13 +386,29 @@ export class StageController {
 		].filter(Boolean).join("\n");
 
 		// Keep claiming and executing tasks until the queue is empty or aborted
+		let emptyPolls = 0;
+		const MAX_EMPTY_POLLS = 3;
 		while (!signal?.aborted && !queue.isAllComplete) {
 			const claim = queue.claim(agent.id, agent.role);
 			if (!claim.ok) {
+				// Detect deadlock: nothing ready AND nothing in progress means
+				// no new tasks can ever become ready (all remaining are blocked
+				// or have unmet dependencies with no agent working on them).
+				if (queue.inProgress.size === 0) {
+					emptyPolls++;
+					if (emptyPolls >= MAX_EMPTY_POLLS) {
+						activityLogger.logBroadcast("system",
+							`${agent.id}: all tasks blocked or unresolvable (${emptyPolls} empty polls, 0 in-progress), breaking out`);
+						break;
+					}
+				} else {
+					emptyPolls = 0;
+				}
 				// No more ready tasks — wait briefly and retry
 				await new Promise(r => setTimeout(r, 1000));
 				continue;
 			}
+			emptyPolls = 0;
 
 			const task = claim.task!;
 			activityLogger.logBroadcast("system", `${agent.id} (${agent.role}) claimed: ${task.title}`);

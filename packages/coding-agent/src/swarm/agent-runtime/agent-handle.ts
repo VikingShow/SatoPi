@@ -26,7 +26,7 @@ export class AgentHandle {
   readonly id: string;
   readonly role: string;
   readonly #agent: Agent;
-  readonly #session: unknown; // oh-my-pi AgentSession — use `unknown` to avoid import complexity
+  readonly #session: unknown | null; // SatoPi AgentSession — null until wired (P0-4 fix)
   #status: "running" | "completed" | "failed" | "aborted" = "running";
   #completionPromise: Promise<SingleResult>;
   #resolveCompletion!: (result: SingleResult) => void;
@@ -39,7 +39,7 @@ export class AgentHandle {
     id: string,
     role: string,
     agent: Agent,
-    session: unknown,
+    session: unknown | null = null,
   ) {
     this.id = id;
     this.role = role;
@@ -65,8 +65,8 @@ export class AgentHandle {
     return this.#agent;
   }
 
-  /** The underlying oh-my-pi AgentSession (for advanced use). */
-  get session(): unknown {
+  /** The underlying oh-my-pi AgentSession (for advanced use). May be null when not yet wired. */
+  get session(): unknown | null {
     return this.#session;
   }
 

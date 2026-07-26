@@ -203,9 +203,10 @@ export class TaskQueue extends EventEmitter {
 
 		if (fixTask) {
 			this.#tasks.set(fixTask.id, { ...fixTask, status: "pending" });
-			// The fix task depends on nothing (or the blocked task) → re-evaluate
-			this.#computeReady();
 		}
+		// Always re-evaluate readiness — blocking a task may free up
+		// dependent tasks whose other dependencies are now satisfied.
+		this.#computeReady();
 
 		this.emit("task:blocked", taskId, reason);
 		return true;

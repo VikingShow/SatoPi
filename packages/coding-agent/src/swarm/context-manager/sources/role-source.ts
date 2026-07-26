@@ -29,6 +29,8 @@ export class RoleSource implements ContextSource {
       return {};
     }
 
+    const fragment: ContextFragment = {};
+
     // Only inject tools — system prompt is resolved by RoleProvider
     if (role.tools && role.tools.length > 0) {
       fragment.tools = [...role.tools];

@@ -127,7 +127,9 @@ export async function executeSwarmAgent(
 	options: SwarmExecutorOptions,
 ): Promise<SingleResult> {
 	// Delegate to custom executor if provided.
-	if (options.executor && options.executor !== defaultExecutor) {
+	// Use instanceof rather than reference equality — a new SubprocessAgentExecutor()
+	// is still the default type and would otherwise cause infinite recursion.
+	if (options.executor && !(options.executor instanceof SubprocessAgentExecutor)) {
 		return options.executor.execute(agent, index, options);
 	}
 

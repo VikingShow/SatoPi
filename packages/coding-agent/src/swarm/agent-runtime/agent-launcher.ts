@@ -1,16 +1,18 @@
 /**
- * agent-launcher.ts — Creates oh-my-pi Agent + AgentSession instances
- * with full AgentLoopConfig wiring.
+ * agent-launcher.ts — Creates SatoPi Agent instances with full AgentLoopConfig wiring.
  *
  * KEY DESIGN: Does NOT use runSubprocess(). Instead directly creates
- * Agent and AgentSession using oh-my-pi's public API (same approach as
- * sdk.ts). This enables access to ALL AgentLoopConfig hooks:
+ * Agent instances using the SatoPi public API (same approach as sdk.ts).
+ * This enables access to ALL AgentLoopConfig hooks:
  *   - transformContext (ContextPipeline injection)
  *   - getSteeringMessages (Human steering from CommBus)
  *   - getAsideMessages (system notifications)
  *   - getFollowUpMessages (multi-turn dialogue)
  *
- * Part of the AgentRuntime system (Phase 3A).
+ * When a `toolRegistry` is provided via LaunchContext, real tools are resolved
+ * by name. Without one, mock stubs are used with an error-level log (P0-3 fix).
+ *
+ * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
 import { Agent } from "@oh-my-pi/pi-agent-core";
@@ -26,6 +28,8 @@ import type {
   Settings,
   SingleResult,
 } from "@oh-my-pi/pi-coding-agent";
+import type { Tool, ToolSession } from "../../tools";
+import { createTools } from "../../tools";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ActivityLogger } from "../hooks/activity-logger";
 import type { AssembledContext } from "../context-manager/context-pipeline";
@@ -88,6 +92,30 @@ export interface LaunchContext {
   activeMmd?: string;
   /** Context window for compaction threshold (in tokens). */
   contextWindow?: number;
+
+  /**
+   * Optional pre-built SatoPi tool registry (Map name → Tool).
+   * When provided, real tools are resolved by name instead of using mock stubs.
+   * Without this, tools execute as no-op mocks (P0-3 — will log an error).
+   */
+  toolRegistry?: Map<string, Tool>;
+
+  /**
+   * Optional built-in tool names for createTools()-based tool creation (Phase A1).
+   * When provided, real tools are created via {@link createTools} with a minimal
+   * ToolSession assembled from {@link createToolSession} callback + launcher defaults.
+   * This is the preferred path for SatoPi swarm agents — it uses the same
+   * BUILTIN_TOOLS factory pipeline as the main agent session.
+   */
+  builtinToolNames?: string[];
+
+  /**
+   * Optional callback to produce a partial ToolSession for createTools().
+   * Fields not provided are filled with defaults from the launcher
+   * (cwd, settings, modelRegistry, etc.).
+   * Only consulted when {@link builtinToolNames} is also provided.
+   */
+  createToolSession?: () => Partial<ToolSession>;
 }
 
 // ============================================================================
@@ -143,26 +171,21 @@ export class AgentLauncher {
     // 2. Build system prompt
     const systemPrompt = this.#buildSystemPrompt(spec, resolvedRole, assembledContext);
 
-    // 3. Resolve tools
+    // 3. Resolve tools — prefer createTools (A1), then registry, then mock stubs
     const toolNames = this.#resolveTools(resolvedRole, assembledContext);
+    const tools = await this.#resolveToolInstances(
+      toolNames,
+      ctx.builtinToolNames,
+      ctx.createToolSession,
+      ctx.toolRegistry,
+    );
 
-    // 4. Create Agent instance (oh-my-pi public API)
+    // 4. Create Agent instance (SatoPi public API)
     const agent = new Agent({
       initialState: {
         systemPrompt: [systemPrompt],
         model,
-        tools: toolNames.map((name) => ({
-          name,
-          description: `Tool: ${name}`,
-          parameters: {
-            type: "object" as const,
-            properties: {} as Record<string, unknown>,
-            additionalProperties: true,
-          },
-          execute: async () => ({
-            content: [{ type: "text" as const, text: `Tool ${name} executed (mock)` }],
-          }),
-        })) as unknown as AgentTool<any, any, unknown>[],
+        tools,
       },
       // ContextPipeline injection via transformContext
       transformContext: async (messages: AgentMessage[], signal?: AbortSignal) => {
@@ -226,9 +249,9 @@ export class AgentLauncher {
     // 6. Start the agent with the task description
     //    The agent won't start the loop until prompt() is called.
     //    We start it immediately and return the handle.
-    const session = {}; // Placeholder — AgentSession is created by AgentSession class in oh-my-pi
-
-    const handle = new AgentHandle(spec.id, spec.role, agent, session);
+    // Session wiring: pass null — the caller (AgentRuntime.spawnOne) handles
+    // AgentRegistry registration separately once a real session is available.
+    const handle = new AgentHandle(spec.id, spec.role, agent, null);
 
     // 7. Launch the agent asynchronously
     //    Use fire-and-forget: the handle's wait() method lets callers
@@ -332,6 +355,89 @@ export class AgentLauncher {
     for (const t of assembledContext.tools) toolSet.add(t);
 
     return [...toolSet];
+  }
+
+  /**
+   * Resolve tool instances using the most-capable available path.
+   *
+   * Resolution order (first match wins):
+   * 1. **createTools()** (Phase A1) — when `builtinToolNames` is provided,
+   *    real tools are created via the SatoPi BUILTIN_TOOLS factory pipeline
+   *    with a minimal ToolSession assembled from the callback + launcher defaults.
+   * 2. **ToolRegistry lookup** — when `toolRegistry` is provided, tools are
+   *    looked up by name in the pre-built map.
+   * 3. **Mock stubs** (@deprecated) — fallback no-op tools; logs an error.
+   */
+  async #resolveToolInstances(
+    toolNames: string[],
+    builtinToolNames?: string[],
+    createToolSession?: () => Partial<ToolSession>,
+    toolRegistry?: Map<string, Tool>,
+  ): Promise<AgentTool<any, any, unknown>[]> {
+    // ── Path A: createTools()-based real tool creation (Phase A1) ──────────
+    if (builtinToolNames && builtinToolNames.length > 0) {
+      const partial = createToolSession?.() ?? {};
+      const session: ToolSession = {
+        ...partial,
+        // Launcher-provided fields — always take precedence
+        settings: this.#settings,
+        modelRegistry: this.#modelRegistry,
+        // Required ToolSession fields filled from partial or defaults
+        cwd: partial.cwd ?? process.cwd(),
+        hasUI: partial.hasUI ?? false,
+        getSessionFile: partial.getSessionFile ?? (() => null),
+        getSessionSpawns: partial.getSessionSpawns ?? (() => null),
+      };
+
+      const tools = await createTools(session, builtinToolNames);
+      logger.debug("[AgentLauncher] Resolved tools via createTools()", {
+        requested: builtinToolNames.length,
+        resolved: tools.length,
+        names: tools.map((t) => t.name),
+      });
+      return tools as unknown as AgentTool<any, any, unknown>[];
+    }
+
+    // ── Path B: Real tool registry available — resolve by name ────────────
+    if (toolRegistry && toolRegistry.size > 0) {
+      const resolved: AgentTool<any, any, unknown>[] = [];
+      for (const name of toolNames) {
+        const tool = toolRegistry.get(name);
+        if (tool) {
+          resolved.push(tool as AgentTool<any, any, unknown>);
+        } else {
+          logger.warn("[AgentLauncher] Tool not found in registry, skipping", { tool: name });
+        }
+      }
+      logger.debug("[AgentLauncher] Resolved tools from registry", {
+        requested: toolNames.length,
+        resolved: resolved.length,
+      });
+      return resolved;
+    }
+
+    // ── Path C: No tool registry — mock stubs (@deprecated since Phase A1) ─
+    // TODO: Remove once all callers provide builtinToolNames + createToolSession
+    // or a toolRegistry via LaunchContext (Phase A4).
+    logger.error(
+      "[AgentLauncher] No builtinToolNames or toolRegistry provided — " +
+      "ALL tools are mock stubs! Callers should pass builtinToolNames + " +
+      "createToolSession (Phase A1) or a toolRegistry via LaunchContext. " +
+      `Agent has ${toolNames.length} tool(s) that will execute as no-ops.`,
+    );
+    /** @deprecated Remove mock-stub fallback once all callers use createTools path (Phase A4). */
+    return toolNames.map((name) => ({
+      name,
+      description: `Tool: ${name} (MOCK — no builtinToolNames or toolRegistry provided)`,
+      parameters: {
+        type: "object" as const,
+        properties: {} as Record<string, unknown>,
+        additionalProperties: true,
+      },
+      execute: async () => ({
+        content: [{ type: "text" as const, text: `Tool ${name} executed (mock — no builtinToolNames or toolRegistry)` }],
+      }),
+    })) as unknown as AgentTool<any, any, unknown>[];
   }
 
   /**

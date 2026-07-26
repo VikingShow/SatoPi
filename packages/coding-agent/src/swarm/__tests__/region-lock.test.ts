@@ -104,7 +104,7 @@ describe("RegionLockManager", () => {
 		const a = RegionLockManager.create();
 		const b = RegionLockManager.create();
 		expect(a).not.toBe(b);
-		// global() now points to the latest create() result
-		expect(RegionLockManager.global()).toBe(b);
+		// create() does NOT affect the global singleton (P0-8 fix)
+		expect(RegionLockManager.global()).not.toBe(b);
 	});
 });

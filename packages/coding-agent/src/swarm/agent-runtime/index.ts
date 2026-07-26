@@ -33,7 +33,6 @@ import type { CommBus } from "../comm-bus/comm-bus";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../hooks/activity-logger";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
 
 // ============================================================================
 // Types
@@ -366,9 +365,8 @@ export class AgentRuntime {
       { agentId, phase: "stage" },
     );
 
-    // 6.5 Attach session and wire lifecycle callbacks
+    // 6.5 Wire lifecycle callbacks for persistent agents
     if (spec.profileId) {
-      AgentRegistry.global().setSession(spec.id, handle.session as AgentSession);
       handle.onComplete = () => {
         AgentRegistry.global().setStatus(spec.id, "idle");
       };

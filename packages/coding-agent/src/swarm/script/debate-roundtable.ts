@@ -145,21 +145,27 @@ export class DebateRoundtable {
 				})),
 			);
 
-			const outputs = await Promise.all(handles.map((h) => h.wait()));
-			results = outputs.map((output: SingleResult, i: number) => ({
-				index: i,
-				id: `plan-debate-r${round}-c${i + 1}`,
-				agent: `debate-agent-${i + 1}`,
-				agentSource: "project" as const,
-				task: roundPrompt,
-				exitCode: 0,
-				output: output?.output ?? "(no output)",
-				stderr: "",
-				truncated: false,
-				durationMs: 0,
-				tokens: 0,
-				requests: 0,
-			}));
+			// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
+			const settled = await Promise.allSettled(handles.map((h) => h.wait()));
+			results = settled.map((s, i) => {
+				if (s.status === "fulfilled") return s.value;
+				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+				return {
+					index: i,
+					id: `plan-debate-r${round}-c${i + 1}`,
+					agent: `debate-agent-${i + 1}`,
+					agentSource: "project" as const,
+					task: roundPrompt,
+					exitCode: 1,
+					output: `[CRASHED] ${errMsg}`,
+					stderr: errMsg,
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+					error: errMsg,
+				};
+			});
 		} else {
 			// FALLBACK: existing code path (keep exactly as-is)
 			const settled = await Promise.allSettled(

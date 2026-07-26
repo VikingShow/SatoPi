@@ -300,8 +300,13 @@ export class ScriptManager {
 
 			let displayOutput: string;
 
-			if (this.#runtime) {
-				// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
+			// Phase A4: AgentRuntime is required. Legacy runSubprocess fallback removed.
+			if (!this.#runtime) {
+				throw new Error(
+					"[ScriptManager] AgentRuntime is required. Call setRuntime() before starting the planner.",
+				);
+			}
+			// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
 				const [planner] = await this.#runtime.spawn([{
 					id: this.#selectedAgentId ?? "planner",
 					role: "planner",
@@ -317,15 +322,6 @@ export class ScriptManager {
 				const result = await planner.wait();
 				displayOutput = (result?.output ?? result) ?? "(no output)";
 			} else {
-				// FALLBACK: existing code path (keep exactly as-is)
-				const systemPrompt = this.#buildPlannerSystemPrompt(plannerRole);
-
-				const agentDef: AgentDefinition = {
-					name: this.#selectedAgentId ?? "planner",
-					description: "Script phase planning agent",
-					systemPrompt,
-					source: "project" as AgentSource,
-				};
 				if (plannerRole?.tools && plannerRole.tools.length > 0) agentDef.tools = plannerRole.tools;
 
 				const planPath = getSessionPlanPath(this.#swarmDir);

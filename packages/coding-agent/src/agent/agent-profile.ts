@@ -17,6 +17,21 @@ import * as fs from "node:fs/promises";
 import { getProfilesDir } from "../offload/paths"
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+/** Profile IDs must be path-safe: alphanumeric, hyphens, and underscores only. */
+const SAFE_PROFILE_ID = /^[a-zA-Z0-9_-]+$/;
+
+function requireSafeProfileId(profileId: string): void {
+	if (!profileId || !SAFE_PROFILE_ID.test(profileId)) {
+		throw new Error(
+			`Invalid profileId "${profileId}": must contain only alphanumeric characters, hyphens, and underscores`
+		);
+	}
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -186,6 +201,7 @@ export class ProfileRegistry {
 		proficiency?: Record<string, number>;
 		specialties?: string[];
 	}): AgentProfile {
+		requireSafeProfileId(opts.profileId);
 		if (this.#profiles.has(opts.profileId)) {
 			throw new Error(`Profile "${opts.profileId}" already exists`);
 		}
@@ -577,6 +593,7 @@ export class ProfileRegistry {
 			const snapshots: unknown[] = [];
 			for (const entry of index) {
 				try {
+					if (!SAFE_PROFILE_ID.test(entry.profileId)) continue; // skip path-traversal IDs
 					const profilePath = `${profilesDir}/${entry.profileId}.json`;
 					const raw = await fs.readFile(profilePath, "utf-8");
 					snapshots.push(JSON.parse(raw));
@@ -610,6 +627,7 @@ export class ProfileRegistry {
 			const profiles = this.list();
 			// Write each profile atomically
 			for (const p of profiles) {
+				if (!SAFE_PROFILE_ID.test(p.profileId)) continue; // skip path-traversal IDs
 				const profilePath = `${profilesDir}/${p.profileId}.json`;
 				const tmp = `${profilePath}.tmp`;
 				await fs.writeFile(tmp, JSON.stringify(p, null, 2), "utf-8");

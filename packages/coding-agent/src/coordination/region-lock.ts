@@ -49,9 +49,7 @@ export class RegionLockManager {
 	static #instance: RegionLockManager | null = null;
 
 	static create(): RegionLockManager {
-		const mgr = new RegionLockManager();
-		RegionLockManager.#instance = mgr;
-		return mgr;
+		return new RegionLockManager();
 	}
 
 	static global(): RegionLockManager {

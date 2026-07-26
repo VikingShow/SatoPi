@@ -39,4 +39,11 @@ export interface AgentSpec {
 
   /** Optional model preference hint for model resolution. */
   modelPreference?: "cheapest" | "smartest" | "role-default";
+
+  /**
+   * Links this spec to a persistent agent identity in the AgentRegistry.
+   * When set, the AgentRuntime associates the spawned agent with an existing
+   * profile so its state (callbacks, status) can be tracked across lifetime events.
+   */
+  profileId?: string;
 }
