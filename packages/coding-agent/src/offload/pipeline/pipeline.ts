@@ -6,12 +6,11 @@
  *
  * L3 (MermaidSynthesizer) 由独立模块 `mermaid-synthesizer.ts` 处理。
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../core/pipeline";
-import { AgentSummarizer, type SummarizeOutput } from "./agent-summarizer";
-import type { AgentOffloadEntry } from "./agent-offload-summarizer";
+import type { ReviewVerdict } from "../../swarm/core/pipeline"
+import { AgentSummarizer, type SummarizeOutput } from "./summarizer"
+import type { AgentOffloadEntry } from "./agent-summarizer"
 import {
 	Deduplicator,
 	type DedupEntry,
@@ -23,7 +22,17 @@ import {
 	type PlanPhase,
 	type MmdNode,
 	type MmdEdge,
-} from "./plan-node-attributor";
+} from "./attributor"
+import {
+	TaskBoundaryJudge,
+	type L15MmdEntry,
+	type L15Judgment,
+} from "./l15-judge";
+import {
+	LlmMermaidSynthesizer,
+	type L2NewEntry,
+	type L2MermaidOutput,
+} from "../mermaid/llm-synthesizer";
 
 // ============================================================================
 // Types
@@ -66,6 +75,8 @@ export class OffloadPipeline {
 	readonly #summarizer = new AgentSummarizer();
 	readonly #deduplicator = new Deduplicator();
 	readonly #attributor = new PlanNodeAttributor();
+	readonly #taskJudge?: TaskBoundaryJudge;
+	readonly #llmMermaid?: LlmMermaidSynthesizer;
 
 	/** L1 累积的待处理条目 */
 	#pendingL1: OffloadPipeline.L1Output[] = [];
@@ -76,8 +87,13 @@ export class OffloadPipeline {
 	/** 上次 L2 执行时间 */
 	#lastL2Time = 0;
 
-	constructor(config: OffloadPipelineConfig) {
+	constructor(config: OffloadPipelineConfig, opts?: {
+		taskJudge?: TaskBoundaryJudge;
+		llmMermaid?: LlmMermaidSynthesizer;
+	}) {
 		this.#config = config;
+		this.#taskJudge = opts?.taskJudge;
+		this.#llmMermaid = opts?.llmMermaid;
 	}
 
 	// -- L1: Worker/Cloner 产出摘要 ------------------------------------------
@@ -258,6 +274,34 @@ export class OffloadPipeline {
 		this.#prevDeduped = [];
 		this.#lastL2Time = 0;
 		this.#attributor.reset();
+	}
+
+	// -- LLM-powered L1.5 + L2 (optional) -----------------------------------
+
+	/**
+	 * LLM-powered task boundary judgment (L1.5).
+	 * Returns null if no LLM judge configured.
+	 */
+	async runL15Llm(input: {
+		recentMessages: string;
+		currentMmd: string | null;
+		availableMmds: L15MmdEntry[];
+	}): Promise<L15Judgment | null> {
+		if (!this.#taskJudge) return null;
+		return this.#taskJudge.judge(input);
+	}
+
+	/**
+	 * LLM-powered Mermaid graph synthesis (L2).
+	 * Returns null if no LLM synthesizer configured.
+	 */
+	async runL2Llm(input: {
+		existingMmd: string | null;
+		entries: L2NewEntry[];
+		taskLabel: string;
+	}): Promise<L2MermaidOutput | null> {
+		if (!this.#llmMermaid) return null;
+		return this.#llmMermaid.synthesize(input);
 	}
 
 	// -- Getters ---------------------------------------------------------------

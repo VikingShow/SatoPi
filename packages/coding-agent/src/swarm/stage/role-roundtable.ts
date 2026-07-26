@@ -22,8 +22,6 @@
  */
 
 import { IrcBus } from "../../irc/bus";
-import { AgentChannel } from "../channel/agent-channel";
-import type { ActivityLogger } from "../hooks/activity-logger";
 import { CommChannel } from "../comm-bus/comm-channel";
 import { logger } from "@oh-my-pi/pi-utils";
 
@@ -62,16 +60,10 @@ export interface RoundtableConfig {
 export class RoleRoundtable {
 	readonly #ircBus: IrcBus;
 	readonly #activityLogger?: ActivityLogger;
-	/**
-	 * @deprecated Shared AgentChannel — kept for backward compatibility.
-	 * Roundtable execution now delegates to {@link CommChannel.roundtable}.
-	 */
-	#sharedChannel?: AgentChannel;
 
-	constructor(ircBus: IrcBus, activityLogger?: ActivityLogger, sharedChannel?: AgentChannel) {
+	constructor(ircBus: IrcBus, activityLogger?: ActivityLogger) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
-		this.#sharedChannel = sharedChannel;
 	}
 
 	/**

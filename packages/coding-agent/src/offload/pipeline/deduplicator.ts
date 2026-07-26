@@ -6,7 +6,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ReviewVerdict } from "../core/pipeline";
+import type { ReviewVerdict } from "../../swarm/core/pipeline"
 
 // ============================================================================
 // Types

@@ -4,12 +4,12 @@
  * Priority: 5.
  * Applies to: "stage" and "curtain" phases.
  *
- * Uses the unified IOffloadManager interface from swarm/offload/.
+ * Uses the unified IOffloadManager interface from offload/.
  */
 
 import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
 import type { Chapter } from "../../core/state";
-import type { IOffloadManager } from "../../offload/offload-manager";
+import type { IOffloadManager } from "../../offload/manager"
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ============================================================================

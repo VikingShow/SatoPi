@@ -23,7 +23,7 @@ import type { MarkEnvironment } from "../coordination/mark-environment";
 import type { ExperienceStore } from "../curtain/experience";
 import type { SwarmMnemopiAdapter } from "../hooks/mnemopi-adapter";
 import type { VerificationHook } from "../core/verification-hook";
-import type { IOffloadManager } from "../offload/offload-manager";
+import type { IOffloadManager } from "../../offload/manager"
 
 /** Dependencies for the built-in hook set. All fields are optional. */
 export interface BuiltinHookDeps {

@@ -1,7 +1,7 @@
 /**
  * offload-hooks.ts — LoopPipelineHooks 实现
  *
- * 串联 SwarmOffloadStore + OffloadPipeline + MermaidSynthesizer + MmdInjector，
+ * 串联 OffloadStore + OffloadPipeline + MermaidSynthesizer + MmdInjector，
  * 通过 10 个生命周期 hook 实现完整的 offload 流水线：
  *
  *   afterAgentRound   → L1 Agent 摘要 → JSONL + ♻ ExperienceStore
@@ -17,23 +17,20 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type {
-	LoopPipelineHooks,
+import type { LoopPipelineHooks,
 	PipelineContext,
 	PipelineResult,
-	WaveResult,
-} from "../core/pipeline";
+	WaveResult, } from "../swarm/core/pipeline"
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../core/pipeline";
-import type { SessionStorage } from "../../session/session-storage";
-import type { PlanPhase } from "./plan-node-attributor";
-import type { ExperienceStore } from "../curtain/experience";
-import type { ExtractedLesson, LoopRunStats } from "../curtain/extractor";
-import { getOffloadDir } from "./offload-paths";
-import { SwarmOffloadStore } from "./offload-store";
-import { OffloadPipeline, type OffloadPipelineConfig } from "./offload-pipeline";
-import { MermaidSynthesizer } from "./mermaid-synthesizer";
-import { MmdInjector } from "./mmd-injector";
+import type { ReviewVerdict } from "../swarm/core/pipeline"
+import type { SessionStorage } from "../session/session-storage"
+import type { PlanPhase } from "./pipeline/attributor"
+import type { ExperienceStore } from "../swarm/curtain/experience"
+import type { ExtractedLesson, LoopRunStats } from "../swarm/curtain/extractor"
+import { OffloadStore } from "./store"
+import { OffloadPipeline, type OffloadPipelineConfig } from "./pipeline/pipeline"
+import { MermaidSynthesizer } from "./mermaid/synthesizer"
+import { MmdInjector } from "./mermaid/injector"
 
 // ============================================================================
 // Types
@@ -86,21 +83,23 @@ export interface OffloadHooksResult {
 /**
  * 创建 offload lifecycle hooks。
  *
- * @param swarmDir  swarm 数据目录
- * @param storage   SessionStorage 实例
- * @param config    Offload 配置
- * @returns         hooks + 上下文 getter
+ * @param workspace  workspace 目录
+ * @param agentName  agent 名称
+ * @param storage    SessionStorage 实例
+ * @param config     Offload 配置
+ * @returns          hooks + 上下文 getter
  */
 export function createOffloadHooks(
-	swarmDir: string,
+	workspace: string,
+	agentName: string,
 	storage: SessionStorage,
 	config: OffloadHooksConfig,
 ): OffloadHooksResult {
-	const store = new SwarmOffloadStore(swarmDir, storage);
+	const store = new OffloadStore(workspace, agentName, storage);
 	const pipeline = new OffloadPipeline(config.pipeline);
 	const synthesizer = new MermaidSynthesizer(storage);
 	const injector = new MmdInjector();
-	const { experienceStore, sessionId } = config;
+	const { experienceStore, sessionId = agentName } = config;
 
 	// 累积的 current MMD 文本
 	let currentMmd = "";
@@ -128,13 +127,13 @@ export function createOffloadHooks(
 			if (experienceStore) {
 				try {
 					await experienceStore.init();
-					logger.info("[OffloadHooks] ExperienceStore bridge enabled", { swarmDir });
+					logger.info("[OffloadHooks] ExperienceStore bridge enabled", { workspace });
 				} catch (err) {
 					logger.warn("[OffloadHooks] ExperienceStore init failed — bridge disabled", { error: String(err) });
 				}
 			}
 
-			logger.info("[OffloadHooks] Pipeline started", { swarmDir });
+			logger.info("[OffloadHooks] Pipeline started", { workspace });
 		},
 
 		// -- beforeIteration -----------------------------------------------------
@@ -211,7 +210,7 @@ export function createOffloadHooks(
 			// 持久化到 JSONL
 			for (const out of l1Outputs) {
 				const entry = toOffloadEntry(out);
-				await store.appendEntry(out.agentId, entry);
+				await store.appendEntry(out.agentId, sessionId, entry);
 			}
 
 			totalWorkerTasks += l1Outputs.length;
@@ -253,7 +252,7 @@ export function createOffloadHooks(
 
 			const l1Outputs = await pipeline.runL1(resultMap, iteration, undefined, scores);
 			for (const out of l1Outputs) {
-				await store.appendEntry(out.agentId, toOffloadEntry(out));
+				await store.appendEntry(out.agentId, sessionId, toOffloadEntry(out));
 			}
 
 			totalClonerTasks += l1Outputs.length;
@@ -270,15 +269,15 @@ export function createOffloadHooks(
 			if (l2Result && (l2Result.nodes.length > 0 || l2Result.edges.length > 0)) {
 				currentMmd = await synthesizer.synthesize({
 					nodes: l2Result.nodes, edges: l2Result.edges,
-					iteration, swarmDir, boundaryType: l2Result.boundary.type,
+					iteration, workspace, agentName, boundaryType: l2Result.boundary.type,
 				});
 
 				for (const [agentId, nodeId] of l2Result.entryNodeMap) {
-					const entries = await store.readEntries(agentId);
+					const entries = await store.readEntries(agentId, sessionId);
 					if (entries.length > 0) {
 						const last = entries[entries.length - 1];
 						last.node_id = nodeId;
-						await store.appendEntry(agentId, last);
+						await store.appendEntry(agentId, sessionId, last);
 					}
 				}
 
@@ -309,7 +308,7 @@ export function createOffloadHooks(
 					await bridgeSessionSummary(store, experienceStore, {
 						sessionId, status,
 						totalWorkerTasks, totalClonerTasks,
-						swarmDir,
+						workspace,
 					});
 					logger.info("[OffloadHooks] Session summary written to ExperienceStore");
 				} catch (err) {
@@ -378,7 +377,7 @@ interface BridgeMeta {
  * 写入 ExperienceStore（含去重合并 + FTS 索引）。
  */
 async function bridgeToExperienceStore(
-	store: SwarmOffloadStore,
+	store: OffloadStore,
 	xpStore: ExperienceStore,
 	meta: BridgeMeta,
 ): Promise<void> {
@@ -446,9 +445,9 @@ async function bridgeToExperienceStore(
  * Session 结束时写入一个整体摘要。
  */
 async function bridgeSessionSummary(
-	store: SwarmOffloadStore,
+	store: OffloadStore,
 	xpStore: ExperienceStore,
-	meta: { sessionId?: string; status: string; totalWorkerTasks: number; totalClonerTasks: number; swarmDir: string },
+	meta: { sessionId?: string; status: string; totalWorkerTasks: number; totalClonerTasks: number; workspace: string },
 ): Promise<void> {
 	const allEntries = await store.readAllEntries();
 	if (allEntries.length === 0) return;
@@ -470,7 +469,7 @@ async function bridgeSessionSummary(
 		finalStatus: meta.status as LoopRunStats["finalStatus"],
 		reviewApprovalRatio: avgScore / 10,
 		agentCount: meta.totalWorkerTasks + meta.totalClonerTasks,
-		taskDescription: `Offload session: ${meta.swarmDir}`,
+		taskDescription: `Offload session: ${meta.workspace}`,
 	};
 
 	xpStore.saveLesson({

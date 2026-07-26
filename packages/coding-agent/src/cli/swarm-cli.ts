@@ -19,6 +19,9 @@ import { ExperienceStore } from "../swarm/curtain/experience";
 import { ProfileRegistry } from "../swarm/agent/agent-profile";
 import { MarkEnvironment } from "../swarm/coordination/mark-environment";
 import { RoleAssetManager } from "../swarm/agent/role-asset";
+import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
+import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
+import { NoopOffloadManager } from "../offload/manager"
 import type { SwarmDefinition } from "../swarm/core";
 
 export type SwarmAction = "run" | "plan" | "resume";
@@ -101,11 +104,18 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			roleAssetManager,
 			profileRegistry,
 		};
-
-		// ── Factory: builds per-session services ───────────────────────────
 		const factory: SessionFactory = async (s, name, swarmDir) => {
 			const stateTracker = new StateTracker(cwd, name);
 			const activityLogger = new ActivityLogger(swarmDir, name);
+
+			// v3: Create HookPipeline and register builtin hooks with NoopOffloadManager.
+			// The real OffloadManager (backed by SessionStorage) is wired later in
+			// SessionRegistry.createSession() once SwarmSessionManager is available.
+			const hookPipeline = new HookPipeline();
+			registerBuiltinHooks(hookPipeline, {
+				offloadManager: new NoopOffloadManager(),
+				profileRegistry: s.profileRegistry,
+			});
 
 			// SwarmRunner: the RunManager for loop-mode runs.
 			const runManager: RunManager = new SwarmRunner({
@@ -120,6 +130,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 				profileRegistry: s.profileRegistry,
 				markEnvironment,
 				roleAssetManager: s.roleAssetManager,
+				hookPipeline,
 			});
 
 			// Placeholder ScriptManager.
@@ -161,7 +172,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 				},
 			};
 
-			return { name, swarmDir, stateTracker, activityLogger, runManager, scriptManager, steeringSink };
+			return { name, swarmDir, stateTracker, activityLogger, runManager, scriptManager, steeringSink, hookPipeline };
 		};
 
 		// ── Create and start ──────────────────────────────────────────────

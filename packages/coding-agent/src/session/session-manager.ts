@@ -458,6 +458,11 @@ export class SessionManager {
 		if (persist && sessionDir) this.#storage.ensureDirSync(sessionDir);
 	}
 
+	/** Expose the underlying SessionStorage for offload pipeline use. */
+	get storage(): SessionStorage {
+		return this.#storage;
+	}
+
 	#rememberBreadcrumb(cwd: string, sessionFile: string): void {
 		if (!this.#suppressBreadcrumb) writeTerminalBreadcrumb(cwd, sessionFile);
 	}

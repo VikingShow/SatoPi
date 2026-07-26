@@ -14,6 +14,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import { getProfilesDir } from "../../offload/paths"
 
 // ============================================================================
 // Types
@@ -500,9 +501,38 @@ export class ProfileRegistry {
 		}
 	}
 
-	/** Load profiles from workspace disk. */
+	/** Load profiles from .stp/profiles/ directory, with migration from old profiles.json. */
 	static async load(workspaceDir: string): Promise<ProfileRegistry> {
 		const registry = new ProfileRegistry();
+		const profilesDir = getProfilesDir(workspaceDir);
+		try {
+			await fs.access(profilesDir);
+			// New format: read _index.json, then each {profileId}.json
+			const indexPath = `${profilesDir}/_index.json`;
+			const indexRaw = await fs.readFile(indexPath, "utf-8");
+			const index: { profileId: string; archetype: string; score: number; lastActive: number }[] = JSON.parse(indexRaw);
+			if (!Array.isArray(index) || index.length === 0) {
+				// Empty index — fall through to old format
+				throw new Error("Empty index");
+			}
+			const snapshots: unknown[] = [];
+			for (const entry of index) {
+				try {
+					const profilePath = `${profilesDir}/${entry.profileId}.json`;
+					const raw = await fs.readFile(profilePath, "utf-8");
+					snapshots.push(JSON.parse(raw));
+				} catch {
+					// Skip corrupted/missing individual profiles
+				}
+			}
+			if (snapshots.length > 0) {
+				registry.deserialize(snapshots);
+				return registry;
+			}
+		} catch {
+			// New format not available — try legacy migration
+		}
+		// Fallback: legacy profiles.json
 		try {
 			const file = Bun.file(`${workspaceDir}/profiles.json`);
 			if (await file.exists()) {
@@ -513,19 +543,40 @@ export class ProfileRegistry {
 		return registry;
 	}
 
-	/** Save profiles to workspace disk (atomic: tmp + rename). */
+	/** Save profiles to .stp/profiles/ (one file per profile + _index.json), with legacy fallback. */
 	async save(workspaceDir: string): Promise<void> {
+		const profilesDir = getProfilesDir(workspaceDir);
+		try {
+			await fs.mkdir(profilesDir, { recursive: true });
+			const profiles = this.list();
+			// Write each profile atomically
+			for (const p of profiles) {
+				const profilePath = `${profilesDir}/${p.profileId}.json`;
+				const tmp = `${profilePath}.tmp`;
+				await fs.writeFile(tmp, JSON.stringify(p, null, 2), "utf-8");
+				await fs.rename(tmp, profilePath);
+			}
+			// Write _index.json with summary data for fast scanning
+			const index = profiles.map(p => ({
+				profileId: p.profileId,
+				archetype: p.identity.archetype,
+				score: p.credit.score,
+				lastActive: p.credit.lastActiveAt,
+			}));
+			const indexTmp = `${profilesDir}/_index.json.tmp`;
+			await fs.writeFile(indexTmp, JSON.stringify(index, null, 2), "utf-8");
+			await fs.rename(indexTmp, `${profilesDir}/_index.json`);
+		} catch (err) {
+			// Best-effort — never crash on persistence failure
+		}
+		// Legacy fallback: also write old profiles.json for one migration cycle
 		try {
 			const path = `${workspaceDir}/profiles.json`;
 			const tmp = `${path}.tmp`;
 			await Bun.write(tmp, JSON.stringify(this.serialize(), null, 2));
 			await fs.rename(tmp, path);
-		} catch (err) {
-			// Best-effort — never crash on persistence failure
-		}
+		} catch { /* best-effort */ }
 	}
-
-	// ── Internal ──────────────────────────────────────────────────────
 
 	#bumpVersion(profileId: string): void {
 		const current = this.#versions.get(profileId) ?? 0;

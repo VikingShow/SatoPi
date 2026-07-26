@@ -1,9 +1,9 @@
 /**
- * SwarmOffloadStore — append-only JSONL storage for agent offload entries.
+ * OffloadStore — append-only JSONL storage for agent offload entries.
  *
- * Each agent writes its offload entries to a dedicated JSONL file:
+ * Each session writes its offload entries to a dedicated JSONL file:
  *
- *   {swarmDir}/.stp/offload/{agentId}.jsonl
+ *   {workspace}/.stp/offload/{agentName}/offload-{sessionId}.jsonl
  *
  * Entries are written fire-and-forget (errors logged, not thrown) using
  * SessionStorage's `openWriter(path, { flags: "a" })` for O(1) append.
@@ -11,14 +11,14 @@
 
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { SessionStorage } from "../../session/session-storage";
-import { getOffloadDir, getOffloadPath } from "./offload-paths";
+import type { SessionStorage } from "../session/session-storage"
+import { getOffloadPath, getAgentDataDir } from "./paths"
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface SwarmOffloadEntry {
+export interface OffloadEntry {
 	timestamp: string;           // ISO 8601
 	agent_id: string;            // "worker-a1", "cloner-guardian"
 	iteration: number;
@@ -32,38 +32,35 @@ export interface SwarmOffloadEntry {
 }
 
 // ============================================================================
-// SwarmOffloadStore
+// OffloadStore
 // ============================================================================
 
-export class SwarmOffloadStore {
-	readonly #swarmDir: string;
+export class OffloadStore {
+	readonly #workspace: string;
+	readonly #agentName: string;
 	readonly #storage: SessionStorage;
 
-	constructor(swarmDir: string, storage: SessionStorage) {
-		this.#swarmDir = swarmDir;
+	constructor(workspace: string, agentName: string, storage: SessionStorage) {
+		this.#workspace = workspace;
+		this.#agentName = agentName;
 		this.#storage = storage;
 	}
-
 	// -- Path helpers ----------------------------------------------------------
 
-	get swarmDir(): string {
-		return this.#swarmDir;
-	}
-
 	get offloadDir(): string {
-		return getOffloadDir(this.#swarmDir);
+		return getAgentDataDir(this.#workspace, this.#agentName);
 	}
 
 	// -- Write ----------------------------------------------------------------
 
 	/**
-	 * Append a single offload entry to the agent's JSONL file.
+	 * Append a single offload entry to the session's JSONL file.
 	 *
 	 * Uses {@link SessionStorage.openWriter} with `flags: "a"` for O(1) append.
 	 * Write failures are logged at warn level but never thrown (fire-and-forget).
 	 */
-	async appendEntry(agentId: string, entry: SwarmOffloadEntry): Promise<void> {
-		const filePath = getOffloadPath(this.#swarmDir, agentId);
+	async appendEntry(agentId: string, sessionId: string, entry: OffloadEntry): Promise<void> {
+		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
 
 		// Ensure parent directory exists synchronously (fast, no await needed).
 		this.#storage.ensureDirSync(path.dirname(filePath));
@@ -73,7 +70,7 @@ export class SwarmOffloadStore {
 			await writer.append(JSON.stringify(entry) + "\n");
 			await writer.flush();
 		} catch (err) {
-			logger.warn("[SwarmOffloadStore] Failed to append offload entry", {
+			logger.warn("[OffloadStore] Failed to append offload entry", {
 				agentId,
 				filePath,
 				error: String(err),
@@ -87,26 +84,26 @@ export class SwarmOffloadStore {
 			}
 		}
 	}
-
 	// -- Read -----------------------------------------------------------------
 
 	/**
-	 * Read all offload entries for a single agent.
-	 * Returns `[]` when the agent has no offload file.
+	 * Read all offload entries for a single agent within a session.
+	 * Returns `[]` when the session has no offload file.
 	 */
-	async readEntries(agentId: string): Promise<SwarmOffloadEntry[]> {
-		const filePath = getOffloadPath(this.#swarmDir, agentId);
-		return this.#readJsonlFile(filePath);
+	async readEntries(agentId: string, sessionId: string): Promise<OffloadEntry[]> {
+		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
+		const allEntries = await this.#readJsonlFile(filePath);
+		return allEntries.filter((e) => e.agent_id === agentId);
 	}
 
 	/**
 	 * Read all offload entries from every agent, merged into one array.
 	 */
-	async readAllEntries(): Promise<SwarmOffloadEntry[]> {
-		const agentIds = await this.listAgentIds();
-		const results: SwarmOffloadEntry[] = [];
-		for (const agentId of agentIds) {
-			const entries = await this.readEntries(agentId);
+	async readAllEntries(): Promise<OffloadEntry[]> {
+		const sessionIds = await this.listAgentIds();
+		const results: OffloadEntry[] = [];
+		for (const sessionId of sessionIds) {
+			const entries = await this.readEntries(sessionId, sessionId);
 			results.push(...entries);
 		}
 		return results;
@@ -115,10 +112,10 @@ export class SwarmOffloadStore {
 	// -- Listing --------------------------------------------------------------
 
 	/**
-	 * Return the set of agent IDs that have at least one offload file.
+	 * Return the set of session IDs that have at least one offload file.
 	 */
 	async listAgentIds(): Promise<string[]> {
-		const dir = getOffloadDir(this.#swarmDir);
+		const dir = getAgentDataDir(this.#workspace, this.#agentName);
 		try {
 			const exists = await this.#storage.exists(dir);
 			if (!exists) return [];
@@ -133,10 +130,10 @@ export class SwarmOffloadStore {
 	// -- Clear ----------------------------------------------------------------
 
 	/**
-	 * Delete every offload JSONL file in the offload directory.
+	 * Delete every offload JSONL file in the agent's offload directory.
 	 */
 	async clear(): Promise<void> {
-		const dir = getOffloadDir(this.#swarmDir);
+		const dir = getAgentDataDir(this.#workspace, this.#agentName);
 		let files: string[];
 		try {
 			files = this.#storage.listFilesSync(dir, "*.jsonl");
@@ -148,7 +145,7 @@ export class SwarmOffloadStore {
 			try {
 				await this.#storage.unlink(file);
 			} catch (err) {
-				logger.warn("[SwarmOffloadStore] Failed to delete offload file during clear", {
+				logger.warn("[OffloadStore] Failed to delete offload file during clear", {
 					file,
 					error: String(err),
 				});
@@ -158,7 +155,7 @@ export class SwarmOffloadStore {
 
 	// -- Internal helpers -----------------------------------------------------
 
-	async #readJsonlFile(filePath: string): Promise<SwarmOffloadEntry[]> {
+	async #readJsonlFile(filePath: string): Promise<OffloadEntry[]> {
 		try {
 			const exists = await this.#storage.exists(filePath);
 			if (!exists) return [];
@@ -175,14 +172,14 @@ export class SwarmOffloadStore {
 
 		if (!text.trim()) return [];
 
-		const entries: SwarmOffloadEntry[] = [];
+		const entries: OffloadEntry[] = [];
 		for (const line of text.split("\n")) {
 			const trimmed = line.trim();
 			if (!trimmed) continue;
 			try {
-				entries.push(JSON.parse(trimmed) as SwarmOffloadEntry);
+				entries.push(JSON.parse(trimmed) as OffloadEntry);
 			} catch {
-				logger.warn("[SwarmOffloadStore] Skipping malformed JSONL line", {
+				logger.warn("[OffloadStore] Skipping malformed JSONL line", {
 					filePath,
 					line: trimmed.slice(0, 200),
 				});
