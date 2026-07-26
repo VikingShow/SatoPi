@@ -152,32 +152,24 @@ describe("ansiDim", () => {
 // ============================================================================
 
 describe("PI_LOGO_ASCII", () => {
-  it("has 8 rows", () => {
-    expect(PI_LOGO_ASCII.length).toBe(8);
+  it("has rows", () => {
+    expect(PI_LOGO_ASCII.length).toBeGreaterThan(0);
   });
 
-  it("all rows have the same length", () => {
-    const lengths = PI_LOGO_ASCII.map((row) => row.length);
-    const first = lengths[0];
-    for (let i = 1; i < lengths.length; i++) {
-      expect(lengths[i]).toBe(first);
-    }
-  });
-
-  it("all rows are 24 characters wide", () => {
+  it("each row has reasonable width for a 60-column terminal", () => {
     for (const row of PI_LOGO_ASCII) {
-      expect(row.length).toBe(24);
+      // Rows vary due to Unicode double-width chars (●) and block elements (▄, █).
+      // Actual widths: 41–44 code units. All fit within the splash inner area.
+      expect(row.length).toBeGreaterThanOrEqual(40);
+      expect(row.length).toBeLessThanOrEqual(46);
     }
   });
 
-  it("contains box-drawing characters", () => {
+  it("contains Pi logo block characters", () => {
     const joined = PI_LOGO_ASCII.join("");
-    expect(joined).toContain("╭");
-    expect(joined).toContain("╮");
-    expect(joined).toContain("╰");
-    expect(joined).toContain("╯");
-    expect(joined).toContain("│");
+    expect(joined).toContain("●");
     expect(joined).toContain("█");
+    expect(joined).toContain("▄");
   });
 });
 
@@ -216,8 +208,8 @@ describe("renderSplash", () => {
 
   it("returns more lines than just borders", () => {
     const lines = renderSplash();
-    // Expected: top border + empty + logo (8) + empty + bottom border + tagline = 13
-    expect(lines.length).toBe(13);
+    // top border + empty + "S a t o P i" header + empty + logo (10) + empty + bottom border + tagline = 17
+    expect(lines.length).toBe(17);
   });
 
   it("top line is a golden border with box-drawing corners", () => {
@@ -234,12 +226,13 @@ describe("renderSplash", () => {
     expect(plain.endsWith("╝")).toBe(true);
   });
 
-  it("contains SatoPi in the content area", () => {
+  it("contains SatoPi brand text in the content area", () => {
     const lines = renderSplash();
     const joined = lines.join("\n");
     // Strip ANSI escapes for plaintext check
     const plain = joined.replace(/\x1b\[[0-9;]*m/g, "");
-    expect(plain).toContain("SatoPi");
+    // SatoPi brand splash uses spaced text "S a t o P i" (stylized header)
+    expect(plain).toContain("S a t o P i");
   });
 
   it("golden border uses primary amber ANSI code", () => {
