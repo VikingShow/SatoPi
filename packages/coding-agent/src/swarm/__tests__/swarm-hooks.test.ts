@@ -13,7 +13,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { createStageFeedback } from "../hooks/swarm-hooks";
 import { ProfileRegistry } from "../../agent/agent-profile";
-import { MarkEnvironment } from "../coordination"
+import { MarkEnvironment } from "../../coordination"
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { Task } from "../executor/task-queue";
 import type { ScoredAgent } from "../../agent/agent-selector";
