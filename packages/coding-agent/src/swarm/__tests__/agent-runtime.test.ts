@@ -16,6 +16,10 @@
 
 import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { Agent } from "@oh-my-pi/pi-agent-core";
+import type { AgentEvent, AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { Model } from "@oh-my-pi/pi-ai";
+import { AgentRegistry } from "../../registry/agent-registry";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -730,5 +734,89 @@ describe("Error handling", () => {
     await expect(
       runtime.spawn([makeSpec({ id: "ctx-agent" })]),
     ).rejects.toThrow("Context DB offline");
+  });
+});
+
+// ============================================================================
+// AgentHandle callbacks
+// ============================================================================
+
+describe("AgentHandle callbacks", () => {
+  test("fires onComplete callback", () => {
+    const agent = new Agent({
+      initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
+    });
+    const handle = new AgentHandle("cb-test", "test", agent, {});
+
+    let fired = false;
+    let agentId = "";
+    handle.onComplete = (result) => {
+      fired = true;
+      agentId = result.agentId;
+    };
+
+    // Simulate agent_end event
+    agent.emitExternalEvent?.({ type: "agent_end" } as AgentEvent);
+
+    expect(fired).toBe(true);
+    expect(agentId).toBe("cb-test");
+  });
+
+  test("onComplete is optional — does not throw when unset", () => {
+    const agent = new Agent({
+      initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
+    });
+    const handle = new AgentHandle("no-cb", "test", agent, {});
+
+    expect(() => {
+      agent.emitExternalEvent?.({ type: "agent_end" } as AgentEvent);
+    }).not.toThrow();
+    expect(handle.status).toBe("completed");
+  });
+});
+
+// ============================================================================
+// AgentRegistry registration
+// ============================================================================
+
+describe("AgentRegistry integration", () => {
+  beforeEach(() => {
+    AgentRegistry.resetGlobalForTests();
+  });
+
+  test("registers persistent agent with profileId", () => {
+    const ref = AgentRegistry.global().register({
+      id: "persistent-architect",
+      displayName: "Architect v3",
+      kind: "persistent",
+      profileId: "architect-v3",
+      role: "architect",
+      session: null,
+    });
+
+    expect(ref.kind).toBe("persistent");
+    expect(ref.profileId).toBe("architect-v3");
+    expect(ref.role).toBe("architect");
+  });
+
+  test("setSession attaches session to existing ref", () => {
+    AgentRegistry.global().register({
+      id: "with-session",
+      displayName: "Session Test",
+      kind: "persistent",
+      session: null,
+    });
+
+    const mockSession = { id: "s1" } as AgentSession;
+    AgentRegistry.global().setSession("with-session", mockSession);
+
+    const ref = AgentRegistry.global().get("with-session");
+    expect(ref?.session).toBe(mockSession);
+  });
+
+  test("setSession is no-op for unknown id", () => {
+    expect(() => {
+      AgentRegistry.global().setSession("unknown", {} as AgentSession);
+    }).not.toThrow();
   });
 });

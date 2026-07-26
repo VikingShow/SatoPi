@@ -30,6 +30,10 @@ export class AgentHandle {
   #status: "running" | "completed" | "failed" | "aborted" = "running";
   #completionPromise: Promise<SingleResult>;
   #resolveCompletion!: (result: SingleResult) => void;
+	/** Callback invoked on successful completion. */
+	onComplete?: (result: { agentId: string; output: string }) => void;
+	/** Callback invoked on error/abort. */
+	onError?: (result: { agentId: string; error: string }) => void;
 
   constructor(
     id: string,
@@ -298,9 +302,10 @@ export class AgentHandle {
 
         case "agent_end": {
           const output = messages.join("\n") || "(no output)";
-          if (this.#status === "running") {
-            this.#status = "completed";
-          }
+			if (this.#status === "running") {
+				this.#status = "completed";
+				this.onComplete?.({ agentId: this.id, output });
+			}
           this.#resolveCompletion({
             index: 0,
             id: this.id,

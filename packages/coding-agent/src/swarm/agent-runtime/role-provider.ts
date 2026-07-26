@@ -8,7 +8,7 @@
  * Part of the AgentRuntime system (Phase 3A).
  */
 
-import type { RoleAssetManager, RoleAsset } from "../agent/role-asset";
+import type { RoleAssetManager, RoleAsset } from "../../agent/role-asset";
 import type { AgentSpec } from "./agent-spec";
 import { logger } from "@oh-my-pi/pi-utils";
 

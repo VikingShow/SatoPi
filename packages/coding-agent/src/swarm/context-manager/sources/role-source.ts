@@ -29,12 +29,7 @@ export class RoleSource implements ContextSource {
       return {};
     }
 
-    const fragment: ContextFragment = {};
-
-    if (role.prompts.system) {
-      fragment.systemPromptAddition = role.prompts.system;
-    }
-
+    // Only inject tools — system prompt is resolved by RoleProvider
     if (role.tools && role.tools.length > 0) {
       fragment.tools = [...role.tools];
     }

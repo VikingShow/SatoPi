@@ -10,7 +10,7 @@ import type { ToolExample } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import { AgentForkManager, type ForkResult } from "../swarm/agent/agent-fork-manager";
+import { AgentForkManager, type ForkResult } from "../agent/agent-fork-manager";
 
 // ============================================================================
 // Context extension

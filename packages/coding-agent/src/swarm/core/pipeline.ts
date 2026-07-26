@@ -51,6 +51,16 @@ export interface PipelineOptions {
 	 * at key lifecycle points without modifying the pipeline controller.
 	 */
 	hooks?: PipelineHooks;
+	/**
+	 * Optional: agent-level transform context hook. Forwarded to runSubprocess
+	 * for MMD injection, L3 compact, and stigmergy context.
+	 */
+	transformContext?: (messages: unknown[], signal?: AbortSignal) => Promise<unknown>;
+	/**
+	 * Optional: agent-level after-tool-call hook. Forwarded to runSubprocess
+	 * for MarkEnvironment stigmergy marks.
+	 */
+	afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 }
 
 export interface PipelineProgress {
@@ -353,6 +363,8 @@ export class PipelineController {
 							onProgress: (_name: string, _progress: AgentProgress) => {
 								options.emitProgress(waveIdx);
 							},
+							transformContext: options.transformContext,
+							afterToolCall: options.afterToolCall,
 							modelRegistry: options.modelRegistry,
 							settings: options.settings,
 							stateTracker: this.#stateTracker,

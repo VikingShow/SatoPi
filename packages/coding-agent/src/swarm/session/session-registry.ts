@@ -23,8 +23,8 @@ import type { ScriptManager } from "../core/services";
 import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import type { RoleAssetManager } from "../agent/role-asset";
-import type { ProfileRegistry } from "../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
+import type { ProfileRegistry } from "../../agent/agent-profile";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
 // is what makes persistence actually work.

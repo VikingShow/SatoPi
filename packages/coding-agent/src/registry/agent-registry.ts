@@ -24,11 +24,10 @@ export const MAIN_AGENT_ID = "Main";
 export type AgentStatus = "running" | "idle" | "parked" | "aborted";
 /**
  * - `main`/`sub`: the user-facing agent tree (driving agent + task subagents).
- * - `advisor`: a passive review transcript persisted like a subagent for usage
- *   attribution and Agent Hub observability, but never a peer — hidden from
- *   agent-facing rosters (`irc`, `history://`) and not messageable/revivable.
+ * - `advisor`: a passive review transcript — hidden from rosters.
+ * - `persistent`: cross-session agent with AgentProfile + role identity.
  */
-export type AgentKind = "main" | "sub" | "advisor";
+export type AgentKind = "main" | "sub" | "advisor" | "persistent";
 
 export interface AgentRef {
 	id: string;
@@ -43,6 +42,10 @@ export interface AgentRef {
 	lastActivity: number;
 	/** Short gist of what the agent is currently doing (latest intent or tool), for the work-aware roster. Display-only. */
 	activity?: string;
+	/** Associated AgentProfile (only for persistent agents). */
+	profileId?: string;
+	/** Current role name (only for persistent agents). */
+	role?: string;
 }
 
 export type RegistryEvent =
@@ -60,6 +63,10 @@ export interface RegisterInput {
 	session: AgentSession | null;
 	sessionFile?: string | null;
 	status?: AgentStatus;
+	/** Associated AgentProfile id (only for persistent agents). */
+	profileId?: string;
+	/** Current role name (only for persistent agents). */
+	role?: string;
 }
 
 export class AgentRegistry {
@@ -92,10 +99,22 @@ export class AgentRegistry {
 			sessionFile: input.sessionFile ?? null,
 			createdAt: now,
 			lastActivity: now,
+			profileId: input.profileId,
+			role: input.role,
 		};
 		this.#refs.set(ref.id, ref);
 		this.#emit({ type: "registered", ref });
 		return ref;
+	}
+
+	/**
+	 * Attach a live session to an already-registered agent.
+	 * No-op when the agent is not found.
+	 */
+	setSession(id: string, session: AgentSession): void {
+		const ref = this.#refs.get(id);
+		if (!ref) return;
+		ref.session = session;
 	}
 
 	setStatus(id: string, status: AgentStatus): void {

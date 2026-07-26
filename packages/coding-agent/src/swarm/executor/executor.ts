@@ -88,6 +88,10 @@ export interface SwarmExecutorOptions {
 	agentOverrides?: Partial<AgentDefinition>;
 		/** Optional activity logger for SSE streaming output. */
 		activityLogger?: ActivityLogger;
+	/** Optional: transform context hook forwarded to runSubprocess. */
+	transformContext?: (messages: unknown[], signal?: AbortSignal) => Promise<unknown>;
+	/** Optional: after-tool-call hook forwarded to runSubprocess. */
+	afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 }
 
 // ============================================================================
@@ -208,7 +212,8 @@ export async function executeSwarmAgent(
 			artifactsDir: path.join(stateTracker.swarmDir, "context"),
 			keepAlive: false,
 			beforeToolCall: toolHooks?.beforeToolCall,
-			afterToolCall: toolHooks?.afterToolCall,
+			afterToolCall: options.afterToolCall ?? toolHooks?.afterToolCall,
+			transformContext: options.transformContext,
 		});
 
 		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);

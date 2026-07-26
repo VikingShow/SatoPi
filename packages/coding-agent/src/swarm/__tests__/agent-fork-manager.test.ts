@@ -12,7 +12,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { decomposeSubtasks, AgentForkManager } from "../agent/agent-fork-manager";
+import { decomposeSubtasks, AgentForkManager } from "../../agent/agent-fork-manager";
 
 describe("decomposeSubtasks", () => {
 	// ── Multi-paragraph tasks ─────────────────────────────────────────

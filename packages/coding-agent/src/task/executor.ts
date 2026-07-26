@@ -410,6 +410,8 @@ export interface ExecutorOptions {
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
 	/** Hook invoked after each tool call in the subagent's loop. */
 	afterToolCall?: AgentLoopConfig["afterToolCall"];
+	/** Optional: transform context before each LLM call. Wired into AgentLoopConfig. */
+	transformContext?: AgentLoopConfig["transformContext"];
 }
 
 function parseStringifiedJson(value: unknown): unknown {
