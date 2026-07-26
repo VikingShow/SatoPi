@@ -678,7 +678,7 @@ export class InputController {
 					text = slashResult;
 				}
 			}
-			// Dispatch extension-registered slash commands (e.g. /swarm, /loopeng).
+			// Dispatch extension-registered slash commands.
 			// executeBuiltinSlashCommand only handles builtins; extension commands
 			if (text?.startsWith("/") && runner) {
 				const spaceIdx = text.indexOf(" ");

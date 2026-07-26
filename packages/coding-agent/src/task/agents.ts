@@ -12,6 +12,7 @@ import agentFrontmatterTemplate from "../prompts/agents/frontmatter.md" with { t
 import librarianMd from "../prompts/agents/librarian.md" with { type: "text" };
 import reviewerMd from "../prompts/agents/reviewer.md" with { type: "text" };
 import scoutMd from "../prompts/agents/scout.md" with { type: "text" };
+import swarmMd from "../prompts/agents/swarm.md" with { type: "text" };
 import taskMd from "../prompts/agents/task.md" with { type: "text" };
 import { AUTO_THINKING } from "../thinking";
 
@@ -65,7 +66,8 @@ const EMBEDDED_AGENT_DEFS: EmbeddedAgentDef[] = [
 		},
 		template: taskMd,
 	},
-];
+	{ fileName: "swarm.md", template: swarmMd },
+]
 
 // Computed lazily on first loadBundledAgents() call to avoid eager prompt.render at module load.
 

@@ -974,7 +974,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Initialize hooks with TUI-based UI context
 		await this.initHooksAndCustomTools();
-		// Rebuild autocomplete to pick up extension-registered commands (e.g. /swarm, /loopeng)
+		// Rebuild autocomplete to pick up extension-registered commands
 		// that were registered during initHooksAndCustomTools above.
 		await this.refreshSlashCommandState();
 
@@ -1113,7 +1113,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			}));
 		// Extension commands are registered after init (initHooksAndCustomTools runs
 		// after the constructor), so they are NOT in #pendingSlashCommands. Re-read
-		// them live so /swarm, /loopeng, etc. appear in autocomplete.
+		// them live so extension commands appear in autocomplete.
 		const extensionCommands: SlashCommand[] = (
 			this.session.extensionRunner?.getRegisteredCommands(BUILTIN_SLASH_COMMAND_RESERVED_NAMES) ?? []
 		).map(cmd => ({

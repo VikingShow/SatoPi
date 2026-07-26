@@ -2305,6 +2305,42 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		},
 	},
 	{
+		name: "swarm",
+		description: "Manage swarm agents and orchestration (run, dashboard, stop)",
+		subcommands: [
+			{ name: "run", description: "Start a swarm run from a YAML definition", usage: "<yaml-file>" },
+			{ name: "dashboard", description: "Open the interactive swarm dashboard" },
+			{ name: "stop", description: "Stop the currently running swarm" },
+		],
+		inlineHint: "[run|dashboard|stop]",
+		allowArgs: true,
+		handleTui: (command, runtime) => {
+			const arg = command.args.trim().toLowerCase();
+			if (!arg || arg === "dashboard") {
+				runtime.ctx.showStatus("Swarm dashboard: use `omp swarm dashboard` for the full interactive view.");
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (arg === "run" || arg.startsWith("run ")) {
+				const yamlFile = arg.slice(3).trim();
+				runtime.ctx.showStatus(
+					yamlFile
+						? `Swarm run: use \`omp swarm run ${yamlFile}\` from the terminal.`
+						: "Swarm run: use `omp swarm run <yaml-file>` from the terminal.",
+				);
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (arg === "stop") {
+				runtime.ctx.showStatus("Swarm stop: use `omp swarm stop` from the terminal.");
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showStatus("Usage: /swarm [run|dashboard|stop]");
+			runtime.ctx.editor.setText("");
+		},
+	},
+	{
 		name: "pause",
 		description: "Freeze all agents (main, subagents, advisor) until resumed",
 		handleTui: async (_command, runtime) => {

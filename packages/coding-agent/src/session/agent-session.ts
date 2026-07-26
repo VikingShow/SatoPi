@@ -246,6 +246,7 @@ import { resolveMemoryBackend } from "../memory-backend";
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
+import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
 import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
@@ -1526,6 +1527,7 @@ const MAGIC_KEYWORD_NOTICE_TYPES: ReadonlySet<string> = new Set([
 	"ultrathink-notice",
 	"orchestrate-notice",
 	"workflow-notice",
+	"swarm-notice",
 ]);
 
 /** Custom-message type of the hidden companion carrying vision descriptions of image
@@ -7922,7 +7924,7 @@ export class AgentSession {
 		return { ...message, content: normalized } as T;
 	}
 
-	#magicKeywordEnabled(keyword: "orchestrate" | "ultrathink" | "workflow"): boolean {
+	#magicKeywordEnabled(keyword: "orchestrate" | "swarm" | "ultrathink" | "workflow"): boolean {
 		return this.settings.get("magicKeywords.enabled") && this.settings.get(`magicKeywords.${keyword}`);
 	}
 
@@ -7946,6 +7948,16 @@ export class AgentSession {
 				role: "custom",
 				customType: "orchestrate-notice",
 				content: ORCHESTRATE_NOTICE,
+				display: false,
+				attribution: "user",
+				timestamp,
+			});
+		}
+		if (this.#magicKeywordEnabled("swarm") && containsSwarm(text)) {
+			keywordNotices.push({
+				role: "custom",
+				customType: "swarm-notice",
+				content: SWARM_NOTICE,
 				display: false,
 				attribution: "user",
 				timestamp,

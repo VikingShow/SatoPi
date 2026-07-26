@@ -2,7 +2,7 @@
  * BeforeLoop — Loop 启动前的规划与辩论。
  *
  * 流程:
- *   1. /loopeng 触发 → Planner 苏格拉底式对话
+ *   1. 扩展命令触发 → Planner 苏格拉底式对话
  *   2. Planner ↔ Human 多轮对话 (Socratic 引导)
  *   3. Planner 产出 draft plan.md
  *   4. (NEW) Agent Debate 多轮辩论草案 → refined plan.md
@@ -55,7 +55,7 @@ export interface ScriptResult {
 /**
  * Generate the Before Loop planning prompt for Planner.
  *
- * This prompt is injected into the conversation when /loopeng triggers.
+ * This prompt is injected into the conversation when the BeforeLoop extension triggers.
  * Planner engages the human in a Socratic dialogue to clarify goals,
  * constraints, and acceptance criteria, then produces plan.md.
  *

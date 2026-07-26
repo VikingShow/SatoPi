@@ -7,3 +7,5 @@ export { SwarmStateMachine, type StateMachineHooks, type PhaseContext, type Tran
 export { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./dag";
 export { evaluateBlockage } from "./blockage";
 export { VerificationHook, type VerificationResult } from "./verification-hook";
+export { SwarmRunner } from "./swarm-runner";
+export type { RunManager, ScriptManager, SteeringSink } from "./services";

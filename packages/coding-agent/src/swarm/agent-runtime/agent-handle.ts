@@ -66,6 +66,46 @@ export class AgentHandle {
     return this.#session;
   }
 
+	/**
+	 * Subscribe to raw AgentEvents from the underlying Agent.
+	 * Use this to wire Dashboard tool-execution rendering or
+	 * bridge events to ActivityLogger.
+	 *
+	 * Returns an unsubscribe function.
+	 */
+	subscribe(callback: (event: AgentEvent) => void): () => void {
+		return this.#agent.subscribe(callback);
+	}
+
+	bridgeToolEvents(activityLogger: { logToolCall: (agentName: string, toolName: string, input?: string, output?: string, error?: string, durationMs?: number) => void }): () => void {
+		const toolTimers = new Map<string, number>();
+		return this.#agent.subscribe((event: AgentEvent) => {
+			switch (event.type) {
+				case "tool_execution_start":
+					toolTimers.set(event.toolCallId, Date.now());
+					activityLogger.logToolCall(
+						this.id,
+						event.toolName,
+						typeof event.args === "string" ? event.args : JSON.stringify(event.args),
+					);
+					break;
+				case "tool_execution_end":
+					activityLogger.logToolCall(
+						this.id,
+						event.toolName,
+						undefined,
+						typeof event.result === "string" ? event.result : JSON.stringify(event.result),
+						event.isError ? String(event.result) : undefined,
+						toolTimers.has(event.toolCallId)
+							? Date.now() - toolTimers.get(event.toolCallId)!
+							: undefined,
+					);
+					toolTimers.delete(event.toolCallId);
+					break;
+			}
+		});
+	}
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
