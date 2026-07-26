@@ -39,8 +39,8 @@ coverage/
 packages/ai/test/.temp-images/
 
 # Project specific
-!.omp/
-.omp/plugins/
+!.stp/
+.stp/plugins/
 .swarm_*/
 .pi_config/
 .opencode/
@@ -80,6 +80,5 @@ python/robomp/.env
 packages/coding-agent/bench/boot-baseline.json
 
 # Swarm runtime artifacts
-.omp/
 .swarm-workspace/
 *.swarm-workspace/
