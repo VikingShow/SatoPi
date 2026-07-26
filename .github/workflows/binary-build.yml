@@ -2,7 +2,8 @@ name: Binary Build
 
 on:
   push:
-    branches: [dev, main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -49,3 +50,22 @@ jobs:
           name: stp-${{ matrix.target.name }}
           path: packages/coding-agent/dist/stp*
           if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stp-*
+          path: dist/
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
