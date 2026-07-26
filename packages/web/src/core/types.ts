@@ -17,6 +17,13 @@ export interface ChatMessage {
   body: string;
   timestamp: number;
   channelId?: string;
+  to?: string;
+  /** True while the message is being streamed token-by-token (not yet finalised). */
+  streaming?: boolean;
+  /** Model chain-of-thought — shown in a collapsible ThinkingBlock after stream_end. */
+  thinking?: string;
+  /** Timestamp when stream_start was received — used for TTFT measurement. */
+  streamCreatedAt?: number;
 }
 
 export interface ChatChannel {

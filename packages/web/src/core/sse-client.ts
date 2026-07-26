@@ -84,12 +84,19 @@ export class SseClient<T = Record<string, unknown>> {
     };
   }
 
-  disconnect(): void {
+  /**
+   * Tear down the current EventSource and stop auto-reconnect.
+   *
+   * @param notify  When false, suppresses the connection-change notification.
+   *                Use this for deliberate session switches so the UI doesn't
+   *                flash "Reconnecting" between disconnect and the next connect.
+   */
+  disconnect(notify = true): void {
     this.shouldReconnect = false;
     this.stopHeartbeat();
     this.eventSource?.close();
     this.eventSource = null;
-    this.notifyConnection(false);
+    if (notify) this.notifyConnection(false);
   }
 
   on(handler: SseEventHandler<T>): () => void {
