@@ -1,12 +1,20 @@
 /**
  * AgentSummarizer — L1 摘要生成器
  *
- * 接收 Agent 产出的 SingleResult，用文本截取生成 ≤200 字摘要。
- * 不调用 LLM（简单实现），摘要直接取 output 前 200 字符。
+ * 接收 Agent 产出的 SingleResult，生成摘要。
+ *
+ * 两种模式:
+ * - summarize() — 同步文本截取 (≤200 字)，不调 LLM
+ * - summarizeAsync() — 使用 L1LlmSummarizer (LLM 语义摘要)，需传入 modelRegistry + settings
+ *   LLM 失败时自动降级到文本截取
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
+import { L1LlmSummarizer } from "./llm-summarizer"
+import type { ModelRegistry } from "../../config/model-registry"
+import type { Settings } from "../../config/settings"
+
 
 // ============================================================================
 // Types
@@ -41,8 +49,20 @@ export interface SummarizeOutput {
 // ============================================================================
 
 export class AgentSummarizer {
+	readonly #llmSummarizer?: L1LlmSummarizer;
+
 	/**
-	 * 生成 Agent 产出的摘要。
+	 * @param opts.modelRegistry — ModelRegistry for LLM-based summarization (optional)
+	 * @param opts.settings — Settings for LLM-based summarization (optional)
+	 */
+	constructor(opts?: { modelRegistry?: ModelRegistry; settings?: Settings }) {
+		if (opts?.modelRegistry && opts?.settings) {
+			this.#llmSummarizer = new L1LlmSummarizer(opts.modelRegistry, opts.settings);
+		}
+	}
+
+	/**
+	 * 生成 Agent 产出的摘要（同步，纯文本截取）。
 	 *
 	 * 实现策略（简单版，不调 LLM）：
 	 * - 摘要截取 output 前 200 字符
@@ -86,5 +106,51 @@ export class AgentSummarizer {
 		});
 
 		return { summary, score: computedScore, taskCall, resultRef };
+	}
+
+	/**
+	 * 生成 Agent 产出的摘要（异步，LLM 语义摘要）。
+	 *
+	 * 需要构造函数传入 modelRegistry + settings 才可用。
+	 * LLM 失败时自动降级到 summarize() 文本截取。
+	 */
+	async summarizeAsync(input: SummarizeInput): Promise<SummarizeOutput> {
+		const { result, agentId, iteration, phaseHint, score } = input;
+
+		if (!this.#llmSummarizer) {
+			// No LLM configured — use synchronous text fallback
+			return this.summarize(input);
+		}
+
+		const outputText = result.output ?? result.stderr ?? "";
+		const trimmed = outputText.trim();
+
+		if (!trimmed) {
+			return { summary: "[no output]", score: 0, taskCall: phaseHint ?? `Agent 产出: ${agentId}` };
+		}
+
+		// Try LLM-based semantic summarization
+		const llmResult = await this.#llmSummarizer.summarize(trimmed);
+
+		const taskCall = phaseHint ? `${phaseHint}` : `Agent 产出: ${agentId}`;
+		let resultRef: string | undefined;
+		if (outputText.length > 2000) {
+			resultRef = `artifact://offload/${agentId}/${iteration}`;
+		}
+
+		logger.debug("[AgentSummarizer] Async summary generated", {
+			agentId,
+			iteration,
+			score: llmResult.score,
+			summaryLen: llmResult.summary.length,
+			hasRef: !!resultRef,
+		});
+
+		return {
+			summary: llmResult.summary,
+			score: score ?? llmResult.score,
+			taskCall,
+			resultRef,
+		};
 	}
 }

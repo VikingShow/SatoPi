@@ -142,7 +142,7 @@ export class SwarmSessionManager {
 
 	get swarmDir(): string { return this.#swarmDir; }
 
-	/** Expose the underlying SessionStorage for swarm offload pipeline use. */
+	/** Expose the underlying SessionStorage for offload pipeline use. */
 	get storage(): SessionStorage {
 		return this.#session.storage;
 	}

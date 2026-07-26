@@ -9,9 +9,9 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../core/pipeline";
-import { AgentSummarizer, type SummarizeOutput } from "./agent-summarizer";
-import type { AgentOffloadEntry } from "./agent-offload-summarizer";
+import type { ReviewVerdict } from "../../swarm/core/pipeline"
+import { AgentSummarizer, type SummarizeOutput } from "./summarizer"
+import type { AgentOffloadEntry } from "./agent-summarizer"
 import {
 	Deduplicator,
 	type DedupEntry,
@@ -23,7 +23,7 @@ import {
 	type PlanPhase,
 	type MmdNode,
 	type MmdEdge,
-} from "./plan-node-attributor";
+} from "./attributor"
 
 // ============================================================================
 // Types

@@ -458,7 +458,7 @@ export class SessionManager {
 		if (persist && sessionDir) this.#storage.ensureDirSync(sessionDir);
 	}
 
-	/** Expose the underlying SessionStorage for swarm offload pipeline use. */
+	/** Expose the underlying SessionStorage for offload pipeline use. */
 	get storage(): SessionStorage {
 		return this.#storage;
 	}

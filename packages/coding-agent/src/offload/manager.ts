@@ -11,8 +11,8 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import { SwarmOffloadStore, type SwarmOffloadEntry } from "./offload-store";
-import type { SessionStorage } from "../../session/session-storage";
+import { OffloadStore, type OffloadEntry } from "./store"
+import type { SessionStorage } from "../session/session-storage"
 
 // ---------------------------------------------------------------------------
 // Unified interface
@@ -30,15 +30,17 @@ export interface IOffloadManager {
 }
 
 // ---------------------------------------------------------------------------
-// OffloadManager — real implementation backed by SwarmOffloadStore
+// OffloadManager — real implementation backed by OffloadStore
 // ---------------------------------------------------------------------------
 
 export class OffloadManager implements IOffloadManager {
-	readonly #store: SwarmOffloadStore;
+	readonly #store: OffloadStore;
+	readonly #sessionId: string;
 	#iteration = 0;
 
-	constructor(swarmDir: string, storage: SessionStorage) {
-		this.#store = new SwarmOffloadStore(swarmDir, storage);
+	constructor(workspace: string, agentName: string, sessionId: string, storage: SessionStorage) {
+		this.#store = new OffloadStore(workspace, agentName, storage);
+		this.#sessionId = sessionId;
 	}
 
 	/** Set the current iteration for entry tagging. */
@@ -53,7 +55,7 @@ export class OffloadManager implements IOffloadManager {
 		const summary = extractSummary(content);
 		const taskCall = extractTaskCall(content);
 
-		const entry: SwarmOffloadEntry = {
+		const entry: OffloadEntry = {
 			timestamp: new Date().toISOString(),
 			agent_id: agentId,
 			iteration: this.#iteration,
@@ -62,7 +64,7 @@ export class OffloadManager implements IOffloadManager {
 			score: 5, // neutral default; refined by reviewer verdicts later
 		};
 
-		await this.#store.appendEntry(agentId, entry);
+		await this.#store.appendEntry(agentId, this.#sessionId, entry);
 		logger.debug("[OffloadManager] L1 entry stored", { agentId, summaryLen: summary.length });
 	}
 
@@ -77,7 +79,7 @@ export class OffloadManager implements IOffloadManager {
 	// -- Context direction -----------------------------------------------------
 
 	async getMmdContext(agentId: string, taskDescription: string): Promise<string | null> {
-		const entries = await this.#store.readEntries(agentId);
+		const entries = await this.#store.readEntries(agentId, this.#sessionId);
 		if (entries.length === 0) return null;
 
 		const recent = entries.slice(-5); // last 5 entries
@@ -101,7 +103,7 @@ export class OffloadManager implements IOffloadManager {
 		if (allEntries.length === 0) return null;
 
 		// Group by agent and pick top entries
-		const byAgent = new Map<string, SwarmOffloadEntry[]>();
+		const byAgent = new Map<string, OffloadEntry[]>();
 		for (const e of allEntries) {
 			const list = byAgent.get(e.agent_id) ?? [];
 			list.push(e);

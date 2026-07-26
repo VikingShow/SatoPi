@@ -13,16 +13,15 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { SessionStorage } from "../../session/session-storage";
-import type { PlanPhase } from "./plan-node-attributor";
-import type { ExperienceStore } from "../curtain/experience";
-import type { ExtractedLesson } from "../curtain/extractor";
-import { getOffloadDir } from "./offload-paths";
-import { SwarmOffloadStore } from "./offload-store";
-import { OffloadPipeline, type OffloadPipelineConfig } from "./offload-pipeline";
-import { MermaidSynthesizer } from "./mermaid-synthesizer";
-import { MmdInjector } from "./mmd-injector";
-import { AgentOffloadSummarizer, type AgentOffloadEntry } from "./agent-offload-summarizer";
+import type { SessionStorage } from "../session/session-storage"
+import type { PlanPhase } from "./pipeline/attributor"
+import type { ExperienceStore } from "../swarm/curtain/experience"
+import type { ExtractedLesson } from "../swarm/curtain/extractor"
+import { OffloadStore } from "./store"
+import { OffloadPipeline, type OffloadPipelineConfig } from "./pipeline/pipeline"
+import { MermaidSynthesizer } from "./mermaid/synthesizer"
+import { MmdInjector } from "./mermaid/injector"
+import { AgentOffloadSummarizer, type AgentOffloadEntry } from "./pipeline/agent-summarizer"
 
 // ============================================================================
 // Types
@@ -67,17 +66,18 @@ export interface OffloadAgentHooksResult {
 // ============================================================================
 
 export function createOffloadAgentHooks(
-	swarmDir: string,
+	workspace: string,
+	agentName: string,
 	storage: SessionStorage,
 	agentId: string,
 	config: OffloadAgentHooksConfig,
 ): OffloadAgentHooksResult {
-	const store = new SwarmOffloadStore(swarmDir, storage);
+	const store = new OffloadStore(workspace, agentName, storage);
 	const pipeline = new OffloadPipeline(config.pipeline);
 	const synthesizer = new MermaidSynthesizer(storage);
 	const injector = new MmdInjector();
 	const summarizer = new AgentOffloadSummarizer();
-	const { experienceStore, sessionId } = config;
+	const { experienceStore, sessionId = agentId } = config;
 
 	// MMD 状态
 	let currentMmd = "";
@@ -112,7 +112,7 @@ export function createOffloadAgentHooks(
 
 		// 持久化到 JSONL
 		const jsonlEntry = toOffloadJsonlEntry(entry);
-		await store.appendEntry(agentId, jsonlEntry);
+		await store.appendEntry(agentId, sessionId, jsonlEntry);
 
 		// 记录 phase
 		if (phaseHint) phaseMap.set(agentId, phaseHint);
@@ -193,7 +193,8 @@ export function createOffloadAgentHooks(
 				nodes: l2Result.nodes,
 				edges: l2Result.edges,
 				iteration,
-				swarmDir,
+				workspace,
+				agentName,
 				boundaryType: l2Result.boundary.type,
 			});
 

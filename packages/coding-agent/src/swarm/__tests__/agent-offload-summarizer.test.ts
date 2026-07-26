@@ -14,10 +14,8 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import {
-	AgentOffloadSummarizer,
-	type AgentOffloadSummarizeInput,
-} from "../offload/agent-offload-summarizer";
+import { AgentOffloadSummarizer,
+	type AgentOffloadSummarizeInput, } from "../../offload/pipeline/agent-summarizer"
 
 describe("AgentOffloadSummarizer", () => {
 	const summarizer = new AgentOffloadSummarizer();

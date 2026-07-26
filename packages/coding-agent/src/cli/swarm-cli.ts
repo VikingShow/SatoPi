@@ -21,7 +21,7 @@ import { MarkEnvironment } from "../swarm/coordination/mark-environment";
 import { RoleAssetManager } from "../swarm/agent/role-asset";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
-import { NoopOffloadManager } from "../swarm/offload/offload-manager";
+import { NoopOffloadManager } from "../offload/manager"
 import type { SwarmDefinition } from "../swarm/core";
 
 export type SwarmAction = "run" | "plan" | "resume";

@@ -1,37 +1,40 @@
 /**
  * offload/ — TencentDB-Agent-Memory Mermaid progressive disclosure engine
  *
- * L1→L1.5→L2→L3 pipeline for swarm context offload.
+ * L1→L1.5→L2→L3 pipeline for context offload.
  *
  * Usage (loop-controller.ts — zero modification):
  *
  *   import { createOffloadHooks } from "./offload";
- *   const hooks = createOffloadHooks(swarmDir, storage, config);
+ *   const hooks = createOffloadHooks(workspace, agentName, storage, config);
  *   runLoop({ hooks });
  */
 
-export { SwarmOffloadStore, type SwarmOffloadEntry } from "./offload-store";
+export { OffloadStore, type OffloadEntry } from "./store";
 export {
 	getOffloadDir,
+	getAgentDataDir,
 	getMmdsDir,
-	getRefsDir,
 	getOffloadPath,
 	getMmdPath,
 	getArchivedMmdPath,
-} from "./offload-paths";
+	getStatePath,
+	getProfilesDir,
+} from "./paths";
 export {
 	OffloadPipeline,
 	type OffloadPipelineConfig,
-} from "./offload-pipeline";
-export { AgentSummarizer, type SummarizeInput, type SummarizeOutput } from "./agent-summarizer";
-export { OffloadManager, NoopOffloadManager, type IOffloadManager } from "./offload-manager";
+} from "./pipeline/pipeline";
+export { AgentSummarizer, type SummarizeInput, type SummarizeOutput } from "./pipeline/summarizer";
+export { L1LlmSummarizer, type L1Summary } from "./pipeline/llm-summarizer";
+export { OffloadManager, NoopOffloadManager, type IOffloadManager } from "./manager";
 export {
 	Deduplicator,
 	type DedupEntry,
 	type DedupInput,
 	type DedupOutput,
 	type TaskBoundary,
-} from "./deduplicator";
+} from "./pipeline/deduplicator";
 export {
 	PlanNodeAttributor,
 	type PlanPhase,
@@ -40,28 +43,34 @@ export {
 	type AttributionOutput,
 	type MmdNode,
 	type MmdEdge,
-} from "./plan-node-attributor";
+} from "./pipeline/attributor";
 export {
 	MermaidSynthesizer,
 	type MmdSynthesizeInput,
-} from "./mermaid-synthesizer";
+} from "./mermaid/synthesizer";
 export {
 	MmdInjector,
 	type MmdInjectConfig,
 	type MmdView,
-} from "./mmd-injector";
+} from "./mermaid/injector";
 export {
 	createOffloadHooks,
 	type OffloadHooksConfig,
 	type OffloadHooksResult,
-} from "./offload-hooks";
+} from "./hooks";
 export {
 	createOffloadAgentHooks,
 	type OffloadAgentHooksConfig,
 	type OffloadAgentHooksResult,
-} from "./offload-agent-hooks";
+} from "./agent-hooks";
 export {
 	AgentOffloadSummarizer,
 	type AgentOffloadEntry,
 	type AgentOffloadSummarizeInput,
-} from "./agent-offload-summarizer";
+} from "./pipeline/agent-summarizer";
+export {
+	compactContext,
+	DEFAULT_COMPACT_CONFIG,
+	type CompactContextConfig,
+	type CompactContextResult,
+} from "./compact";

@@ -9,8 +9,8 @@
 
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { SessionStorage } from "../../session/session-storage";
-import { getMmdPath, getArchivedMmdPath, getMmdsDir } from "./offload-paths";
+import type { SessionStorage } from "../../session/session-storage"
+import { getMmdPath, getArchivedMmdPath, getMmdsDir } from "../paths"
 
 // ============================================================================
 // Forward type references (from plan-node-attributor in pipeline module)
@@ -41,8 +41,10 @@ export interface MmdSynthesizeInput {
 	edges: MmdEdge[];
 	/** 当前迭代编号 (0-based) */
 	iteration: number;
-	/** swarm 目录路径 */
-	swarmDir: string;
+	/** workspace 路径 */
+	workspace: string;
+	/** agent 名称 */
+	agentName: string;
 	/** 图标题（可选） */
 	title?: string;
 	/** 任务边界类型 */
@@ -84,15 +86,15 @@ export class MermaidSynthesizer {
 		const mmdText = this.generateText(input);
 
 		// 确保 mmds 目录存在
-		const mmdsDir = getMmdsDir(input.swarmDir);
+		const mmdsDir = getMmdsDir(input.workspace, input.agentName);
 		this.#storage.ensureDirSync(mmdsDir);
 
 		// 原子写入当前活跃图
-		const mmdPath = getMmdPath(input.swarmDir);
+		const mmdPath = getMmdPath(input.workspace, input.agentName);
 		await this.#storage.writeTextAtomic(mmdPath, mmdText);
 
 		// 归档写入
-		const archivedPath = getArchivedMmdPath(input.swarmDir, input.iteration);
+		const archivedPath = getArchivedMmdPath(input.workspace, input.agentName, input.iteration);
 		const archivedDir = path.dirname(archivedPath);
 		this.#storage.ensureDirSync(archivedDir);
 		await this.#storage.writeTextAtomic(archivedPath, mmdText);

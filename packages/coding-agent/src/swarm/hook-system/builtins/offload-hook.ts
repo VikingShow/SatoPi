@@ -9,7 +9,7 @@
 
 import type { Chapter } from "../../core/state";
 import type { HookEvent, HookPayload, HookContext, HookRegistration } from "../types";
-import type { IOffloadManager } from "../../offload/offload-manager";
+import type { IOffloadManager } from "../../offload/manager"
 import { logger } from "@oh-my-pi/pi-utils";
 
 // ---------------------------------------------------------------------------

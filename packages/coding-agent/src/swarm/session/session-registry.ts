@@ -12,7 +12,7 @@
  */
 
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
-import { OffloadManager } from "../offload/offload-manager";
+import { OffloadManager } from "../../offload/manager"
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { StateTracker } from "../core/state";
@@ -30,7 +30,7 @@ import type { ProfileRegistry } from "../agent/agent-profile";
 import { SwarmSessionManager } from "./swarm-session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { IOffloadManager } from "../offload/offload-manager";
+import type { IOffloadManager } from "../../offload/manager"
 
 // ============================================================================
 // Types
@@ -200,7 +200,7 @@ export class SessionRegistry {
 			// The factory may have registered hooks with NoopOffloadManager;
 			// we upgrade to a real OffloadManager backed by SessionStorage.
 			if (services.hookPipeline) {
-				const offloadManager = new OffloadManager(swarmDir, sessionManager.storage);
+				const offloadManager = new OffloadManager(this.workspace, name, name, sessionManager.storage);
 				session.offloadManager = offloadManager;
 
 				registerBuiltinHooks(services.hookPipeline, {
