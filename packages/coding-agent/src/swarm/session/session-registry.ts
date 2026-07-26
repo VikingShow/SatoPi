@@ -18,6 +18,7 @@ import * as fs from "node:fs/promises";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger, ActivityBroadcaster } from "../hooks/activity-logger";
 import type { RunManager, SteeringSink } from "../core/services";
+import type { MarkEnvironment } from "../coordination/mark-environment";
 import type { ScriptManager } from "../core/services";
 import type { ExperienceStore } from "../curtain/experience";
 import type { ModelRegistry } from "../../config/model-registry";
@@ -46,10 +47,12 @@ export interface SharedServices {
 	roleAssetManager: RoleAssetManager;
 	/** P7: AgentProfile registry — cross-run persistent agent identity. */
 	profileRegistry: ProfileRegistry;
+	/** P7: Stigmergic MarkEnvironment — cross-agent coordination signals. */
+	markEnvironment: MarkEnvironment;
 }
 
 /** The complete per-session service graph. */
-export interface SessionServices {
+
 	name: string;
 	swarmDir: string;
 	stateTracker: StateTracker;

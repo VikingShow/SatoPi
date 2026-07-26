@@ -103,6 +103,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			experienceStore,
 			roleAssetManager,
 			profileRegistry,
+			markEnvironment,
 		};
 		const factory: SessionFactory = async (s, name, swarmDir) => {
 			const stateTracker = new StateTracker(cwd, name);
