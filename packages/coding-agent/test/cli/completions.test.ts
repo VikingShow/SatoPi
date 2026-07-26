@@ -188,7 +188,7 @@ describe("buildSpec", () => {
 	});
 });
 
-describe("omp completions (integration / drift)", () => {
+describe("stp completions (integration / drift)", () => {
 	it("emits a zsh script reflecting the live command + flag surface", async () => {
 		const proc = Bun.spawn([process.execPath, cliEntry, "completions", "zsh"], {
 			cwd: repoRoot,
@@ -214,15 +214,15 @@ describe("omp completions (integration / drift)", () => {
 		expect(stdout).toContain(":value:(off minimal low medium high xhigh max auto)");
 		expect(stdout).toContain(":value:(always-ask write yolo)");
 		// Real subcommands present; dynamic callbacks wired.
-		expect(stdout).toContain("_omp_cmd_commit");
+		expect(stdout).toContain("_stp_cmd_commit");
 		expect(stdout).toContain("'completions:");
-		// zsh routes single-value dynamic flags through the _omp_call action, which
-		// itself shells out to `omp __complete $kind`.
-		expect(stdout).toContain("_omp_call models");
-		expect(stdout).toContain("_omp_call sessions");
-		expect(stdout).toContain("command omp __complete $kind");
+		// zsh routes single-value dynamic flags through the _stp_call action, which
+		// itself shells out to `stp __complete $kind`.
+		expect(stdout).toContain("_stp_call models");
+		expect(stdout).toContain("_stp_call sessions");
+		expect(stdout).toContain("command stp __complete $kind");
 		// Hidden/default commands must NOT surface as completable subcommands.
-		expect(stdout).not.toContain("_omp_cmd_launch");
-		expect(stdout).not.toContain("_omp_cmd___complete");
+		expect(stdout).not.toContain("_stp_cmd_launch");
+		expect(stdout).not.toContain("_stp_cmd___complete");
 	});
 });
