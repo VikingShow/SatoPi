@@ -177,7 +177,14 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			return;
 		}
 
-		process.stderr.write(`Swarm "${swarmName}" started successfully.\n`);
+		process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
+		await (session.runManager as SwarmRunner).waitForCompletion();
+		const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
+		if (curtainResult) {
+			process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
+		} else {
+			process.stderr.write(`Swarm "${swarmName}" finished.\n`);
+		}
 	} finally {
 		authStorage.close();
 	}

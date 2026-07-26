@@ -51,6 +51,7 @@ export class SwarmRunner implements RunManager {
 	#experienceStore: ExperienceStore;
 	#sessionManager: SwarmSessionManager | undefined;
 	#running = false;
+	#completionPromise = Promise.withResolvers<void>();
 	#lastCurtainResult: CurtainResult | null = null;
 	#loopConfig: LoopSwarmConfig | null = null;
 	#profileRegistry: ProfileRegistry;
@@ -96,13 +97,17 @@ export class SwarmRunner implements RunManager {
 		this.#runtime = opts.runtime;
 	}
 
-	setSessionManager(sm: SwarmSessionManager): void { this.#sessionManager = sm; }
 	get isRunning(): boolean { return this.#running; }
 	getLastCurtainResult(): CurtainResult | null { return this.#lastCurtainResult; }
 
+	/** Wait for the full Stage → Curtain lifecycle to complete. */
+	async waitForCompletion(): Promise<void> {
+		return this.#completionPromise.promise;
+	}
+
 	async start(agentCount?: number): Promise<{ success: boolean; error?: string }> {
-		// Rotate session file so each Run gets a clean history slate.
-		try { await this.#sessionManager?.rotate(); } catch { /* best-effort */ }
+		// Reset completion promise for each run
+		this.#completionPromise = Promise.withResolvers<void>();
 
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
@@ -173,6 +178,7 @@ export class SwarmRunner implements RunManager {
 			}).finally(() => {
 				this.#running = false;
 				this.#abortController = null;
+				this.#completionPromise.resolve();
 			});
 
 			return { success: true };

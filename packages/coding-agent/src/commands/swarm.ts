@@ -23,9 +23,9 @@ export default class Swarm extends Command {
 	};
 
 	static examples = [
-		"# Run a swarm from a loop.yaml\n  omp swarm run ./loop.yaml",
-		"# Plan a swarm run\n  omp swarm plan ./loop.yaml",
-		"# Resume a swarm session\n  omp swarm resume my-swarm",
+		"# Run a swarm from a loop.yaml\n  stp swarm run ./loop.yaml",
+		"# Plan a swarm run\n  stp swarm plan ./loop.yaml",
+		"# Resume a swarm session\n  stp swarm resume my-swarm",
 	];
 
 	async run(): Promise<void> {
@@ -38,8 +38,8 @@ export default class Swarm extends Command {
 		if (!args.target) {
 			process.stderr.write(
 				args.action === "resume"
-					? "Usage: omp swarm resume <session-name>\n"
-					: `Usage: omp swarm ${args.action} <path-to-loop.yaml>\n`,
+					? "Usage: stp swarm resume <session-name>\n"
+					: `Usage: stp swarm ${args.action} <path-to-loop.yaml>\n`,
 			);
 			process.exitCode = 1;
 			return;
