@@ -1,7 +1,7 @@
 /**
  * OffloadManager — unified interface for the offload subsystem.
  *
- * Combines two previously separate placeholder interfaces:
+ * Combines two previously separate interfaces:
  *   1. hook-system/builtins/offload-hook.ts — summarizeL1 / forceFlush (hook direction)
  *   2. context-manager/sources/offload-source.ts — getMmdContext / getExperienceContext (context direction)
  *
@@ -11,41 +11,165 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
+import { SwarmOffloadStore, type SwarmOffloadEntry } from "./offload-store";
+import type { SessionStorage } from "../../session/session-storage";
 
 // ---------------------------------------------------------------------------
 // Unified interface
 // ---------------------------------------------------------------------------
 
 export interface IOffloadManager {
-  /** L1 summarization of an agent's output (hook direction). */
-  summarizeL1(agentId: string, content: unknown): Promise<void>;
-  /** Force-flush pending offload data to persistent storage (hook direction). */
-  forceFlush(): Promise<void>;
-  /** Get MMD context for agent spawn injection (context direction). */
-  getMmdContext(agentId: string, taskDescription: string): Promise<string | null>;
-  /** Get experience context for agent spawn injection (context direction). */
-  getExperienceContext(agentId: string, taskDescription: string): Promise<string | null>;
+	/** L1 summarization of an agent's output (hook direction). */
+	summarizeL1(agentId: string, content: unknown): Promise<void>;
+	/** Force-flush pending offload data to persistent storage (hook direction). */
+	forceFlush(): Promise<void>;
+	/** Get MMD context for agent spawn injection (context direction). */
+	getMmdContext(agentId: string, taskDescription: string): Promise<string | null>;
+	/** Get experience context for agent spawn injection (context direction). */
+	getExperienceContext(agentId: string, taskDescription: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
-// No-op implementation — logs and returns null/void.
-// Replace with a real implementation that delegates to OffloadPipeline
-// once SwarmOffloadStore + SessionStorage wiring is available in the session factory.
+// OffloadManager — real implementation backed by SwarmOffloadStore
+// ---------------------------------------------------------------------------
+
+export class OffloadManager implements IOffloadManager {
+	readonly #store: SwarmOffloadStore;
+	#iteration = 0;
+
+	constructor(swarmDir: string, storage: SessionStorage) {
+		this.#store = new SwarmOffloadStore(swarmDir, storage);
+	}
+
+	/** Set the current iteration for entry tagging. */
+	setIteration(it: number): void {
+		this.#iteration = it;
+	}
+
+	// -- Hook direction --------------------------------------------------------
+
+	async summarizeL1(agentId: string, content: unknown): Promise<void> {
+		// Extract a summary from the content (could be SingleResult, string, or arbitrary payload)
+		const summary = extractSummary(content);
+		const taskCall = extractTaskCall(content);
+
+		const entry: SwarmOffloadEntry = {
+			timestamp: new Date().toISOString(),
+			agent_id: agentId,
+			iteration: this.#iteration,
+			task_call: taskCall,
+			summary,
+			score: 5, // neutral default; refined by reviewer verdicts later
+		};
+
+		await this.#store.appendEntry(agentId, entry);
+		logger.debug("[OffloadManager] L1 entry stored", { agentId, summaryLen: summary.length });
+	}
+
+	async forceFlush(): Promise<void> {
+		// The store is write-through (JSONL append), so no buffered data to flush.
+		// L2 attribution (PlanNodeAttributor) is triggered separately when phase
+		// boundaries and plan.md are available. This method ensures any pending
+		// writes are visible.
+		logger.debug("[OffloadManager] forceFlush (write-through, no buffered data)");
+	}
+
+	// -- Context direction -----------------------------------------------------
+
+	async getMmdContext(agentId: string, taskDescription: string): Promise<string | null> {
+		const entries = await this.#store.readEntries(agentId);
+		if (entries.length === 0) return null;
+
+		const recent = entries.slice(-5); // last 5 entries
+		const lines = [
+			"<offload_context>",
+			`  Agent ${agentId} has completed ${entries.length} tasks so far.`,
+			`  Recent work for task "${taskDescription}":`,
+			"",
+			...recent.map(e =>
+				`  - [${e.timestamp}] ${e.task_call}: ${e.summary.slice(0, 150)}`,
+			),
+			"</offload_context>",
+		];
+
+		return lines.join("\n");
+	}
+
+	async getExperienceContext(agentId: string, taskDescription: string): Promise<string | null> {
+		// Read all agents' entries to provide cross-agent experience
+		const allEntries = await this.#store.readAllEntries();
+		if (allEntries.length === 0) return null;
+
+		// Group by agent and pick top entries
+		const byAgent = new Map<string, SwarmOffloadEntry[]>();
+		for (const e of allEntries) {
+			const list = byAgent.get(e.agent_id) ?? [];
+			list.push(e);
+			byAgent.set(e.agent_id, list);
+		}
+
+		const lines = [
+			"<swarm_experience>",
+			`  Prior work across ${byAgent.size} agents for task "${taskDescription}":`,
+			"",
+		];
+
+		for (const [aid, entries] of byAgent) {
+			const latest = entries[entries.length - 1];
+			lines.push(`  ${aid === agentId ? "* (you)" : `  - ${aid}`}: ${latest.summary.slice(0, 120)} (${entries.length} total entries)`);
+		}
+
+		lines.push("</swarm_experience>");
+		return lines.join("\n");
+	}
+}
+
+// ---------------------------------------------------------------------------
+// No-op implementation — fallback when SessionStorage is unavailable
 // ---------------------------------------------------------------------------
 
 export class NoopOffloadManager implements IOffloadManager {
-  async summarizeL1(_agentId: string, _content: unknown): Promise<void> {
-    // TODO: delegate to OffloadPipeline.runL1() when SessionStorage is wired
-  }
-  async forceFlush(): Promise<void> {
-    // TODO: delegate to OffloadPipeline.runL2() when phases are available
-  }
-  async getMmdContext(_agentId: string, _taskDescription: string): Promise<string | null> {
-    logger.debug("[NoopOffloadManager] getMmdContext called (no-op until wired)");
-    return null;
-  }
-  async getExperienceContext(_agentId: string, _taskDescription: string): Promise<string | null> {
-    logger.debug("[NoopOffloadManager] getExperienceContext called (no-op until wired)");
-    return null;
-  }
+	async summarizeL1(_agentId: string, _content: unknown): Promise<void> {
+		// Falls through — offload subsystem not wired
+	}
+	async forceFlush(): Promise<void> {
+		// Falls through — offload subsystem not wired
+	}
+	async getMmdContext(_agentId: string, _taskDescription: string): Promise<string | null> {
+		return null;
+	}
+	async getExperienceContext(_agentId: string, _taskDescription: string): Promise<string | null> {
+		return null;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extractSummary(content: unknown): string {
+	if (!content) return "(no output)";
+	if (typeof content === "string") return content.slice(0, 200);
+	if (typeof content === "object" && content !== null) {
+		const obj = content as Record<string, unknown>;
+		// SingleResult-like: extract text content
+		if (typeof obj.text === "string") return obj.text.slice(0, 200);
+		if (typeof obj.summary === "string") return obj.summary.slice(0, 200);
+		if (typeof obj.message === "string") return obj.message.slice(0, 200);
+		// Fallback: stringify keys
+		const keys = Object.keys(obj).join(", ");
+		return `(object with keys: ${keys})`;
+	}
+	return String(content).slice(0, 200);
+}
+
+function extractTaskCall(content: unknown): string {
+	if (!content) return "(unknown)";
+	if (typeof content === "string") return content.slice(0, 80);
+	if (typeof content === "object" && content !== null) {
+		const obj = content as Record<string, unknown>;
+		if (typeof obj.task === "string") return obj.task.slice(0, 80);
+		if (typeof obj.taskCall === "string") return obj.taskCall.slice(0, 80);
+	}
+	return "(see offload entry)";
 }

@@ -46,6 +46,7 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { ActivityEntry, ActivityEventType } from "../hooks/activity-logger";
 import type { Chapter, PipelineStatus, SwarmState, AgentState } from "../core/state";
+import type { SessionStorage } from "../../session/session-storage";
 
 // ============================================================================
 // Custom entry type tags
@@ -140,6 +141,11 @@ export class SwarmSessionManager {
 	// -- Accessors ------------------------------------------------------------
 
 	get swarmDir(): string { return this.#swarmDir; }
+
+	/** Expose the underlying SessionStorage for swarm offload pipeline use. */
+	get storage(): SessionStorage {
+		return this.#session.storage;
+	}
 
 	// -- Swarm State ----------------------------------------------------------
 

@@ -11,6 +11,8 @@
  * about how each component is wired up.
  */
 
+import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import { OffloadManager } from "../offload/offload-manager";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { StateTracker } from "../core/state";
@@ -27,6 +29,8 @@ import type { ProfileRegistry } from "../agent/agent-profile";
 // is what makes persistence actually work.
 import { SwarmSessionManager } from "./swarm-session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { IOffloadManager } from "../offload/offload-manager";
 
 // ============================================================================
 // Types
@@ -56,6 +60,10 @@ export interface SessionServices {
 	abortController: AbortController;
 	/** OH-MY-PI-based session persistence (replaces pipeline.json, activity.jsonl, conversation.json). */
 	sessionManager?: SwarmSessionManager;
+	/** v3: Hook pipeline for lifecycle hooks (Profile, Stigmergy, Offload, etc.). */
+	hookPipeline?: HookPipeline;
+	/** v3: Offload manager for context offload (L1 summarization, MMD injection). */
+	offloadManager?: IOffloadManager;
 }
 
 /** High-level session status for the run listing. */
@@ -174,25 +182,32 @@ export class SessionRegistry {
 		};
 
 		// Inject SwarmSessionManager into legacy persistence layers (dual-write).
-		// Each service keeps its existing file writes AND additionally writes to
-		// session.jsonl through the SessionManager.
 		if (sessionManager) {
 			services.stateTracker.setSessionManager(sessionManager);
 			services.activityLogger.setSessionManager(sessionManager);
 			services.scriptManager.setSessionManager?.(sessionManager);
 
-			// Seed the in-memory StateTracker from the persisted snapshot when
-			// the session.jsonl already existed (e.g. backend restart recovering
-			// a historical session). Without this, GET /api/runs reports the
-			// persisted status (completed/failed) from readLatestState but the
-			// in-memory StateTracker is still the empty "idle" default — the
-			// session list and the live state disagree, producing a ghost session.
+			// Seed the in-memory StateTracker from the persisted snapshot.
 			const snapshot = await SwarmSessionManager.readLatestState(swarmDir);
 			if (snapshot) {
 				services.stateTracker.updatePipeline(snapshot);
 				logger.info("[SessionRegistry] seeded StateTracker from persisted snapshot", {
 					name, status: snapshot.status, phase: snapshot.phase,
 				});
+			}
+
+			// v3: Wire real OffloadManager and register builtin hooks.
+			// The factory may have registered hooks with NoopOffloadManager;
+			// we upgrade to a real OffloadManager backed by SessionStorage.
+			if (services.hookPipeline) {
+				const offloadManager = new OffloadManager(swarmDir, sessionManager.storage);
+				session.offloadManager = offloadManager;
+
+				registerBuiltinHooks(services.hookPipeline, {
+					offloadManager,
+					profileRegistry: this.#shared.profileRegistry,
+				});
+				logger.info("[SessionRegistry] Builtin hooks registered with OffloadManager", { name });
 			}
 		}
 

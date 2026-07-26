@@ -24,7 +24,7 @@ export {
 	type OffloadPipelineConfig,
 } from "./offload-pipeline";
 export { AgentSummarizer, type SummarizeInput, type SummarizeOutput } from "./agent-summarizer";
-export { NoopOffloadManager, type IOffloadManager } from "./offload-manager";
+export { OffloadManager, NoopOffloadManager, type IOffloadManager } from "./offload-manager";
 export {
 	Deduplicator,
 	type DedupEntry,

@@ -12,7 +12,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, mock, vi } from "bun:test";
 import { IrcBus } from "../../irc/bus";
-import { AgentChannel } from "../channel/agent-channel";
+import { CommChannel } from "../comm-bus/comm-channel";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import {
 	AgentBroadcastTool,
@@ -22,12 +22,12 @@ import {
 	AgentPeersTool,
 } from "../../tools/agent-channel-tools";
 
-function makeChannel(bus: IrcBus, agentIds: string[]): AgentChannel {
-	return new AgentChannel(bus, { agents: agentIds, observers: [] });
+function makeChannel(bus: IrcBus, agentIds: string[]): CommChannel {
+	return new CommChannel(bus, agentIds, []);
 }
 
-function makeContext(channel: AgentChannel): AgentToolContext {
-	return { agentChannel: channel } as AgentToolContext;
+function makeContext(channel: CommChannel): AgentToolContext {
+	return { commChannel: channel } as AgentToolContext;
 }
 
 describe("AgentBroadcastTool", () => {
