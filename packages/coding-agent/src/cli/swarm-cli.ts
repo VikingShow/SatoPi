@@ -17,7 +17,7 @@ import type { RunManager, ScriptManager, SteeringSink } from "../swarm/core/serv
 import { ActivityLogger } from "../swarm/hooks/activity-logger";
 import { ExperienceStore } from "../swarm/curtain/experience";
 import { ProfileRegistry } from "../swarm/agent/agent-profile";
-import { MarkEnvironment } from "../swarm/coordination/mark-environment";
+import { MarkEnvironment } from "../coordination/mark-environment"
 import { RoleAssetManager } from "../swarm/agent/role-asset";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
@@ -103,6 +103,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			experienceStore,
 			roleAssetManager,
 			profileRegistry,
+			markEnvironment,
 		};
 		const factory: SessionFactory = async (s, name, swarmDir) => {
 			const stateTracker = new StateTracker(cwd, name);
