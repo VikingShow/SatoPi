@@ -22,7 +22,7 @@ import type { RoleAssetManager } from "../agent/role-asset";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import type { ContributionData } from "./reporter-election";
+import type { ContributionData } from "./types";
 import { CommBus } from "../comm-bus";
 import type { AgentRuntime } from "../agent-runtime";
 

@@ -17,7 +17,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { StateTracker, Chapter } from "../core/state";
 import type { ActivityLogger } from "../hooks/activity-logger";
 import type { ExperienceStore } from "../curtain/experience";
-import type { RunManager } from "../monitor/api-routes";
+import type { RunManager } from "../core/services";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
