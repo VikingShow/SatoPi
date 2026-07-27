@@ -1,138 +1,113 @@
-import type { Chapter, SwarmState } from "../../../swarm/core/state";
-import { ansiBold, ansiDim, ansiFg, PHASE_DISPLAY, SATOPI_COLORS } from "./theme";
-
 /**
- * Ordered list of all phases in lifecycle sequence.
- * Paused and Blocked appear after Stage since they can interrupt it.
+ * Phase View — renders the 8-phase lifecycle progress bar + sub-status line.
+ *
+ * All 8 lifecycle phases shown with icons and labels. The current phase is
+ * highlighted (bold + amber), future phases are dimmed. A sub-status line
+ * beneath shows human-readable pipeline status + elapsed time.
  */
+
+import type { Chapter, SwarmState, TodoItem } from "../../../swarm/core/state";
+import { sato } from "./theme";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
 const PHASE_ORDER: Chapter[] = [
-	"idle",
-	"script",
-	"script-debate",
-	"script-confirm",
-	"stage",
-	"paused",
-	"blocked",
-	"curtain",
+	"idle", "script", "script-debate", "script-confirm",
+	"stage", "paused", "blocked", "curtain",
 ];
 
-/** Format a duration in milliseconds as HH:MM:SS */
-function formatDuration(ms: number): string {
-	const totalSec = Math.floor(ms / 1000);
-	const h = Math.floor(totalSec / 3600);
-	const m = Math.floor((totalSec % 3600) / 60);
-	const s = totalSec % 60;
-	return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+const PHASE_ICON: Record<Chapter, string> = {
+	idle: "○",
+	script: "◇",
+	"script-debate": "◆",
+	"script-confirm": "◇",
+	stage: "●",
+	paused: "⏸",
+	blocked: "⛔",
+	curtain: "◈",
+};
 
-/** Compute task progress from todo items */
-function computeTaskProgress(todos: SwarmState["todos"]): { done: number; total: number } {
-	if (!todos || todos.length === 0) return { done: 0, total: 0 };
-	const done = todos.filter(t => t.status === "completed").length;
-	return { done, total: todos.length };
-}
+const PHASE_LABEL: Record<Chapter, string> = {
+	idle: "Idle",
+	script: "Script",
+	"script-debate": "Debate",
+	"script-confirm": "Confirm",
+	stage: "Stage",
+	paused: "Paused",
+	blocked: "Blocked",
+	curtain: "Curtain",
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
 
 /**
- * Render the phase lifecycle progress view.
+ * Render the phase lifecycle progress bar.
  *
- * Displays all 8 workflow phases as a horizontal progress bar:
- *   - Completed phases: colored icon with checkmark indicator
- *   - Current phase: bold colored icon + bold label (caller can animate via re-render)
- *   - Future phases: dimmed icon
- *
- * Also renders a sub-status line: elapsed time, agent count, task progress.
- *
- * @param state - Current swarm state snapshot.
- * @returns Array of ANSI-color-coded strings, one per line.
+ * Returns an array of chalk-coloured lines:
+ *   Line 1:  ○ Idle → ◇ Script → ◆ Debate → ● Stage → ...
+ *   Line 2:  ─ status: Running  [tasks 3/7]  [12m 34s] ─
  */
 export function renderPhaseView(state: SwarmState): string[] {
 	const currentPhase = state.phase ?? "idle";
-	const currentIdx = PHASE_ORDER.indexOf(currentPhase);
 
-	const lines: string[] = [];
+	const icons = PHASE_ORDER.map(phase => {
+		const isCurrent = phase === currentPhase;
+		const icon = PHASE_ICON[phase];
+		const label = PHASE_LABEL[phase];
+		const coloredIcon = isCurrent ? sato.bold(sato.amber(icon)) : sato.dim(icon);
+		const coloredLabel = isCurrent ? sato.bold(label) : sato.dim(label);
+		return `${coloredIcon} ${coloredLabel}`;
+	});
 
-	// --- Phase bar ---
-	const phaseParts: string[] = [];
+	const arrow = sato.dim(" → ");
+	const phaseLine = icons.join(arrow);
 
-	for (let i = 0; i < PHASE_ORDER.length; i++) {
-		const phase = PHASE_ORDER[i];
-		const display = PHASE_DISPLAY[phase];
-		const colorCode = display.color.ansi256;
+	// Sub-status line
+	const status = state.status ?? "idle";
+	const statusLabel = sato.amber(status.charAt(0).toUpperCase() + status.slice(1));
 
-		if (i < currentIdx) {
-			// Completed phase: colored icon with checkmark
-			phaseParts.push(ansiFg(SATOPI_COLORS.success.ansi256, display.icon));
-		} else if (i === currentIdx) {
-			// Current phase: bold + colored
-			phaseParts.push(ansiBold(ansiFg(colorCode, display.icon)));
-		} else {
-			// Future phase: dimmed
-			phaseParts.push(ansiDim(display.icon));
-		}
-	}
+	const progress = computeTaskProgress(state.todos ?? []);
+	const taskPart = progress.total > 0 ? sato.dim(`[tasks ${progress.done}/${progress.total}]`) : "";
 
-	// Join phase icons with arrow separator and add labels below
-	const phaseIcons = phaseParts.join("  ");
-	lines.push(phaseIcons);
+	const duration =
+		state.startedAt != null ? sato.dim(`[${formatDuration(Date.now() - state.startedAt)}]`) : "";
 
-	// --- Phase labels row ---
-	const labelParts: string[] = [];
-	for (let i = 0; i < PHASE_ORDER.length; i++) {
-		const phase = PHASE_ORDER[i];
-		const display = PHASE_DISPLAY[phase];
-		const colorCode = display.color.ansi256;
+	const parts = [sato.dim("status:"), statusLabel, taskPart, duration].filter(Boolean);
+	const subLine = "─ " + parts.join("  ") + " " + "─".repeat(4);
 
-		let label: string;
-		if (i < currentIdx) {
-			label = ansiDim(display.label);
-		} else if (i === currentIdx) {
-			label = ansiBold(ansiFg(colorCode, display.label));
-		} else {
-			label = ansiDim(display.label);
-		}
-		labelParts.push(label);
-	}
-	lines.push(labelParts.join("  "));
+	return [phaseLine, sato.dim(subLine)];
+}
 
-	// --- Separator ---
-	lines.push(ansiDim("─".repeat(Math.max(40, phaseIcons.replace(/\x1b\[[0-9;]*m/g, "").length))));
+// ============================================================================
+// Internal
+// ============================================================================
 
-	// --- Sub-status line ---
-	const elapsed = Date.now() - state.startedAt;
-	const elapsedStr = formatDuration(elapsed);
+interface TaskProgress {
+	done: number;
+	total: number;
+}
 
-	const agentCount = Object.keys(state.agents).length;
-	const runningAgents = Object.values(state.agents).filter(a => a.status === "running").length;
+function computeTaskProgress(todos: TodoItem[]): TaskProgress {
+	const done = todos.filter(t => t.status === "done" || t.status === "completed").length;
+	return { done, total: todos.length };
+}
 
-	const { done, total } = computeTaskProgress(state.todos);
+function formatDuration(ms: number): string {
+	if (ms < 0) return "0s";
+	if (ms < 1000) return "<1s";
 
-	const statusParts: string[] = [];
+	const totalSec = Math.floor(ms / 1000);
+	if (totalSec < 60) return `${totalSec}s`;
 
-	// Time
-	statusParts.push(`${ansiDim("Time:")} ${ansiFg(SATOPI_COLORS.text.ansi256, elapsedStr)}`);
+	const min = Math.floor(totalSec / 60);
+	const sec = totalSec % 60;
+	if (min < 60) return `${min}m ${sec}s`;
 
-	// Agent count
-	const agentStr = runningAgents > 0 ? `${agentCount} (${runningAgents} running)` : `${agentCount}`;
-	statusParts.push(`${ansiDim("Agents:")} ${ansiFg(SATOPI_COLORS.text.ansi256, agentStr)}`);
-
-	// Task progress
-	if (total > 0) {
-		statusParts.push(
-			`${ansiDim("Tasks:")} ${ansiFg(SATOPI_COLORS.info.ansi256, `${done}/${total}`)}${ansiDim(" done")}`,
-		);
-	}
-
-	// Iteration
-	if (state.loopIteration !== undefined && state.loopIteration > 0) {
-		statusParts.push(`${ansiDim("Iteration:")} ${ansiFg(SATOPI_COLORS.text.ansi256, String(state.loopIteration))}`);
-	}
-
-	// Roundtable sub-phase
-	if (state.roundtablePhase) {
-		statusParts.push(`${ansiDim("Step:")} ${ansiFg(SATOPI_COLORS.purple.ansi256, state.roundtablePhase)}`);
-	}
-
-	lines.push(statusParts.join(`  ${ansiDim("│")}  `));
-
-	return lines;
+	const hr = Math.floor(min / 60);
+	const remMin = min % 60;
+	return `${hr}h ${remMin}m`;
 }

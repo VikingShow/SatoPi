@@ -6,11 +6,8 @@
 
 export { renderSplash } from "../../modes/components/swarm/splash";
 export {
-	ansiBold,
-	ansiDim,
-	ansiFg,
-	PHASE_DISPLAY,
 	PI_LOGO_ASCII,
-	SATOPI_COLORS,
+	PHASE_DISPLAY,
+	sato,
+	phaseColor,
 } from "../../modes/components/swarm/theme";
-export { createStreamProgressHandler, streamAgentOutput } from "./streaming";

@@ -13,12 +13,14 @@
  *   < 60 cols   → compact mode (abbreviated labels)
  */
 
+import { visibleWidth } from "@oh-my-pi/pi-tui";
 import type { SwarmState } from "../../../swarm/core/state";
 import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
 import { type ContextPanelState, renderContextPanel } from "./context-panel";
+import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { renderPhaseView } from "./phase-view";
-import { ansiDim } from "./theme";
+import { sato } from "./theme";
 
 // ============================================================================
 // Types
@@ -65,7 +67,7 @@ function renderSingleColumn(input: DashboardInput, width: number): string[] {
 	lines.push(...renderAgentPanel(input.swarm, width));
 	lines.push("");
 
-	// Comm panel (show last 5 messages to save space)
+	// Comm panel (last 5 messages)
 	const recentMsgs = input.messages.slice(0, 5);
 	lines.push(...renderCommPanel(recentMsgs, width));
 	lines.push("");
@@ -93,22 +95,14 @@ function renderTwoColumn(input: DashboardInput, width: number): string[] {
 	const commLines = renderCommPanel(recentMsgs, rightWidth);
 	const contextLines = renderContextPanel(input.context, rightWidth);
 
-	// Interleave left and right panels
-	const maxRight = Math.max(commLines.length, contextLines.length);
-	const rightCombined: string[] = [];
-	for (let i = 0; i < maxRight; i++) {
-		if (i < commLines.length) {
-			rightCombined.push(commLines[i]);
-		} else if (i < commLines.length + contextLines.length) {
-			rightCombined.push(contextLines[i - commLines.length]);
-		}
-	}
+	// Interleave right panels
+	const rightCombined = [...commLines, ...contextLines];
 
 	const maxRows = Math.max(agentLines.length, rightCombined.length);
 	for (let i = 0; i < maxRows; i++) {
-		const left = i < agentLines.length ? agentLines[i].padEnd(leftWidth) : " ".repeat(leftWidth);
+		const left = i < agentLines.length ? agentLines[i] : " ".repeat(leftWidth);
 		const right = i < rightCombined.length ? rightCombined[i] : "";
-		lines.push(`${left} │ ${right}`);
+		lines.push(`${left} ${sato.dim("│")} ${right}`);
 	}
 
 	return lines;
@@ -119,13 +113,11 @@ function renderTwoColumn(input: DashboardInput, width: number): string[] {
 function renderCompact(input: DashboardInput, width: number): string[] {
 	const lines: string[] = [];
 
-	// Minimal phase line (no border)
 	const phase = input.swarm.phase ?? "idle";
 	const agentCount = Object.keys(input.swarm.agents ?? {}).length;
 	const status = input.swarm.status ?? "idle";
-	lines.push(ansiDim(`[${status}] phase=${phase} agents=${agentCount}`));
+	lines.push(sato.dim(`[${status}] phase=${phase} agents=${agentCount}`));
 
-	// Agent summary (one line per agent, abbreviated)
 	for (const agent of Object.values(input.swarm.agents ?? {})) {
 		const glyph =
 			agent.status === "completed" ? "✓" : agent.status === "running" ? "◌" : agent.status === "failed" ? "✗" : "·";
