@@ -133,7 +133,7 @@ function buildScriptNode(
 ): GraphNode {
 	const planDebate = loopConfig?.planDebate;
 	const outputs: NodeOutput[] = [
-		{ type: "file", path: "plan.md", description: "Structured execution plan with phases and tasks" },
+		{ id: "plan", description: "Structured execution plan (plan.md)" },
 	];
 
 	const gate: GateSpec | undefined = planDebate?.enabled
@@ -199,7 +199,7 @@ function buildStageNode(
 		? {
 				type: "test",
 				mode: "on-failure",
-				command: loopConfig.verification.command,
+				command: loopConfig.verification.commands.join(" && "),
 			}
 		: undefined;
 

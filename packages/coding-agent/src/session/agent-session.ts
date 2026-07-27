@@ -3327,7 +3327,7 @@ export class AgentSession {
 	}
 
 	/** The embedded swarm bridge — created when "swarm" magic keyword is detected. */
-	get embeddedSwarm(): EmbeddedSwarmBridge | null {
+	get embeddedSwarm(): ISwarmOrchestrator | null {
 		return this.#embeddedSwarm;
 	}
 
