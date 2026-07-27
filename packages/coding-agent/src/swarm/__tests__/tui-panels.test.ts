@@ -269,7 +269,10 @@ describe("renderContextPanel", () => {
 
 	it("token usage lines contain ANSI colour codes", () => {
 		const state = makeCtx({ agents: [{ agentId: "agent-1", tokensUsed: 30000, tokenBudget: 32768 }] });
-		expect(renderContextPanel(state, W).join("\n")).toContain("\x1b[");
+		const full = renderContextPanel(state, W).join("\n");
+		// 30000/32768 ≈ 92% — should trigger danger/red styling
+		expect(full).toContain("\x1b[");
+		expect(full).toContain("92%");
 	});
 
 	it("handles zero token budget gracefully", () => {

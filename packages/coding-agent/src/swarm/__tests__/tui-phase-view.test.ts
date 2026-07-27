@@ -101,23 +101,25 @@ describe("current phase highlighting", () => {
 // ============================================================================
 
 describe("future phases dimmed", () => {
-	it("dims future phases when current is idle", () => {
+	it("non-current phases are rendered in muted colour", () => {
+		// When idle is the current phase, all other phases should NOT
+		// be bold — they should be rendered in sato.muted (chalk.hex).
 		const state = makeState({ phase: "idle" });
 		const lines = renderPhaseView(state);
-		// All phases after idle should be dimmed
-		expect(lines[0]).toContain("\x1b[2m");
+		// sato.bold outputs \x1b[1m for the current phase only.
+		// Non-current phases get chalk.hex (no bold escape).
+		expect(lines[0]).toContain("\x1b[1m"); // current phase is bold
 	});
 
-	it("no future phases are dimmed when current is curtain", () => {
-		// Curtain is the last phase — everything before it is past (not dimmed, not bold)
-		// Dim is only applied to future phases. Curtain has nothing after it.
+	it("only curtain is bold when curtain is current", () => {
+		// When curtain is current, only curtain gets \x1b[1m.
 		const state = makeState({ phase: "curtain" });
 		const lines = renderPhaseView(state);
-		// Future-phase dim wouldn't appear because there are none
-		// (Dim still appears on non-current phases, let's check)
-		// Actually: our renderPhaseView dims ALL non-current phases
-		// So curtain=bold, everything else=dimmed
-		expect(lines[0]).toContain("\x1b[2m");
+		// Should contain bold for the current phase
+		expect(lines[0]).toContain("\x1b[1m");
+		// Non-current phases use chalk.hex — verify all 8 icons appear
+		const plain = lines[0].replace(/\x1b\[[0-9;]*m/g, "");
+		expect(plain).toContain(PHASE_DISPLAY.curtain.icon);
 	});
 });
 

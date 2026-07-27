@@ -26,11 +26,19 @@ describe("sato colour helpers", () => {
 		const result = sato.success("OK");
 		expect(result).toContain("\x1b[");
 		expect(result).toContain("OK");
-		expect(result).toMatch(/\x1b\[0m$/);
+		// chalk.hex in level 1 outputs 24-bit colour + \x1b[39m reset
+		expect(result).toMatch(/\x1b\[39m$/);
 	});
 
 	it("sato.error wraps text in ANSI escape codes", () => {
 		const result = sato.error("FAIL");
+		expect(result).toContain("\x1b[");
+		expect(result).toContain("FAIL");
+	});
+
+	it("sato.danger is an alias for sato.error", () => {
+		expect(sato.danger).toBeDefined();
+		const result = sato.danger("FAIL");
 		expect(result).toContain("\x1b[");
 		expect(result).toContain("FAIL");
 	});
@@ -81,8 +89,9 @@ describe("sato colour helpers", () => {
 	});
 
 	it("handles empty string", () => {
+		// Chalk returns the empty string unmodified when input is empty.
 		const result = sato.success("");
-		expect(result).toMatch(/\x1b\[0m$/);
+		expect(result).toBe("");
 	});
 });
 

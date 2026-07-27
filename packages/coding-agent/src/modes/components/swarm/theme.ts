@@ -23,6 +23,8 @@ export const sato = {
 	// ── Semantic (matches satopi.json theme) ──────────────────────────────
 	success: (text: string) => chalk.hex("#6D9E6B")(text),    // bodhiGreen
 	error:   (text: string) => chalk.hex("#CC7A72")(text),    // softRed
+	/** Alias for error — panels use both names. */
+	danger:  (text: string) => chalk.hex("#CC7A72")(text),    // softRed
 	warning: (text: string) => chalk.hex("#D8B860")(text),    // warmGold
 	muted:   (text: string) => chalk.hex("#8B9098")(text),    // inkMuted
 	dim:     (text: string) => chalk.hex("#555B64")(text),    // inkDim
