@@ -14,7 +14,9 @@ import chalk from "chalk";
 import { theme } from "../modes/theme/theme";
 import { isTimeoutError, withTimeoutSignal } from "../utils/fetch-timeout";
 
-const REPO = "can1357/oh-my-pi";
+// [SatoPi] Use SatoPi's own GitHub repo for binary downloads
+const REPO = "VikingShow/SatoPi";
+// const REPO = "can1357/oh-my-pi";            // [original omp]
 const PACKAGE = "@oh-my-pi/pi-coding-agent";
 const HOMEBREW_FORMULA = "can1357/tap/omp";
 const MISE_TOOL = "github:can1357/oh-my-pi";
@@ -239,14 +241,47 @@ async function resolveUpdateTarget(): Promise<UpdateTarget> {
 }
 
 /**
- * Get the latest release info from the npm registry.
- * Uses npm instead of GitHub API to avoid unauthenticated rate limiting.
+ * [SatoPi] Get the latest release info from GitHub Releases API.
+ * Original omp version (npm registry) commented out below for reference.
  */
+// /**
+//  * Get the latest release info from the npm registry.
+//  * Uses npm instead of GitHub API to avoid unauthenticated rate limiting.
+//  */
+// async function getLatestRelease_omp(): Promise<ReleaseInfo> {
+// 	let response: Response;
+// 	try {
+// 		response = await fetch(`${NPM_REGISTRY}${PACKAGE}/latest`, {
+// 			signal: withTimeoutSignal(RELEASE_METADATA_TIMEOUT_MS),
+// 		});
+// 	} catch (err) {
+// 		if (isTimeoutError(err)) {
+// 			throw new Error("Timed out fetching release info after 30s", { cause: err });
+// 		}
+// 		throw err;
+// 	}
+// 	if (!response.ok) {
+// 		throw new Error(`Failed to fetch release info: ${response.statusText}`);
+// 	}
+//
+// 	const data = (await response.json()) as { version: string };
+// 	const version = data.version;
+// 	const tag = `v${version}`;
+//
+// 	return {
+// 		tag,
+// 		version,
+// 	};
+// }
 async function getLatestRelease(): Promise<ReleaseInfo> {
 	let response: Response;
 	try {
-		response = await fetch(`${NPM_REGISTRY}${PACKAGE}/latest`, {
+		response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
 			signal: withTimeoutSignal(RELEASE_METADATA_TIMEOUT_MS),
+			headers: {
+				Accept: "application/vnd.github+json",
+				"X-GitHub-Api-Version": "2022-11-28",
+			},
 		});
 	} catch (err) {
 		if (isTimeoutError(err)) {
@@ -258,14 +293,11 @@ async function getLatestRelease(): Promise<ReleaseInfo> {
 		throw new Error(`Failed to fetch release info: ${response.statusText}`);
 	}
 
-	const data = (await response.json()) as { version: string };
-	const version = data.version;
-	const tag = `v${version}`;
+	const data = (await response.json()) as { tag_name: string };
+	const tag = data.tag_name;
+	const version = tag.startsWith("v") ? tag.slice(1) : tag;
 
-	return {
-		tag,
-		version,
-	};
+	return { tag, version };
 }
 
 /**
@@ -610,6 +642,18 @@ function formatVerificationFailure(result: InstalledVersionVerification, expecte
 }
 
 /**
+ * Build platform-appropriate reinstall instructions for when auto-update fails.
+ */
+function getReinstallInstructions(): string {
+	const binaryName = getBinaryName();
+	const url = `https://github.com/${REPO}/releases/latest/download/${binaryName}`;
+	if (process.platform === "win32") {
+		return `curl -LO ${url}`;
+	}
+	return `curl -LO ${url} && chmod +x ${binaryName} && sudo mv ${binaryName} /usr/local/bin/${APP_NAME}`;
+}
+
+/**
  * Print post-update verification result.
  */
 async function printVerification(expectedVersion: string): Promise<void> {
@@ -619,7 +663,7 @@ async function printVerification(expectedVersion: string): Promise<void> {
 		return;
 	}
 	console.log(chalk.yellow(`\nWarning: ${formatVerificationFailure(result, expectedVersion)}`));
-	console.log(chalk.yellow(`You may need to reinstall: curl -fsSL https://omp.sh/install | sh`));
+	console.log(chalk.yellow(`You may need to reinstall:\n  ${getReinstallInstructions()}`));
 }
 
 async function unlinkIfExists(filePath: string): Promise<void> {
