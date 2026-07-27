@@ -1,5 +1,5 @@
 /**
- * After Loop — Rule-based lesson extraction.
+ * Curtain — Rule-based lesson extraction.
  *
  * Analyzes StageResult to extract structured lessons from agent output
  * suitable for storage in the experience database.
@@ -52,7 +52,10 @@ export interface LoopRunStats {
 // Extractor
 // ============================================================================
 
-export function extractLessons(result: StageResult, agentCount: number): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
+export function extractLessons(
+	result: StageResult,
+	agentCount: number,
+): { lessons: ExtractedLesson[]; stats: LoopRunStats } {
 	const lessons: ExtractedLesson[] = [];
 
 	const taskCount = result.taskProgress.total;

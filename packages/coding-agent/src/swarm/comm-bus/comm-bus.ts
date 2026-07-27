@@ -15,7 +15,7 @@
  */
 
 import type { IrcBus } from "../../irc/bus";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { CommChannel } from "./comm-channel";
 
 // ============================================================================
@@ -91,10 +91,7 @@ export class CommBus {
 		if (target && this.#ircBus) {
 			// Deliver to target agent via IrcBus (suppressed — human messages
 			// are already shown in the UI via the conversation panel).
-			await this.#ircBus.send(
-				{ from: "human", to: target, body: text },
-				{ suppressRelay: true },
-			).catch(() => {
+			await this.#ircBus.send({ from: "human", to: target, body: text }, { suppressRelay: true }).catch(() => {
 				// Best-effort: target agent may not exist yet
 			});
 		}
@@ -114,16 +111,9 @@ export class CommBus {
 		let channel = this.#channels.get(name);
 		if (!channel) {
 			if (!this.#ircBus) {
-				throw new Error(
-					"CommBus.groupChannel: no IrcBus wired. Call CommBus.ensureGlobal(ircBus) during startup.",
-				);
+				throw new Error("CommBus.groupChannel: no IrcBus wired. Call CommBus.ensureGlobal(ircBus) during startup.");
 			}
-			channel = new CommChannel(
-				this.#ircBus,
-				agentIds,
-				[],
-				activityLogger ?? this.#activityLogger,
-			);
+			channel = new CommChannel(this.#ircBus, agentIds, [], activityLogger ?? this.#activityLogger);
 			this.#channels.set(name, channel);
 		}
 		return channel;

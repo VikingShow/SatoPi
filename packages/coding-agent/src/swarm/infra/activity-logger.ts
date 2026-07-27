@@ -94,10 +94,10 @@ export interface ActivityEntry {
 	errorFlag?: string;
 	recoverable?: boolean;
 	suggestion?: string;
-		/** File-change fields */
-		linesChanged?: number;
-		/** Stream-end fields */
-		thinking?: string;
+	/** File-change fields */
+	linesChanged?: number;
+	/** Stream-end fields */
+	thinking?: string;
 }
 
 // ============================================================================
@@ -226,7 +226,15 @@ export class ActivityLogger {
 	 */
 	logAgentState(
 		worker: string,
-		fields: { status?: string; iteration?: number; praiseCount?: number; criticismCount?: number; conflictCount?: number; role?: string; modelName?: string },
+		fields: {
+			status?: string;
+			iteration?: number;
+			praiseCount?: number;
+			criticismCount?: number;
+			conflictCount?: number;
+			role?: string;
+			modelName?: string;
+		},
 	): void {
 		this.log({
 			ts: Date.now(),
@@ -242,7 +250,13 @@ export class ActivityLogger {
 	 * loopIteration, roundtablePhase, and todos are reflected in the UI
 	 * without a polling delay.
 	 */
-	logPipelineState(fields: { loopIteration?: number; roundtablePhase?: string; todos?: unknown[]; totalTokens?: number; totalRequests?: number }): void {
+	logPipelineState(fields: {
+		loopIteration?: number;
+		roundtablePhase?: string;
+		todos?: unknown[];
+		totalTokens?: number;
+		totalRequests?: number;
+	}): void {
 		this.log({
 			ts: Date.now(),
 			type: "pipeline_state",
@@ -260,21 +274,56 @@ export class ActivityLogger {
 	// -- Tool Call (P2-10) ---------------------------------------------------
 
 	/** Logged when a swarm agent executes a tool. */
-	logToolCall(agentName: string, toolName: string, input?: string, output?: string, error?: string, durationMs?: number): void {
-		this.log({ ts: Date.now(), type: "tool_call", agent: agentName, toolName, toolInput: input, toolOutput: output, toolError: error, toolDurationMs: durationMs });
+	logToolCall(
+		agentName: string,
+		toolName: string,
+		input?: string,
+		output?: string,
+		error?: string,
+		durationMs?: number,
+	): void {
+		this.log({
+			ts: Date.now(),
+			type: "tool_call",
+			agent: agentName,
+			toolName,
+			toolInput: input,
+			toolOutput: output,
+			toolError: error,
+			toolDurationMs: durationMs,
+		});
 	}
 
 	// -- Error Flag (P2-11) --------------------------------------------------
 
 	/** Logged when a provider-level error is classified with a bit flag. */
-	logProviderError(agentName: string, errorFlag: string, message: string, recoverable: boolean, suggestion?: string): void {
-		this.log({ ts: Date.now(), type: "error_flag", agent: agentName, errorFlag, body: message, recoverable, suggestion });
+	logProviderError(
+		agentName: string,
+		errorFlag: string,
+		message: string,
+		recoverable: boolean,
+		suggestion?: string,
+	): void {
+		this.log({
+			ts: Date.now(),
+			type: "error_flag",
+			agent: agentName,
+			errorFlag,
+			body: message,
+			recoverable,
+			suggestion,
+		});
 	}
 
 	// -- File Change ---------------------------------------------------------
 
 	/** Logged when a worker agent creates, modifies, or deletes a file. */
-	logFileChange(agentName: string, file: string, action: "created" | "modified" | "deleted", linesChanged?: number): void {
+	logFileChange(
+		agentName: string,
+		file: string,
+		action: "created" | "modified" | "deleted",
+		linesChanged?: number,
+	): void {
 		this.log({ ts: Date.now(), type: "file_change", agent: agentName, file, action, linesChanged });
 	}
 
@@ -290,7 +339,11 @@ export class ActivityLogger {
 	 *  replay reconstructs the full message from stream_end.body). */
 	logStreamDelta(msgId: string, from: string, delta: string): void {
 		this.#broadcaster?.broadcast(this.#sessionName, {
-			ts: Date.now(), type: "stream_delta", messageId: msgId, from, body: delta,
+			ts: Date.now(),
+			type: "stream_delta",
+			messageId: msgId,
+			from,
+			body: delta,
 		});
 	}
 
@@ -299,7 +352,11 @@ export class ActivityLogger {
 	 *  SSE-only (same rationale as logStreamDelta). */
 	logStreamThinking(msgId: string, from: string, delta: string): void {
 		this.#broadcaster?.broadcast(this.#sessionName, {
-			ts: Date.now(), type: "stream_thinking", messageId: msgId, from, body: delta,
+			ts: Date.now(),
+			type: "stream_thinking",
+			messageId: msgId,
+			from,
+			body: delta,
 		});
 	}
 

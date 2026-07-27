@@ -7,10 +7,10 @@
  *   - resetAgentStatuses: clears all agent state for retry
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
 import { StateTracker } from "../core/state";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 
@@ -33,8 +33,8 @@ describe("getWorstAgent", () => {
 		const st = new StateTracker(tmpDir, "test");
 		await st.init(["worker-1", "worker-2", "worker-3"], 5, "loop");
 
-		await st.incrementPraise(["worker-1"]);     // score: +1
-		await st.incrementCriticism(["worker-2"]);   // score: -1
+		await st.incrementPraise(["worker-1"]); // score: +1
+		await st.incrementCriticism(["worker-2"]); // score: -1
 		// worker-3: score 0
 
 		const worst = st.getWorstAgent();
@@ -45,9 +45,9 @@ describe("getWorstAgent", () => {
 		const st = new StateTracker(tmpDir, "test");
 		await st.init(["worker-1", "worker-2", "worker-3", "worker-4"], 5, "loop");
 
-		await st.incrementPraise(["worker-1"]);       // score: +1
-		await st.incrementCriticism(["worker-2"]);     // score: -1
-		await st.incrementConflict("worker-3");         // score: -1
+		await st.incrementPraise(["worker-1"]); // score: +1
+		await st.incrementCriticism(["worker-2"]); // score: -1
+		await st.incrementConflict("worker-3"); // score: -1
 		// worker-4: score 0
 
 		// Only search among worker-1 and worker-4 (the best two)
@@ -88,7 +88,7 @@ describe("getWorstAgent", () => {
 		await st.init(["worker-1", "worker-2", "cloner-1"], 5, "loop");
 
 		await st.incrementPraise(["worker-1", "worker-2"]); // workers: +1
-		await st.incrementCriticism(["cloner-1"]);           // cloner-1: -1 (worst overall)
+		await st.incrementCriticism(["cloner-1"]); // cloner-1: -1 (worst overall)
 
 		// Search only among workers — cloner-1 should NOT be returned
 		// even though it has the lowest score globally.

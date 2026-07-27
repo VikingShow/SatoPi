@@ -22,7 +22,7 @@ import { type LoopSwarmConfig, parseSwarmYaml, validateSwarmDefinition } from ".
 import type { RunManager } from "../core/services";
 import type { Chapter, StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import { getSessionPlanPath } from "./plan-paths";
 import { generatePlanningPrompt, runPlanDebate } from "./script-planner";

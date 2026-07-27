@@ -8,32 +8,32 @@
  * containing identity, credit score, expertise, and violation history.
  */
 
-import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
-import type { Chapter } from "../../core/state";
 import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { Chapter } from "../../core/state";
+import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class ProfileSource implements ContextSource {
-  readonly name = "profile";
-  readonly priority = 1;
+	readonly name = "profile";
+	readonly priority = 1;
 
-  readonly #profileRegistry: ProfileRegistry;
+	readonly #profileRegistry: ProfileRegistry;
 
-  constructor(profileRegistry: ProfileRegistry) {
-    this.#profileRegistry = profileRegistry;
-  }
+	constructor(profileRegistry: ProfileRegistry) {
+		this.#profileRegistry = profileRegistry;
+	}
 
-  appliesTo(_phase: Chapter, _agentRole: string): boolean {
-    return true;
-  }
+	appliesTo(_phase: Chapter, _agentRole: string): boolean {
+		return true;
+	}
 
-  async build(spec: AgentSpecLike, _base: BuildContext): Promise<ContextFragment> {
-    const profileCtx = this.#profileRegistry.getPromptContext(spec.id);
-    if (!profileCtx) {
-      return {};
-    }
+	async build(spec: AgentSpecLike, _base: BuildContext): Promise<ContextFragment> {
+		const profileCtx = this.#profileRegistry.getPromptContext(spec.id);
+		if (!profileCtx) {
+			return {};
+		}
 
-    return {
-      systemPromptAddition: profileCtx,
-    };
-  }
+		return {
+			systemPromptAddition: profileCtx,
+		};
+	}
 }

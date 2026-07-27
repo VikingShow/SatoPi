@@ -10,32 +10,32 @@
  * should be aware of.
  */
 
-import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
+import type { MarkEnvironment } from "../../../coordination";
 import type { Chapter } from "../../core/state";
-import type { MarkEnvironment } from "../../../coordination"
+import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class StigmergySource implements ContextSource {
-  readonly name = "stigmergy";
-  readonly priority = 4;
+	readonly name = "stigmergy";
+	readonly priority = 4;
 
-  readonly #markEnv: MarkEnvironment;
+	readonly #markEnv: MarkEnvironment;
 
-  constructor(markEnv: MarkEnvironment) {
-    this.#markEnv = markEnv;
-  }
+	constructor(markEnv: MarkEnvironment) {
+		this.#markEnv = markEnv;
+	}
 
-  appliesTo(phase: Chapter, _agentRole: string): boolean {
-    return phase === "stage";
-  }
+	appliesTo(phase: Chapter, _agentRole: string): boolean {
+		return phase === "stage";
+	}
 
-  async build(spec: AgentSpecLike, _base: BuildContext): Promise<ContextFragment> {
-    const contextText = this.#markEnv.getContextForAgent(spec.id);
-    if (!contextText) {
-      return {};
-    }
+	async build(spec: AgentSpecLike, _base: BuildContext): Promise<ContextFragment> {
+		const contextText = this.#markEnv.getContextForAgent(spec.id);
+		if (!contextText) {
+			return {};
+		}
 
-    return {
-      systemPromptAddition: contextText,
-    };
-  }
+		return {
+			systemPromptAddition: contextText,
+		};
+	}
 }

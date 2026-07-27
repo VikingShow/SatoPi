@@ -40,13 +40,13 @@
  * ```
  */
 
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
-import * as path from "node:path";
-import * as fs from "node:fs/promises";
-import type { ActivityEntry, ActivityEventType } from "../hooks/activity-logger";
-import type { Chapter, PipelineStatus, SwarmState, AgentState } from "../core/state";
 import type { SessionStorage } from "../../session/session-storage";
+import type { AgentState, Chapter, PipelineStatus, SwarmState } from "../core/state";
+import type { ActivityEntry, ActivityEventType } from "../infra/activity-logger";
 
 // ============================================================================
 // Custom entry type tags
@@ -54,13 +54,13 @@ import type { SessionStorage } from "../../session/session-storage";
 
 /** Entry type suffix for SessionManager.appendCustomEntry(). */
 export const CTX = {
-	SWARM_STATE:  "swarm_state"  as const,
-	AGENT_STATE:  "agent_state"  as const,
-	ACTIVITY:     "swarm_activity" as const,
-	PHASE:        "swarm_phase"  as const,
-	VERDICT:      "swarm_verdict" as const,
+	SWARM_STATE: "swarm_state" as const,
+	AGENT_STATE: "agent_state" as const,
+	ACTIVITY: "swarm_activity" as const,
+	PHASE: "swarm_phase" as const,
+	VERDICT: "swarm_verdict" as const,
 	CONVERSATION: "script_turn" as const,
-	SCRIPT:  "script_state" as const,
+	SCRIPT: "script_state" as const,
 	CONVERSATION_SNAPSHOT: "conversation_snapshot" as const,
 } as const;
 
@@ -129,7 +129,7 @@ export class SwarmSessionManager {
 			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length > 0) {
 				// Open the most recently modified session
-				sessions.sort((a, b) => ((b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0)));
+				sessions.sort((a, b) => (b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0));
 				return SwarmSessionManager.open(sessions[0].path, swarmDir);
 			}
 		} catch {
@@ -140,7 +140,9 @@ export class SwarmSessionManager {
 
 	// -- Accessors ------------------------------------------------------------
 
-	get swarmDir(): string { return this.#swarmDir; }
+	get swarmDir(): string {
+		return this.#swarmDir;
+	}
 
 	/** Expose the underlying SessionStorage for offload pipeline use. */
 	get storage(): SessionStorage {
@@ -220,9 +222,15 @@ export class SwarmSessionManager {
 
 	// -- Lifecycle ------------------------------------------------------------
 
-	async flush(): Promise<void> { await this.#session.flush(); }
-	flushSync(): void { this.#session.flushSync(); }
-	async close(): Promise<void> { await this.#session.close(); }
+	async flush(): Promise<void> {
+		await this.#session.flush();
+	}
+	flushSync(): void {
+		this.#session.flushSync();
+	}
+	async close(): Promise<void> {
+		await this.#session.close();
+	}
 
 	/**
 	 * Rotate to a fresh session file — closes the current file and creates
@@ -245,7 +253,9 @@ export class SwarmSessionManager {
 			this.#session = created.#session;
 			logger.debug("[SwarmSessionManager] rotated to new session file", { swarmDir: this.#swarmDir });
 		} catch (err) {
-			logger.error("[SwarmSessionManager] rotate failed to create new session — reopening old session", { error: String(err) });
+			logger.error("[SwarmSessionManager] rotate failed to create new session — reopening old session", {
+				error: String(err),
+			});
 			try {
 				const oldFilePath = (oldSession as any).getSessionFile?.() as string | undefined;
 				if (oldFilePath) {
@@ -273,7 +283,7 @@ export class SwarmSessionManager {
 		try {
 			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length === 0) return null;
-			sessions.sort((a, b) => ((b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0)));
+			sessions.sort((a, b) => (b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0));
 			return sessions[0].path;
 		} catch {
 			return null;
@@ -315,9 +325,7 @@ export class SwarmSessionManager {
 	 */
 	static async readActivityEntries(swarmDir: string): Promise<ActivityEntry[]> {
 		const raw = await SwarmSessionManager.readRawEntries(swarmDir);
-		return raw
-			.filter(e => e.type === "custom" && e.customType === CTX.ACTIVITY)
-			.map(e => e.data as ActivityEntry);
+		return raw.filter(e => e.type === "custom" && e.customType === CTX.ACTIVITY).map(e => e.data as ActivityEntry);
 	}
 
 	/**
@@ -355,7 +363,11 @@ export class SwarmSessionManager {
 
 	/** Return the session tree structure (entries with parentId → tree). */
 	getTree(): Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }> {
-		return this.#session.getTree() as unknown as Array<{ entry: Record<string, unknown>; children: unknown[]; label?: string }>;
+		return this.#session.getTree() as unknown as Array<{
+			entry: Record<string, unknown>;
+			children: unknown[];
+			label?: string;
+		}>;
 	}
 
 	/** Return the full branch path from root to leaf. */

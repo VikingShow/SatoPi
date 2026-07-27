@@ -22,11 +22,8 @@ import type { HookContext } from "./types";
  *
  * @returns The resolved agentId string, or `undefined` if neither source provides one.
  */
-export function resolveAgentId(
-  payload: { agentId?: unknown },
-  ctx: HookContext,
-): string | undefined {
-  if (typeof payload.agentId === "string") return payload.agentId;
-  if (typeof ctx.agentId === "string") return ctx.agentId;
-  return undefined;
+export function resolveAgentId(payload: { agentId?: unknown }, ctx: HookContext): string | undefined {
+	if (typeof payload.agentId === "string") return payload.agentId;
+	if (typeof ctx.agentId === "string") return ctx.agentId;
+	return undefined;
 }

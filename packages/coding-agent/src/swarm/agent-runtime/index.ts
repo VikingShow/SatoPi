@@ -18,10 +18,11 @@ import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
+import type { Tool } from "../../tools";
 import type { CommBus } from "../comm-bus/comm-bus";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentHandle } from "./agent-handle";
 import type { AgentLauncher, LaunchContext } from "./agent-launcher";
 import type { AgentSpec } from "./agent-spec";
@@ -92,6 +93,9 @@ export interface AgentRuntimeOptions {
 
 	/** Optional activity logger for streaming output. */
 	activityLogger?: ActivityLogger;
+
+	/** Optional tool registry for resolving tool names to real Tool instances. */
+	toolRegistry?: Map<string, Tool>;
 }
 
 // ============================================================================
@@ -124,6 +128,7 @@ export class AgentRuntime {
 	readonly #modelRegistry: ModelRegistry;
 	readonly #settings: Settings;
 	readonly #activityLogger?: ActivityLogger;
+	readonly #toolRegistry?: Map<string, Tool>;
 
 	/** Per-agent message queues for steering messages (populated from CommBus). */
 	readonly #steeringQueues = new Map<string, AgentMessage[]>();
@@ -143,6 +148,7 @@ export class AgentRuntime {
 		this.#modelRegistry = options.modelRegistry;
 		this.#settings = options.settings;
 		this.#activityLogger = options.activityLogger;
+		this.#toolRegistry = options.toolRegistry;
 	}
 
 	// -----------------------------------------------------------------------
@@ -413,6 +419,7 @@ export class AgentRuntime {
 			modelRegistry: this.#modelRegistry,
 			settings: this.#settings,
 			activityLogger: this.#activityLogger,
+			toolRegistry: this.#toolRegistry,
 		};
 
 		let handle: AgentHandle;

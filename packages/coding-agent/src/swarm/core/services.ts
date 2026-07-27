@@ -7,8 +7,8 @@
  */
 
 import type { ExecutorOptions, SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { CurtainResult } from "../curtain/types";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 // Agent execution & communication
@@ -62,9 +62,13 @@ export interface ScriptManager {
 	confirm(agentCount?: number): Promise<{ success: boolean; error?: string }>;
 	cancel(): Promise<{ success: boolean; error?: string }>;
 	getState(): {
-		phase: string; task: string; conversationLength: number;
-		planReady: boolean; busy: boolean;
-		selectedAgentId?: string; recommendedAgents?: number;
+		phase: string;
+		task: string;
+		conversationLength: number;
+		planReady: boolean;
+		busy: boolean;
+		selectedAgentId?: string;
+		recommendedAgents?: number;
 		estimatedAgentHours?: number;
 	};
 	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;

@@ -12,8 +12,8 @@
  * 8. acknowledge 幂等性
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
-import { MarkEnvironment } from "../../coordination"
+import { beforeEach, describe, expect, test } from "bun:test";
+import { MarkEnvironment } from "../../coordination";
 
 describe("MarkEnvironment", () => {
 	let env: MarkEnvironment;
@@ -42,9 +42,9 @@ describe("MarkEnvironment", () => {
 
 	test("placeMark — throws on duplicate markId", () => {
 		env.placeMark({ markId: "m1", type: "signal", agentId: "w1", message: "hello" });
-		expect(() =>
-			env.placeMark({ markId: "m1", type: "signal", agentId: "w2", message: "world" }),
-		).toThrow('Mark "m1" already exists');
+		expect(() => env.placeMark({ markId: "m1", type: "signal", agentId: "w2", message: "world" })).toThrow(
+			'Mark "m1" already exists',
+		);
 	});
 
 	test("queryMarks — returns all marks when no filters", () => {
@@ -175,7 +175,7 @@ describe("MarkEnvironment", () => {
 		env.placeMark({ markId: "m1", type: "signal", agentId: "w1", message: "mine" });
 
 		expect(env.forceRemove("m1", "w2")).toBe(false); // wrong owner
-		expect(env.forceRemove("m1", "w1")).toBe(true);  // correct owner
+		expect(env.forceRemove("m1", "w1")).toBe(true); // correct owner
 		expect(env.queryMarks()).toHaveLength(0);
 	});
 
@@ -200,8 +200,21 @@ describe("MarkEnvironment", () => {
 
 	test("getContextForAgent — returns formatted XML with active marks", () => {
 		env.placeMark({ markId: "warn", type: "warning", agentId: "w2", message: "Broken test!", priority: "high" });
-		env.placeMark({ markId: "lock", type: "lock", agentId: "w2", path: "/src/db.ts", message: "Refactoring DB", priority: "medium" });
-		env.placeMark({ markId: "sig", type: "signal", agentId: "w2", message: "I'm done with auth", priority: "medium" });
+		env.placeMark({
+			markId: "lock",
+			type: "lock",
+			agentId: "w2",
+			path: "/src/db.ts",
+			message: "Refactoring DB",
+			priority: "medium",
+		});
+		env.placeMark({
+			markId: "sig",
+			type: "signal",
+			agentId: "w2",
+			message: "I'm done with auth",
+			priority: "medium",
+		});
 
 		const ctx = env.getContextForAgent("w1");
 		expect(ctx).toContain("<stigmergic_environment>");
@@ -239,7 +252,15 @@ describe("MarkEnvironment", () => {
 	// ── Serialization ─────────────────────────────────────────────────
 
 	test("serialize → deserialize restores marks correctly", () => {
-		env.placeMark({ markId: "m1", type: "lock", agentId: "w1", path: "/src/a.ts", message: "a", priority: "high", tags: ["urgent"] });
+		env.placeMark({
+			markId: "m1",
+			type: "lock",
+			agentId: "w1",
+			path: "/src/a.ts",
+			message: "a",
+			priority: "high",
+			tags: ["urgent"],
+		});
 		env.placeMark({ markId: "m2", type: "warning", agentId: "w2", message: "watch out", priority: "critical" });
 		env.acknowledge("m1", "w3");
 		env.acknowledge("m2", "w1");

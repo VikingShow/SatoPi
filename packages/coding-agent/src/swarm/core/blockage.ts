@@ -41,7 +41,7 @@ export function evaluateBlockage(input: BlockageInput): BlockageDecision {
 	const crashThreshold = input.crashThreshold ?? CRASH_THRESHOLD;
 
 	const stagnated = input.stagnationCount >= stagnationThreshold;
-	const deadlocked = Object.values(input.agentCrashCounts).some((c) => c >= crashThreshold);
+	const deadlocked = Object.values(input.agentCrashCounts).some(c => c >= crashThreshold);
 
 	if (!stagnated && !deadlocked) {
 		return { blocked: false };

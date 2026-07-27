@@ -10,13 +10,13 @@
  * 6. onStageComplete does not throw
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
-import { createStageFeedback } from "../hooks/swarm-hooks";
-import { ProfileRegistry } from "../../agent/agent-profile";
-import { MarkEnvironment } from "../../coordination"
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { Task } from "../executor/task-queue";
+import { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
+import { MarkEnvironment } from "../../coordination";
+import type { Task } from "../executor/task-queue";
+import { createStageFeedback } from "../infra/swarm-hooks";
 
 describe("createStageFeedback (StageController callbacks)", () => {
 	let profileRegistry: ProfileRegistry;
@@ -76,10 +76,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 			markEnvironment,
 		});
 
-		fb.onAgentsSelected([
-			makeAgent("agent-alpha", "architect"),
-			makeAgent("agent-beta", "implementer"),
-		]);
+		fb.onAgentsSelected([makeAgent("agent-alpha", "architect"), makeAgent("agent-beta", "implementer")]);
 
 		expect(profileRegistry.get("agent-alpha")).toBeDefined();
 		expect(profileRegistry.get("agent-beta")).toBeDefined();
@@ -88,7 +85,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("onAgentsSelected is idempotent for same profileId", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w1")]);
@@ -100,7 +99,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("onTaskCompleted updates credit score and places artifact mark", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w1")]);
@@ -136,7 +137,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("onTaskFailed records failure and places warning mark", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w2")]);
@@ -159,7 +162,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("getAgentContext returns profile + stigmergy context", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w3", "reviewer")]);
@@ -172,7 +177,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("getAgentContext includes stigmergy marks when present", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w4"), makeAgent("w5")]);
@@ -194,7 +201,9 @@ describe("createStageFeedback (StageController callbacks)", () => {
 
 	test("onStageComplete does not throw", () => {
 		const fb = createStageFeedback({
-			enabled: true, profileRegistry, markEnvironment,
+			enabled: true,
+			profileRegistry,
+			markEnvironment,
 		});
 
 		fb.onAgentsSelected([makeAgent("w1")]);

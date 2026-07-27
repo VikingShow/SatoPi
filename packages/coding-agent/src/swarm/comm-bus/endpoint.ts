@@ -6,24 +6,18 @@
  * lightweight value objects — they carry no runtime state.
  */
 
-export type EndpointCapability =
-  | "send"
-  | "receive"
-  | "broadcast"
-  | "interrupt"
-  | "vote"
-  | "roundtable";
+export type EndpointCapability = "send" | "receive" | "broadcast" | "interrupt" | "vote" | "roundtable";
 
 export interface CommEndpoint {
-  readonly id: string;
-  readonly kind: "human" | "agent" | "system";
-  readonly capabilities: ReadonlySet<EndpointCapability>;
+	readonly id: string;
+	readonly kind: "human" | "agent" | "system";
+	readonly capabilities: ReadonlySet<EndpointCapability>;
 }
 
 const DEFAULT_CAPABILITIES: Record<CommEndpoint["kind"], EndpointCapability[]> = {
-  human: ["send", "receive", "broadcast", "interrupt"],
-  agent: ["send", "receive", "broadcast", "vote", "roundtable"],
-  system: ["send", "broadcast"],
+	human: ["send", "receive", "broadcast", "interrupt"],
+	agent: ["send", "receive", "broadcast", "vote", "roundtable"],
+	system: ["send", "broadcast"],
 };
 
 /**
@@ -31,13 +25,13 @@ const DEFAULT_CAPABILITIES: Record<CommEndpoint["kind"], EndpointCapability[]> =
  * If no capabilities are provided, sensible defaults are applied based on `kind`.
  */
 export function createEndpoint(
-  id: string,
-  kind: CommEndpoint["kind"],
-  capabilities?: EndpointCapability[],
+	id: string,
+	kind: CommEndpoint["kind"],
+	capabilities?: EndpointCapability[],
 ): CommEndpoint {
-  return {
-    id,
-    kind,
-    capabilities: new Set(capabilities ?? DEFAULT_CAPABILITIES[kind]),
-  };
+	return {
+		id,
+		kind,
+		capabilities: new Set(capabilities ?? DEFAULT_CAPABILITIES[kind]),
+	};
 }

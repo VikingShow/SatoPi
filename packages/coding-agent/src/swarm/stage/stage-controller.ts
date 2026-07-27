@@ -28,7 +28,7 @@ import type { StateTracker } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
 import { type Task, TaskQueue } from "../executor/task-queue";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { TaskComplexityAnalyzer } from "../script/task-analyzer";
 import type { RoleCandidate } from "./role-roundtable";
 

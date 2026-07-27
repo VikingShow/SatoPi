@@ -7,11 +7,11 @@
  *
  * When `blocking` is true and any command fails, the caller treats the
  * verification as failed and continues to the next loop iteration instead
- * of entering the After Loop pipeline.
+ * of entering the Curtain pipeline.
  */
 
-import type { ActivityLogger } from "../hooks/activity-logger";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Types
@@ -66,9 +66,10 @@ export class VerificationHook {
 			results.push(result);
 
 			const status = result.exitCode === 0 ? "PASS" : "FAIL";
-			const truncated = result.output.length > 2000
-				? `${result.output.slice(0, 2000)}... (truncated, ${result.output.length} chars total)`
-				: result.output;
+			const truncated =
+				result.output.length > 2000
+					? `${result.output.slice(0, 2000)}... (truncated, ${result.output.length} chars total)`
+					: result.output;
 
 			this.activityLogger?.logBroadcast(
 				"system",

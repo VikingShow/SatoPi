@@ -26,7 +26,7 @@ import {
 	reflectDeep,
 	reflectionToLesson,
 } from "../curtain";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { streamAgentOutput } from "../render/streaming";
 import type { StageResult } from "../stage/stage-controller";
 import type { ContributionData } from "./types";

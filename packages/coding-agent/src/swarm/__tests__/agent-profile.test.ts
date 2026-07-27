@@ -10,7 +10,7 @@
  * 6. 信用分边界（不超 [1, 100]）
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { ProfileRegistry } from "../../agent/agent-profile";
 
 describe("ProfileRegistry", () => {
@@ -40,9 +40,9 @@ describe("ProfileRegistry", () => {
 
 	test("createProfile — throws on duplicate profileId", () => {
 		registry.createProfile({ profileId: "dup", name: "A", archetype: "worker" });
-		expect(() =>
-			registry.createProfile({ profileId: "dup", name: "B", archetype: "worker" }),
-		).toThrow('Profile "dup" already exists');
+		expect(() => registry.createProfile({ profileId: "dup", name: "B", archetype: "worker" })).toThrow(
+			'Profile "dup" already exists',
+		);
 	});
 
 	test("getOrCreate — returns existing profile", () => {
@@ -182,7 +182,8 @@ describe("ProfileRegistry", () => {
 
 	test("getPromptContext — returns XML block with profile data", () => {
 		registry.createProfile({
-			profileId: "w1", name: "Alice",
+			profileId: "w1",
+			name: "Alice",
 			archetype: "implementer",
 			domains: ["typescript", "react"],
 			specialties: ["refactoring"],
@@ -193,7 +194,7 @@ describe("ProfileRegistry", () => {
 		expect(ctx).not.toBeNull();
 		expect(ctx!).toContain("<agent_profile");
 		expect(ctx!).toContain('id="w1"');
-		expect(ctx!).toContain("archetype=\"implementer\"");
+		expect(ctx!).toContain('archetype="implementer"');
 		expect(ctx!).toContain("domains: typescript, react");
 	});
 

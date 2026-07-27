@@ -26,7 +26,7 @@ import type { MmdInjector } from "../../offload/mermaid/injector";
 import type { Tool, ToolSession } from "../../tools";
 import { createTools } from "../../tools";
 import type { AssembledContext } from "../context-manager/context-pipeline";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { AgentHandle } from "./agent-handle";
 import type { AgentSpec } from "./agent-spec";
 import type { ResolvedRole } from "./role-provider";
@@ -364,7 +364,7 @@ export class AgentLauncher {
 	 *    with a minimal ToolSession assembled from the callback + launcher defaults.
 	 * 2. **ToolRegistry lookup** — when `toolRegistry` is provided, tools are
 	 *    looked up by name in the pre-built map.
-	 * 3. **Mock stubs** (@deprecated) — fallback no-op tools; logs an error.
+	 * 3. **No tools** — throws an error (Phase A4: mock stubs removed).
 	 */
 	async #resolveToolInstances(
 		toolNames: string[],

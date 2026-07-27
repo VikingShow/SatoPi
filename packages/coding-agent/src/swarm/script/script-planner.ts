@@ -19,9 +19,9 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ExperienceStore } from "../curtain/experience";
 import type { LoopSwarmConfig } from "../core/schema";
-import { getSessionPlanPath, getPlanArchiveDir, getSessionOmpDir } from "./plan-paths";
+import type { ExperienceStore } from "../curtain/experience";
+import { getPlanArchiveDir, getSessionOmpDir, getSessionPlanPath } from "./plan-paths";
 
 // ============================================================================
 // Types
@@ -63,10 +63,7 @@ export interface ScriptResult {
  *
  * @param experienceStore Optional store to query past loop experience.
  */
-export async function generatePlanningPrompt(
-	config: ScriptConfig,
-	experienceStore?: ExperienceStore,
-): Promise<string> {
+export async function generatePlanningPrompt(config: ScriptConfig, experienceStore?: ExperienceStore): Promise<string> {
 	const { swarmDir, workspace, loopConfig, taskDescription } = config;
 
 	const defaultAgents = loopConfig.agents.initial;
@@ -112,11 +109,11 @@ export async function generatePlanningPrompt(
 		"- Write incrementally — append confirmed decisions, never rewrite the whole file",
 		"- Past plans are archived at `.stp/plans/`. Review for iteration history",
 		"- Agents need clear acceptance criteria, constraints, and scope boundaries",
-			"## When Ready",
-			"",
-			"When ALL sections are confirmed and `[DRAFT]` markers are removed,",
-			"state clearly: \"The plan is complete and ready for debate.\" The human",
-			"will then decide to run debate or start execution.",
+		"## When Ready",
+		"",
+		"When ALL sections are confirmed and `[DRAFT]` markers are removed,",
+		'state clearly: "The plan is complete and ready for debate." The human',
+		"will then decide to run debate or start execution.",
 	];
 
 	if (taskDescription) {
@@ -136,10 +133,7 @@ export async function generatePlanningPrompt(
 			try {
 				experienceStore.markReferenced(lessons.map(l => l.runId));
 			} catch (err) {
-				logger.warn(
-					"[ScriptPlanner] Failed to mark referenced lessons — continuing",
-					{ error: String(err) },
-				);
+				logger.warn("[ScriptPlanner] Failed to mark referenced lessons — continuing", { error: String(err) });
 			}
 
 			sections.push("");

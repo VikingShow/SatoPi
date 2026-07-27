@@ -13,9 +13,8 @@
  * 9. Sets timestamp to ISO string
  */
 
-import { describe, test, expect } from "bun:test";
-import { AgentOffloadSummarizer,
-	type AgentOffloadSummarizeInput, } from "../../offload/pipeline/agent-summarizer"
+import { describe, expect, test } from "bun:test";
+import { type AgentOffloadSummarizeInput, AgentOffloadSummarizer } from "../../offload/pipeline/agent-summarizer";
 
 describe("AgentOffloadSummarizer", () => {
 	const summarizer = new AgentOffloadSummarizer();
@@ -28,10 +27,7 @@ describe("AgentOffloadSummarizer", () => {
 
 	test("extracts text from last assistant message", async () => {
 		const input: AgentOffloadSummarizeInput = {
-			messages: [
-				makeMsg("user", "What is 2+2?"),
-				makeMsg("assistant", "The answer is 4."),
-			],
+			messages: [makeMsg("user", "What is 2+2?"), makeMsg("assistant", "The answer is 4.")],
 			agentId: "agent-1",
 			turnIndex: 0,
 		};
@@ -98,9 +94,7 @@ describe("AgentOffloadSummarizer", () => {
 
 	test("falls back to last user message when no assistant response", async () => {
 		const input: AgentOffloadSummarizeInput = {
-			messages: [
-				makeMsg("user", "Please write a function."),
-			],
+			messages: [makeMsg("user", "Please write a function.")],
 			agentId: "agent-5",
 			turnIndex: 0,
 		};
@@ -262,8 +256,6 @@ describe("AgentOffloadSummarizer", () => {
 
 		const entry = await summarizer.summarize(input);
 		expect(entry.timestamp).toBeString();
-		expect(new Date(entry.timestamp).getTime()).toBeGreaterThanOrEqual(
-			new Date(before).getTime(),
-		);
+		expect(new Date(entry.timestamp).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
 	});
 });

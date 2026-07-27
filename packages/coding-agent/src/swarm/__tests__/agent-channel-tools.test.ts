@@ -10,18 +10,18 @@
  * 6. Tool metadata verification (name, approval, concurrency, summary)
  */
 
-import { describe, test, expect, beforeEach, afterEach, mock, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test, vi } from "bun:test";
+import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import type { TextContent } from "@oh-my-pi/pi-ai";
 import { IrcBus } from "../../irc/bus";
-import { CommChannel } from "../comm-bus/comm-channel";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import {
 	AgentBroadcastTool,
+	AgentPeersTool,
 	AgentQueryAllTool,
 	AgentQueryMajorityTool,
 	AgentRoundtableTool,
-	AgentPeersTool,
 } from "../../tools/agent-channel-tools";
+import { CommChannel } from "../comm-bus/comm-channel";
 
 function makeChannel(bus: IrcBus, agentIds: string[]): CommChannel {
 	return new CommChannel(bus, agentIds, []);
@@ -137,8 +137,11 @@ describe("AgentQueryAllTool", () => {
 		const ctx = makeContext(channel);
 
 		const result = await tool.execute(
-			"t1", { question: "What do you think?", timeout: 100 },
-			undefined, undefined, ctx,
+			"t1",
+			{ question: "What do you think?", timeout: 100 },
+			undefined,
+			undefined,
+			ctx,
 		);
 
 		expect(result.isError).toBeUndefined();
@@ -169,10 +172,7 @@ describe("AgentQueryMajorityTool", () => {
 		const tool = new AgentQueryMajorityTool();
 		const ctx = makeContext(channel);
 
-		const result = await tool.execute(
-			"t1", { question: "A or B?", timeout: 100 },
-			undefined, undefined, ctx,
-		);
+		const result = await tool.execute("t1", { question: "A or B?", timeout: 100 }, undefined, undefined, ctx);
 
 		expect(result.isError).toBe(true);
 		expect((result.content[0] as TextContent).text).toContain("No agents responded");

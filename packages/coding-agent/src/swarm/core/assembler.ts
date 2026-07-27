@@ -23,13 +23,14 @@ import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { IrcBus } from "../../irc/bus";
+import type { Tool } from "../../tools";
 import { AgentRuntime } from "../agent-runtime";
 import { AgentLauncher } from "../agent-runtime/agent-launcher";
 import { RoleProvider } from "../agent-runtime/role-provider";
 import { CommBus } from "../comm-bus/comm-bus";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Types
@@ -48,6 +49,8 @@ export interface AssemblerOptions {
 	hookPipeline: HookPipeline;
 	/** Optional IrcBus for agent-to-agent communication. */
 	ircBus?: IrcBus;
+	/** Optional tool registry for resolving tool names to real Tool instances. */
+	toolRegistry?: Map<string, Tool>;
 }
 
 // ============================================================================
@@ -90,5 +93,6 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 		modelRegistry: opts.modelRegistry,
 		settings: opts.settings,
 		activityLogger: opts.activityLogger,
+		toolRegistry: opts.toolRegistry,
 	});
 }

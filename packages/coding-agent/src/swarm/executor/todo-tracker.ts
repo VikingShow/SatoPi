@@ -24,10 +24,12 @@ const HEADING_TASK = /^#{1,3}\s+(?:Step\s+|Phase\s+|Task\s+|Item\s+|Goal\s+)?(\d
 const NUMBERED_ITEM = /^(\d+[.)]\s+.+)/gm;
 
 /** File path references in worker output: `src/foo/bar.ts`, `packages/x/y.ts` */
-const FILE_REF = /(?:Created|Modified|Wrote|Updated|Added|Deleted|Renamed)\s+(?:file\s+)?[`']?([\w./-]+\.\w{1,6})[`']?/gi;
+const FILE_REF =
+	/(?:Created|Modified|Wrote|Updated|Added|Deleted|Renamed)\s+(?:file\s+)?[`']?([\w./-]+\.\w{1,6})[`']?/gi;
 
 /** "Completed:" or "Done:" sections in worker output */
-const COMPLETED_SECTION = /(?:^|\n)(?:##\s*)?(?:Completed|Done|Finished|Accomplished)[:\s]*\n([\s\S]*?)(?=\n##|\n---|\n\*\*\*|$)/i;
+const COMPLETED_SECTION =
+	/(?:^|\n)(?:##\s*)?(?:Completed|Done|Finished|Accomplished)[:\s]*\n([\s\S]*?)(?=\n##|\n---|\n\*\*\*|$)/i;
 
 /** "## Round Summary" section */
 const ROUND_SUMMARY = /##\s*Round\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n```|\n---\n|---|\n\*\*\*|\n___|$)/i;
@@ -135,17 +137,17 @@ export class TodoTracker {
 
 		// Track which todos have been touched in this update
 		let hasInProgress = false;
-		const updated = todos.map((todo) => {
+		const updated = todos.map(todo => {
 			if (todo.status === "completed") return todo;
 
 			// Match by file paths associated with the todo
 			if (todo.files && todo.files.length > 0) {
-				const allFilesDone = todo.files.every((f) => mentionedFiles.has(f.toLowerCase()));
+				const allFilesDone = todo.files.every(f => mentionedFiles.has(f.toLowerCase()));
 				if (allFilesDone) {
 					return { ...todo, status: "completed" as const, completedAt: Date.now() };
 				}
 				// If some files are mentioned, mark as in_progress
-				const someFilesDone = todo.files.some((f) => mentionedFiles.has(f.toLowerCase()));
+				const someFilesDone = todo.files.some(f => mentionedFiles.has(f.toLowerCase()));
 				if (someFilesDone) {
 					hasInProgress = true;
 					return { ...todo, status: "in_progress" as const };
@@ -156,7 +158,7 @@ export class TodoTracker {
 			if (completedBlob.length > 0) {
 				const titleKeywords = this.#extractKeywords(todo.title);
 				if (titleKeywords.length > 0) {
-					const matchedKeywords = titleKeywords.filter((kw) => completedBlob.includes(kw));
+					const matchedKeywords = titleKeywords.filter(kw => completedBlob.includes(kw));
 					// If all significant keywords are found in completed text, mark as completed
 					if (matchedKeywords.length >= Math.ceil(titleKeywords.length * 0.6)) {
 						return { ...todo, status: "completed" as const, completedAt: Date.now() };
@@ -177,7 +179,7 @@ export class TodoTracker {
 		// If no items are in_progress but some are still pending, mark the first
 		// pending as in_progress (assumes sequential execution).
 		if (!hasInProgress) {
-			const firstPendingIdx = updated.findIndex((t) => t.status === "pending");
+			const firstPendingIdx = updated.findIndex(t => t.status === "pending");
 			if (firstPendingIdx >= 0) {
 				updated[firstPendingIdx] = { ...updated[firstPendingIdx], status: "in_progress" };
 			}
@@ -208,7 +210,26 @@ export class TodoTracker {
 		return title
 			.toLowerCase()
 			.split(/[^a-z0-9]+/)
-			.filter((w) => w.length > 3)
-			.filter((w) => !["the", "this", "that", "with", "from", "into", "have", "will", "your", "they", "them", "what", "when", "which", "then"].includes(w));
+			.filter(w => w.length > 3)
+			.filter(
+				w =>
+					![
+						"the",
+						"this",
+						"that",
+						"with",
+						"from",
+						"into",
+						"have",
+						"will",
+						"your",
+						"they",
+						"them",
+						"what",
+						"when",
+						"which",
+						"then",
+					].includes(w),
+			);
 	}
 }

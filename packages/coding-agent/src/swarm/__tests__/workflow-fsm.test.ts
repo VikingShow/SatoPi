@@ -24,7 +24,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { StateTracker } from "../core/state";
 import { type Chapter, PHASES, WorkflowFsm } from "../core/workflow-fsm";
-import { ActivityLogger } from "../hooks/activity-logger";
+import { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Test helpers

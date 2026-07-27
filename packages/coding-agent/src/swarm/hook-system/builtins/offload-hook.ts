@@ -7,11 +7,11 @@
  * @module hook-system/builtins/offload-hook
  */
 
-import type { Chapter } from "../../core/state";
-import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
-import type { IOffloadManager } from "../../../offload/manager"
-import { resolveAgentId } from "../utils";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { IOffloadManager } from "../../../offload/manager";
+import type { Chapter } from "../../core/state";
+import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
+import { resolveAgentId } from "../utils";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -34,65 +34,59 @@ const ACTIVE_PHASES: Chapter[] = ["script", "script-debate", "stage", "curtain"]
  *
  * @param offloadManager - The offload subsystem instance.
  */
-export function createOffloadHook(
-  offloadManager: IOffloadManager,
-): HookRegistration {
-  return {
-    name: "offload-hook",
-    priority: 2,
-    events: ["agent:afterComplete", "workflow:beforePhase", "roundtable:afterRound"],
-    phases: ACTIVE_PHASES,
+export function createOffloadHook(offloadManager: IOffloadManager): HookRegistration {
+	return {
+		name: "offload-hook",
+		priority: 2,
+		events: ["agent:afterComplete", "workflow:beforePhase", "roundtable:afterRound"],
+		phases: ACTIVE_PHASES,
 
-    async handler<K extends HookEvent>(
-      event: K,
-      payload: HookPayloadMap[K],
-      ctx: HookContext,
-    ): Promise<void> {
-      const agentId = resolveAgentId(payload, ctx);
+		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
+			const agentId = resolveAgentId(payload, ctx);
 
-      switch (event) {
-        // -----------------------------------------------------------------
-        // agent:afterComplete — L1 summarize
-        // -----------------------------------------------------------------
-        case "agent:afterComplete": {
-          if (!agentId) {
-            logger.warn("[OffloadHook] agent:afterComplete missing agentId");
-            return;
-          }
-          // payload is AgentAfterCompletePayload
-          await offloadManager.summarizeL1(agentId, payload);
-          logger.debug("[OffloadHook] L1 summarize triggered", { agentId });
-          return;
-        }
+			switch (event) {
+				// -----------------------------------------------------------------
+				// agent:afterComplete — L1 summarize
+				// -----------------------------------------------------------------
+				case "agent:afterComplete": {
+					if (!agentId) {
+						logger.warn("[OffloadHook] agent:afterComplete missing agentId");
+						return;
+					}
+					// payload is AgentAfterCompletePayload
+					await offloadManager.summarizeL1(agentId, payload);
+					logger.debug("[OffloadHook] L1 summarize triggered", { agentId });
+					return;
+				}
 
-        // -----------------------------------------------------------------
-        // workflow:beforePhase — flush pending data
-        // -----------------------------------------------------------------
-        case "workflow:beforePhase": {
-          await offloadManager.forceFlush();
-          logger.debug("[OffloadHook] Force-flush completed", {
-            phase: ctx.phase,
-          });
-          return;
-        }
+				// -----------------------------------------------------------------
+				// workflow:beforePhase — flush pending data
+				// -----------------------------------------------------------------
+				case "workflow:beforePhase": {
+					await offloadManager.forceFlush();
+					logger.debug("[OffloadHook] Force-flush completed", {
+						phase: ctx.phase,
+					});
+					return;
+				}
 
-        // -----------------------------------------------------------------
-        // roundtable:afterRound — L1 summarize
-        // -----------------------------------------------------------------
-        case "roundtable:afterRound": {
-          if (!agentId) {
-            logger.warn("[OffloadHook] roundtable:afterRound missing agentId");
-            return;
-          }
-          // payload is RoundtableAfterRoundPayload
-          await offloadManager.summarizeL1(agentId, payload);
-          logger.debug("[OffloadHook] Roundtable L1 summarize", { agentId });
-          return;
-        }
+				// -----------------------------------------------------------------
+				// roundtable:afterRound — L1 summarize
+				// -----------------------------------------------------------------
+				case "roundtable:afterRound": {
+					if (!agentId) {
+						logger.warn("[OffloadHook] roundtable:afterRound missing agentId");
+						return;
+					}
+					// payload is RoundtableAfterRoundPayload
+					await offloadManager.summarizeL1(agentId, payload);
+					logger.debug("[OffloadHook] Roundtable L1 summarize", { agentId });
+					return;
+				}
 
-        default:
-          return;
-      }
-    },
-  };
+				default:
+					return;
+			}
+		},
+	};
 }
