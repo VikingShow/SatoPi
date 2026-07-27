@@ -25,9 +25,9 @@ export default class Swarm extends Command {
 
 	static flags = {
 		engine: Flags.string({
-			description: "Engine to use: legacy (default) or graph",
+			description: "Engine to use: graph (default) or legacy",
 			options: ["legacy", "graph"],
-			default: "legacy",
+			default: "graph",
 		}),
 	};
 

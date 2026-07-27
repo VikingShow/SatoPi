@@ -113,7 +113,7 @@ export type SwarmEventCallback = (event: SwarmPhaseEvent | SwarmAgentEvent) => v
 // EmbeddedSwarmBridge
 // ============================================================================
 
-export class EmbeddedSwarmBridge {
+export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	readonly #config: EmbeddedSwarmConfig;
 	#fsm!: WorkflowFsm;
 	#stateTracker!: StateTracker;

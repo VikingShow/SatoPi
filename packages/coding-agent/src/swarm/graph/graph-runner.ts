@@ -30,7 +30,7 @@ import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import { buildExecutionWaves } from "../core/dag";
-import { loadGraphDefinition, type GraphDefinition, type NodeResult } from "./schema";
+import { loadGraphDefinition, type GraphDefinition, type NodeContext, type NodeResult } from "./schema";
 import { WaveScheduler, type SchedulingStrategy, type SchedulerNodeInfo } from "./graph-executor";
 import { selectNodeBehavior } from "./node-behavior";
 import type { SingleResult } from "../../task";
@@ -218,61 +218,45 @@ export class GraphRunner implements ISwarmOrchestrator {
 					await stateTracker.updateAgent(nodeId, { status: "running" });
 					updateCheckpoint(nodeId, "running");
 
-					try {
-						const behavior = selectNodeBehavior(node.type);
-						const prepared = await behavior.prepare({
-							node: {
-								id: nodeId,
-								label: node.label,
-								description: node.description,
-								role: node.role,
-								tools: node.tools,
-								type: node.type ?? "custom",
-								dependsOn: node.depends_on ?? [],
-							},
-							workspace,
-							modelRegistry,
-							settings,
-							upstreamOutputs: {},
-							experience: "",
-							signal: abortSignal,
-							runtime,
-							roleAssetManager,
-							profileRegistry,
-							stateTracker,
-							activityLogger,
-						});
+					const behavior = selectNodeBehavior(node.type);
+					const ctx: NodeContext = {
+						node: {
+							id: nodeId,
+							label: node.label,
+							description: node.description,
+							role: node.role,
+							tools: node.tools,
+							type: node.type ?? "custom",
+							dependsOn: node.depends_on ?? [],
+						},
+						workspace,
+						modelRegistry,
+						settings,
+						upstreamOutputs: {},
+						experience: "",
+						signal: abortSignal,
+						runtime,
+						roleAssetManager,
+						profileRegistry,
+						stateTracker,
+						activityLogger,
+					};
 
-						const behaviorResult = await behavior.execute({
-							node: {
-								id: nodeId,
-								label: node.label,
-								description: node.description,
-								role: node.role,
-								tools: node.tools,
-								type: node.type ?? "custom",
-								dependsOn: node.depends_on ?? [],
-							},
-							workspace,
-							modelRegistry,
-							settings,
-							upstreamOutputs: {},
-							experience: "",
-							signal: abortSignal,
-							runtime,
-							roleAssetManager,
-							profileRegistry,
-							stateTracker,
-							activityLogger,
-						}, prepared);
+					try {
+						const prepared = await behavior.prepare(ctx);
+						const behaviorResult = await behavior.execute(ctx, prepared);
 
 						if (!node.gate) {
 							await stateTracker.updateAgent(nodeId, { status: "completed" });
-						updateCheckpoint(nodeId, "completed");
+							updateCheckpoint(nodeId, "completed");
 							return { nodeId, success: behaviorResult.success, error: behaviorResult.error };
 						}
 
-						let lastGateResult = await gateController.runGate(node, behaviorResult.output ?? "");
+						let lastGateResult = await gateController.runGate(
+							node,
+							behaviorResult.output ?? "",
+							behaviorResult.success,
+						);
 						let attempt = 0;
 						while (!lastGateResult.passed) {
 							const action = await gateController.handleGateFailure(node, lastGateResult, attempt);
@@ -291,7 +275,11 @@ export class GraphRunner implements ISwarmOrchestrator {
 							const { promise, resolve } = Promise.withResolvers<void>();
 							setTimeout(resolve, action.delayMs);
 							await promise;
-							lastGateResult = await gateController.runGate(node, behaviorResult.output ?? "");
+							lastGateResult = await gateController.runGate(
+								node,
+								behaviorResult.output ?? "",
+								behaviorResult.success,
+							);
 							attempt++;
 						}
 						if (lastGateResult.passed) {
@@ -305,6 +293,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 						await stateTracker.updateAgent(nodeId, { status: "failed", error: msg });
 						updateCheckpoint(nodeId, "failed", msg);
 						return { nodeId, success: false, error: msg };
+					} finally {
+						await behavior.cleanup(ctx);
 					}
 				},
 				onNodeComplete(nodeId, result) {

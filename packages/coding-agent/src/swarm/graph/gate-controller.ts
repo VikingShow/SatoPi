@@ -165,9 +165,15 @@ export class GateController extends EventEmitter {
 	 * @param node     The graph node whose gate to run.
 	 * @param _agentOutput Raw output from the agent (for future LSP context).
 	 */
-	async runGate(node: GraphNode, _agentOutput: string): Promise<GateResult> {
+	async runGate(node: GraphNode, _agentOutput: string, agentSucceeded = true): Promise<GateResult> {
 		const gate = node.gate;
 		if (!gate) {
+			return { passed: true, errors: [], fixable: false };
+		}
+
+		// "on-failure" mode: skip gate when the agent succeeded.
+		// The gate only runs when the agent already failed.
+		if (gate.mode === "on-failure" && agentSucceeded) {
 			return { passed: true, errors: [], fixable: false };
 		}
 

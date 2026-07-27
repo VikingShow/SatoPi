@@ -595,7 +595,7 @@ export class ExperienceStore {
 	getRunLessons(runId: string): ExperienceEntry[] {
 		const db = this.#db!;
 		const sql = db.query(`
-			SELECT run_id, timestamp, lesson_json, stats_json
+			SELECT run_id, timestamp, lesson_json, stats_json, weight, graph_name, node_id, task_hash
 			FROM lessons
 			WHERE run_id = ?1
 		`);
@@ -604,12 +604,20 @@ export class ExperienceStore {
 			timestamp: string;
 			lesson_json: string;
 			stats_json: string;
+			weight: number | null;
+			graph_name: string | null;
+			node_id: string | null;
+			task_hash: string | null;
 		}>;
 		return rows.map(row => ({
 			runId: row.run_id,
 			timestamp: row.timestamp,
 			lesson: JSON.parse(row.lesson_json) as ExtractedLesson,
 			stats: JSON.parse(row.stats_json) as LoopRunStats,
+			weight: row.weight ?? undefined,
+			graphName: row.graph_name ?? undefined,
+			nodeId: row.node_id ?? undefined,
+			taskHash: row.task_hash ?? undefined,
 		}));
 	}
 
@@ -619,7 +627,7 @@ export class ExperienceStore {
 	getRecentLessons(limit = 20): ExperienceEntry[] {
 		const db = this.#db!;
 		const sql = db.query(`
-			SELECT run_id, timestamp, lesson_json, stats_json
+			SELECT run_id, timestamp, lesson_json, stats_json, weight, graph_name, node_id, task_hash
 			FROM lessons
 			ORDER BY timestamp DESC
 			LIMIT ?1
@@ -629,12 +637,20 @@ export class ExperienceStore {
 			timestamp: string;
 			lesson_json: string;
 			stats_json: string;
+			weight: number | null;
+			graph_name: string | null;
+			node_id: string | null;
+			task_hash: string | null;
 		}>;
 		return rows.map(row => ({
 			runId: row.run_id,
 			timestamp: row.timestamp,
 			lesson: JSON.parse(row.lesson_json) as ExtractedLesson,
 			stats: JSON.parse(row.stats_json) as LoopRunStats,
+			weight: row.weight ?? undefined,
+			graphName: row.graph_name ?? undefined,
+			nodeId: row.node_id ?? undefined,
+			taskHash: row.task_hash ?? undefined,
 		}));
 	}
 
@@ -644,7 +660,7 @@ export class ExperienceStore {
 	getByTag(tag: string, limit = 20): ExperienceEntry[] {
 		const db = this.#db!;
 		const sql = db.query(`
-			SELECT run_id, timestamp, lesson_json, stats_json
+			SELECT run_id, timestamp, lesson_json, stats_json, weight, graph_name, node_id, task_hash
 			FROM lessons
 			WHERE tags LIKE ?1
 			ORDER BY timestamp DESC
@@ -655,12 +671,20 @@ export class ExperienceStore {
 			timestamp: string;
 			lesson_json: string;
 			stats_json: string;
+			weight: number | null;
+			graph_name: string | null;
+			node_id: string | null;
+			task_hash: string | null;
 		}>;
 		return rows.map(row => ({
 			runId: row.run_id,
 			timestamp: row.timestamp,
 			lesson: JSON.parse(row.lesson_json) as ExtractedLesson,
 			stats: JSON.parse(row.stats_json) as LoopRunStats,
+			weight: row.weight ?? undefined,
+			graphName: row.graph_name ?? undefined,
+			nodeId: row.node_id ?? undefined,
+			taskHash: row.task_hash ?? undefined,
 		}));
 	}
 
@@ -796,13 +820,11 @@ export class ExperienceStore {
 				taskDescription: "principle-generation",
 			},
 		};
-
 		// Principles get a weight boost upfront
 		const db = this.#db!;
-		db.run(
-			`
-			INSERT OR REPLACE INTO lessons (run_id, timestamp, lesson_json, stats_json, tags, weight)
-			VALUES (?1, ?2, ?3, ?4, ?5, 3.0)
+		db.run(`
+			INSERT OR REPLACE INTO lessons (run_id, timestamp, lesson_json, stats_json, tags, weight, graph_name, node_id, task_hash)
+			VALUES (?1, ?2, ?3, ?4, ?5, 3.0, NULL, NULL, NULL)
 		`,
 			[
 				entry.runId,
