@@ -20,6 +20,8 @@ import { assembleAgentRuntime } from "../swarm/core/assembler";
 import type { RunManager, SteeringSink } from "../swarm/core/services";
 import { StateTracker } from "../swarm/core/state";
 import { SwarmRunner } from "../swarm/core/swarm-runner";
+import { GraphRunner } from "../swarm/graph/graph-runner";
+import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
 import { ExperienceStore } from "../swarm/curtain/experience";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
@@ -38,6 +40,7 @@ export interface SwarmCommandArgs {
 	/** YAML path for run/plan, session name for resume. */
 	target: string;
 	flags: Record<string, unknown>;
+	engine?: "graph" | "legacy";
 }
 
 // ============================================================================
@@ -67,6 +70,7 @@ async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
+	engine: "graph" | "legacy" = "legacy",
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -135,25 +139,38 @@ async function createSwarmServices(
 			hindsightClient: s.hindsightClient,
 			mnemopiClient: s.mnemopiClient,
 		});
-
-		// SwarmRunner with AgentRuntime — StageController will use
-		// runtime.spawn() instead of the legacy streamAgentOutput path.
-		const runManager: RunManager = new SwarmRunner({
-			modelRegistry: s.modelRegistry,
-			settings: s.settings,
-			workspace: s.workspace,
-			yamlPath: s.yamlPath,
-			stateTracker,
-			activityLogger,
-			experienceStore: s.experienceStore,
-			sessionManager: undefined,
-			profileRegistry: s.profileRegistry,
-			markEnvironment,
-			roleAssetManager: s.roleAssetManager,
-			hookPipeline,
-			runtime,
-			hindsightClient: s.hindsightClient,
-		});
+		let runManager: RunManager;
+		if (engine === "graph") {
+			// GraphRunner implements ISwarmOrchestrator; wrap in adapter for RunManager.
+			const graphRunner = new GraphRunner({
+				workspace: s.workspace,
+				graphPath: s.yamlPath,
+				modelRegistry: s.modelRegistry,
+				settings: s.settings,
+				profileRegistry: s.profileRegistry,
+			});
+			await graphRunner.init();
+			runManager = new GraphRunnerAsRunManager(graphRunner);
+		} else {
+			// Legacy SwarmRunner with AgentRuntime — StageController uses
+			// runtime.spawn() instead of the legacy streamAgentOutput path.
+			runManager = new SwarmRunner({
+				modelRegistry: s.modelRegistry,
+				settings: s.settings,
+				workspace: s.workspace,
+				yamlPath: s.yamlPath,
+				stateTracker,
+				activityLogger,
+				experienceStore: s.experienceStore,
+				sessionManager: undefined,
+				profileRegistry: s.profileRegistry,
+				markEnvironment,
+				roleAssetManager: s.roleAssetManager,
+				hookPipeline,
+				runtime,
+				hindsightClient: s.hindsightClient,
+			});
+		}
 
 		// Real ScriptManager with AgentRuntime wired in.
 		const scriptManager = new ScriptManager({
@@ -218,7 +235,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const swarmName = def.name;
 	const authStorage = await discoverAuthStorage();
 	try {
-		const { shared, factory } = await createSwarmServices(cwd, yamlPath, def);
+		const engine = (cmd.engine ?? "legacy") as "graph" | "legacy";
+		const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
 
 		const registry = new SessionRegistry(shared, factory, 1);
 		const session = await registry.createSession(swarmName);
@@ -232,13 +250,18 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			return;
 		}
 
-		process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
-		await (session.runManager as SwarmRunner).waitForCompletion();
-		const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
-		if (curtainResult) {
-			process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
+		if (engine === "graph") {
+			// GraphRunnerAsRunManager handles completion internally.
+			process.stderr.write(`Graph "${swarmName}" started.\n`);
 		} else {
-			process.stderr.write(`Swarm "${swarmName}" finished.\n`);
+			process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
+			await (session.runManager as SwarmRunner).waitForCompletion();
+			const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
+			if (curtainResult) {
+				process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
+			} else {
+				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
+			}
 		}
 	} finally {
 		authStorage.close();

@@ -38,10 +38,14 @@ export interface ExperienceEntry {
 	stats: LoopRunStats;
 	/** Experience quality weight (0.1–5.0). Initial 1.0, boosted on reference, decayed when unreferenced. */
 	weight?: number;
-	/** ISO timestamp of last reference by a reviewer during planning. */
 	lastReferencedAt?: string;
-}
-
+	/** Graph name — scopes lessons to a specific graph definition. */
+	graphName?: string;
+	/** Node ID within the graph that produced this lesson. */
+	nodeId?: string;
+	/** Content hash of the task the agent was working on. */
+	taskHash?: string;
+ }
 export interface SearchResult {
 	runId: string;
 	timestamp: string;
@@ -288,9 +292,16 @@ export class ExperienceStore {
 
 			// Set default weight for existing rows
 			db.run("UPDATE lessons SET weight = 1.0 WHERE weight IS NULL");
-
 			db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (1)");
 			this.#schemaVersion = 1;
+		}
+
+		if (this.#schemaVersion < 2) {
+			try { db.run("ALTER TABLE lessons ADD COLUMN graph_name TEXT"); } catch { /* exists */ }
+			try { db.run("ALTER TABLE lessons ADD COLUMN node_id TEXT"); } catch { /* exists */ }
+			try { db.run("ALTER TABLE lessons ADD COLUMN task_hash TEXT"); } catch { /* exists */ }
+			db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (2)");
+			this.#schemaVersion = 2;
 		}
 	}
 

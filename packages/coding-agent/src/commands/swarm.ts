@@ -2,7 +2,7 @@
  * Manage swarm runs.
  */
 import { APP_NAME } from "@oh-my-pi/pi-utils";
-import { Args, Command, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
 import { type SwarmAction, type SwarmCommandArgs, runSwarmCommand } from "../cli/swarm-cli";
 import { initTheme } from "../modes/theme/theme";
 
@@ -23,14 +23,22 @@ export default class Swarm extends Command {
 		}),
 	};
 
+	static flags = {
+		engine: Flags.string({
+			description: "Engine to use: legacy (default) or graph",
+			options: ["legacy", "graph"],
+			default: "legacy",
+		}),
+	};
+
 	static examples = [
 		"# Run a swarm from a loop.yaml\n  stp swarm run ./loop.yaml",
+		"# Run a swarm using the graph engine\n  stp swarm run ./loop.yaml --engine=graph",
 		"# Plan a swarm run\n  stp swarm plan ./loop.yaml",
 		"# Resume a swarm session\n  stp swarm resume my-swarm",
 	];
-
 	async run(): Promise<void> {
-		const { args } = await this.parse(Swarm);
+		const { args, flags } = await this.parse(Swarm);
 		if (!args.action) {
 			renderCommandHelp(APP_NAME, "swarm", Swarm);
 			return;
@@ -50,6 +58,7 @@ export default class Swarm extends Command {
 			action: args.action as SwarmAction,
 			target: args.target,
 			flags: {},
+			engine: flags.engine as "graph" | "legacy",
 		};
 
 		await initTheme();
