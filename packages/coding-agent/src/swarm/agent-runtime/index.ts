@@ -15,24 +15,18 @@
  */
 
 import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
-import type {
-  ModelRegistry,
-  Settings,
-} from "@oh-my-pi/pi-coding-agent";
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-
-import type { AgentSpec } from "./agent-spec";
-import type { ResolvedRole } from "./role-provider";
-import { RoleProvider } from "./role-provider";
-import type { LaunchContext } from "./agent-launcher";
-import { AgentLauncher } from "./agent-launcher";
-import { AgentHandle } from "./agent-handle";
-
-import type { ContextPipeline, AssembledContext, PhaseInfo } from "../context-manager/context-pipeline";
-import type { CommBus } from "../comm-bus/comm-bus";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../hooks/activity-logger";
 import { AgentRegistry } from "../../registry/agent-registry";
+import type { Tool } from "../../tools";
+import type { CommBus } from "../comm-bus/comm-bus";
+import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { ActivityLogger } from "../infra/activity-logger";
+import type { AgentHandle } from "./agent-handle";
+import type { AgentLauncher, LaunchContext } from "./agent-launcher";
+import type { AgentSpec } from "./agent-spec";
+import type { ResolvedRole, RoleProvider } from "./role-provider";
 
 // ============================================================================
 // Types
@@ -42,63 +36,66 @@ import { AgentRegistry } from "../../registry/agent-registry";
  * Configuration for a roundtable discussion among multiple agents.
  */
 export interface RoundtableConfig {
-  /** Number of discussion rounds. */
-  rounds: number;
+	/** Number of discussion rounds. */
+	rounds: number;
 
-  /** Per-round timeout in milliseconds. */
-  timeoutMs?: number;
+	/** Per-round timeout in milliseconds. */
+	timeoutMs?: number;
 
-  /** Convergence threshold for early exit (Jaccard similarity, 0-1). */
-  convergenceThreshold?: number;
+	/** Convergence threshold for early exit (Jaccard similarity, 0-1). */
+	convergenceThreshold?: number;
 
-  /** Consecutive rounds above threshold before early exit. */
-  convergenceStreak?: number;
+	/** Consecutive rounds above threshold before early exit. */
+	convergenceStreak?: number;
 }
 
 /**
  * Result of a roundtable discussion.
  */
 export interface RoundtableResult {
-  /** Whether the roundtable converged before exhausting all rounds. */
-  converged: boolean;
+	/** Whether the roundtable converged before exhausting all rounds. */
+	converged: boolean;
 
-  /** Number of rounds actually executed. */
-  rounds: number;
+	/** Number of rounds actually executed. */
+	rounds: number;
 
-  /** All response strings across all rounds. */
-  responses: string[];
+	/** All response strings across all rounds. */
+	responses: string[];
 
-  /** Final positions from the last round. */
-  finalPositions: string[];
+	/** Final positions from the last round. */
+	finalPositions: string[];
 }
 
 /**
  * Options for the AgentRuntime constructor.
  */
 export interface AgentRuntimeOptions {
-  /** Shared service for role resolution. */
-  roleProvider: RoleProvider;
+	/** Shared service for role resolution. */
+	roleProvider: RoleProvider;
 
-  /** Shared service for context assembly. */
-  contextPipeline: ContextPipeline;
+	/** Shared service for context assembly. */
+	contextPipeline: ContextPipeline;
 
-  /** Shared service for agent creation + launch. */
-  launcher: AgentLauncher;
+	/** Shared service for agent creation + launch. */
+	launcher: AgentLauncher;
 
-  /** Communication bus for human steering and system messages. */
-  commBus: CommBus;
+	/** Communication bus for human steering and system messages. */
+	commBus: CommBus;
 
-  /** Hook pipeline for lifecycle events. */
-  hookPipeline: HookPipeline;
+	/** Hook pipeline for lifecycle events. */
+	hookPipeline: HookPipeline;
 
-  /** Model registry (needed for LaunchContext modelRegistry). */
-  modelRegistry: ModelRegistry;
+	/** Model registry (needed for LaunchContext modelRegistry). */
+	modelRegistry: ModelRegistry;
 
-  /** Settings (needed for LaunchContext settings). */
-  settings: Settings;
+	/** Settings (needed for LaunchContext settings). */
+	settings: Settings;
 
-  /** Optional activity logger for streaming output. */
-  activityLogger?: ActivityLogger;
+	/** Optional activity logger for streaming output. */
+	activityLogger?: ActivityLogger;
+
+	/** Optional tool registry for resolving tool names to real Tool instances. */
+	toolRegistry?: Map<string, Tool>;
 }
 
 // ============================================================================
@@ -123,258 +120,369 @@ export interface AgentRuntimeOptions {
  * ```
  */
 export class AgentRuntime {
-  readonly #roleProvider: RoleProvider;
-  readonly #contextPipeline: ContextPipeline;
-  readonly #launcher: AgentLauncher;
-  readonly #commBus: CommBus;
-  readonly #hookPipeline: HookPipeline;
-  readonly #modelRegistry: ModelRegistry;
-  readonly #settings: Settings;
-  readonly #activityLogger?: ActivityLogger;
+	readonly #roleProvider: RoleProvider;
+	readonly #contextPipeline: ContextPipeline;
+	readonly #launcher: AgentLauncher;
+	readonly #commBus: CommBus;
+	readonly #hookPipeline: HookPipeline;
+	readonly #modelRegistry: ModelRegistry;
+	readonly #settings: Settings;
+	readonly #activityLogger?: ActivityLogger;
+	readonly #toolRegistry?: Map<string, Tool>;
 
-  /** Per-agent message queues for steering messages (populated from CommBus). */
-  readonly #steeringQueues = new Map<string, AgentMessage[]>();
+	/** Per-agent message queues for steering messages (populated from CommBus). */
+	readonly #steeringQueues = new Map<string, AgentMessage[]>();
 
-  /** Per-agent message queues for follow-up messages. */
-  readonly #followUpQueues = new Map<string, AgentMessage[]>();
+	/** Per-agent message queues for follow-up messages. */
+	readonly #followUpQueues = new Map<string, AgentMessage[]>();
 
-  /** Per-agent queues for system notification (aside) messages. */
-  readonly #asideQueues = new Map<string, AsideMessage[]>();
+	/** Per-agent queues for system notification (aside) messages. */
+	readonly #asideQueues = new Map<string, AsideMessage[]>();
 
-  constructor(options: AgentRuntimeOptions) {
-    this.#roleProvider = options.roleProvider;
-    this.#contextPipeline = options.contextPipeline;
-    this.#launcher = options.launcher;
-    this.#commBus = options.commBus;
-    this.#hookPipeline = options.hookPipeline;
-    this.#modelRegistry = options.modelRegistry;
-    this.#settings = options.settings;
-    this.#activityLogger = options.activityLogger;
-  }
+	constructor(options: AgentRuntimeOptions) {
+		this.#roleProvider = options.roleProvider;
+		this.#contextPipeline = options.contextPipeline;
+		this.#launcher = options.launcher;
+		this.#commBus = options.commBus;
+		this.#hookPipeline = options.hookPipeline;
+		this.#modelRegistry = options.modelRegistry;
+		this.#settings = options.settings;
+		this.#activityLogger = options.activityLogger;
+		this.#toolRegistry = options.toolRegistry;
+	}
 
-  // -----------------------------------------------------------------------
-  // Public API
-  // -----------------------------------------------------------------------
+	// -----------------------------------------------------------------------
+	// Public API
+	// -----------------------------------------------------------------------
 
-  /**
-   * Spawn one or more agents from declarative specs.
-   *
-   * All phases use this single entry point. Agents are spawned in parallel
-   * when multiple specs are provided.
-   *
-   * @returns AgentHandle[] — each handle provides wait(), send(), abort(), outputStream()
-   */
-  async spawn(specs: AgentSpec[]): Promise<AgentHandle[]> {
-    const handles = await Promise.all(specs.map((spec) => this.spawnOne(spec)));
-    return handles;
-  }
+	/**
+	 * Spawn one or more agents from declarative specs.
+	 *
+	 * All phases use this single entry point. Agents are spawned in parallel
+	 * when multiple specs are provided.
+	 *
+	 * @returns AgentHandle[] — each handle provides wait(), send(), abort(), outputStream()
+	 */
+	async spawn(specs: AgentSpec[]): Promise<AgentHandle[]> {
+		const handles = await Promise.all(specs.map(spec => this.spawnOne(spec)));
+		return handles;
+	}
 
-  /**
-   * Spawn agents for a structured roundtable discussion.
-   *
-   * Each spec becomes a participant. The roundtable runs for the
-   * configured number of rounds, with optional convergence-based
-   * early exit.
-   */
-  async spawnRoundtable(
-    _specs: AgentSpec[],
-    _config: RoundtableConfig,
-  ): Promise<RoundtableResult> {
-    // Roundtable orchestration will be implemented in a later phase.
-    // For now, return a stub result.
-    logger.warn(
-      "[AgentRuntime] spawnRoundtable() not yet implemented — returning stub",
-    );
-    return {
-      converged: false,
-      rounds: 0,
-      responses: [],
-      finalPositions: [],
-    };
-  }
+	/**
+	 * Spawn agents for a structured roundtable discussion.
+	 *
+	 * Each spec becomes a participant. The roundtable runs for the
+	 * configured number of rounds, with optional convergence-based
+	 * early exit.
+	 *
+	 * Flow per round:
+	 * 1. Build each agent's task with prior round positions appended
+	 * 2. Spawn all agents in parallel via spawn()
+	 * 3. Collect responses
+	 * 4. Check convergence (Jaccard similarity of token sets)
+	 * 5. If converged for N consecutive rounds, exit early
+	 */
+	async spawnRoundtable(specs: AgentSpec[], config: RoundtableConfig): Promise<RoundtableResult> {
+		const allResponses: string[] = [];
+		let lastRoundPositions: string[] = [];
+		let prevRoundPositions: string[] = [];
+		let convergenceStreak = 0;
+		const convergenceThreshold = config.convergenceThreshold ?? 0.8;
+		const convergenceStreakRequired = config.convergenceStreak ?? 1;
 
-  /**
-   * Queue a human steering message for a specific agent.
-   *
-   * The message will be delivered to the agent at the next injection boundary.
-   * Uses CommBus.receiveFromHuman() to log the message, then queues it
-   * for delivery to the target agent's steering queue.
-   */
-  async sendHumanMessage(agentId: string, text: string): Promise<void> {
-    // Log via CommBus
-    await this.#commBus.receiveFromHuman(text, agentId);
+		for (let round = 0; round < config.rounds; round++) {
+			// Build per-agent tasks with prior round context
+			const priorContext =
+				prevRoundPositions.length > 0
+					? "\n\n## Prior Round Positions\n" +
+						prevRoundPositions.map((p, j) => `**Agent ${specs[j]?.id ?? j}:** ${p}`).join("\n\n") +
+						"\n\nReview the above positions. Provide your updated position."
+					: "";
 
-    // Queue for agent delivery
-    const queue = this.#steeringQueues.get(agentId) ?? [];
-    queue.push({
-      role: "user",
-      content: [{ type: "text", text: `[Human] ${text}` }],
-      timestamp: Date.now(),
-    });
-    this.#steeringQueues.set(agentId, queue);
-  }
+			const roundSpecs = specs.map(s => ({
+				...s,
+				task: s.task + priorContext,
+			}));
 
-  /**
-   * Queue a system notification (aside message) for a specific agent.
-   */
-  async sendSystemNotification(
-    agentId: string,
-    text: string,
-  ): Promise<void> {
-    const queue = this.#asideQueues.get(agentId) ?? [];
-    queue.push({
-      role: "user",
-      content: [{ type: "text", text: `[System] ${text}` }],
-      timestamp: Date.now(),
-    });
-    this.#asideQueues.set(agentId, queue);
-  }
+			// Spawn all agents in parallel
+			const handles = await this.spawn(roundSpecs);
 
-  // -----------------------------------------------------------------------
-  // Internal
-  // -----------------------------------------------------------------------
+			// Wait for all responses with optional per-round timeout
+			const results = await Promise.allSettled(handles.map(h => h.wait(config.timeoutMs ?? 300_000)));
 
-  /**
-   * Spawn a single agent from its spec.
-   *
-   * Full lifecycle:
-   * 1. HookPipeline.trigger("agent:beforeSpawn")
-   * 2. RoleProvider.resolve(spec)
-   * 3. ContextPipeline.assemble(spec, phase, base)
-   * 4. Build AgentLoopConfig hooks from CommBus queues
-   * 5. AgentLauncher.launch(launchContext)
-   * 6. HookPipeline.trigger("agent:afterSpawn")
-   */
-  private async spawnOne(spec: AgentSpec): Promise<AgentHandle> {
-    const agentId = spec.id;
+			const roundResponses = results.map((r, i) => {
+				if (r.status === "fulfilled") {
+					const out = r.value;
+					return out?.output ?? out ?? "(no response)";
+				}
+				logger.warn("[AgentRuntime] Roundtable agent failed", {
+					round,
+					agentId: specs[i]?.id,
+					error: String(r.reason),
+				});
+				return "(no response)";
+			});
 
-    // 1. Before-spawn hook
-    await this.#hookPipeline.trigger(
-      "agent:beforeSpawn",
-      { agentId, role: spec.role, task: spec.task },
-      { agentId, phase: "idle" },
-    );
+			allResponses.push(...roundResponses);
+			lastRoundPositions = roundResponses;
 
-    // 2. Resolve role
-    let resolvedRole: ResolvedRole;
-    try {
-      resolvedRole = await this.#roleProvider.resolve(spec);
-    } catch (err) {
-      logger.error("[AgentRuntime] Role resolution failed", {
-        agentId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
+			// Check convergence (skip first round — nothing to compare against)
+			if (round > 0 && prevRoundPositions.length === roundResponses.length) {
+				const similarity = jaccardSimilarity(roundResponses.join(" "), prevRoundPositions.join(" "));
 
-    // 3. Assemble context via ContextPipeline
-    const phaseInfo: PhaseInfo = {
-      phase: "stage",
-      multiAgent: true,
-      humanMode: "observer",
-    };
+				if (similarity >= convergenceThreshold) {
+					convergenceStreak++;
+					if (convergenceStreak >= convergenceStreakRequired) {
+						logger.info("[AgentRuntime] Roundtable converged", {
+							round: round + 1,
+							similarity,
+							streak: convergenceStreak,
+						});
+						return {
+							converged: true,
+							rounds: round + 1,
+							responses: allResponses,
+							finalPositions: lastRoundPositions,
+						};
+					}
+				} else {
+					convergenceStreak = 0;
+				}
+			}
 
-    const baseContext = {
-      taskDescription: spec.task,
-      workspace: process.cwd(),
-      swarmDir: ".swarm-workspace",
-      turnNumber: 0,
-      phase: phaseInfo,
-      accumulated: undefined as unknown as Partial<AssembledContext>,
-    };
+			prevRoundPositions = [...lastRoundPositions];
+		}
 
-    let assembledContext: AssembledContext;
-    try {
-      assembledContext = await this.#contextPipeline.assemble(
-        { id: spec.id, role: spec.role, task: spec.task },
-        phaseInfo,
-        baseContext,
-      );
-    } catch (err) {
-      logger.error("[AgentRuntime] Context assembly failed", {
-        agentId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
+		logger.info("[AgentRuntime] Roundtable completed without convergence", {
+			rounds: config.rounds,
+		});
 
-    // 4. Build AgentLoopConfig hook providers from internal queues
-    const hookProviders: LaunchContext["hookProviders"] = {
-      getSteeringMessages: async () => {
-        const queue = this.#steeringQueues.get(agentId);
-        if (!queue || queue.length === 0) return [];
-        const messages = queue.splice(0);
-        this.#steeringQueues.delete(agentId);
-        return messages;
-      },
-      getFollowUpMessages: async () => {
-        const queue = this.#followUpQueues.get(agentId);
-        if (!queue || queue.length === 0) return [];
-        const messages = queue.splice(0);
-        this.#followUpQueues.delete(agentId);
-        return messages;
-      },
-      getAsideMessages: async () => {
-        const queue = this.#asideQueues.get(agentId);
-        if (!queue || queue.length === 0) return [];
-        const messages = queue.splice(0);
-        this.#asideQueues.delete(agentId);
-        return messages;
-      },
-    };
+		return {
+			converged: false,
+			rounds: config.rounds,
+			responses: allResponses,
+			finalPositions: lastRoundPositions,
+		};
+	}
 
-    // 4.5 Register persistent agent in global AgentRegistry
-    if (spec.profileId) {
-      AgentRegistry.global().register({
-        id: spec.id,
-        displayName: spec.id,
-        kind: "persistent",
-        parentId: "Main",
-        session: null,
-        sessionFile: null,
-        profileId: spec.profileId,
-        role: spec.role,
-      });
-    }
-    // 5. Build launch context and launch
-    const launchContext: LaunchContext = {
-      spec,
-      resolvedRole,
-      assembledContext,
-      hookProviders,
-      modelRegistry: this.#modelRegistry,
-      settings: this.#settings,
-      activityLogger: this.#activityLogger,
-    };
+	/**
+	 * Queue a human steering message for a specific agent.
+	 *
+	 * The message will be delivered to the agent at the next injection boundary.
+	 * Uses CommBus.receiveFromHuman() to log the message, then queues it
+	 * for delivery to the target agent's steering queue.
+	 */
+	async sendHumanMessage(agentId: string, text: string): Promise<void> {
+		// Log via CommBus
+		await this.#commBus.receiveFromHuman(text, agentId);
 
-    let handle: AgentHandle;
-    try {
-      handle = await this.#launcher.launch(launchContext);
-    } catch (err) {
-      logger.error("[AgentRuntime] Agent launch failed", {
-        agentId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
+		// Queue for agent delivery
+		const queue = this.#steeringQueues.get(agentId) ?? [];
+		queue.push({
+			role: "user",
+			content: [{ type: "text", text: `[Human] ${text}` }],
+			timestamp: Date.now(),
+		});
+		this.#steeringQueues.set(agentId, queue);
+	}
 
-    // 6. After-spawn hook
-    await this.#hookPipeline.trigger(
-      "agent:afterSpawn",
-      { agentId, role: spec.role, handle },
-      { agentId, phase: "stage" },
-    );
+	/**
+	 * Queue a system notification (aside message) for a specific agent.
+	 */
+	async sendSystemNotification(agentId: string, text: string): Promise<void> {
+		const queue = this.#asideQueues.get(agentId) ?? [];
+		queue.push({
+			role: "user",
+			content: [{ type: "text", text: `[System] ${text}` }],
+			timestamp: Date.now(),
+		});
+		this.#asideQueues.set(agentId, queue);
+	}
 
-    // 6.5 Wire lifecycle callbacks for persistent agents
-    if (spec.profileId) {
-      handle.onComplete = () => {
-        AgentRegistry.global().setStatus(spec.id, "idle");
-      };
-      handle.onError = () => {
-        AgentRegistry.global().setStatus(spec.id, "aborted");
-      };
-    }
+	/** The communication bus for human steering and agent messaging. */
+	get commBus(): CommBus {
+		return this.#commBus;
+	}
 
-    return handle;
-  }
+	// -----------------------------------------------------------------------
+	// Internal
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Spawn a single agent from its spec.
+	 *
+	 * Full lifecycle:
+	 * 1. HookPipeline.trigger("agent:beforeSpawn")
+	 * 2. RoleProvider.resolve(spec)
+	 * 3. ContextPipeline.assemble(spec, phase, base)
+	 * 4. Build AgentLoopConfig hooks from CommBus queues
+	 * 5. AgentLauncher.launch(launchContext)
+	 * 6. HookPipeline.trigger("agent:afterSpawn")
+	 */
+	private async spawnOne(spec: AgentSpec): Promise<AgentHandle> {
+		const agentId = spec.id;
+
+		// 1. Before-spawn hook
+		await this.#hookPipeline.trigger(
+			"agent:beforeSpawn",
+			{ agentId, role: spec.role, task: spec.task },
+			{ agentId, phase: "idle" },
+		);
+
+		// 2. Resolve role
+		let resolvedRole: ResolvedRole;
+		try {
+			resolvedRole = await this.#roleProvider.resolve(spec);
+		} catch (err) {
+			logger.error("[AgentRuntime] Role resolution failed", {
+				agentId,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			throw err;
+		}
+
+		// 3. Assemble context via ContextPipeline
+		const phaseInfo: PhaseInfo = {
+			phase: "stage",
+			multiAgent: true,
+			humanMode: "observer",
+		};
+
+		const baseContext = {
+			taskDescription: spec.task,
+			workspace: process.cwd(),
+			swarmDir: ".swarm-workspace",
+			turnNumber: 0,
+			phase: phaseInfo,
+			accumulated: undefined as unknown as Partial<AssembledContext>,
+		};
+
+		let assembledContext: AssembledContext;
+		try {
+			assembledContext = await this.#contextPipeline.assemble(
+				{ id: spec.id, role: spec.role, task: spec.task },
+				phaseInfo,
+				baseContext,
+			);
+		} catch (err) {
+			logger.error("[AgentRuntime] Context assembly failed", {
+				agentId,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			throw err;
+		}
+
+		// 4. Build AgentLoopConfig hook providers from internal queues
+		const hookProviders: LaunchContext["hookProviders"] = {
+			getSteeringMessages: async () => {
+				const queue = this.#steeringQueues.get(agentId);
+				if (!queue || queue.length === 0) return [];
+				const messages = queue.splice(0);
+				this.#steeringQueues.delete(agentId);
+				return messages;
+			},
+			getFollowUpMessages: async () => {
+				const queue = this.#followUpQueues.get(agentId);
+				if (!queue || queue.length === 0) return [];
+				const messages = queue.splice(0);
+				this.#followUpQueues.delete(agentId);
+				return messages;
+			},
+			getAsideMessages: async () => {
+				const queue = this.#asideQueues.get(agentId);
+				if (!queue || queue.length === 0) return [];
+				const messages = queue.splice(0);
+				this.#asideQueues.delete(agentId);
+				return messages;
+			},
+		};
+
+		// 4.5 Register persistent agent in global AgentRegistry
+		if (spec.profileId) {
+			AgentRegistry.global().register({
+				id: spec.id,
+				displayName: spec.id,
+				kind: "persistent",
+				parentId: "Main",
+				session: null,
+				sessionFile: null,
+				profileId: spec.profileId,
+				role: spec.role,
+			});
+		}
+		// 5. Build launch context and launch
+		const launchContext: LaunchContext = {
+			spec,
+			resolvedRole,
+			assembledContext,
+			hookProviders,
+			modelRegistry: this.#modelRegistry,
+			settings: this.#settings,
+			activityLogger: this.#activityLogger,
+			toolRegistry: this.#toolRegistry,
+		};
+
+		let handle: AgentHandle;
+		try {
+			handle = await this.#launcher.launch(launchContext);
+		} catch (err) {
+			logger.error("[AgentRuntime] Agent launch failed", {
+				agentId,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			throw err;
+		}
+
+		// 6. After-spawn hook
+		await this.#hookPipeline.trigger(
+			"agent:afterSpawn",
+			{ agentId, role: spec.role, handle },
+			{ agentId, phase: "stage" },
+		);
+
+		// 6.5 Wire lifecycle callbacks for persistent agents
+		if (spec.profileId) {
+			handle.onComplete = () => {
+				AgentRegistry.global().setStatus(spec.id, "idle");
+			};
+			handle.onError = () => {
+				AgentRegistry.global().setStatus(spec.id, "aborted");
+			};
+		}
+
+		return handle;
+	}
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Compute Jaccard similarity between two texts.
+ *
+ * Tokenizes each text into a set of lowercase words, then computes
+ * |intersection| / |union|. Returns 0 for empty inputs.
+ */
+function jaccardSimilarity(a: string, b: string): number {
+	const tokenize = (text: string): Set<string> => {
+		const words = text
+			.toLowerCase()
+			.split(/[^a-z0-9]+/)
+			.filter(w => w.length > 2);
+		return new Set(words);
+	};
+
+	const setA = tokenize(a);
+	const setB = tokenize(b);
+
+	if (setA.size === 0 && setB.size === 0) return 1;
+	if (setA.size === 0 || setB.size === 0) return 0;
+
+	let intersection = 0;
+	for (const token of setA) {
+		if (setB.has(token)) intersection++;
+	}
+
+	return intersection / (setA.size + setB.size - intersection);
 }

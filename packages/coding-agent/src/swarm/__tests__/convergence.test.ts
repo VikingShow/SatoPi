@@ -1,10 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import {
-	extractRoundSummary,
-	jaccardSimilarity,
-	findingsSimilarity,
-	parseRoundSummaryJson,
-} from "../core/convergence";
+import { describe, expect, it } from "bun:test";
+import { extractRoundSummary, findingsSimilarity, jaccardSimilarity, parseRoundSummaryJson } from "../core/convergence";
 
 describe("jaccardSimilarity", () => {
 	it("is 1 for two empty sets", () => {
@@ -24,10 +19,7 @@ describe("jaccardSimilarity", () => {
 
 describe("findingsSimilarity", () => {
 	it("tokenizes, lowercases and ignores short tokens", () => {
-		const s = findingsSimilarity(
-			["Missing input validation"],
-			["missing INPUT validation"],
-		);
+		const s = findingsSimilarity(["Missing input validation"], ["missing INPUT validation"]);
 		expect(s).toBe(1);
 	});
 	it("detects divergent findings", () => {
@@ -46,7 +38,6 @@ describe("extractRoundSummary", () => {
 		expect(extractRoundSummary(out)).toBe(out);
 	});
 });
-
 
 describe("parseRoundSummaryJson", () => {
 	it("parses a valid JSON round summary block", () => {

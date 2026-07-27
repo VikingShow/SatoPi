@@ -7,21 +7,21 @@
 
 export { CommBus } from "./comm-bus";
 export {
-  CommChannel,
-  type RoundtableOpts,
-  type RoundtableResult,
-  type VoteOpts,
-  type VoteResult,
+	CommChannel,
+	type RoundtableOpts,
+	type RoundtableResult,
+	type VoteOpts,
+	type VoteResult,
 } from "./comm-channel";
 export {
-  runRoundtable,
-  jaccardSimilarity,
-  tokenize,
-  type RoundtableConfig,
-} from "./roundtable";
-export { runVote, parseVote } from "./vote";
-export {
-  createEndpoint,
-  type CommEndpoint,
-  type EndpointCapability,
+	type CommEndpoint,
+	createEndpoint,
+	type EndpointCapability,
 } from "./endpoint";
+export {
+	jaccardSimilarity,
+	type RoundtableConfig,
+	runRoundtable,
+	tokenize,
+} from "./roundtable";
+export { parseVote, runVote } from "./vote";

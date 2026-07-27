@@ -8,7 +8,7 @@
 
 import type { AgentProgress, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Types
@@ -48,43 +48,43 @@ export interface StreamAgentOptions {
  * @param userOnProgress  Optional caller-provided onProgress for side-effects.
  */
 export function createStreamProgressHandler(
-		activityLogger: ActivityLogger,
-		msgId: string,
-		from: string,
-		userOnProgress?: (progress: AgentProgress) => void,
-	): (progress: AgentProgress) => void {
-		let sentLen = 0;
-		/** Full-text accumulator that never shrinks — survives ring buffer rotation. */
-		let fullOutput = "";
-		return (progress: AgentProgress) => {
-			userOnProgress?.(progress);
-				// Forward thinking/reasoning chunks in real-time
-				if (progress.thinkingDelta) {
-					activityLogger.logStreamThinking(msgId, from, progress.thinkingDelta);
-				}
-			const lines = [...(progress.recentOutput ?? [])].reverse();
-			const ringText = lines.join("\n");
+	activityLogger: ActivityLogger,
+	msgId: string,
+	from: string,
+	userOnProgress?: (progress: AgentProgress) => void,
+): (progress: AgentProgress) => void {
+	let sentLen = 0;
+	/** Full-text accumulator that never shrinks — survives ring buffer rotation. */
+	let fullOutput = "";
+	return (progress: AgentProgress) => {
+		userOnProgress?.(progress);
+		// Forward thinking/reasoning chunks in real-time
+		if (progress.thinkingDelta) {
+			activityLogger.logStreamThinking(msgId, from, progress.thinkingDelta);
+		}
+		const lines = [...(progress.recentOutput ?? [])].reverse();
+		const ringText = lines.join("\n");
 
-			// Merge ring buffer text into the full accumulator.
-			// When output is shorter than the ring window, ringText grows monotonically.
-			// When the ring buffer rotates and drops old lines, ringText may shrink —
-			// we find the overlap with fullOutput and append only the new suffix.
-			if (ringText.length >= fullOutput.length) {
-				fullOutput = ringText;
-			} else {
-				// Ring buffer rotated — find where ringText overlaps with the tail
-				// of fullOutput so we can append genuinely new content.
-				const overlap = tailOverlap(fullOutput, ringText);
-				fullOutput = fullOutput + ringText.slice(overlap);
-			}
+		// Merge ring buffer text into the full accumulator.
+		// When output is shorter than the ring window, ringText grows monotonically.
+		// When the ring buffer rotates and drops old lines, ringText may shrink —
+		// we find the overlap with fullOutput and append only the new suffix.
+		if (ringText.length >= fullOutput.length) {
+			fullOutput = ringText;
+		} else {
+			// Ring buffer rotated — find where ringText overlaps with the tail
+			// of fullOutput so we can append genuinely new content.
+			const overlap = tailOverlap(fullOutput, ringText);
+			fullOutput = fullOutput + ringText.slice(overlap);
+		}
 
-			if (fullOutput.length > sentLen) {
-				const delta = fullOutput.slice(sentLen);
-				sentLen = fullOutput.length;
-				activityLogger.logStreamDelta(msgId, from, delta);
-			}
-		};
-	}
+		if (fullOutput.length > sentLen) {
+			const delta = fullOutput.slice(sentLen);
+			sentLen = fullOutput.length;
+			activityLogger.logStreamDelta(msgId, from, delta);
+		}
+	};
+}
 
 /**
  * Find the length of the longest suffix of \`full\` that is also a prefix of \`ring\`.
@@ -141,20 +141,17 @@ export function streamAgentOutput(
 
 	return runSubprocess({
 		...runOptions,
-		onProgress: createStreamProgressHandler(
-			opts.activityLogger,
-			opts.msgId,
-			opts.from,
-			runOptions.userOnProgress,
-		),
-	}).then((result: SingleResult) => {
-		const raw = result.output ?? "";
-		const finalBody = opts.transformOutput ? opts.transformOutput(raw) : (raw || "(no output)");
-		opts.activityLogger.logStreamEnd(opts.msgId, opts.from, finalBody, result.thinking);
-		return result;
-	}).catch((err: unknown) => {
-		const errMsg = err instanceof Error ? err.message : String(err);
-		opts.activityLogger.logStreamEnd(opts.msgId, opts.from, `[Error] ${errMsg}`, undefined);
-		throw err;
-	});
+		onProgress: createStreamProgressHandler(opts.activityLogger, opts.msgId, opts.from, runOptions.userOnProgress),
+	})
+		.then((result: SingleResult) => {
+			const raw = result.output ?? "";
+			const finalBody = opts.transformOutput ? opts.transformOutput(raw) : raw || "(no output)";
+			opts.activityLogger.logStreamEnd(opts.msgId, opts.from, finalBody, result.thinking);
+			return result;
+		})
+		.catch((err: unknown) => {
+			const errMsg = err instanceof Error ? err.message : String(err);
+			opts.activityLogger.logStreamEnd(opts.msgId, opts.from, `[Error] ${errMsg}`, undefined);
+			throw err;
+		});
 }

@@ -10,9 +10,10 @@
  *   - script-debate → debate (structured discussion)
  *   - curtain, other → standalone (independent work)
  */
-import type { ContextSource, ContextFragment, AgentSpecLike, BuildContext } from "../context-pipeline";
-import type { Chapter } from "../../core/state";
+
 import { logger } from "@oh-my-pi/pi-utils";
+import type { Chapter } from "../../core/state";
+import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 const MODE_PROMPTS: Record<string, string> = {
 	swarm: [

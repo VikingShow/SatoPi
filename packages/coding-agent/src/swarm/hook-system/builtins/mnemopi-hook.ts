@@ -8,9 +8,9 @@
  * @module hook-system/builtins/mnemopi-hook
  */
 
-import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
-import type { SwarmMnemopiAdapter } from "../../hooks/mnemopi-adapter";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { SwarmMnemopiAdapter } from "../../infra/mnemopi-adapter";
+import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
 
 /**
  * Create a mnemopi memory hook.
@@ -24,74 +24,65 @@ import { logger } from "@oh-my-pi/pi-utils";
  *
  * @param adapter - The SwarmMnemopiAdapter instance.
  */
-export function createMnemopiHook(
-  adapter: SwarmMnemopiAdapter,
-): HookRegistration {
-  return {
-    name: "mnemopi-hook",
-    priority: 3,
-    events: ["agent:beforeSpawn", "agent:afterComplete"],
+export function createMnemopiHook(adapter: SwarmMnemopiAdapter): HookRegistration {
+	return {
+		name: "mnemopi-hook",
+		priority: 3,
+		events: ["agent:beforeSpawn", "agent:afterComplete"],
 
-    async handler<K extends HookEvent>(
-      event: K,
-      payload: HookPayloadMap[K],
-      _ctx: HookContext,
-    ): Promise<void> {
-      switch (event) {
-        // -----------------------------------------------------------------
-        // agent:beforeSpawn — recall historical context
-        // -----------------------------------------------------------------
-        case "agent:beforeSpawn": {
-          // payload is AgentBeforeSpawnPayload
-          const planSummary = payload.planSummary ?? "";
-          const taskSummary = payload.taskSummary ?? "";
+		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], _ctx: HookContext): Promise<void> {
+			switch (event) {
+				// -----------------------------------------------------------------
+				// agent:beforeSpawn — recall historical context
+				// -----------------------------------------------------------------
+				case "agent:beforeSpawn": {
+					// payload is AgentBeforeSpawnPayload
+					const planSummary = payload.planSummary ?? "";
+					const taskSummary = payload.taskSummary ?? "";
 
-          try {
-            const recallResult = await adapter.recallForIteration(
-              planSummary,
-              taskSummary,
-            );
-            logger.debug("[MnemopiHook] Recall completed", {
-              agentId: payload.agentId,
-              hasResults: !!recallResult,
-            });
-          } catch (err: unknown) {
-            logger.warn("[MnemopiHook] Recall failed — continuing", {
-              agentId: payload.agentId,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-          return;
-        }
+					try {
+						const recallResult = await adapter.recallForIteration(planSummary, taskSummary);
+						logger.debug("[MnemopiHook] Recall completed", {
+							agentId: payload.agentId,
+							hasResults: !!recallResult,
+						});
+					} catch (err: unknown) {
+						logger.warn("[MnemopiHook] Recall failed — continuing", {
+							agentId: payload.agentId,
+							error: err instanceof Error ? err.message : String(err),
+						});
+					}
+					return;
+				}
 
-        // -----------------------------------------------------------------
-        // agent:afterComplete — store iteration results
-        // -----------------------------------------------------------------
-        case "agent:afterComplete": {
-          // payload is AgentAfterCompletePayload
-          if (!payload.summary) {
-            return;
-          }
-          const summary: string = payload.summary;
-          const score: number = payload.score ?? 0;
+				// -----------------------------------------------------------------
+				// agent:afterComplete — store iteration results
+				// -----------------------------------------------------------------
+				case "agent:afterComplete": {
+					// payload is AgentAfterCompletePayload
+					if (!payload.summary) {
+						return;
+					}
+					const summary: string = payload.summary;
+					const score: number = payload.score ?? 0;
 
-          try {
-            await adapter.storeAfterIteration(summary, score);
-            logger.debug("[MnemopiHook] Iteration stored", {
-              agentId: payload.agentId,
-            });
-          } catch (err: unknown) {
-            logger.warn("[MnemopiHook] Store failed — continuing", {
-              agentId: payload.agentId,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-          return;
-        }
+					try {
+						await adapter.storeAfterIteration(summary, score);
+						logger.debug("[MnemopiHook] Iteration stored", {
+							agentId: payload.agentId,
+						});
+					} catch (err: unknown) {
+						logger.warn("[MnemopiHook] Store failed — continuing", {
+							agentId: payload.agentId,
+							error: err instanceof Error ? err.message : String(err),
+						});
+					}
+					return;
+				}
 
-        default:
-          return;
-      }
-    },
-  };
+				default:
+					return;
+			}
+		},
+	};
 }

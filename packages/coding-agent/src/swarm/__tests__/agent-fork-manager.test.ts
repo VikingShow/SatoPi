@@ -8,11 +8,11 @@
  * 4. AgentForkManager: reset clears state
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as fs from "node:fs/promises";
-import { decomposeSubtasks, AgentForkManager } from "../../agent/agent-fork-manager";
+import { AgentForkManager, decomposeSubtasks } from "../../agent/agent-fork-manager";
 
 describe("decomposeSubtasks", () => {
 	// ── Multi-paragraph tasks ─────────────────────────────────────────
@@ -78,9 +78,7 @@ describe("AgentForkManager", () => {
 			state: { model: { id: "dummy" } },
 		} as any;
 
-		expect(
-			manager.fork(mockAgent, "test task"),
-		).rejects.toThrow("max fork depth");
+		expect(manager.fork(mockAgent, "test task")).rejects.toThrow("max fork depth");
 	});
 
 	test("throws when depth exceeds maxDepth via options", () => {
@@ -89,9 +87,7 @@ describe("AgentForkManager", () => {
 			state: { model: { id: "dummy" }, systemPrompt: [], tools: [], messages: [] },
 		} as any;
 
-		expect(
-			manager.fork(mockAgent, "task", { depth: 1 }),
-		).rejects.toThrow("max fork depth");
+		expect(manager.fork(mockAgent, "task", { depth: 1 })).rejects.toThrow("max fork depth");
 	});
 
 	// ── Reset ────────────────────────────────────────────────────────

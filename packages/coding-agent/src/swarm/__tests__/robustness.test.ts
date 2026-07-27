@@ -7,12 +7,12 @@
  *   - resetAgentStatuses retry lifecycle (state.ts)
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
-import { StateTracker } from "../core/state";
+import * as path from "node:path";
 import { RegionLockManager } from "../../coordination/region-lock";
+import { StateTracker } from "../core/state";
 
 let tmpDir: string;
 
@@ -35,7 +35,7 @@ describe("scale-down lifecycle", () => {
 
 		// Simulate work: worker-2 performs poorly
 		await st.incrementPraise(["worker-1", "worker-3"]); // good workers
-		await st.incrementCriticism(["worker-2"]);          // bad worker
+		await st.incrementCriticism(["worker-2"]); // bad worker
 		await st.incrementConflict("worker-2");
 
 		// Scale-down: find worst among current workers, unregister

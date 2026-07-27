@@ -13,37 +13,37 @@
  * AgentLoopConfig, and launches the SatoPi Agent instance.
  */
 export interface AgentSpec {
-  /** Unique agent identifier (e.g. "planner", "agent-1", "reporter"). */
-  id: string;
+	/** Unique agent identifier (e.g. "planner", "agent-1", "reporter"). */
+	id: string;
 
-  /** Role name to resolve from the role library (e.g. "planner", "backend", "reviewer"). */
-  role: string;
+	/** Role name to resolve from the role library (e.g. "planner", "backend", "reviewer"). */
+	role: string;
 
-  /**
-   * Where the role definition comes from.
-   *
-   * - "library": Query RoleAssetManager for an approved role asset.
-   * - "profile": Query agent profiles (future; falls back to default for now).
-   * - "inline": Use the inline systemPrompt and tools directly.
-   */
-  roleSource: "library" | "profile" | "inline";
+	/**
+	 * Where the role definition comes from.
+	 *
+	 * - "library": Query RoleAssetManager for an approved role asset.
+	 * - "profile": Query agent profiles (future; falls back to default for now).
+	 * - "inline": Use the inline systemPrompt and tools directly.
+	 */
+	roleSource: "library" | "profile" | "inline";
 
-  /** Inline role definition — only used when roleSource is "inline". */
-  inline?: {
-    systemPrompt: string;
-    tools: string[];
-  };
+	/** Inline role definition — only used when roleSource is "inline". */
+	inline?: {
+		systemPrompt: string;
+		tools: string[];
+	};
 
-  /** Human-readable task description for this agent. */
-  task: string;
+	/** Human-readable task description for this agent. */
+	task: string;
 
-  /** Optional model preference hint for model resolution. */
-  modelPreference?: "cheapest" | "smartest" | "role-default";
+	/** Optional model preference hint for model resolution. */
+	modelPreference?: "cheapest" | "smartest" | "role-default";
 
-  /**
-   * Links this spec to a persistent agent identity in the AgentRegistry.
-   * When set, the AgentRuntime associates the spawned agent with an existing
-   * profile so its state (callbacks, status) can be tracked across lifetime events.
-   */
-  profileId?: string;
+	/**
+	 * Links this spec to a persistent agent identity in the AgentRegistry.
+	 * When set, the AgentRuntime associates the spawned agent with an existing
+	 * profile so its state (callbacks, status) can be tracked across lifetime events.
+	 */
+	profileId?: string;
 }

@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ModelRegistry, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import * as taskExecutor from "@oh-my-pi/pi-coding-agent";
-import { executeSwarmAgent } from "../executor/executor";
 import { StateTracker } from "../core/state";
+import { executeSwarmAgent } from "../executor/executor";
 
 const mockResult = {
 	index: 0,

@@ -7,13 +7,13 @@
  * - For pipeline mode, iterations repeat the full DAG execution
  */
 import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { AgentExecutor } from "../executor/executor";
 import { executeSwarmAgent } from "../executor/executor";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
-import type { AgentRuntime } from "../agent-runtime";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
 
 /** P1-8: Maximum concurrent agents per wave to avoid resource exhaustion. */
 const CONCURRENCY_LIMIT = 10;
@@ -229,7 +229,18 @@ export class PipelineController {
 	}
 
 	async run(options: PipelineOptions): Promise<PipelineResult> {
-		const { workspace, signal, onProgress, modelRegistry, settings, executor, hooks, runtime, transformContext, afterToolCall } = options;
+		const {
+			workspace,
+			signal,
+			onProgress,
+			modelRegistry,
+			settings,
+			executor,
+			hooks,
+			runtime,
+			transformContext,
+			afterToolCall,
+		} = options;
 		const allResults = new Map<string, SingleResult[]>();
 		const errors: string[] = [];
 

@@ -1,6 +1,15 @@
 // Script phase — planning, debate, and task complexity analysis
-export { generatePlanningPrompt, planExists, stampAndArchivePlanMd, archivePlanForHistory, runPlanDebate, type ScriptConfig, type ScriptResult } from "./script-planner";
-export { ScriptManager } from "./script-manager";
+
 export { DebateRoundtable } from "./debate-roundtable";
-export { TaskComplexityAnalyzer, type TaskComplexitySignals, type TaskComplexityRecommendation } from "./task-analyzer";
-export { getSessionPlanPath, getPlanArchiveDir, getSessionOmpDir } from "./plan-paths";
+export { getPlanArchiveDir, getSessionOmpDir, getSessionPlanPath } from "./plan-paths";
+export { ScriptManager } from "./script-manager";
+export {
+	archivePlanForHistory,
+	generatePlanningPrompt,
+	planExists,
+	runPlanDebate,
+	type ScriptConfig,
+	type ScriptResult,
+	stampAndArchivePlanMd,
+} from "./script-planner";
+export { TaskComplexityAnalyzer, type TaskComplexityRecommendation, type TaskComplexitySignals } from "./task-analyzer";

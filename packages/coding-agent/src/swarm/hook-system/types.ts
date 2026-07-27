@@ -30,37 +30,37 @@ import type { Chapter } from "../core/state";
  * Vote events: opinion gathering and tallying
  */
 export type HookEvent =
-  // Workflow phase lifecycle
-  | "workflow:beforePhase"
-  | "workflow:afterPhase"
-  | "workflow:phaseTimeout"
-  // Agent lifecycle
-  | "agent:beforeSpawn"
-  | "agent:afterSpawn"
-  | "agent:afterComplete"
-  | "agent:onError"
-  // Context window management
-  | "context:beforeInjection"
-  | "context:afterInjection"
-  | "context:beforeCompaction"
-  | "context:afterCompaction"
-  // Offload / persistence
-  | "offload:afterL1"
-  | "offload:beforeFlush"
-  | "offload:afterFlush"
-  // Communication bus
-  | "comm:beforeMessage"
-  | "comm:afterMessage"
-  | "comm:beforeBroadcast"
-  | "comm:afterBroadcast"
-  // Roundtable / debate
-  | "roundtable:beforeRound"
-  | "roundtable:afterRound"
-  | "roundtable:converged"
-  // Voting / consensus
-  | "vote:start"
-  | "vote:tally"
-  | "vote:result";
+	// Workflow phase lifecycle
+	| "workflow:beforePhase"
+	| "workflow:afterPhase"
+	| "workflow:phaseTimeout"
+	// Agent lifecycle
+	| "agent:beforeSpawn"
+	| "agent:afterSpawn"
+	| "agent:afterComplete"
+	| "agent:onError"
+	// Context window management
+	| "context:beforeInjection"
+	| "context:afterInjection"
+	| "context:beforeCompaction"
+	| "context:afterCompaction"
+	// Offload / persistence
+	| "offload:afterL1"
+	| "offload:beforeFlush"
+	| "offload:afterFlush"
+	// Communication bus
+	| "comm:beforeMessage"
+	| "comm:afterMessage"
+	| "comm:beforeBroadcast"
+	| "comm:afterBroadcast"
+	// Roundtable / debate
+	| "roundtable:beforeRound"
+	| "roundtable:afterRound"
+	| "roundtable:converged"
+	// Voting / consensus
+	| "vote:start"
+	| "vote:tally"
+	| "vote:result";
 
 // ---------------------------------------------------------------------------
 // Typed Event Payloads (Phase B2 — discriminated union)
@@ -68,133 +68,133 @@ export type HookEvent =
 
 /** Payload for agent:beforeSpawn — emitted before an agent is launched. */
 export interface AgentBeforeSpawnPayload {
-  agentId: string;
-  role: string;
-  task: string;
-  /** Optional display name (falls back to agentId in profile-hook). */
-  name?: string;
-  /** Optional archetype label for profile classification. */
-  archetype?: string;
-  /** Optional plan summary for mnemopi recall. */
-  planSummary?: string;
-  /** Optional task summary for mnemopi recall. */
-  taskSummary?: string;
+	agentId: string;
+	role: string;
+	task: string;
+	/** Optional display name (falls back to agentId in profile-hook). */
+	name?: string;
+	/** Optional archetype label for profile classification. */
+	archetype?: string;
+	/** Optional plan summary for mnemopi recall. */
+	planSummary?: string;
+	/** Optional task summary for mnemopi recall. */
+	taskSummary?: string;
 }
 
 /** Payload for agent:afterSpawn — emitted after successful agent launch. */
 export interface AgentAfterSpawnPayload {
-  agentId: string;
-  role: string;
-  /** The AgentHandle returned by AgentLauncher. */
-  handle: unknown;
+	agentId: string;
+	role: string;
+	/** The AgentHandle returned by AgentLauncher. */
+	handle: unknown;
 }
 
 /** Payload for agent:afterComplete — emitted when an agent finishes a task. */
 export interface AgentAfterCompletePayload {
-  agentId: string;
-  /** Whether the task succeeded (defaults to true in profile-hook). */
-  success?: boolean;
-  /** Optional path to the output artifact. */
-  artifactPath?: string;
-  /** Optional human-readable completion message. */
-  message?: string;
-  /** Optional L1 summary text for mnemopi storage. */
-  summary?: string;
-  /** Optional quality score for mnemopi storage. */
-  score?: number;
-  /** Optional task ID from the task queue. */
-  taskId?: string;
-  /** Optional raw result object from the agent. */
-  result?: unknown;
+	agentId: string;
+	/** Whether the task succeeded (defaults to true in profile-hook). */
+	success?: boolean;
+	/** Optional path to the output artifact. */
+	artifactPath?: string;
+	/** Optional human-readable completion message. */
+	message?: string;
+	/** Optional L1 summary text for mnemopi storage. */
+	summary?: string;
+	/** Optional quality score for mnemopi storage. */
+	score?: number;
+	/** Optional task ID from the task queue. */
+	taskId?: string;
+	/** Optional raw result object from the agent. */
+	result?: unknown;
 }
 
 /** Payload for agent:onError — emitted when an agent encounters an error. */
 export interface AgentOnErrorPayload {
-  agentId: string;
-  /** Error message or description. */
-  error: string;
+	agentId: string;
+	/** Error message or description. */
+	error: string;
 }
 
 /** Payload for workflow:beforePhase — emitted before a phase transition. */
 export interface WorkflowBeforePhasePayload {
-  /** Optional phase name. */
-  phase?: string;
-  /** Optional shell verification commands to run (verification-hook). */
-  commands?: string[];
+	/** Optional phase name. */
+	phase?: string;
+	/** Optional shell verification commands to run (verification-hook). */
+	commands?: string[];
 }
 
 /** Payload for workflow:afterPhase — emitted after a phase completes. */
 export interface WorkflowAfterPhasePayload {
-  /** Optional list of agent IDs that participated in the phase. */
-  agentIds?: string[];
-  /** Optional session summary for experience persistence. */
-  sessionSummary?: unknown;
-  /** Optional run IDs to mark as referenced (experience store). */
-  runIds?: string[];
+	/** Optional list of agent IDs that participated in the phase. */
+	agentIds?: string[];
+	/** Optional session summary for experience persistence. */
+	sessionSummary?: unknown;
+	/** Optional run IDs to mark as referenced (experience store). */
+	runIds?: string[];
 }
 
 /** Payload for workflow:phaseTimeout — emitted when a phase times out. */
 export interface WorkflowPhaseTimeoutPayload {
-  /** The phase that timed out. */
-  phase?: string;
+	/** The phase that timed out. */
+	phase?: string;
 }
 
 /** Payload for context events (injection / compaction lifecycle). */
 export interface ContextLifecyclePayload {
-  /** Optional agent ID associated with the context operation. */
-  agentId?: string;
+	/** Optional agent ID associated with the context operation. */
+	agentId?: string;
 }
 
 /** Payload for offload:afterL1 — emitted after an L1 summary is produced. */
 export interface OffloadAfterL1Payload {
-  /** The agent whose conversation was summarized. */
-  agentId?: string;
+	/** The agent whose conversation was summarized. */
+	agentId?: string;
 }
 
 /** Payload for offload:beforeFlush / offload:afterFlush. */
 export interface OffloadFlushPayload {
-  /** Optional experience entry to bridge to the experience store. */
-  entry?: unknown;
-  /** Optional run ID for tracing. */
-  runId?: string;
+	/** Optional experience entry to bridge to the experience store. */
+	entry?: unknown;
+	/** Optional run ID for tracing. */
+	runId?: string;
 }
 
 /** Payload for communication events (messaging / broadcast). */
 export interface CommPayload {
-  /** Optional sender agent ID. */
-  from?: string;
-  /** Optional target agent ID (for direct messages). */
-  to?: string;
-  /** Optional message content. */
-  message?: string;
+	/** Optional sender agent ID. */
+	from?: string;
+	/** Optional target agent ID (for direct messages). */
+	to?: string;
+	/** Optional message content. */
+	message?: string;
 }
 
 /** Payload for roundtable:beforeRound. */
 export interface RoundtableBeforeRoundPayload {
-  /** Optional agent ID for the round participant. */
-  agentId?: string;
-  /** Optional round number. */
-  round?: number;
+	/** Optional agent ID for the round participant. */
+	agentId?: string;
+	/** Optional round number. */
+	round?: number;
 }
 
 /** Payload for roundtable:afterRound — emitted after a debate round. */
 export interface RoundtableAfterRoundPayload {
-  /** The agent whose round completed. */
-  agentId: string;
+	/** The agent whose round completed. */
+	agentId: string;
 }
 
 /** Payload for roundtable:converged — emitted when debate reaches consensus. */
 export interface RoundtableConvergedPayload {
-  /** IDs of agents that participated in the converged debate. */
-  agentIds?: string[];
+	/** IDs of agents that participated in the converged debate. */
+	agentIds?: string[];
 }
 
 /** Payload for vote events. */
 export interface VotePayload {
-  /** Optional agent IDs involved in the vote. */
-  agentIds?: string[];
-  /** Optional vote topic or question. */
-  topic?: string;
+	/** Optional agent IDs involved in the vote. */
+	agentIds?: string[];
+	/** Optional vote topic or question. */
+	topic?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,30 +218,30 @@ export interface VotePayload {
  * ```
  */
 export type HookPayloadMap = {
-  "workflow:beforePhase": WorkflowBeforePhasePayload;
-  "workflow:afterPhase": WorkflowAfterPhasePayload;
-  "workflow:phaseTimeout": WorkflowPhaseTimeoutPayload;
-  "agent:beforeSpawn": AgentBeforeSpawnPayload;
-  "agent:afterSpawn": AgentAfterSpawnPayload;
-  "agent:afterComplete": AgentAfterCompletePayload;
-  "agent:onError": AgentOnErrorPayload;
-  "context:beforeInjection": ContextLifecyclePayload;
-  "context:afterInjection": ContextLifecyclePayload;
-  "context:beforeCompaction": ContextLifecyclePayload;
-  "context:afterCompaction": ContextLifecyclePayload;
-  "offload:afterL1": OffloadAfterL1Payload;
-  "offload:beforeFlush": OffloadFlushPayload;
-  "offload:afterFlush": OffloadFlushPayload;
-  "comm:beforeMessage": CommPayload;
-  "comm:afterMessage": CommPayload;
-  "comm:beforeBroadcast": CommPayload;
-  "comm:afterBroadcast": CommPayload;
-  "roundtable:beforeRound": RoundtableBeforeRoundPayload;
-  "roundtable:afterRound": RoundtableAfterRoundPayload;
-  "roundtable:converged": RoundtableConvergedPayload;
-  "vote:start": VotePayload;
-  "vote:tally": VotePayload;
-  "vote:result": VotePayload;
+	"workflow:beforePhase": WorkflowBeforePhasePayload;
+	"workflow:afterPhase": WorkflowAfterPhasePayload;
+	"workflow:phaseTimeout": WorkflowPhaseTimeoutPayload;
+	"agent:beforeSpawn": AgentBeforeSpawnPayload;
+	"agent:afterSpawn": AgentAfterSpawnPayload;
+	"agent:afterComplete": AgentAfterCompletePayload;
+	"agent:onError": AgentOnErrorPayload;
+	"context:beforeInjection": ContextLifecyclePayload;
+	"context:afterInjection": ContextLifecyclePayload;
+	"context:beforeCompaction": ContextLifecyclePayload;
+	"context:afterCompaction": ContextLifecyclePayload;
+	"offload:afterL1": OffloadAfterL1Payload;
+	"offload:beforeFlush": OffloadFlushPayload;
+	"offload:afterFlush": OffloadFlushPayload;
+	"comm:beforeMessage": CommPayload;
+	"comm:afterMessage": CommPayload;
+	"comm:beforeBroadcast": CommPayload;
+	"comm:afterBroadcast": CommPayload;
+	"roundtable:beforeRound": RoundtableBeforeRoundPayload;
+	"roundtable:afterRound": RoundtableAfterRoundPayload;
+	"roundtable:converged": RoundtableConvergedPayload;
+	"vote:start": VotePayload;
+	"vote:tally": VotePayload;
+	"vote:result": VotePayload;
 };
 
 // ---------------------------------------------------------------------------
@@ -268,26 +268,26 @@ export type HookPayload = HookPayloadMap[HookEvent];
  * The index signature allows forward-compatible extension.
  */
 export interface HookContext {
-  /** Current workflow phase (used for phase-filtered hooks) */
-  phase?: Chapter;
-  /** The agent id associated with the current event */
-  agentId?: string;
-  /** FSM / state machine service (future) */
-  fsm?: unknown;
-  /** Communication bus (future) */
-  commBus?: unknown;
-  /** Runtime / execution environment (future) */
-  runtime?: unknown;
-  /** Context window manager (future) */
-  contextManager?: unknown;
-  /** State tracker for persistence (future) */
-  stateTracker?: unknown;
-  /** Activity logger for structured event logging */
-  activityLogger?: unknown;
-  /** Session registry (future) */
-  sessionRegistry?: unknown;
-  /** Forward-compatible extensions */
-  [key: string]: unknown;
+	/** Current workflow phase (used for phase-filtered hooks) */
+	phase?: Chapter;
+	/** The agent id associated with the current event */
+	agentId?: string;
+	/** FSM / state machine service (future) */
+	fsm?: unknown;
+	/** Communication bus (future) */
+	commBus?: unknown;
+	/** Runtime / execution environment (future) */
+	runtime?: unknown;
+	/** Context window manager (future) */
+	contextManager?: unknown;
+	/** State tracker for persistence (future) */
+	stateTracker?: unknown;
+	/** Activity logger for structured event logging */
+	activityLogger?: unknown;
+	/** Session registry (future) */
+	sessionRegistry?: unknown;
+	/** Forward-compatible extensions */
+	[key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,36 +306,32 @@ export interface HookContext {
  * are correctly typed based on the event being handled.
  */
 export interface HookRegistration {
-  /** Unique hook name (used for unregister / debugging) */
-  readonly name: string;
-  /** Execution order — lower values run first */
-  readonly priority: number;
-  /** Events this hook subscribes to */
-  readonly events: HookEvent[];
-  /** Optional phase filter — if set, the hook only fires during these phases */
-  readonly phases?: Chapter[];
-  /**
-   * Hook handler — generic over the triggered event.
-   *
-   * Use `switch (event)` to narrow the payload type:
-   * ```ts
-   * handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx) {
-   *   switch (event) {
-   *     case "agent:beforeSpawn":
-   *       // payload is AgentBeforeSpawnPayload
-   *       break;
-   *   }
-   * }
-   * ```
-   *
-   * @param event   - The event being triggered.
-   * @param payload - Event-specific payload (typed via HookPayloadMap).
-   * @param ctx     - Shared service context.
-   * @returns `void` to continue, `false` to short-circuit remaining hooks.
-   */
-  handler<K extends HookEvent>(
-    event: K,
-    payload: HookPayloadMap[K],
-    ctx: HookContext,
-  ): Promise<void | boolean>;
+	/** Unique hook name (used for unregister / debugging) */
+	readonly name: string;
+	/** Execution order — lower values run first */
+	readonly priority: number;
+	/** Events this hook subscribes to */
+	readonly events: HookEvent[];
+	/** Optional phase filter — if set, the hook only fires during these phases */
+	readonly phases?: Chapter[];
+	/**
+	 * Hook handler — generic over the triggered event.
+	 *
+	 * Use `switch (event)` to narrow the payload type:
+	 * ```ts
+	 * handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx) {
+	 *   switch (event) {
+	 *     case "agent:beforeSpawn":
+	 *       // payload is AgentBeforeSpawnPayload
+	 *       break;
+	 *   }
+	 * }
+	 * ```
+	 *
+	 * @param event   - The event being triggered.
+	 * @param payload - Event-specific payload (typed via HookPayloadMap).
+	 * @param ctx     - Shared service context.
+	 * @returns `void` to continue, `false` to short-circuit remaining hooks.
+	 */
+	handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void | boolean>;
 }

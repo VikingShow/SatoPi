@@ -8,10 +8,10 @@
  * @module hook-system/builtins/verification-hook
  */
 
-import type { Chapter } from "../../core/state";
-import type { HookEvent, HookPayloadMap, HookContext, HookRegistration } from "../types";
-import type { VerificationHook } from "../../core/verification-hook";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { Chapter } from "../../core/state";
+import type { VerificationHook } from "../../core/verification-hook";
+import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -36,43 +36,37 @@ const ACTIVE_PHASES: Chapter[] = ["curtain"];
  *
  * @param verification - The VerificationHook instance.
  */
-export function createVerificationHook(
-  verification: VerificationHook,
-): HookRegistration {
-  return {
-    name: "verification-hook",
-    priority: 5,
-    events: ["workflow:beforePhase"],
-    phases: ACTIVE_PHASES,
+export function createVerificationHook(verification: VerificationHook): HookRegistration {
+	return {
+		name: "verification-hook",
+		priority: 5,
+		events: ["workflow:beforePhase"],
+		phases: ACTIVE_PHASES,
 
-    async handler<K extends HookEvent>(
-      event: K,
-      payload: HookPayloadMap[K],
-      _ctx: HookContext,
-    ): Promise<void> {
-      if (event !== "workflow:beforePhase") {
-        return;
-      }
+		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], _ctx: HookContext): Promise<void> {
+			if (event !== "workflow:beforePhase") {
+				return;
+			}
 
-      // payload is WorkflowBeforePhasePayload — commands is string[] | undefined
-      const commands = payload.commands ?? [];
+			// payload is WorkflowBeforePhasePayload — commands is string[] | undefined
+			const commands = payload.commands ?? [];
 
-      if (commands.length === 0) {
-        logger.debug("[VerificationHook] No verification commands to run");
-        return;
-      }
+			if (commands.length === 0) {
+				logger.debug("[VerificationHook] No verification commands to run");
+				return;
+			}
 
-      try {
-        const result = await verification.run(commands);
-        logger.info("[VerificationHook] Verification completed", {
-          passed: result.passed,
-          total: result.results?.length ?? commands.length,
-        });
-      } catch (err: unknown) {
-        logger.error("[VerificationHook] Verification threw unhandled error", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
-  };
+			try {
+				const result = await verification.run(commands);
+				logger.info("[VerificationHook] Verification completed", {
+					passed: result.passed,
+					total: result.results?.length ?? commands.length,
+				});
+			} catch (err: unknown) {
+				logger.error("[VerificationHook] Verification threw unhandled error", {
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		},
+	};
 }

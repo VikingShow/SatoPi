@@ -78,10 +78,7 @@ export class SwarmMnemopiAdapter {
 	 * @param planSummary  plan.md 的摘要或关键 phase 描述
 	 * @param taskSummary  本轮任务的简短描述
 	 */
-	async recallForIteration(
-		planSummary: string,
-		taskSummary: string,
-	): Promise<RecallResult | null> {
+	async recallForIteration(planSummary: string, taskSummary: string): Promise<RecallResult | null> {
 		if (!this.#config.enabled) return null;
 
 		const query = [planSummary, taskSummary].filter(Boolean).join(" ").slice(0, 500);
@@ -128,11 +125,7 @@ export class SwarmMnemopiAdapter {
 
 		if (!contextText) return null;
 
-		return [
-			"<historical_context>",
-			contextText,
-			"</historical_context>",
-		].join("\n");
+		return ["<historical_context>", contextText, "</historical_context>"].join("\n");
 	}
 
 	// ------------------------------------------------------------------------
@@ -143,10 +136,7 @@ export class SwarmMnemopiAdapter {
 	 * 在 Cloner 审查前，召回与"审查决策"相关的历史模式。
 	 * 帮助 Cloner 参考类似场景下的历史判定。
 	 */
-	async recallForReviewer(
-		agentOutputs: string[],
-		iteration: number,
-	): Promise<RecallResult | null> {
+	async recallForReviewer(agentOutputs: string[], iteration: number): Promise<RecallResult | null> {
 		if (!this.#config.enabled) return null;
 
 		const summary = agentOutputs.join(" ").slice(0, 500);
@@ -179,11 +169,7 @@ export class SwarmMnemopiAdapter {
 	 * @param score       质量评分 (0-10)
 	 * @param metadata    附加元数据
 	 */
-	async storeAfterIteration(
-		summary: string,
-		score: number,
-		metadata?: Record<string, unknown>,
-	): Promise<void> {
+	async storeAfterIteration(summary: string, score: number, metadata?: Record<string, unknown>): Promise<void> {
 		if (!this.#config.enabled) return;
 		if (score < this.#config.autoStoreThreshold) {
 			logger.debug("[MnemopiAdapter] Skipping store (below threshold)", { score });
@@ -249,7 +235,7 @@ export class SwarmMnemopiAdapter {
 		let hash = 0;
 		for (let i = 0; i < str.length; i++) {
 			const chr = str.charCodeAt(i);
-			hash = ((hash << 5) - hash) + chr;
+			hash = (hash << 5) - hash + chr;
 			hash |= 0;
 		}
 		return String(hash);

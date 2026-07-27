@@ -2,7 +2,7 @@
  * Shared types for the Curtain phase.
  */
 
-/** AfterLoop result — shared between loop controller and curtain pipeline. */
+/** Curtain result — shared between loop controller and curtain pipeline. */
 export interface CurtainResult {
 	runId: string;
 	status: string;

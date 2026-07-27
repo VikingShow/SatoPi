@@ -539,7 +539,7 @@ export class ExperienceStore {
 
 	/**
 	 * Decay lessons that were not referenced in the current run.
-	 * Call once per loop run (After Loop phase).
+	 * Call once per curtain run (Curtain phase).
 	 * Lessons not referenced in 10+ runs get their weight multiplied by 0.9 each run.
 	 */
 	decayUnreferenced(currentRunIds: string[]): void {
@@ -777,7 +777,7 @@ export class ExperienceStore {
 				finalStatus: "completed",
 				reviewApprovalRatio: 1,
 				agentCount: 0,
-				
+
 				taskDescription: "principle-generation",
 			},
 		};

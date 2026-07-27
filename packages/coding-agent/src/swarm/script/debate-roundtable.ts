@@ -13,12 +13,12 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentToolRestriction } from "../core/schema";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentToolRestriction } from "../core/schema";
 
 // ============================================================================
 // Types
@@ -127,94 +127,94 @@ export class DebateRoundtable {
 				? this.#buildRound1Prompt(draftPlan)
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
-		// Spawn agents in parallel for this round
-		let results: SingleResult[];
+			// Spawn agents in parallel for this round
+			let results: SingleResult[];
 
-		if (this.#runtime) {
-			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
-			const debatePrompt = this.#debateAgentSystemPrompt();
-			const restrictedTools = this.#toolRestriction?.allowed ?? [];
+			if (this.#runtime) {
+				// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
+				const debatePrompt = this.#debateAgentSystemPrompt();
+				const restrictedTools = this.#toolRestriction?.allowed ?? [];
 
-			const handles: AgentHandle[] = await this.#runtime.spawn(
-				Array.from({ length: agentCount }, (_, i) => ({
-					id: `debate-agent-${i + 1}`,
-					role: "debater",
-					roleSource: "inline" as const,
-					inline: { systemPrompt: debatePrompt, tools: restrictedTools },
-					task: roundPrompt,
-				})),
-			);
-
-			// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
-			const settled = await Promise.allSettled(handles.map((h) => h.wait()));
-			results = settled.map((s, i) => {
-				if (s.status === "fulfilled") return s.value;
-				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
-				return {
-					index: i,
-					id: `plan-debate-r${round}-c${i + 1}`,
-					agent: `debate-agent-${i + 1}`,
-					agentSource: "project" as const,
-					task: roundPrompt,
-					exitCode: 1,
-					output: `[CRASHED] ${errMsg}`,
-					stderr: errMsg,
-					truncated: false,
-					durationMs: 0,
-					tokens: 0,
-					requests: 0,
-					error: errMsg,
-				};
-			});
-		} else {
-			// FALLBACK: existing code path (keep exactly as-is)
-			const settled = await Promise.allSettled(
-				Array.from({ length: agentCount }, (_, i) =>
-					runSubprocess({
-						cwd: workspace,
-						agent: (() => {
-							const def: AgentDefinition = {
-								name: `debate-agent-${i + 1}`,
-								description: `Plan debate agent ${i + 1}`,
-								systemPrompt: this.#debateAgentSystemPrompt(),
-								source: "project" as const,
-							};
-							if (this.#toolRestriction) {
-								if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
-									def.tools = this.#toolRestriction.allowed;
-								}
-								if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
-									def.blockedTools = this.#toolRestriction.blocked;
-								}
-							}
-							return def;
-						})(),
+				const handles: AgentHandle[] = await this.#runtime.spawn(
+					Array.from({ length: agentCount }, (_, i) => ({
+						id: `debate-agent-${i + 1}`,
+						role: "debater",
+						roleSource: "inline" as const,
+						inline: { systemPrompt: debatePrompt, tools: restrictedTools },
 						task: roundPrompt,
+					})),
+				);
+
+				// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
+				const settled = await Promise.allSettled(handles.map(h => h.wait()));
+				results = settled.map((s, i) => {
+					if (s.status === "fulfilled") return s.value;
+					const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+					return {
 						index: i,
 						id: `plan-debate-r${round}-c${i + 1}`,
-						modelRegistry,
-						settings,
-						signal,
-					}),
-				),
-			);
-			results = settled.map((s, i) => {
-				if (s.status === "fulfilled") return s.value;
-				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
-				return {
-					index: i,
-					id: `plan-debate-r${round}-c${i + 1}`,
-					agent: `debate-agent-${i + 1}`,
-					agentSource: "project" as const,
-					task: "",
-					exitCode: 1,
-					output: `[CRASHED] ${errMsg}`,
-					stderr: "",
-					truncated: false,
-					durationMs: 0,
-					tokens: 0,
-					requests: 0,
-				};
+						agent: `debate-agent-${i + 1}`,
+						agentSource: "project" as const,
+						task: roundPrompt,
+						exitCode: 1,
+						output: `[CRASHED] ${errMsg}`,
+						stderr: errMsg,
+						truncated: false,
+						durationMs: 0,
+						tokens: 0,
+						requests: 0,
+						error: errMsg,
+					};
+				});
+			} else {
+				// FALLBACK: existing code path (keep exactly as-is)
+				const settled = await Promise.allSettled(
+					Array.from({ length: agentCount }, (_, i) =>
+						runSubprocess({
+							cwd: workspace,
+							agent: (() => {
+								const def: AgentDefinition = {
+									name: `debate-agent-${i + 1}`,
+									description: `Plan debate agent ${i + 1}`,
+									systemPrompt: this.#debateAgentSystemPrompt(),
+									source: "project" as const,
+								};
+								if (this.#toolRestriction) {
+									if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
+										def.tools = this.#toolRestriction.allowed;
+									}
+									if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
+										def.blockedTools = this.#toolRestriction.blocked;
+									}
+								}
+								return def;
+							})(),
+							task: roundPrompt,
+							index: i,
+							id: `plan-debate-r${round}-c${i + 1}`,
+							modelRegistry,
+							settings,
+							signal,
+						}),
+					),
+				);
+				results = settled.map((s, i) => {
+					if (s.status === "fulfilled") return s.value;
+					const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+					return {
+						index: i,
+						id: `plan-debate-r${round}-c${i + 1}`,
+						agent: `debate-agent-${i + 1}`,
+						agentSource: "project" as const,
+						task: "",
+						exitCode: 1,
+						output: `[CRASHED] ${errMsg}`,
+						stderr: "",
+						truncated: false,
+						durationMs: 0,
+						tokens: 0,
+						requests: 0,
+					};
 				});
 			}
 

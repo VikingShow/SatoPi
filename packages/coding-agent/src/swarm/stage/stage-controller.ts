@@ -14,29 +14,23 @@
  *   6. All tasks done → spawn reporter agent → user applauds → Curtain
  */
 
-import * as fs from "node:fs/promises";
-import type { ModelRegistry, Settings, AgentDefinition } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import type { ActivityLogger } from "../hooks/activity-logger";
-import type { AgentExecutor } from "../executor/executor";
-import { SubprocessAgentExecutor } from "../executor/executor";
-import { streamAgentOutput } from "../render/streaming";
-import { RegionLockManager } from "../../coordination/region-lock";
-import { TaskQueue, type Task } from "../executor/task-queue";
-import { type ScoredAgent, selectAgents, extractDomains } from "../../agent/agent-selector";
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { RoleAssetManager, RoleAsset } from "../../agent/role-asset";
-import type { StateTracker } from "../core/state";
-import type { AgentToolRestriction, LoopSwarmConfig } from "../core/schema";
-import { TaskComplexityAnalyzer } from "../script/task-analyzer";
-import type { ReviewVerdict } from "../core/pipeline";
-import type { RoleCandidate } from "./role-roundtable";
-import { CommBus } from "../comm-bus/comm-bus";
+import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { CommBus } from "../comm-bus/comm-bus";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { StateTracker } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
+import { type Task, TaskQueue } from "../executor/task-queue";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { ActivityLogger } from "../infra/activity-logger";
+import { TaskComplexityAnalyzer } from "../script/task-analyzer";
+import type { RoleCandidate } from "./role-roundtable";
 
 // ============================================================================
 // StageCallbacks — feedback interface for Profile credit + Stigmergy marks
@@ -77,7 +71,6 @@ export interface StageOptions {
 	profileRegistry: ProfileRegistry;
 	roleAssetManager: RoleAssetManager;
 	ircBus?: IrcBus;
-	executor?: AgentExecutor;
 	/** Pre-selected agent IDs (skip selection algorithm). */
 	agentIds?: string[];
 	/** User-specified agent count (overrides complexity analyzer). */
@@ -88,8 +81,14 @@ export interface StageOptions {
 	hookPipeline?: HookPipeline;
 	/** v3: Workflow FSM for authoritative phase transitions. */
 	fsm?: WorkflowFsm;
-	/** v3: AgentRuntime for v3 agent spawning. */
+	/** v3: AgentRuntime — required for agent spawning (unified execution path). */
 	runtime?: AgentRuntime;
+	/** v3: CommBus for inter-agent communication (injected, not global singleton). */
+	commBus?: CommBus;
+	/** P5: Max retries per task before blocking (default 3). */
+	maxRetries?: number;
+	/** P5: Base delay for exponential backoff between retries (default 5000ms). */
+	retryBaseDelayMs?: number;
 }
 
 export interface StageResult {
@@ -108,24 +107,22 @@ export interface StageResult {
 
 export class StageController {
 	readonly #opts: StageOptions;
-	#executor: AgentExecutor;
-	#lockMgr = new RegionLockManager();
-	/** Phase 3B: AgentRuntime instance (set externally after construction if available). */
-	#runtime: AgentRuntime | undefined = undefined;
-	/** @deprecated Replaced by CommBus.groupChannel("role-negotiation", ...) */
-	// #sharedChannel?: AgentChannel;
+	/** AgentRuntime — required for all agent spawning (unified execution path). */
+	#runtime: AgentRuntime;
 
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
-		this.#executor = opts.executor ?? new SubprocessAgentExecutor();
-		if (opts.runtime) this.#runtime = opts.runtime;
+		if (!opts.runtime) {
+			throw new Error("[StageController] AgentRuntime is required. Pass `runtime` in StageOptions.");
+		}
+		this.#runtime = opts.runtime;
 	}
 
 	/**
 	 * Run the full Stage phase: select agents → assign roles → execute tasks → report.
 	 */
 	async run(): Promise<StageResult> {
-		const { workspace, planContent, loopConfig, stateTracker, activityLogger, signal } = this.#opts;
+		const { planContent, loopConfig, stateTracker, activityLogger, signal } = this.#opts;
 		const errors: string[] = [];
 
 		// ── Phase: stage ─────────────────────────────────────────────────────────
@@ -203,11 +200,20 @@ export class StageController {
 					preferredRoles: profile.stats.preferredRoles,
 				});
 			}
-			activityLogger.logBroadcast("system", `Auto-created ${missing} new agent(s) to reach required count of ${required}`);
+			activityLogger.logBroadcast(
+				"system",
+				`Auto-created ${missing} new agent(s) to reach required count of ${required}`,
+			);
 		}
 
 		if (selectedAgents.length === 0) {
-			return { status: "failed", agentResults: new Map(), errors: ["No agents available"], agents: [], taskProgress: { total: 0, completed: 0 } };
+			return {
+				status: "failed",
+				agentResults: new Map(),
+				errors: ["No agents available"],
+				agents: [],
+				taskProgress: { total: 0, completed: 0 },
+			};
 		}
 
 		// Save profiles immediately so they persist across restarts
@@ -216,7 +222,10 @@ export class StageController {
 		// P7: Notify callbacks that agents have been selected
 		this.#opts.callbacks?.onAgentsSelected(selectedAgents);
 
-		activityLogger.logBroadcast("system", `Selected ${selectedAgents.length} agents: ${selectedAgents.map(a => a.name).join(", ")}`);
+		activityLogger.logBroadcast(
+			"system",
+			`Selected ${selectedAgents.length} agents: ${selectedAgents.map(a => a.name).join(", ")}`,
+		);
 
 		// 3. Role assignment (roundtable or direct)
 		const roleAssignments = await this.#assignRoles(selectedAgents);
@@ -241,11 +250,14 @@ export class StageController {
 		}
 		const queue = new TaskQueue(tasks);
 		await stateTracker.updatePipeline({ roundtablePhase: `Task queue: ${tasks.length} tasks ready` });
-		activityLogger.logBroadcast("system", `Task queue initialized with ${tasks.length} tasks. Agent-hour estimate: ${recommendation.estimatedAgentHours}h`);
+		activityLogger.logBroadcast(
+			"system",
+			`Task queue initialized with ${tasks.length} tasks. Agent-hour estimate: ${recommendation.estimatedAgentHours}h`,
+		);
 
 		// 5. Spawn agents in parallel
 		const agentResults = new Map<string, SingleResult[]>();
-		const agentPromises = roleAssignments.map(async (agent) => {
+		const agentPromises = roleAssignments.map(async agent => {
 			const results = await this.#runAgent(agent, queue, signal);
 			agentResults.set(agent.id, results);
 			return { agentId: agent.id, results };
@@ -316,11 +328,14 @@ export class StageController {
 			preferredRoles: a.preferredRoles ?? [],
 		}));
 
-		// 5. Try roundtable negotiation (if IRC bus is available)
-		if (ircBus) {
-			// Register a shared channel via CommBus for cross-component access
-			const commBus = CommBus.ensureGlobal(ircBus, activityLogger);
-			commBus.groupChannel("role-negotiation", candidates.map(c => c.agentId), activityLogger);
+		// 5. Try roundtable negotiation (if CommBus is available)
+		if (this.#opts.commBus && ircBus) {
+			// Use the injected CommBus (not the global singleton) for role negotiation
+			this.#opts.commBus.groupChannel(
+				"role-negotiation",
+				candidates.map(c => c.agentId),
+				activityLogger,
+			);
 			// TODO: implement roundtable role negotiation via channel.roundtable() when
 			// response parsing to extract { agentId, role }[] assignments is available.
 		}
@@ -360,30 +375,11 @@ export class StageController {
 		queue: TaskQueue,
 		signal: AbortSignal | undefined,
 	): Promise<SingleResult[]> {
-		const { workspace, swarmName, activityLogger, modelRegistry, settings, profileRegistry, roleAssetManager } = this.#opts;
+		const { activityLogger } = this.#opts;
+		const maxRetries = this.#opts.maxRetries ?? 3;
+		const retryBaseDelayMs = this.#opts.retryBaseDelayMs ?? 5_000;
+		const retryCounts = new Map<string, number>();
 		const results: SingleResult[] = [];
-		let roleDef: RoleAsset | null = null;
-
-		// Load role definition
-		try {
-			roleDef = await roleAssetManager.get(agent.role);
-		} catch { /* use defaults */ }
-
-		// Build system prompt with profile context + P7 stigmergy context
-		const profileCtx = profileRegistry.getPromptContext(agent.id);
-		const stigmergyCtx = this.#opts.callbacks?.getAgentContext(agent.id) ?? "";
-		const systemPrompt = [
-			roleDef?.prompts?.system ??
-				`You are a ${agent.role} in the SatoPi system. Complete tasks assigned to you from the task queue.`,
-			profileCtx ?? "",
-			stigmergyCtx,
-			"",
-			"TASK QUEUE INSTRUCTIONS:",
-			"- You have a shared task queue. Use the queue to claim the next available task.",
-			"- When you complete a task, mark it as done. Dependent tasks will become ready.",
-			"- If you encounter an issue, create a fix task and notify the reviewer.",
-			"- Work efficiently — your completion speed affects the team's throughput.",
-		].filter(Boolean).join("\n");
 
 		// Keep claiming and executing tasks until the queue is empty or aborted
 		let emptyPolls = 0;
@@ -397,8 +393,10 @@ export class StageController {
 				if (queue.inProgress.size === 0) {
 					emptyPolls++;
 					if (emptyPolls >= MAX_EMPTY_POLLS) {
-						activityLogger.logBroadcast("system",
-							`${agent.id}: all tasks blocked or unresolvable (${emptyPolls} empty polls, 0 in-progress), breaking out`);
+						activityLogger.logBroadcast(
+							"system",
+							`${agent.id}: all tasks blocked or unresolvable (${emptyPolls} empty polls, 0 in-progress), breaking out`,
+						);
 						break;
 					}
 				} else {
@@ -421,56 +419,38 @@ export class StageController {
 					task.files ? `Files: ${task.files.join(", ")}` : "",
 					"",
 					"Complete this task. When done, report what you accomplished.",
-				].filter(Boolean).join("\n");
+				]
+					.filter(Boolean)
+					.join("\n");
 
 				let result: SingleResult;
 
-				if (this.#runtime) {
-					// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
-					const [handle] = await this.#runtime.spawn([{
+				// Unified path — AgentRuntime.spawn() is the only execution path.
+				// Legacy streamAgentOutput path removed (Phase A4).
+				const [handle] = await this.#runtime.spawn([
+					{
 						id: agent.id,
 						role: agent.role,
 						roleSource: "library",
 						task: taskText,
-					}]);
+					},
+				]);
 
-					const output = await handle.wait();
-					result = {
-						index: results.length,
-						id: msgId,
-						agent: agent.id,
-						agentSource: "project" as const,
-						task: taskText,
-						exitCode: 0,
-						output: (output?.output ?? output) ?? "(no output)",
-						stderr: "",
-						truncated: false,
-						durationMs: 0,
-						tokens: 0,
-						requests: 0,
-					};
-				} else {
-					// FALLBACK: existing code path (keep exactly as-is)
-					result = await streamAgentOutput(
-						{ activityLogger, msgId, from: agent.id },
-						{
-							cwd: workspace,
-							agent: {
-								name: agent.id,
-								description: `Stage agent: ${agent.id} (${agent.role})`,
-								systemPrompt,
-								source: "project" as const,
-								tools: [...(roleDef?.tools ?? []), "agent_fork"],
-							},
-							task: taskText,
-							index: results.length,
-							id: msgId,
-							modelRegistry,
-							settings,
-							signal,
-						},
-					);
-				}
+				const agentResult = await handle.wait();
+				result = {
+					index: results.length,
+					id: msgId,
+					agent: agent.id,
+					agentSource: "project" as const,
+					task: taskText,
+					exitCode: 0,
+					output: agentResult?.output ?? agentResult ?? "(no output)",
+					stderr: "",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+				};
 
 				results.push(result);
 
@@ -485,21 +465,66 @@ export class StageController {
 					);
 					activityLogger.logBroadcast("system", `${agent.id} completed: ${task.title}`);
 				} else {
-					queue.block(task.id, `Agent ${agent.id} failed with exit ${result.exitCode}`);
-					this.#opts.callbacks?.onTaskFailed(agent.id, task, `exit code ${result.exitCode}`);
+					// P5: Retry non-zero exit codes with exponential backoff
+					const retries = (retryCounts.get(task.id) ?? 0) + 1;
+					if (retries < maxRetries) {
+						retryCounts.set(task.id, retries);
+						const delay = retryBaseDelayMs * 2 ** (retries - 1);
+						activityLogger.logBroadcast(
+							"system",
+							`${agent.id}: task "${task.title}" exit ${result.exitCode} ` +
+								`(attempt ${retries}/${maxRetries}), retrying in ${delay}ms`,
+						);
+						queue.release(task.id, `retry ${retries}/${maxRetries}: exit ${result.exitCode}`);
+						await new Promise(r => setTimeout(r, delay));
+						continue; // retry
+					}
+					queue.block(
+						task.id,
+						`Agent ${agent.id} failed with exit ${result.exitCode} after ${maxRetries} attempts`,
+					);
+					this.#opts.callbacks?.onTaskFailed(
+						agent.id,
+						task,
+						`exit code ${result.exitCode} after ${maxRetries} attempts`,
+					);
 					// v3: also fire HookPipeline error event
 					void this.#opts.hookPipeline?.trigger(
 						"agent:onError",
-						{ agentId: agent.id, taskId: task.id, error: `exit code ${result.exitCode}` },
+						{
+							agentId: agent.id,
+							taskId: task.id,
+							error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
+						},
 						{ phase: "stage" },
 					);
-					activityLogger.logBroadcast("system", `${agent.id} failed: ${task.title} (exit ${result.exitCode})`);
+					activityLogger.logBroadcast(
+						"system",
+						`${agent.id} failed: ${task.title} (exit ${result.exitCode} after ${maxRetries} attempts)`,
+					);
 				}
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
-				queue.block(task.id, msg);
-				this.#opts.callbacks?.onTaskFailed(agent.id, task, msg);
-				activityLogger.logCrash(agent.id, msg);
+				const retries = (retryCounts.get(task.id) ?? 0) + 1;
+
+				if (retries < maxRetries) {
+					// P5: Retry with exponential backoff
+					retryCounts.set(task.id, retries);
+					const delay = retryBaseDelayMs * 2 ** (retries - 1);
+					activityLogger.logBroadcast(
+						"system",
+						`${agent.id}: task "${task.title}" failed (attempt ${retries}/${maxRetries}), ` +
+							`retrying in ${delay}ms: ${msg}`,
+					);
+					queue.release(task.id, `retry ${retries}/${maxRetries}: ${msg}`);
+					await new Promise(r => setTimeout(r, delay));
+					continue; // retry — the released task will be re-claimed
+				}
+
+				// Max retries exhausted — block the task permanently
+				queue.block(task.id, `Failed after ${maxRetries} attempts: ${msg}`);
+				this.#opts.callbacks?.onTaskFailed(agent.id, task, `Failed after ${maxRetries} attempts: ${msg}`);
+				activityLogger.logCrash(agent.id, `Failed after ${maxRetries} attempts: ${msg}`);
 			}
 		}
 

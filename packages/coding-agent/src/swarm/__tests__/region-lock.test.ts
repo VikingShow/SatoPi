@@ -110,7 +110,7 @@ describe("RegionLockManager", () => {
 		expect(mgr.getActiveLocks()).toHaveLength(1);
 
 		// Wait for TTL to pass.
-		await new Promise((r) => setTimeout(r, 20));
+		await new Promise(r => setTimeout(r, 20));
 
 		// getActiveLocks calls cleanup -> expired lock removed.
 		expect(mgr.getActiveLocks()).toHaveLength(0);
@@ -119,7 +119,7 @@ describe("RegionLockManager", () => {
 	it("cleanupExpired runs before checkLock", async () => {
 		const mgr = new RegionLockManager(10);
 		mgr.tryLock("worker-1", "src/stale.ts");
-		await new Promise((r) => setTimeout(r, 20));
+		await new Promise(r => setTimeout(r, 20));
 		// After TTL, the lock is stale -- checkLock cleans up, so file appears free.
 		expect(mgr.checkLock("src/stale.ts", "worker-2").locked).toBe(false);
 	});
@@ -128,10 +128,10 @@ describe("RegionLockManager", () => {
 		const mgr = new RegionLockManager(30);
 		expect(mgr.tryLock("worker-1", "src/refresh.ts")).toBe(true);
 		// Sleep a bit, then re-acquire to refresh the timestamp.
-		await new Promise((r) => setTimeout(r, 15));
+		await new Promise(r => setTimeout(r, 15));
 		expect(mgr.tryLock("worker-1", "src/refresh.ts")).toBe(true);
 		// Wait past original TTL but well before refreshed expiry.
-		await new Promise((r) => setTimeout(r, 20));
+		await new Promise(r => setTimeout(r, 20));
 		// Lock should still be active because re-acquire refreshed the timestamp.
 		expect(mgr.getActiveLocks()).toHaveLength(1);
 	});

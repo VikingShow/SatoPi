@@ -11,27 +11,26 @@
  * about how each component is wired up.
  */
 
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
-import { OffloadManager } from "../../offload/manager"
-import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import type { StateTracker } from "../core/state";
-import type { ActivityLogger, ActivityBroadcaster } from "../hooks/activity-logger";
-import type { RunManager, SteeringSink } from "../core/services";
-import type { MarkEnvironment } from "../../coordination";
-import type { ScriptManager } from "../core/services";
-import type { ExperienceStore } from "../curtain/experience";
+import * as path from "node:path";
+import { logger } from "@oh-my-pi/pi-utils";
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import type { RoleAssetManager } from "../../agent/role-asset";
-import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { MarkEnvironment } from "../../coordination";
+import type { IOffloadManager } from "../../offload/manager";
+import { OffloadManager } from "../../offload/manager";
+import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
+import type { StateTracker } from "../core/state";
+import type { ExperienceStore } from "../curtain/experience";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
 // is what makes persistence actually work.
 import { SwarmSessionManager } from "./swarm-session-manager";
-import { logger } from "@oh-my-pi/pi-utils";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { IOffloadManager } from "../../offload/manager"
 
 // ============================================================================
 // Types
@@ -70,14 +69,7 @@ export interface SessionServices {
 }
 
 /** High-level session status for the run listing. */
-export type SessionStatus =
-	| "idle"
-	| "script"
-	| "stage"
-	| "paused"
-	| "blocked"
-	| "completed"
-	| "failed";
+export type SessionStatus = "idle" | "script" | "stage" | "paused" | "blocked" | "completed" | "failed";
 
 /** Factory function signature — builds all per-session objects for a given swarmDir. */
 export type SessionFactory = (
@@ -98,11 +90,7 @@ export class SessionRegistry {
 	/** Optional SSE broadcaster auto-injected into every new session. */
 	#broadcaster: ActivityBroadcaster | null = null;
 
-	constructor(
-		shared: SharedServices,
-		factory: SessionFactory,
-		maxConcurrent = Infinity,
-	) {
+	constructor(shared: SharedServices, factory: SessionFactory, maxConcurrent = Infinity) {
 		this.#shared = shared;
 		this.#factory = factory;
 		this.#maxConcurrent = maxConcurrent;
@@ -150,9 +138,7 @@ export class SessionRegistry {
 			throw new Error(`Session "${name}" already exists`);
 		}
 		if (!this.canStart()) {
-			throw new Error(
-				`Max ${this.#maxConcurrent} concurrent sessions reached`,
-			);
+			throw new Error(`Max ${this.#maxConcurrent} concurrent sessions reached`);
 		}
 
 		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
@@ -168,7 +154,9 @@ export class SessionRegistry {
 			sessionManager = await SwarmSessionManager.openOrCreate(swarmDir);
 			logger.info("[SessionRegistry] SwarmSessionManager created", { name, swarmDir });
 		} catch (err) {
-			logger.warn("[SessionRegistry] SwarmSessionManager unavailable — falling back to legacy persistence", { error: String(err) });
+			logger.warn("[SessionRegistry] SwarmSessionManager unavailable — falling back to legacy persistence", {
+				error: String(err),
+			});
 		}
 
 		// Wire the SSE broadcaster to the new session's ActivityLogger.
@@ -195,7 +183,9 @@ export class SessionRegistry {
 			if (snapshot) {
 				services.stateTracker.updatePipeline(snapshot);
 				logger.info("[SessionRegistry] seeded StateTracker from persisted snapshot", {
-					name, status: snapshot.status, phase: snapshot.phase,
+					name,
+					status: snapshot.status,
+					phase: snapshot.phase,
 				});
 			}
 
@@ -224,15 +214,27 @@ export class SessionRegistry {
 		session.abortController.abort();
 		// Flush and close SwarmSessionManager before cleanup
 		if (session.sessionManager) {
-			try { await session.sessionManager.flush(); } catch { /* best-effort */ }
-			try { await session.sessionManager.close(); } catch { /* best-effort */ }
+			try {
+				await session.sessionManager.flush();
+			} catch {
+				/* best-effort */
+			}
+			try {
+				await session.sessionManager.close();
+			} catch {
+				/* best-effort */
+			}
 		}
 		// Remove from in-memory registry
 		this.#sessions.delete(name);
 		// Remove the .swarm_{name} directory from disk so GET /api/runs
 		// (which scans the workspace filesystem) does not resurrect it.
 		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
-		try { await fs.rm(swarmDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+		try {
+			await fs.rm(swarmDir, { recursive: true, force: true });
+		} catch {
+			/* best-effort */
+		}
 	}
 
 	async destroyAll(): Promise<void> {
@@ -262,18 +264,12 @@ export class SessionRegistry {
 					// with the forked file so the child inherits the parent's
 					// full session history.
 					await session.sessionManager.close();
-					session.sessionManager = await SwarmSessionManager.open(
-						forkResult.newSessionFile,
-						session.swarmDir,
-					);
+					session.sessionManager = await SwarmSessionManager.open(forkResult.newSessionFile, session.swarmDir);
 
 					// Restore parent to its original session file — fork()
 					// internally reopened the parent onto the new file.
 					await parent.sessionManager.close();
-					parent.sessionManager = await SwarmSessionManager.open(
-						forkResult.oldSessionFile,
-						parent.swarmDir,
-					);
+					parent.sessionManager = await SwarmSessionManager.open(forkResult.oldSessionFile, parent.swarmDir);
 
 					// Re-seed child's StateTracker from the forked snapshot.
 					const snapshot = await SwarmSessionManager.readLatestState(session.swarmDir);

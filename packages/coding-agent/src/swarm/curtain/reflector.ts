@@ -1,5 +1,5 @@
 /**
- * After Loop — LLM Deep Reflection.
+ * Curtain — LLM Deep Reflection.
  *
  * Takes the completed StageResult + extracted lessons and performs a single
  * cheap-model LLM call to identify root causes, effective patterns,

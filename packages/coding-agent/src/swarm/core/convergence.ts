@@ -50,8 +50,8 @@ export function jaccardSimilarity(a: string[], b: string[]): number {
 
 /** Compute Jaccard similarity between two sets of findings. */
 export function findingsSimilarity(prev: string[], curr: string[]): number {
-	const prevTokens = prev.flatMap((f) => f.toLowerCase().split(/[^a-z0-9]+/)).filter((t) => t.length > 2);
-	const currTokens = curr.flatMap((f) => f.toLowerCase().split(/[^a-z0-9]+/)).filter((t) => t.length > 2);
+	const prevTokens = prev.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
+	const currTokens = curr.flatMap(f => f.toLowerCase().split(/[^a-z0-9]+/)).filter(t => t.length > 2);
 	return jaccardSimilarity(prevTokens, currTokens);
 }
 

@@ -11,11 +11,10 @@
  * integration point with SatoPi's agent loop.
  */
 
-import type { AgentMessage, AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
-import type { Chapter } from "../core/state";
+import type { AgentLoopConfig, AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
-
-import { compactContext, DEFAULT_COMPACT_CONFIG, type CompactContextConfig } from "../../offload/compact";
+import { type CompactContextConfig, compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
+import type { Chapter } from "../core/state";
 
 // ============================================================================
 // Types
@@ -26,33 +25,33 @@ import { compactContext, DEFAULT_COMPACT_CONFIG, type CompactContextConfig } fro
  * Mirrors the PhaseInfo concept from the swarm v3 unified architecture.
  */
 export interface PhaseInfo {
-  phase: Chapter;
-  multiAgent: boolean;
-  humanMode: "dialogue" | "observer" | "passive" | "none";
+	phase: Chapter;
+	multiAgent: boolean;
+	humanMode: "dialogue" | "observer" | "passive" | "none";
 }
 
 /**
  * Input context available to all ContextSource implementations.
  */
 export interface BuildContext {
-  taskDescription: string;
-  workspace: string;
-  swarmDir: string;
-  planContent?: string;
-  turnNumber: number;
-  phase: PhaseInfo;
-  /** Previously accumulated fragments from higher-priority sources. */
-  accumulated: Partial<AssembledContext>;
+	taskDescription: string;
+	workspace: string;
+	swarmDir: string;
+	planContent?: string;
+	turnNumber: number;
+	phase: PhaseInfo;
+	/** Previously accumulated fragments from higher-priority sources. */
+	accumulated: Partial<AssembledContext>;
 }
 
 /**
  * A fragment of context produced by a single ContextSource.
  */
 export interface ContextFragment {
-  systemPromptAddition?: string;
-  taskPromptAddition?: string;
-  injectedMessages?: AgentMessage[];
-  tools?: string[];
+	systemPromptAddition?: string;
+	taskPromptAddition?: string;
+	injectedMessages?: AgentMessage[];
+	tools?: string[];
 }
 
 /**
@@ -60,21 +59,21 @@ export interface ContextFragment {
  * for role-based and task-based context resolution.
  */
 export interface AgentSpecLike {
-  id: string;
-  role: string;
-  task: string;
+	id: string;
+	role: string;
+	task: string;
 }
 
 /**
  * The fully assembled context ready for injection into the agent loop.
  */
 export interface AssembledContext {
-  systemPrompt: string;
-  taskPrompt: string;
-  tools: string[];
-  injectedMessages: AgentMessage[];
-  /** Source name to content mapping for debugging. */
-  metadata: Record<string, string>;
+	systemPrompt: string;
+	taskPrompt: string;
+	tools: string[];
+	injectedMessages: AgentMessage[];
+	/** Source name to content mapping for debugging. */
+	metadata: Record<string, string>;
 }
 
 // ============================================================================
@@ -90,19 +89,19 @@ export interface AssembledContext {
  * priority order.
  */
 export interface ContextSource {
-  /** Unique name for debugging and metadata tracking. */
-  readonly name: string;
-  /** Execution priority — lower numbers execute first. */
-  readonly priority: number;
-  /**
-   * Whether this source applies to the given phase and agent role.
-   * Used to filter out irrelevant sources before execution.
-   */
-  appliesTo(phase: Chapter, agentRole: string): boolean;
-  /**
-   * Build a context fragment for the given agent spec and base context.
-   */
-  build(spec: AgentSpecLike, base: BuildContext): Promise<ContextFragment>;
+	/** Unique name for debugging and metadata tracking. */
+	readonly name: string;
+	/** Execution priority — lower numbers execute first. */
+	readonly priority: number;
+	/**
+	 * Whether this source applies to the given phase and agent role.
+	 * Used to filter out irrelevant sources before execution.
+	 */
+	appliesTo(phase: Chapter, agentRole: string): boolean;
+	/**
+	 * Build a context fragment for the given agent spec and base context.
+	 */
+	build(spec: AgentSpecLike, base: BuildContext): Promise<ContextFragment>;
 }
 
 // ============================================================================
@@ -124,124 +123,118 @@ export interface ContextSource {
  * ```
  */
 export class ContextPipeline {
-  private sources: ContextSource[] = [];
+	private sources: ContextSource[] = [];
 
-  /**
-   * Register a context source. Sources are sorted by priority on assemble.
-   */
-  register(source: ContextSource): void {
-    this.sources.push(source);
-  }
+	/**
+	 * Register a context source. Sources are sorted by priority on assemble.
+	 */
+	register(source: ContextSource): void {
+		this.sources.push(source);
+	}
 
-  /**
-   * Assemble context by running all applicable sources in priority order.
-   *
-   * 1. Filters sources by `appliesTo(phase, agentRole)`.
-   * 2. Sorts remaining sources by priority (ascending).
-   * 3. Runs each source's `build()` sequentially.
-   * 4. Merges all fragments into an AssembledContext.
-   *
-   * If a source throws, the error is logged and the source is skipped —
-   * one failing source does not crash the pipeline.
-   */
-  async assemble(
-    spec: AgentSpecLike,
-    phase: PhaseInfo,
-    base: BuildContext,
-  ): Promise<AssembledContext> {
-    const applicable = this.sources
-      .filter((s) => s.appliesTo(phase.phase, spec.role))
-      .sort((a, b) => a.priority - b.priority);
+	/**
+	 * Assemble context by running all applicable sources in priority order.
+	 *
+	 * 1. Filters sources by `appliesTo(phase, agentRole)`.
+	 * 2. Sorts remaining sources by priority (ascending).
+	 * 3. Runs each source's `build()` sequentially.
+	 * 4. Merges all fragments into an AssembledContext.
+	 *
+	 * If a source throws, the error is logged and the source is skipped —
+	 * one failing source does not crash the pipeline.
+	 */
+	async assemble(spec: AgentSpecLike, phase: PhaseInfo, base: BuildContext): Promise<AssembledContext> {
+		const applicable = this.sources
+			.filter(s => s.appliesTo(phase.phase, spec.role))
+			.sort((a, b) => a.priority - b.priority);
 
-    const assembled: AssembledContext = {
-      systemPrompt: "",
-      taskPrompt: base.taskDescription,
-      tools: [],
-      injectedMessages: [],
-      metadata: {},
-    };
+		const assembled: AssembledContext = {
+			systemPrompt: "",
+			taskPrompt: base.taskDescription,
+			tools: [],
+			injectedMessages: [],
+			metadata: {},
+		};
 
-    for (const source of applicable) {
-      try {
-        const fragment = await source.build(spec, {
-          ...base,
-          accumulated: { ...assembled },
-        });
+		for (const source of applicable) {
+			try {
+				const fragment = await source.build(spec, {
+					...base,
+					accumulated: { ...assembled },
+				});
 
-        if (fragment.systemPromptAddition) {
-          assembled.systemPrompt = assembled.systemPrompt
-            ? `${assembled.systemPrompt}\n${fragment.systemPromptAddition}`
-            : fragment.systemPromptAddition;
-        }
-        if (fragment.taskPromptAddition) {
-          assembled.taskPrompt = assembled.taskPrompt
-            ? `${assembled.taskPrompt}\n${fragment.taskPromptAddition}`
-            : fragment.taskPromptAddition;
-        }
-        if (fragment.tools && fragment.tools.length > 0) {
-          for (const tool of fragment.tools) {
-            if (!assembled.tools.includes(tool)) {
-              assembled.tools.push(tool);
-            }
-          }
-        }
-        if (fragment.injectedMessages && fragment.injectedMessages.length > 0) {
-          assembled.injectedMessages.push(...fragment.injectedMessages);
-        }
+				if (fragment.systemPromptAddition) {
+					assembled.systemPrompt = assembled.systemPrompt
+						? `${assembled.systemPrompt}\n${fragment.systemPromptAddition}`
+						: fragment.systemPromptAddition;
+				}
+				if (fragment.taskPromptAddition) {
+					assembled.taskPrompt = assembled.taskPrompt
+						? `${assembled.taskPrompt}\n${fragment.taskPromptAddition}`
+						: fragment.taskPromptAddition;
+				}
+				if (fragment.tools && fragment.tools.length > 0) {
+					for (const tool of fragment.tools) {
+						if (!assembled.tools.includes(tool)) {
+							assembled.tools.push(tool);
+						}
+					}
+				}
+				if (fragment.injectedMessages && fragment.injectedMessages.length > 0) {
+					assembled.injectedMessages.push(...fragment.injectedMessages);
+				}
 
-        // Track metadata for debugging
-        const additions: string[] = [];
-        if (fragment.systemPromptAddition) additions.push("systemPrompt");
-        if (fragment.taskPromptAddition) additions.push("taskPrompt");
-        if (fragment.tools?.length) additions.push(`tools(${fragment.tools.length})`);
-        if (fragment.injectedMessages?.length) additions.push(`messages(${fragment.injectedMessages.length})`);
-        assembled.metadata[source.name] = additions.length > 0 ? additions.join(", ") : "(no additions)";
-      } catch (err) {
-        logger.warn(`[ContextPipeline] Source "${source.name}" failed, skipping`, {
-          error: String(err),
-          agentId: spec.id,
-          phase: phase.phase,
-        });
-        assembled.metadata[source.name] = `ERROR: ${String(err)}`;
-      }
-    }
+				// Track metadata for debugging
+				const additions: string[] = [];
+				if (fragment.systemPromptAddition) additions.push("systemPrompt");
+				if (fragment.taskPromptAddition) additions.push("taskPrompt");
+				if (fragment.tools?.length) additions.push(`tools(${fragment.tools.length})`);
+				if (fragment.injectedMessages?.length) additions.push(`messages(${fragment.injectedMessages.length})`);
+				assembled.metadata[source.name] = additions.length > 0 ? additions.join(", ") : "(no additions)";
+			} catch (err) {
+				logger.warn(`[ContextPipeline] Source "${source.name}" failed, skipping`, {
+					error: String(err),
+					agentId: spec.id,
+					phase: phase.phase,
+				});
+				assembled.metadata[source.name] = `ERROR: ${String(err)}`;
+			}
+		}
 
-    return assembled;
-  }
+		return assembled;
+	}
 
-  /**
-   * Convert assembled context into an AgentLoopConfig["transformContext"] implementation.
-   *
-   * The returned function prepends `assembled.injectedMessages` to the message array,
-   * so external context (experience, stigmergy, etc.) is visible to the agent.
-   *
-   * This is the key integration point with SatoPi's agent loop.
-   */
-  toTransformContext(
-    assembled: AssembledContext,
-    opts?: { compactWindow?: number },
-  ): Exclude<AgentLoopConfig["transformContext"], undefined> {
-    const injected = assembled.injectedMessages;
-    return async (messages: AgentMessage[], _signal?: AbortSignal): Promise<AgentMessage[]> => {
-      let result = injected.length === 0 ? messages : [...injected, ...messages];
-      // L3 compact context if configured
-      if (opts?.compactWindow) {
-        const compacted = compactContext(result, new Map(), {
-          ...DEFAULT_COMPACT_CONFIG,
-          contextWindow: opts.compactWindow,
-        });
-        result = compacted.messages;
-      }
-      return result;
-    };
-  }
+	/**
+	 * Convert assembled context into an AgentLoopConfig["transformContext"] implementation.
+	 *
+	 * The returned function prepends `assembled.injectedMessages` to the message array,
+	 * so external context (experience, stigmergy, etc.) is visible to the agent.
+	 *
+	 * This is the key integration point with SatoPi's agent loop.
+	 */
+	toTransformContext(
+		assembled: AssembledContext,
+		opts?: { compactWindow?: number },
+	): Exclude<AgentLoopConfig["transformContext"], undefined> {
+		const injected = assembled.injectedMessages;
+		return async (messages: AgentMessage[], _signal?: AbortSignal): Promise<AgentMessage[]> => {
+			let result = injected.length === 0 ? messages : [...injected, ...messages];
+			// L3 compact context if configured
+			if (opts?.compactWindow) {
+				const compacted = compactContext(result, new Map(), {
+					...DEFAULT_COMPACT_CONFIG,
+					contextWindow: opts.compactWindow,
+				});
+				result = compacted.messages;
+			}
+			return result;
+		};
+	}
 
-  /**
-   * Get registered sources for debugging.
-   */
-  listSources(): ReadonlyArray<{ name: string; priority: number }> {
-    return this.sources
-      .map((s) => ({ name: s.name, priority: s.priority }))
-      .sort((a, b) => a.priority - b.priority);
-  }
+	/**
+	 * Get registered sources for debugging.
+	 */
+	listSources(): ReadonlyArray<{ name: string; priority: number }> {
+		return this.sources.map(s => ({ name: s.name, priority: s.priority })).sort((a, b) => a.priority - b.priority);
+	}
 }

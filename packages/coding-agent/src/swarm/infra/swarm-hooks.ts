@@ -7,13 +7,13 @@
  * 3. 回调失败不崩溃 Stage — 所有内部操作自行容错
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { MarkEnvironment } from "../../coordination";
-import type { StageCallbacks } from "../stage/stage-controller";
-import type { Task } from "../executor/task-queue";
 import type { ScoredAgent } from "../../agent/agent-selector";
+import type { MarkEnvironment } from "../../coordination";
+import type { Task } from "../executor/task-queue";
+import type { StageCallbacks } from "../stage/stage-controller";
 
 // ============================================================================
 // Types

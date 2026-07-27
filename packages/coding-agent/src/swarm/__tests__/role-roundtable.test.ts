@@ -9,13 +9,9 @@
  * 5. fallbackRoleAssign algorithm (preference match + round-robin)
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { IrcBus } from "../../irc/bus";
-import {
-	RoleRoundtable,
-	fallbackRoleAssign,
-	type RoleCandidate,
-} from "../stage/role-roundtable";
+import { fallbackRoleAssign, type RoleCandidate, RoleRoundtable } from "../stage/role-roundtable";
 
 describe("RoleRoundtable (unit — no live IrcBus)", () => {
 	let bus: IrcBus;

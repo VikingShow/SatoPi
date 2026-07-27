@@ -8,23 +8,28 @@
  * After both complete, waits for user to "Applaud" before finalizing.
  */
 
-import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
-import { StateTracker } from "../core/state";
-import { ActivityLogger } from "../hooks/activity-logger";
-import { ExperienceStore, extractLessons, reflectDeep, reflectionToLesson, generateRunSummary, type ExtractedLesson, type LoopRunStats } from "../curtain";
-import { VerificationHook } from "../core/verification-hook";
-import { streamAgentOutput } from "../render/streaming";
-import type { StageResult } from "../stage/stage-controller";
-import type { LoopSwarmConfig } from "../core/schema";
-import type { CurtainResult } from "./types";
-import type { RoleAssetManager } from "../../agent/role-asset";
-import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import type { ContributionData } from "./types";
-import { CommBus } from "../comm-bus";
+import { logger } from "@oh-my-pi/pi-utils";
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
+import { CommBus } from "../comm-bus";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { StateTracker } from "../core/state";
+import {
+	type ExperienceStore,
+	type ExtractedLesson,
+	extractLessons,
+	generateRunSummary,
+	type LoopRunStats,
+	reflectDeep,
+	reflectionToLesson,
+} from "../curtain";
+import type { ActivityLogger } from "../infra/activity-logger";
+import { streamAgentOutput } from "../render/streaming";
+import type { StageResult } from "../stage/stage-controller";
+import type { ContributionData } from "./types";
 
 // ============================================================================
 // Types
@@ -42,6 +47,8 @@ export interface CurtainRunnerOpts {
 	profileRegistry?: ProfileRegistry;
 	/** Optional IRC bus for agent-to-agent communication (enables reporter election). */
 	ircBus?: IrcBus;
+	/** Optional CommBus (injected from AgentRuntime; falls back to global singleton). */
+	commBus?: CommBus;
 	/** Promise that resolves when user applauds. Set up by the API endpoint. */
 	applaudSignal?: AbortSignal;
 }
@@ -79,8 +86,15 @@ export async function runCurtainPipeline(
 	opts: CurtainRunnerOpts,
 ): Promise<CurtainResultData | null> {
 	const {
-		workspace, stateTracker, activityLogger, experienceStore,
-		loopConfig, modelRegistry, settings, roleAssetManager, profileRegistry,
+		workspace,
+		stateTracker,
+		activityLogger,
+		experienceStore,
+		loopConfig,
+		modelRegistry,
+		settings,
+		roleAssetManager,
+		profileRegistry,
 		ircBus,
 	} = opts;
 
@@ -93,7 +107,7 @@ export async function runCurtainPipeline(
 
 	// Agent counts
 	const agents = stateTracker.state.agents;
-		const agentCount = Object.keys(agents).length;
+	const agentCount = Object.keys(agents).length;
 
 	// ── Elect reporter via agent voting (if IRC bus available) ──
 	let electedReporter: string | null = null;
@@ -109,10 +123,14 @@ export async function runCurtainPipeline(
 				});
 			}
 			const eligibleIds = contributions.map(c => c.agentId);
-			const channel = CommBus.global().groupChannel("election", eligibleIds, activityLogger);
+			const commBus = opts.commBus ?? CommBus.global();
+			const channel = commBus.groupChannel("election", eligibleIds, activityLogger);
 			const voteResult = await channel.vote("elect reporter", { eligibleIds, timeoutMs: 15000 });
 			electedReporter = voteResult.winner;
-			activityLogger.logBroadcast("system", `Elected reporter: ${electedReporter} (deputies: ${voteResult.deputyIds.join(", ")})`);
+			activityLogger.logBroadcast(
+				"system",
+				`Elected reporter: ${electedReporter} (deputies: ${voteResult.deputyIds.join(", ")})`,
+			);
 			logger.info("[Curtain] Reporter elected", { reporter: electedReporter });
 		} catch (err) {
 			logger.warn("[Curtain] Reporter election failed, falling back to default reporter", { error: String(err) });
@@ -122,7 +140,13 @@ export async function runCurtainPipeline(
 	// ── Run reporter + reflection in parallel ──
 	const [reporterSummary, extraction] = await Promise.all([
 		// Thread A: Reporter agent (elected or default)
-		runReporterAgent(workspace, result, { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride: electedReporter }),
+		runReporterAgent(workspace, result, {
+			modelRegistry,
+			settings,
+			activityLogger,
+			roleAssetManager,
+			reporterOverride: electedReporter,
+		}),
 		// Thread B: Reflection pipeline
 		runReflectionPipeline(result, {
 			agentCount,
@@ -136,13 +160,9 @@ export async function runCurtainPipeline(
 	// ── Merge results ──
 	await stateTracker.updatePipeline({ roundtablePhase: "Curtain: building summary" });
 
-	const summaryMarkdown = [
-		reporterSummary ?? "No reporter output.",
-		"",
-		"---",
-		"",
-		extraction.reflectionSummary,
-	].join("\n");
+	const summaryMarkdown = [reporterSummary ?? "No reporter output.", "", "---", "", extraction.reflectionSummary].join(
+		"\n",
+	);
 
 	// Save lessons
 	const referencedRunIds: string[] = [];
@@ -177,12 +197,12 @@ export async function runCurtainPipeline(
 		lessons: extraction.lessons,
 		reflection: extraction.deepReflection
 			? {
-				rootCauses: extraction.deepReflection.rootCauses,
-				effectivePatterns: extraction.deepReflection.effectivePatterns,
-				structuralIssues: extraction.deepReflection.structuralIssues,
-				recommendations: extraction.deepReflection.recommendations,
-				confidence: extraction.deepReflection.confidence,
-			}
+					rootCauses: extraction.deepReflection.rootCauses,
+					effectivePatterns: extraction.deepReflection.effectivePatterns,
+					structuralIssues: extraction.deepReflection.structuralIssues,
+					recommendations: extraction.deepReflection.recommendations,
+					confidence: extraction.deepReflection.confidence,
+				}
 			: null,
 		stats: {
 			totalIterations: extraction.stats.totalIterations,
@@ -198,7 +218,11 @@ export async function runCurtainPipeline(
 
 	// SatoPi: release the SQLite connection after the curtain pipeline
 	// completes so we do not leak database handles across runs.
-	try { experienceStore.close(); } catch { /* best-effort */ }
+	try {
+		experienceStore.close();
+	} catch {
+		/* best-effort */
+	}
 
 	logger.info("[Curtain] Phase completed successfully");
 	return curtainResult;
@@ -232,9 +256,12 @@ async function runReporterAgent(
 		if (role?.status === "approved") {
 			reporterPrompt = role.prompts.system;
 		}
-	} catch { /* use default */ }
+	} catch {
+		/* use default */
+	}
 
-	const systemPrompt = reporterPrompt ??
+	const systemPrompt =
+		reporterPrompt ??
 		`You are a ${reporterName} Reporter agent. Summarize the completed build for the user. Be clear, concise, and honest about issues.`;
 
 	try {
@@ -256,16 +283,18 @@ async function runReporterAgent(
 
 		if (runtime) {
 			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
-			const [handle] = await runtime.spawn([{
-				id: reporterName,
-				role: reporterName,
-				roleSource: roleAssetManager ? "library" : "inline",
-				inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
-				task: reportTask,
-			}]);
+			const [handle] = await runtime.spawn([
+				{
+					id: reporterName,
+					role: reporterName,
+					roleSource: roleAssetManager ? "library" : "inline",
+					inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
+					task: reportTask,
+				},
+			]);
 
 			const output = await handle.wait();
-			reportOutput = (output?.output ?? output) ?? null;
+			reportOutput = output?.output ?? output ?? null;
 		} else {
 			// FALLBACK: existing code path (keep exactly as-is)
 			const report = await streamAgentOutput(

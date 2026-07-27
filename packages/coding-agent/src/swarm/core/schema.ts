@@ -333,8 +333,7 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 		maxIterations: (raw.max_iterations as number) ?? 5,
 		planDebate: {
 			enabled: ((raw.plan_debate as Record<string, unknown>)?.enabled as boolean) ?? true,
-			agentCount: ((raw.plan_debate as Record<string, unknown>)?.agent_count as number)
-				?? 2,
+			agentCount: ((raw.plan_debate as Record<string, unknown>)?.agent_count as number) ?? 2,
 			maxRounds: ((raw.plan_debate as Record<string, unknown>)?.max_rounds as number) ?? 3,
 			convergenceThreshold: ((raw.plan_debate as Record<string, unknown>)?.convergence_threshold as number) ?? 2,
 		},

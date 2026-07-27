@@ -21,10 +21,10 @@
  * with Jaccard-based convergence detection.
  */
 
-import { IrcBus } from "../../irc/bus";
-import { CommChannel } from "../comm-bus/comm-channel";
-import type { ActivityLogger } from "../hooks/activity-logger";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { IrcBus } from "../../irc/bus";
+import { CommChannel } from "../comm-bus/comm-channel";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Types
@@ -88,7 +88,9 @@ export class RoleRoundtable {
 		const agentIds = candidates.map(c => c.agentId);
 
 		logger.info("[RoleRoundtable] Starting negotiation", {
-			agents: candidates.length, roles: availableRoles.length, rounds,
+			agents: candidates.length,
+			roles: availableRoles.length,
+			rounds,
 		});
 
 		// Build discussion topic
@@ -99,9 +101,7 @@ export class RoleRoundtable {
 			`The project requires these roles: ${roleList}`,
 			"",
 			"The following agents are available:",
-			...candidates.map(c =>
-				`  - ${c.name} (prefers: ${c.preferredRoles.join(", ") || "none"})`,
-			),
+			...candidates.map(c => `  - ${c.name} (prefers: ${c.preferredRoles.join(", ") || "none"})`),
 			"",
 			"**Task**: Negotiate and decide which agent takes which role.",
 			`There are ${candidates.length} agents and ${availableRoles.length} roles.`,
@@ -118,12 +118,7 @@ export class RoleRoundtable {
 
 		try {
 			// Delegate roundtable execution to CommChannel
-			const commChannel = new CommChannel(
-				this.#ircBus,
-				agentIds,
-				[],
-				this.#activityLogger,
-			);
+			const commChannel = new CommChannel(this.#ircBus, agentIds, [], this.#activityLogger);
 
 			const result = await commChannel.roundtable(topic, { rounds, timeoutMs });
 
@@ -152,10 +147,7 @@ export class RoleRoundtable {
 	 * Accepts `string[]` (from {@link RoundtableResult.responses}) instead
 	 * of the previous `IrcMessage[]`.
 	 */
-	#parseAssignments(
-		responses: string[],
-		candidates: RoleCandidate[],
-	): RoleAssignment[] | null {
+	#parseAssignments(responses: string[], candidates: RoleCandidate[]): RoleAssignment[] | null {
 		// Try to find JSON assignments in any response
 		for (const body of responses) {
 			const jsonMatch = body.match(/```json\s*\n?([\s\S]*?)```/);
@@ -203,10 +195,7 @@ export class RoleRoundtable {
 /**
  * Fallback algorithm-based role assignment (preserved from original #assignRoles).
  */
-export function fallbackRoleAssign(
-	candidates: RoleCandidate[],
-	availableRoles: string[],
-): RoleAssignment[] {
+export function fallbackRoleAssign(candidates: RoleCandidate[], availableRoles: string[]): RoleAssignment[] {
 	const assignments: RoleAssignment[] = [];
 
 	// First pass: agents with strong role preference

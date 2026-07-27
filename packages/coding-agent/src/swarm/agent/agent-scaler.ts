@@ -46,8 +46,8 @@ export function computeScaleDelta(params: ScaleDeltaParams): number {
 	// Gate: not enough voters voted.
 	if (suggestions.length < Math.ceil(voterCount / 2)) return 0;
 
-	const upVotes = suggestions.filter((d) => d > 0).length;
-	const downVotes = suggestions.filter((d) => d < 0).length;
+	const upVotes = suggestions.filter(d => d > 0).length;
+	const downVotes = suggestions.filter(d => d < 0).length;
 	const superMajority = Math.ceil((voterCount * 2) / 3);
 	const majority = Math.ceil(voterCount / 2);
 

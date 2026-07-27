@@ -23,7 +23,7 @@ import type {
 import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
-import type { ActivityLogger } from "../hooks/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { createStreamProgressHandler } from "../render/streaming";
 
 /** Default per-agent wall-clock cap (5 minutes). */
@@ -86,8 +86,8 @@ export interface SwarmExecutorOptions {
 	 * Lets callers supply custom systemPrompt, tools, blockedTools, source, etc.
 	 */
 	agentOverrides?: Partial<AgentDefinition>;
-		/** Optional activity logger for SSE streaming output. */
-		activityLogger?: ActivityLogger;
+	/** Optional activity logger for SSE streaming output. */
+	activityLogger?: ActivityLogger;
 	/** Optional: transform context hook forwarded to runSubprocess. */
 	transformContext?: (messages: unknown[], signal?: AbortSignal) => Promise<unknown>;
 	/** Optional: after-tool-call hook forwarded to runSubprocess. */
@@ -147,7 +147,7 @@ export async function executeSwarmAgent(
 		onStarted,
 		toolHooks,
 		agentOverrides,
-			activityLogger,
+		activityLogger,
 	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
@@ -190,9 +190,9 @@ export async function executeSwarmAgent(
 	});
 	await stateTracker.appendLog(agent.name, `Starting iteration ${iteration}`);
 
-			// SSE streaming: signal the frontend that this agent has started producing output.
-			const streamMsgId = `${agentId}-${Date.now()}`;
-			activityLogger?.logStreamStart(streamMsgId, agent.name);
+	// SSE streaming: signal the frontend that this agent has started producing output.
+	const streamMsgId = `${agentId}-${Date.now()}`;
+	activityLogger?.logStreamStart(streamMsgId, agent.name);
 
 	try {
 		const result = await runSubprocess({
@@ -204,10 +204,11 @@ export async function executeSwarmAgent(
 			modelOverride,
 			signal: effectiveSignal,
 			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
-				onProgress: activityLogger
-					? createStreamProgressHandler(activityLogger, streamMsgId, agent.name,
-						(progress) => onProgress?.(agent.name, progress))
-					: (progress: AgentProgress) => onProgress?.(agent.name, progress),
+			onProgress: activityLogger
+				? createStreamProgressHandler(activityLogger, streamMsgId, agent.name, progress =>
+						onProgress?.(agent.name, progress),
+					)
+				: (progress: AgentProgress) => onProgress?.(agent.name, progress),
 			modelRegistry,
 			settings,
 			enableLsp: false,
@@ -229,7 +230,7 @@ export async function executeSwarmAgent(
 			`Iteration ${iteration} ${status}${result.error ? `: ${result.error}` : ""}`,
 		);
 
-			activityLogger?.logStreamEnd(streamMsgId, agent.name, result.output, result.thinking);
+		activityLogger?.logStreamEnd(streamMsgId, agent.name, result.output, result.thinking);
 		return result;
 	} catch (err) {
 		const error = err instanceof Error ? err.message : String(err);
@@ -242,7 +243,7 @@ export async function executeSwarmAgent(
 			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 		});
 		await stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`);
-			activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
+		activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
 
 		const failResult: SingleResult = {
 			index,
