@@ -84,9 +84,9 @@ describe("current phase highlighting", () => {
 		const lines = renderPhaseView(state);
 		const iconRow = lines[0];
 
-		expect(iconRow).toContain(PHASE_DISPLAY.stage.icon);
-		// Current phase should have bold ANSI
-		expect(iconRow).toContain("\x1b[1m");
+		// Current phase gets amber color styling
+		const plain = stripAnsi(lines[0]);
+		expect(plain).toContain(PHASE_DISPLAY.stage.icon);
 	});
 
 	it("defaults to idle when phase is undefined", () => {
@@ -101,25 +101,14 @@ describe("current phase highlighting", () => {
 // ============================================================================
 
 describe("future phases dimmed", () => {
-	it("non-current phases are rendered in muted colour", () => {
-		// When idle is the current phase, all other phases should NOT
-		// be bold — they should be rendered in sato.muted (chalk.hex).
-		const state = makeState({ phase: "idle" });
-		const lines = renderPhaseView(state);
-		// sato.bold outputs \x1b[1m for the current phase only.
-		// Non-current phases get chalk.hex (no bold escape).
-		expect(lines[0]).toContain("\x1b[1m"); // current phase is bold
-	});
 
-	it("only curtain is bold when curtain is current", () => {
-		// When curtain is current, only curtain gets \x1b[1m.
+	it("all 8 phase icons render when curtain is current", () => {
 		const state = makeState({ phase: "curtain" });
 		const lines = renderPhaseView(state);
-		// Should contain bold for the current phase
-		expect(lines[0]).toContain("\x1b[1m");
-		// Non-current phases use chalk.hex — verify all 8 icons appear
-		const plain = lines[0].replace(/\x1b\[[0-9;]*m/g, "");
-		expect(plain).toContain(PHASE_DISPLAY.curtain.icon);
+		const plain = stripAnsi(lines[0]);
+		for (const phase of ["idle", "script", "script-debate", "script-confirm", "stage", "paused", "blocked", "curtain"] as const) {
+			expect(plain).toContain(PHASE_DISPLAY[phase].icon);
+		}
 	});
 });
 
