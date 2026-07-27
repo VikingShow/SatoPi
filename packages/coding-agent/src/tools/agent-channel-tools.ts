@@ -18,7 +18,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { IrcBus } from "../irc/bus";
 import { CommChannel } from "../swarm/comm-bus/comm-channel";
-import type { ActivityLogger } from "../swarm/hooks/activity-logger";
+import type { ActivityLogger } from "../swarm/infra/activity-logger";
 
 // ============================================================================
 // Types

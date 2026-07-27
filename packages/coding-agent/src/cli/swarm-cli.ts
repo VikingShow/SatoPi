@@ -23,7 +23,7 @@ import { SwarmRunner } from "../swarm/core/swarm-runner";
 import { ExperienceStore } from "../swarm/curtain/experience";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
-import { ActivityLogger } from "../swarm/hooks/activity-logger";
+import { ActivityLogger } from "../swarm/infra/activity-logger";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
