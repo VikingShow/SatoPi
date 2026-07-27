@@ -108,6 +108,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 		}
 		this.#waves = buildExecutionWaves(deps);
 
+		// Mark mode as graph for TUI dashboard rendering
+		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		logger.info("[GraphRunner] Initialized", {
 			graph: graphName,
 			nodes: Object.keys(this.#graph.nodes).length,
