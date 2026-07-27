@@ -39,7 +39,7 @@ coverage/
 packages/ai/test/.temp-images/
 
 # Project specific
-.stp/
+!.stp/
 .stp/plugins/
 .swarm_*/
 .pi_config/

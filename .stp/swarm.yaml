@@ -1,0 +1,19 @@
+swarm:
+  name: SatoPi
+  mode: loop
+  workspace: .
+  agents: {}
+  target_count: 1
+  max_iterations: 10
+  workers:
+    initial: 3
+    min: 1
+    max: 10
+    auto: false
+  cloners:
+    count: 2
+  plan_debate:
+    enabled: true
+    cloner_count: 2
+    max_rounds: 2
+    convergence_threshold: 0.7
