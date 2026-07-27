@@ -52,7 +52,7 @@ export interface LaunchContext {
   /** The original agent spec. */
   spec: AgentSpec;
 
-  /** Resolved role (system prompt, tools, modelRole). */
+  /** Resolved role (system prompt, tools). */
   resolvedRole: ResolvedRole;
 
   /** Context assembled by ContextPipeline (system prompt, tools, injected msgs). */
@@ -137,10 +137,10 @@ export interface MinimalToolSession extends Partial<ToolSession> {
 // ============================================================================
 
 /**
- * Creates and starts oh-my-pi Agent instances with full hook wiring.
+ * Creates and starts SatoPi Agent instances with full hook wiring.
  *
  * The launcher is responsible for:
- * 1. Model resolution (spec.modelPreference + resolvedRole.modelRole)
+ * 1. Model resolution (spec.modelPreference)
  * 2. System prompt assembly
  * 3. Agent creation with transformContext + getApiKey + all hooks
  * 4. Agent lifecycle start (prompt)
@@ -224,7 +224,7 @@ export class AgentLauncher {
           }
         }
 
-        // Step 3: Apply L3 compact context (fusion with oh-my-pi compaction)
+        // Step 3: Apply L3 compact context (fusion with SatoPi compaction)
         if (ctx.offloadManager && ctx.contextWindow) {
           try {
             const compacted = compactContext(result, new Map(), {
@@ -249,7 +249,11 @@ export class AgentLauncher {
       getApiKey: async (requestModel: Model) => {
         try {
           return await this.#modelRegistry.resolver(requestModel, spec.id);
-        } catch {
+        } catch (err) {
+          logger.warn("[AgentLauncher] API key resolution failed", {
+            agentId: spec.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
           return undefined;
         }
       },
@@ -270,7 +274,12 @@ export class AgentLauncher {
     // 7. Launch the agent asynchronously
     //    Use fire-and-forget: the handle's wait() method lets callers
     //    await completion when they need results.
-    this.#startAgent(agent, spec, hookProviders, ctx.signal);
+    this.#startAgent(agent, spec, hookProviders, ctx.signal).catch(err => {
+      logger.warn("[AgentLauncher] Unhandled startAgent error", {
+        agentId: spec.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     logger.debug("[AgentLauncher] Agent launched", {
       id: spec.id,
@@ -455,18 +464,21 @@ export class AgentLauncher {
   }
 
   /**
-   * Start the oh-my-pi agent loop asynchronously.
+   * Start the SatoPi agent loop asynchronously.
    *
-   * Pushes human steering messages from hook providers into the agent's
-   * steering queue before launching, then starts the prompt loop.
+   * Launches a live steering-message feed that continuously polls the CommBus
+   * for human steering messages and injects them into the running agent's
+   * steering queue. The feed runs concurrently with the prompt loop so that
+   * steering messages arriving after agent start can reach the agent without
+   * waiting for the current turn to complete (SatoPi P2-14).
    */
   async #startAgent(
     agent: Agent,
     spec: AgentSpec,
     hookProviders: LaunchContext["hookProviders"],
-    _signal?: AbortSignal,
+    signal?: AbortSignal,
   ): Promise<void> {
-    // Pre-load steering messages from CommBus
+    // Pre-load initial steering messages from CommBus (first batch)
     try {
       if (hookProviders.getSteeringMessages) {
         const steeringMessages = await hookProviders.getSteeringMessages();
@@ -480,6 +492,29 @@ export class AgentLauncher {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+
+    // Live steering feed: poll CommBus for new steering messages
+    // and inject them into the agent's steering queue so human steering
+    // that arrives after agent start can reach the running agent.
+    let feedActive = true;
+    const steerFeed = (async () => {
+      if (!hookProviders.getSteeringMessages) return;
+      while (feedActive && !signal?.aborted) {
+        try {
+          const msgs = await hookProviders.getSteeringMessages();
+          for (const msg of msgs) {
+            agent.steer(msg);
+          }
+        } catch (err) {
+          logger.warn("[AgentLauncher] Steering feed poll failed", {
+            agentId: spec.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        // Yield between polls so the CommBus has time to accumulate messages
+        await new Promise<void>(r => setTimeout(r, 1_000));
+      }
+    })();
 
     // Pre-load follow-up messages
     try {
@@ -504,6 +539,8 @@ export class AgentLauncher {
         agentId: spec.id,
         error: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      feedActive = false;
     }
   }
 }

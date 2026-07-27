@@ -17,7 +17,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 // ============================================================================
 
 /**
- * The resolved role — concrete prompt, tools, and model-role hint
+ * The resolved role — concrete prompt, tools, and guidelines
  * ready to feed into the AgentLauncher.
  */
 export interface ResolvedRole {
@@ -29,15 +29,6 @@ export interface ResolvedRole {
 
   /** Tool names this role has access to. */
   tools: string[];
-
-  /**
-   * Model-role hint for model resolution:
-   *
-   * - "smol": cheap/fast model (e.g. haiku, flash)
-   * - "normal": balanced model (e.g. sonnet, gemini-pro)
-   * - "large": powerful model (e.g. opus, gemini-ultra)
-   */
-  modelRole: "smol" | "normal" | "large";
 }
 
 // ============================================================================
@@ -74,7 +65,6 @@ export class RoleProvider {
         systemPrompt: spec.inline.systemPrompt,
         guidelines: [],
         tools: spec.inline.tools,
-        modelRole: "normal",
       };
     }
 
@@ -90,7 +80,6 @@ export class RoleProvider {
       systemPrompt: `You are a ${spec.role} agent in the SatoPi swarm system. Complete your assigned task thoroughly and report your results.`,
       guidelines: [],
       tools: ["read", "grep", "glob"],
-      modelRole: "normal",
     };
   }
 
@@ -115,7 +104,6 @@ export class RoleProvider {
         systemPrompt: role.prompts.system,
         guidelines: role.prompts.guidelines ?? [],
         tools: role.tools ?? [],
-        modelRole: "normal",
       };
     } catch (err) {
       logger.warn("[RoleProvider] Error resolving role from library", {

@@ -8,7 +8,7 @@
  *
  * The pipeline's `toTransformContext()` method produces an
  * `AgentLoopConfig["transformContext"]` implementation — this is the key
- * integration point with oh-my-pi's agent loop.
+ * integration point with SatoPi's agent loop.
  */
 
 import type { AgentMessage, AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
@@ -215,7 +215,7 @@ export class ContextPipeline {
    * The returned function prepends `assembled.injectedMessages` to the message array,
    * so external context (experience, stigmergy, etc.) is visible to the agent.
    *
-   * This is the key integration point with oh-my-pi's agent loop.
+   * This is the key integration point with SatoPi's agent loop.
    */
   toTransformContext(
     assembled: AssembledContext,

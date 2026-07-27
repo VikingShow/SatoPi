@@ -1,5 +1,5 @@
 /**
- * Swarm agent execution via oh-my-pi's subagent infrastructure.
+ * Swarm agent execution via SatoPi's subagent infrastructure.
  *
  * Wraps `runSubprocess` to spawn individual swarm agents with full tool access.
  * Each agent runs in the swarm workspace with its task instructions as the user prompt.
@@ -95,11 +95,11 @@ export interface SwarmExecutorOptions {
 }
 
 // ============================================================================
-// Default executor — spawns a local oh-my-pi subprocess
+// Default executor — spawns a local SatoPi subprocess
 // ============================================================================
 
 /**
- * Default agent executor: spawns a local oh-my-pi subprocess.
+ * Default agent executor: spawns a local SatoPi subprocess.
  *
  * The agent receives:
  * - System prompt: built from role + extra_context
@@ -117,7 +117,7 @@ export class SubprocessAgentExecutor implements AgentExecutor {
 const defaultExecutor = new SubprocessAgentExecutor();
 
 /**
- * Execute a single swarm agent as an oh-my-pi subagent.
+ * Execute a single swarm agent as a SatoPi subagent.
  *
  * Used by both SubprocessAgentExecutor and PipelineController.
  */

@@ -10,7 +10,7 @@
  *
  * All phases (script, stage, curtain) use this single spec type.
  * The AgentRuntime resolves the role, assembles context, builds
- * AgentLoopConfig, and launches the oh-my-pi Agent instance.
+ * AgentLoopConfig, and launches the SatoPi Agent instance.
  */
 export interface AgentSpec {
   /** Unique agent identifier (e.g. "planner", "agent-1", "reporter"). */

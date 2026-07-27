@@ -91,7 +91,6 @@ export function jaccardSimilarity(a: string, b: string): number {
   const intersection = new Set([...setA].filter(t => setB.has(t)));
   const union = new Set([...setA, ...setB]);
 
-  if (union.size === 0) return 0;
   return intersection.size / union.size;
 }
 

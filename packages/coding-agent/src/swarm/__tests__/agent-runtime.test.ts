@@ -151,7 +151,6 @@ describe("RoleProvider", () => {
       expect(result.systemPrompt).toBe("You are a planner agent.");
       expect(result.guidelines).toEqual(["Plan carefully", "Ask questions"]);
       expect(result.tools).toEqual(["read", "write", "grep"]);
-      expect(result.modelRole).toBe("normal");
     });
 
     test("falls back when library role is not found", async () => {
@@ -161,7 +160,6 @@ describe("RoleProvider", () => {
       const result = await provider.resolve(makeSpec({ role: "nonexistent" }));
       expect(result.systemPrompt).toContain("nonexistent agent");
       expect(result.tools).toEqual(["read", "grep", "glob"]);
-      expect(result.modelRole).toBe("normal");
     });
 
     test("falls back when library role is not approved", async () => {
@@ -197,7 +195,6 @@ describe("RoleProvider", () => {
         makeSpec({ roleSource: "profile", role: "custom-role" }),
       );
       expect(result.systemPrompt).toContain("custom-role agent");
-      expect(result.modelRole).toBe("normal");
     });
 
     test("returns default fallback when inline spec has no inline definition", async () => {
@@ -344,7 +341,6 @@ describe("AgentLauncher", () => {
       systemPrompt: "You are a test agent.",
       guidelines: [],
       tools: ["read"],
-      modelRole: "normal",
     };
     return {
       spec: makeSpec(),

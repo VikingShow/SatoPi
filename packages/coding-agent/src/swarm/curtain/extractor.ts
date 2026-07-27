@@ -127,30 +127,3 @@ export function extractLessons(result: StageResult, agentCount: number): { lesso
 
 	return { lessons, stats };
 }
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function parseFindingTags(finding: string): string[] {
-	const tags: string[] = [];
-	const lower = finding.toLowerCase();
-
-	if (lower.includes("security") || lower.includes("vulnerab") || lower.includes("exploit")) {
-		tags.push("security");
-	}
-	if (lower.includes("quality") || lower.includes("poor") || lower.includes("bug")) {
-		tags.push("quality");
-	}
-	if (lower.includes("alignment") || lower.includes("misalign") || lower.includes("off-track")) {
-		tags.push("alignment");
-	}
-	if (lower.includes("complete") || lower.includes("incomplete") || lower.includes("missing")) {
-		tags.push("completeness");
-	}
-	if (lower.includes("format") || lower.includes("style") || lower.includes("convention")) {
-		tags.push("code-style");
-	}
-
-	return tags;
-}

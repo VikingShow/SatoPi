@@ -1,5 +1,5 @@
 /**
- * agent-handle.ts — Thin wrapper around oh-my-pi's Agent + AgentSession.
+ * agent-handle.ts — Thin wrapper around SatoPi's Agent + AgentSession.
  *
  * Provides a simplified API for the swarm system: wait(), send(), abort(),
  * and outputStream(). The AgentHandle is the only reference the swarm
@@ -18,7 +18,7 @@ import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 /**
  * A lightweight handle for tracking and controlling a spawned agent.
  *
- * Wraps oh-my-pi's Agent instance without replacing it. The swarm pipeline
+ * Wraps SatoPi's Agent instance without replacing it. The swarm pipeline
  * uses AgentHandle for status queries, result collection, messaging, and
  * streaming — no direct Agent manipulation needed.
  */
@@ -60,12 +60,12 @@ export class AgentHandle {
     return this.#status;
   }
 
-  /** The underlying oh-my-pi Agent instance (for advanced use). */
+  /** The underlying SatoPi Agent instance (for advanced use). */
   get agent(): Agent {
     return this.#agent;
   }
 
-  /** The underlying oh-my-pi AgentSession (for advanced use). May be null when not yet wired. */
+  /** The underlying SatoPi AgentSession (for advanced use). May be null when not yet wired. */
   get session(): unknown | null {
     return this.#session;
   }
@@ -135,7 +135,7 @@ export class AgentHandle {
   /**
    * Send a message to a running agent (steering interrupt).
    *
-   * Uses oh-my-pi's `agent.steer()` to inject a message mid-turn.
+   * Uses SatoPi's `agent.steer()` to inject a message mid-turn.
    * The agent will process it at the next injection boundary.
    */
   async send(message: string): Promise<void> {
@@ -162,7 +162,7 @@ export class AgentHandle {
   /**
    * Abort the agent immediately.
    *
-   * Calls oh-my-pi's `agent.abort()` and marks the handle as "aborted".
+   * Calls SatoPi's `agent.abort()` and marks the handle as "aborted".
    */
   abort(reason?: string): void {
     if (this.#status !== "running") return;
@@ -187,7 +187,7 @@ export class AgentHandle {
   /**
    * Get an async iterable of output strings for real-time UI streaming.
    *
-   * Subscribes to oh-my-pi Agent events and yields message deltas
+   * Subscribes to SatoPi Agent events and yields message deltas
    * as they arrive. The iterator ends when the agent finishes.
    */
   async *outputStream(): AsyncIterable<string> {
@@ -272,7 +272,7 @@ export class AgentHandle {
   // -----------------------------------------------------------------------
 
   /**
-   * Wire oh-my-pi agent events into handle completion tracking.
+   * Wire SatoPi agent events into handle completion tracking.
    *
    * Listens for agent_end events to resolve the completion promise
    * with the assembled SingleResult.
