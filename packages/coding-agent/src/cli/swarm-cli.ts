@@ -222,20 +222,26 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const yamlPath = path.resolve(cmd.target);
 	const cwd = getProjectDir();
 
-	// Pre-parse YAML to get the swarm name for SessionRegistry.
+	// Determine engine before parsing — graph engine skips swarm YAML parsing
+	const engine = (cmd.engine ?? "legacy") as "graph" | "legacy";
+
 	let def: SwarmDefinition;
-	try {
-		def = await parseSwarmYamlFile(yamlPath);
-	} catch (err) {
-		process.stderr.write(`Failed to parse ${yamlPath}: ${String(err)}\n`);
-		process.exitCode = 1;
-		return;
+	if (engine === "graph") {
+		// GraphRunner handles its own YAML parsing (graph.yaml format)
+		def = { name: path.basename(yamlPath, path.extname(yamlPath)), description: "", version: 1, mode: "loop", targetCount: 0, agents: new Map(), loopConfig: null };
+	} else {
+		try {
+			def = await parseSwarmYamlFile(yamlPath);
+		} catch (err) {
+			process.stderr.write(`Failed to parse ${yamlPath}: ${String(err)}\n`);
+			process.exitCode = 1;
+			return;
+		}
 	}
 
 	const swarmName = def.name;
-	const authStorage = await discoverAuthStorage();
+		
 	try {
-		const engine = (cmd.engine ?? "legacy") as "graph" | "legacy";
 		const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
 
 		const registry = new SessionRegistry(shared, factory, 1);
@@ -263,8 +269,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
 			}
 		}
-	} finally {
-		authStorage.close();
+	} catch {
+		// authStorage cleanup handled by createSwarmServices internally
 	}
 }
 
