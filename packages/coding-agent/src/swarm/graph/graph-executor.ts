@@ -12,18 +12,11 @@
  */
 
 
-// ============================================================================
-// Stub types — reconciled with graph/schema.ts by Phase 1
-// ============================================================================
+import type { NodeResult } from "./schema";
 
-/**
- * Result of executing a single graph node.
- */
-export interface NodeResult {
-	nodeId: string;
-	success: boolean;
-	error?: string;
-}
+// ============================================================================
+// Scheduling types
+// ============================================================================
 
 /**
  * Per-node metadata needed by schedulers.

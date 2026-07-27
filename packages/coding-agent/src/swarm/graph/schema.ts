@@ -200,6 +200,145 @@ export interface GraphDefinition {
 }
 
 // ============================================================================
+// Runtime types — used by behaviors and executors at execution time
+// ============================================================================
+
+/**
+ * Runtime output produced by an executed node.
+ * Distinct from {@link NodeOutput} which is a compile-time artifact specification.
+ */
+export interface NodeExecutionOutput {
+	/** The node that produced this output. */
+	nodeId: string;
+	/** File paths produced as artifacts. */
+	artifacts: string[];
+	/** Human-readable summary of what the node did. */
+	summary: string;
+	/** Raw execution result for downstream consumption. */
+	result?: unknown;
+}
+
+/**
+ * Minimal node definition consumed by NodeBehavior at runtime.
+ * Subset of {@link GraphNode} covering everything a behavior needs.
+ */
+export interface NodeDefinition {
+	/** Unique node identifier within the graph. */
+	id: string;
+	/** Human-readable label for UI rendering. */
+	label: string;
+	/** Natural-language description of what this node does. */
+	description: string;
+	/** Node type — drives which behavior is selected. */
+	type?: NodeType;
+	/** Role name resolved via RoleProvider. */
+	role: string;
+	/** Tools available to the agent spawned by this node. */
+	tools: string[];
+	/** Node IDs this node depends on (upstream). */
+	dependsOn: string[];
+	/** Gate to run after execution. */
+	gate?: GateSpec;
+	/** Timeout string (e.g. "30m", "2h"). */
+	timeout?: string;
+	/** Explicit AgentProfile binding. */
+	profileId?: string;
+}
+
+/**
+ * Result of a single node execution by a behavior.
+ */
+export interface NodeResult {
+	/** Node that produced this result. */
+	nodeId: string;
+	/** Whether the agent completed without errors. */
+	success: boolean;
+	/** Agent output text. */
+	output?: string;
+	/** File paths produced by this node. */
+	artifacts?: string[];
+	/** Error message if execution failed. */
+	error?: string;
+	/** Per-agent results for downstream consumption. */
+	agentResults?: Array<{ agentId: string; output: string; error?: string }>;
+}
+
+/**
+ * Outcome of gate validation after node execution.
+ */
+export interface GateResult {
+	/** Whether all gates passed. */
+	passed: boolean;
+	/** Descriptions of failed gates. */
+	failures: string[];
+	/** Whether the human must review before proceeding. */
+	humanReviewRequired: boolean;
+	/** Recommended retry strategy based on failure type. */
+	retryStrategy?: "immediate" | "fixup" | "human";
+}
+
+import type { ModelRegistry } from "../../config/model-registry";
+import type { Settings } from "../../config/settings";
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
+
+/**
+ * Context assembled by GraphExecutor and injected into every NodeBehavior method.
+ */
+export interface NodeContext {
+	/** The node definition being executed. */
+	node: NodeDefinition;
+	/** Absolute path to the project workspace. */
+	workspace: string;
+	/** Model registry for resolving model references. */
+	modelRegistry: ModelRegistry;
+	/** Application settings (provider keys, concurrency, etc.). */
+	settings: Settings;
+	/** Outputs from nodes listed in node.dependsOn (keyed by node ID). */
+	upstreamOutputs: Record<string, NodeExecutionOutput>;
+	/** Concatenated lessons / hints from prior runs (ExperienceStore). */
+	experience: string;
+	/** AbortSignal for cooperative cancellation. */
+	signal: AbortSignal;
+	/** Agent runtime for spawning sub-agents. */
+	runtime: AgentRuntime;
+}
+
+/**
+ * Pluggable behavior contract for a single Theatre Graph node.
+ *
+ * ADR-3: Each node type selects a behavior that follows the lifecycle:
+ * prepare → execute → validate → cleanup.
+ */
+export interface NodeBehavior {
+	/** Human-readable name for diagnostics and logging. */
+	readonly name: string;
+
+	/**
+	 * Prepare: assemble agent specs from the node definition.
+	 * Called once before execute().
+	 */
+	prepare(ctx: NodeContext): Promise<AgentSpec[]>;
+
+	/**
+	 * Execute: spawn the prepared agents and collect results.
+	 */
+	execute(ctx: NodeContext, prepared: AgentSpec[]): Promise<NodeResult>;
+
+	/**
+	 * Validate: run gate checks against the execution result.
+	 * Called after execute() regardless of success/failure.
+	 */
+	validate(result: NodeResult, gate?: GateSpec): Promise<GateResult>;
+
+	/**
+	 * Cleanup: abort any still-running agents and release resources.
+	 * Called after validate(), even if execute() threw. Must be idempotent.
+	 */
+	cleanup(ctx: NodeContext): Promise<void>;
+}
+
+// ============================================================================
 // Raw YAML shapes (snake_case input)
 // ============================================================================
 

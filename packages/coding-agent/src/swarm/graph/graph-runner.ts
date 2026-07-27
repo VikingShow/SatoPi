@@ -29,8 +29,8 @@ import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import { buildExecutionWaves } from "../core/dag";
-import { loadGraphDefinition, type GraphDefinition } from "./schema";
-import { WaveScheduler, type NodeResult, type SchedulingStrategy } from "./graph-executor";
+import { loadGraphDefinition, type GraphDefinition, type NodeResult } from "./schema";
+import { WaveScheduler, type SchedulingStrategy } from "./graph-executor";
 import { CustomNodeBehavior } from "./node-behavior";
 import { GateController } from "./gate-controller";
 

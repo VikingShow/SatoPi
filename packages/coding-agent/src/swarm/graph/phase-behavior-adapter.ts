@@ -28,11 +28,11 @@ import type {
 import type { GateSpec, NodeType } from "./schema";
 
 // ============================================================================
-// Stub types (will migrate to graph/schema.ts or node-behavior.ts)
+// Adapter-specific types (bridge PhaseBehavior ↔ NodeBehavior)
 // ============================================================================
 
-/** Context passed to each NodeBehavior method by the graph engine. */
-export interface NodeContext {
+/** Context passed to the adapter by the graph engine. */
+export interface AdapterNodeContext {
 	/** Stable identifier for this node in the graph. */
 	nodeId: string;
 	/** PhaseContext bridging to the existing swarm infrastructure. */
@@ -47,7 +47,7 @@ export interface PreparedNode {
 }
 
 /** Result returned by execute(). */
-export interface NodeResult {
+export interface AdapterNodeResult {
 	nodeId: string;
 	/** Agent handles spawned during execute(). */
 	agents: AgentHandle[];
@@ -58,7 +58,7 @@ export interface NodeResult {
 }
 
 /** Result returned by validate(). */
-export interface GateResult {
+export interface AdapterGateResult {
 	/** Whether the gate condition was satisfied. */
 	passed: boolean;
 	/** Human-readable status or transition message. */
@@ -66,26 +66,25 @@ export interface GateResult {
 }
 
 /**
- * NodeBehavior — contract every graph node must implement.
+ * AdapterNodeBehavior — contract for phase-behavior adapters.
  *
  * Lifecycle: prepare → execute → validate → cleanup.
- * Defined here as a stub; will migrate to graph/node-behavior.ts.
  */
-export interface NodeBehavior {
+export interface AdapterNodeBehavior {
 	/** The theatre phase this node corresponds to. */
 	readonly nodeType: NodeType;
 
 	/** Validate inputs and allocate resources before execution. */
-	prepare(ctx: NodeContext): Promise<PreparedNode>;
+	prepare(ctx: AdapterNodeContext): Promise<PreparedNode>;
 
 	/** Run the node: spawn agents, poll events, drive to completion. */
-	execute(ctx: NodeContext, prepared: PreparedNode): Promise<NodeResult>;
+	execute(ctx: AdapterNodeContext, prepared: PreparedNode): Promise<AdapterNodeResult>;
 
 	/** Check whether the gate condition is satisfied. */
-	validate(result: NodeResult, gate: GateSpec): Promise<GateResult>;
+	validate(result: AdapterNodeResult, gate: GateSpec): Promise<AdapterGateResult>;
 
 	/** Release resources after the node completes or is aborted. */
-	cleanup(ctx: NodeContext): Promise<void>;
+	cleanup(ctx: AdapterNodeContext): Promise<void>;
 }
 
 // ============================================================================
@@ -109,7 +108,7 @@ const CHAPTER_TO_NODE_TYPE: Record<string, NodeType> = {
  *   const gate = await scriptNode.validate(result, { type: "script" });
  *   await scriptNode.cleanup(ctx);
  */
-export class PhaseBehaviorNodeAdapter implements NodeBehavior {
+export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	readonly nodeType: NodeType;
 
 	#behavior: PhaseBehavior;
@@ -133,7 +132,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	 * No-op — PhaseBehavior has no prepare step.
 	 * Returns a minimal PreparedNode carrying only the nodeId.
 	 */
-	async prepare(ctx: NodeContext): Promise<PreparedNode> {
+	async prepare(ctx: AdapterNodeContext): Promise<PreparedNode> {
 		return { nodeId: ctx.nodeId };
 	}
 
@@ -145,7 +144,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	 * Calls PhaseBehavior.enter() to spawn agents and create channels.
 	 * Stores the PhaseContext for later use by validate() and event delegates.
 	 */
-	async execute(ctx: NodeContext, _prepared: PreparedNode): Promise<NodeResult> {
+	async execute(ctx: AdapterNodeContext, _prepared: PreparedNode): Promise<AdapterNodeResult> {
 		this.#phaseContext = ctx.phaseContext;
 
 		const result: PhaseEnterResult = await this.#behavior.enter(ctx.phaseContext);
@@ -177,7 +176,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	 * non-null PhaseCompletion. Returns { passed: false } while the phase
 	 * is still running (checkCompletion returns null).
 	 */
-	async validate(result: NodeResult, gate: GateSpec): Promise<GateResult> {
+	async validate(result: AdapterNodeResult, gate: GateSpec): Promise<AdapterGateResult> {
 		const phaseCtx = this.#phaseContext;
 		if (!phaseCtx) {
 			return { passed: false, message: "No phase context available for validation" };
@@ -204,7 +203,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	 * Calls PhaseBehavior.exit() to release agent handles, channels, and
 	 * internal state. Resets all adapter state.
 	 */
-	async cleanup(_ctx: NodeContext): Promise<void> {
+	async cleanup(_ctx: AdapterNodeContext): Promise<void> {
 		await this.#behavior.exit();
 		this.#phaseContext = undefined;
 		this.#agents = [];
