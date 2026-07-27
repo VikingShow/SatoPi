@@ -25,7 +25,8 @@ import { isProviderEnabled } from "../capability";
 import { findAllNearestProjectConfigDirs, getConfigDirs } from "../config";
 import { listClaudePluginRoots } from "../discovery/helpers";
 import { listOmpExtensionRoots } from "../discovery/omp-extension-roots";
-import { loadBundledAgents, parseAgent } from "./agents";
+import { loadBundledAgents, parseAgent, roleToAgentDefinition } from "./agents";
+import { RoleAssetManager } from "../agent/role-asset";
 import type { AgentDefinition, AgentSource } from "./types";
 
 const TASK_AGENT_CONFIG_SOURCE = ".omp";
@@ -124,7 +125,29 @@ export async function discoverAgents(cwd: string, home: string = os.homedir()): 
 			if (seen.has(agent.name)) return false;
 			seen.add(agent.name);
 			return true;
-		});
+	});
+
+	// Scan roles/*.role.yaml for RoleAsset→AgentDefinition conversions.
+	// Role-based agents do NOT override .md agents with the same name.
+	const roleManager = new RoleAssetManager(cwd);
+	const roleAgents: AgentDefinition[] = [];
+	try {
+		const roleSummaries = await roleManager.list();
+		for (const summary of roleSummaries) {
+			if (seen.has(summary.id)) continue;
+			const role = await roleManager.get(summary.id);
+			if (!role) continue;
+			try {
+				const agent = roleToAgentDefinition(role);
+				seen.add(agent.name);
+				roleAgents.push(agent);
+			} catch (err) {
+				logger.warn("Failed to convert role to agent definition", { roleId: summary.id, error: err });
+			}
+		}
+	} catch (err) {
+		logger.warn("Failed to scan roles directory", { error: err });
+	}
 
 	const bundledAgents = loadBundledAgents().filter(agent => {
 		if (seen.has(agent.name)) return false;
@@ -134,7 +157,7 @@ export async function discoverAgents(cwd: string, home: string = os.homedir()): 
 
 	const projectAgentsDir = projectDirs.length > 0 ? projectDirs[0].path : null;
 
-	return { agents: [...loadedAgents, ...bundledAgents], projectAgentsDir };
+	return { agents: [...loadedAgents, ...roleAgents, ...bundledAgents], projectAgentsDir };
 }
 
 /**

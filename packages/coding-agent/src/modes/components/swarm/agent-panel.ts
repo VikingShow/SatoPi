@@ -8,6 +8,7 @@
 import type { AgentState, SwarmState } from "../../../swarm/core/state";
 import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { sato } from "./theme";
+import { ProfileRegistry } from "../../../agent/agent-profile";
 
 // ============================================================================
 // Status glyphs
@@ -123,6 +124,15 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 	const roleLabel = agent.role ?? agent.modelName ?? "";
 	const roleBadge = roleLabel ? sato.dim(`[${roleLabel}]`) : "";
 
+	// Profile badge (persistent identity)
+	let profileBadge = "";
+	if (agent.profileId) {
+		const profile = ProfileRegistry.global().get(agent.profileId);
+		if (profile) {
+			profileBadge = sato.dim(`score:${profile.credit.score}`);
+		}
+	}
+
 	// Status text
 	let statusText: string;
 	if (agent.status === "failed") {
@@ -147,6 +157,7 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 	// Assemble
 	const segments: string[] = [glyphStr, name];
 	if (roleBadge) segments.push(roleBadge);
+	if (profileBadge) segments.push(profileBadge);
 	segments.push(statusText);
 	if (durationStr) segments.push(durationStr);
 

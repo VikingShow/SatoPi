@@ -19,7 +19,7 @@ import * as path from "node:path";
  * durable across sessions, it belongs in the session directory, not at
  * the workspace root.
  *
- * Path: .swarm_{name}/.stp/plan.md
+ * Path: .stp/sessions/swarm-{name}/.stp/plan.md
  */
 export function getSessionPlanPath(swarmDir: string): string {
 	return path.join(swarmDir, ".stp", "plan.md");

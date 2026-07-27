@@ -2,7 +2,7 @@
  * In-memory state tracker for swarm pipeline execution.
  *
  * Persists state via SwarmSessionManager → session.jsonl (OH-MY-PI SessionManager).
- * Per-agent logs are still written to `.swarm_<name>/logs/` for forensic debugging.
+ * Per-agent logs are still written to `.stp/sessions/swarm-<name>/logs/` for forensic debugging.
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -115,7 +115,7 @@ export class StateTracker {
 	#sessionManager: SwarmSessionManager | null = null;
 
 	constructor(workspaceDir: string, name: string) {
-		this.#swarmDir = path.join(workspaceDir, `.swarm_${name}`);
+		this.#swarmDir = path.join(workspaceDir, ".stp", "sessions", `swarm-${name}`);
 		this.#state = {
 			name,
 			status: "idle",

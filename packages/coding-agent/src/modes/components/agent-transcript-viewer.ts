@@ -31,6 +31,7 @@ import type { AgentHubRemote } from "./agent-hub";
 import { ChatTranscriptBuilder } from "./chat-transcript-builder";
 import { DynamicBorder } from "./dynamic-border";
 import { formatContextUsage } from "./status-line/context-thresholds";
+import { ProfileRegistry } from "../../agent/agent-profile";
 
 export interface AgentTranscriptViewerDeps {
 	agentId: string;
@@ -559,7 +560,7 @@ export class AgentTranscriptViewer implements Component {
 		const contentWidth = Math.max(1, width - 1);
 		const ref = this.deps.registry.get(this.deps.agentId);
 
-		const headerLines = this.#headerLines(ref?.status, ref?.kind, ref?.parentId);
+		const headerLines = this.#headerLines(ref?.status, ref?.kind, ref?.parentId, ref?.profileId, ref?.role);
 		const footerLines = this.#footerLines();
 		const noticeLine = this.#notice
 			? ` ${theme.fg("error", sanitizeErrorLine(this.#notice, innerWidth))}`
@@ -591,10 +592,26 @@ export class AgentTranscriptViewer implements Component {
 		return lines;
 	}
 
-	#headerLines(status: AgentStatus | undefined, kind: string | undefined, parentId: string | undefined): string[] {
+	#headerLines(
+		status: AgentStatus | undefined,
+		kind: string | undefined,
+		parentId: string | undefined,
+		profileId: string | undefined,
+		role: string | undefined,
+	): string[] {
 		const lines = [theme.fg("accent", `Agent Hub ${theme.sep.dot} ${this.deps.agentId}`)];
 		if (status && kind) {
-			const kindTag = theme.fg("dim", ` ${parentId ? `${kind} ${theme.sep.dot} of ${parentId}` : kind}`);
+			let kindLabel = kind;
+			if (kind === "persistent" && (profileId || role)) {
+				const parts = ["persistent"];
+				if (role) parts.push(role);
+				if (profileId) {
+					const profile = ProfileRegistry.global().get(profileId);
+					if (profile) parts.push(`score:${profile.credit.score}`);
+				}
+				kindLabel = parts.join(` ${theme.sep.dot} `);
+			}
+			const kindTag = theme.fg("dim", ` ${parentId ? `${kindLabel} ${theme.sep.dot} of ${parentId}` : kindLabel}`);
 			const modelLabel = this.#model ? theme.fg("muted", `${theme.sep.dot}${this.#model}`) : "";
 			lines.push(`${theme.bold(this.deps.agentId)} ${statusBadge(status)}${kindTag}${modelLabel}`);
 		}

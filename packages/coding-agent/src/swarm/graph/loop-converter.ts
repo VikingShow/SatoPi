@@ -1,7 +1,7 @@
 /**
  * Loop YAML → Graph Definition converter.
  *
- * Converts legacy .stp/loop.yaml files to the Theatre Graph format,
+ * Converts legacy swarm.yaml files to the Theatre Graph format,
  * mapping swarm agents to graph nodes and loop config to node metadata.
  */
 

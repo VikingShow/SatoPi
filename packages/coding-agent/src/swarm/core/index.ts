@@ -23,6 +23,7 @@ export {
 	type OffloadConfig,
 	parseSwarmYaml,
 	resolveLoopConfig,
+	resolveSwarmYamlPath,
 	type StigmergyConfig,
 	type SwarmAgent,
 	type SwarmDefinition,

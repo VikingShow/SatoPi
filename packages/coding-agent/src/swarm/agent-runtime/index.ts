@@ -338,7 +338,7 @@ export class AgentRuntime {
 		const baseContext = {
 			taskDescription: spec.task,
 			workspace: process.cwd(),
-			swarmDir: ".swarm-workspace",
+			swarmDir: ".stp",
 			turnNumber: 0,
 			phase: phaseInfo,
 			accumulated: undefined as unknown as Partial<AssembledContext>,

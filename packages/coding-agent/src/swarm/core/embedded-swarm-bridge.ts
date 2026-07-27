@@ -46,7 +46,7 @@ import { DebateRoundtable } from "../script/debate-roundtable";
 export interface EmbeddedSwarmConfig {
 	/** Project workspace directory. */
 	workspace: string;
-	/** Swarm work directory (auto-created as .swarm_{id}/). */
+	/** Swarm work directory (auto-created as .stp/sessions/swarm-{id}/). */
 	swarmDir: string;
 	/** Model registry for API key resolution. */
 	modelRegistry: ModelRegistry;

@@ -28,7 +28,7 @@ import { getPlanArchiveDir, getSessionPlanPath } from "./plan-paths";
 // ============================================================================
 
 export interface ScriptConfig {
-	/** Session swarm directory (e.g. workspace/.swarm_SatoPi). */
+	/** Session swarm directory (e.g. workspace/.stp/sessions/swarm-SatoPi). */
 	swarmDir: string;
 	/** Workspace root (for experience store, plan archives). */
 	workspace: string;
@@ -156,7 +156,7 @@ export async function generatePlanningPrompt(config: ScriptConfig, experienceSto
 /**
  * Check whether plan.md exists in the session directory.
  *
- * @param swarmDir — per-session swarm directory (e.g. workspace/.swarm_SatoPi)
+ * @param swarmDir — per-session swarm directory (e.g. workspace/.stp/sessions/swarm-SatoPi)
  */
 export async function planExists(swarmDir: string): Promise<boolean> {
 	return Bun.file(getSessionPlanPath(swarmDir)).exists();

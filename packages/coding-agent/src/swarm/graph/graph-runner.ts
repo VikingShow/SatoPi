@@ -75,7 +75,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 	async init(): Promise<void> {
 		const { workspace, modelRegistry, settings, profileRegistry } = this.#config;
 		this.#graphName = path.basename(this.#config.graphPath, ".graph.yaml");
-		const swarmDir = path.join(workspace, `.swarm_${this.#graphName}`);
+		const swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
 
 		this.#graph = await loadGraphDefinition(this.#config.graphPath);
 

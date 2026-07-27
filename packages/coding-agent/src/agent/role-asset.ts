@@ -1,7 +1,7 @@
 /**
  * Role Asset Library — YAML-based role definitions for SatoPi workers.
  *
- * Each role is a standalone .role.yaml file at `.swarm-workspace/roles/{role-id}.role.yaml`.
+ * Each role is a standalone .role.yaml file at `.stp/roles/{role-id}.role.yaml`.
  * Roles define system prompts, tool permissions, metadata, and approval lifecycle.
  *
  * Lifecycle: draft → proposed → approved → deprecated
@@ -42,6 +42,14 @@ export interface RoleAsset {
   mcp_servers?: string[];
   /** Per-role model override (e.g. "deepseek-v4-pro" or "claude-sonnet-4-20250514"). */
   model?: string;
+  /** Thinking effort level (maps to Effort value or "auto"). */
+  thinkingLevel?: string;
+  /** Structured output schema for agent yield. */
+  output?: Record<string, unknown>;
+  /** Task nesting policy: "*" for unrestricted, or list of agent names. */
+  spawns?: string;
+  /** Whether this agent blocks the parent until it completes. */
+  blocking?: boolean;
 }
 
 export interface RoleAssetSummary {
@@ -74,6 +82,10 @@ export interface RoleUpdateInput {
   skills?: string[];
   mcp_servers?: string[];
   model?: string;
+  thinkingLevel?: string;
+  output?: Record<string, unknown>;
+  spawns?: string;
+  blocking?: boolean;
 }
 
 export interface RoleCreateInput {
@@ -90,6 +102,10 @@ export interface RoleCreateInput {
   skills?: string[];
   mcp_servers?: string[];
   model?: string;
+  thinkingLevel?: string;
+  output?: Record<string, unknown>;
+  spawns?: string;
+  blocking?: boolean;
   veto?: boolean;
   weight?: number;
 }
@@ -98,7 +114,7 @@ export interface RoleCreateInput {
 // Constants
 // ============================================================================
 
-const DEFAULT_ROLES_DIR = "roles";
+const DEFAULT_ROLES_DIR = ".stp/roles";
 
 // ============================================================================
 // RoleAssetManager
@@ -106,14 +122,17 @@ const DEFAULT_ROLES_DIR = "roles";
 
 export class RoleAssetManager {
   readonly #rolesDir: string;
+  readonly #legacyRolesDir: string;
 
   constructor(workspaceDir: string) {
     this.#rolesDir = path.join(workspaceDir, DEFAULT_ROLES_DIR);
+    this.#legacyRolesDir = path.join(workspaceDir, "roles");
   }
 
   /** Ensure the roles directory exists. */
   async init(): Promise<void> {
     await fs.mkdir(this.#rolesDir, { recursive: true });
+    await fs.mkdir(this.#legacyRolesDir, { recursive: true });
   }
 
   get rolesDir(): string {
@@ -126,12 +145,21 @@ export class RoleAssetManager {
 
   /** Get a single role by ID. Returns null if not found. */
   async get(id: string): Promise<RoleAsset | null> {
+    // Try primary location first
     const filePath = this.#rolePath(id);
     try {
       const content = await fs.readFile(filePath, "utf-8");
       return Bun.YAML.parse(content) as RoleAsset;
     } catch {
-      return null;
+      // Fall back to legacy roles/ directory
+      const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const legacyPath = path.join(this.#legacyRolesDir, `${safe}.role.yaml`);
+      try {
+        const content = await fs.readFile(legacyPath, "utf-8");
+        return Bun.YAML.parse(content) as RoleAsset;
+      } catch {
+        return null;
+      }
     }
   }
 
@@ -139,41 +167,40 @@ export class RoleAssetManager {
   async list(statusFilter?: RoleStatus): Promise<RoleAssetSummary[]> {
     await this.init();
 
-    let entries: string[];
-    try {
-      entries = await fs.readdir(this.#rolesDir);
-    } catch {
-      return [];
-    }
-
+    const seen = new Set<string>();
     const roles: RoleAssetSummary[] = [];
 
-    for (const name of entries) {
-      if (!name.endsWith(".role.yaml")) continue;
+    const collectFrom = (dir: string) => {
+      return fs.readdir(dir).then(entries => {
+        for (const name of entries) {
+          if (!name.endsWith(".role.yaml")) continue;
+          try {
+            return fs.readFile(path.join(dir, name), "utf-8").then(content => {
+              const role = Bun.YAML.parse(content) as RoleAsset;
+              if (seen.has(role.id)) return;
+              if (statusFilter && role.status !== statusFilter) return;
+              seen.add(role.id);
+              roles.push({
+                id: role.id,
+                name: role.name,
+                description: role.description,
+                status: role.status,
+                version: role.version,
+                tags: role.tags,
+                usage_count: role.usage_count,
+                success_rate: role.success_rate,
+                updated_at: role.updated_at,
+              });
+            });
+          } catch {
+            // Skip invalid files
+          }
+        }
+      }).catch(() => { /* directory may not exist */ });
+    };
 
-      try {
-        const content = await fs.readFile(
-          path.join(this.#rolesDir, name),
-          "utf-8",
-        );
-        const role = Bun.YAML.parse(content) as RoleAsset;
-        if (statusFilter && role.status !== statusFilter) continue;
-
-        roles.push({
-          id: role.id,
-          name: role.name,
-          description: role.description,
-          status: role.status,
-          version: role.version,
-          tags: role.tags,
-          usage_count: role.usage_count,
-          success_rate: role.success_rate,
-          updated_at: role.updated_at,
-        });
-      } catch {
-        // Skip invalid files
-      }
-    }
+    await collectFrom(this.#rolesDir);
+    await collectFrom(this.#legacyRolesDir);
 
     return roles;
   }
@@ -419,6 +446,19 @@ function serializeRoleYaml(role: RoleAsset): string {
   }
   if (role.model) {
     lines.push(`model: "${role.model}"`);
+  }
+  if (role.thinkingLevel) {
+    lines.push(`thinkingLevel: "${role.thinkingLevel}"`);
+  }
+  if (role.output) {
+    lines.push("output:");
+    lines.push(`  ${JSON.stringify(role.output)}`);
+  }
+  if (role.spawns) {
+    lines.push(`spawns: "${role.spawns}"`);
+  }
+  if (role.blocking !== undefined) {
+    lines.push(`blocking: ${role.blocking}`);
   }
 
   lines.push(

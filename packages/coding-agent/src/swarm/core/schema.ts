@@ -1,3 +1,6 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
 // ============================================================================
 // Raw YAML shape (snake_case, optional fields)
 // ============================================================================
@@ -547,6 +550,29 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 		agentOrder,
 		loopConfig,
 	};
+}
+
+// ============================================================================
+// Path resolution
+// ============================================================================
+
+/**
+ * Resolve the swarm YAML config path within a workspace directory.
+ * Tries `.stp/swarm.yaml` first, then falls back to legacy `loop.yaml`
+ * for backward compatibility with existing swarm workspaces.
+ *
+ * @returns the first existing path, or `.stp/swarm.yaml` if neither exists
+ */
+export async function resolveSwarmYamlPath(workspaceDir: string): Promise<string> {
+	const preferred = path.join(workspaceDir, ".stp", "swarm.yaml");
+	const legacy = path.join(workspaceDir, "loop.yaml");
+	const legacyWorkspace = path.join(workspaceDir, ".swarm-workspace", "loop.yaml");
+
+	try { await fs.access(preferred); return preferred; } catch { /* fall through */ }
+	try { await fs.access(legacy); return legacy; } catch { /* fall through */ }
+	try { await fs.access(legacyWorkspace); return legacyWorkspace; } catch { /* fall through */ }
+
+	return preferred;
 }
 
 // ============================================================================

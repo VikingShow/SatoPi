@@ -147,7 +147,7 @@ export class SessionRegistry {
 			throw new Error(`Max ${this.#maxConcurrent} concurrent sessions reached`);
 		}
 
-		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
+		const swarmDir = path.join(this.#shared.workspace, ".stp", "sessions", `swarm-${name}`);
 		await fs.mkdir(swarmDir, { recursive: true });
 
 		const services = await this.#factory(this.#shared, name, swarmDir);
@@ -233,9 +233,9 @@ export class SessionRegistry {
 		}
 		// Remove from in-memory registry
 		this.#sessions.delete(name);
-		// Remove the .swarm_{name} directory from disk so GET /api/runs
+		// Remove the .stp/sessions/swarm-{name} directory from disk so GET /api/runs
 		// (which scans the workspace filesystem) does not resurrect it.
-		const swarmDir = path.join(this.#shared.workspace, `.swarm_${name}`);
+		const swarmDir = path.join(this.#shared.workspace, ".stp", "sessions", `swarm-${name}`);
 		try {
 			await fs.rm(swarmDir, { recursive: true, force: true });
 		} catch {

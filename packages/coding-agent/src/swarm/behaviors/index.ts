@@ -56,7 +56,7 @@ export interface PhaseContext {
 	/** Absolute path to the project workspace directory. */
 	workspace: string;
 
-	/** Absolute path to the swarm workspace (.swarm_<name>). */
+	/** Absolute path to the swarm workspace (.stp/sessions/swarm-<name>). */
 	swarmDir: string;
 
 	/** Raw plan content (markdown) — populated after Script phase. */

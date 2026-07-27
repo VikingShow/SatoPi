@@ -155,7 +155,7 @@ export class ScriptManager {
 		}
 
 		const loopConfig = await this.#readLoopConfig();
-		if (!loopConfig) return { success: false, error: "Failed to parse loop.yaml" };
+		if (!loopConfig) return { success: false, error: "Failed to parse swarm.yaml" };
 
 		this.#taskDescription = task;
 		this.#conversation = [];
@@ -235,7 +235,7 @@ export class ScriptManager {
 		}
 
 		const loopConfig = await this.#readLoopConfig();
-		if (!loopConfig) return { success: false, error: "Failed to parse loop.yaml" };
+		if (!loopConfig) return { success: false, error: "Failed to parse swarm.yaml" };
 
 		this.#busy = true;
 		(async () => {

@@ -14,7 +14,8 @@ import reviewerMd from "../prompts/agents/reviewer.md" with { type: "text" };
 import scoutMd from "../prompts/agents/scout.md" with { type: "text" };
 import swarmMd from "../prompts/agents/swarm.md" with { type: "text" };
 import taskMd from "../prompts/agents/task.md" with { type: "text" };
-import { AUTO_THINKING } from "../thinking";
+import { AUTO_THINKING, parseConfiguredThinkingLevel } from "../thinking";
+import type { RoleAsset } from "../agent/role-asset";
 
 import type { AgentDefinition, AgentSource } from "./types";
 
@@ -156,9 +157,43 @@ export function getBundledAgentsMap(): Map<string, AgentDefinition> {
 
 /**
  * Clear the bundled agents cache (for testing).
- */
 export function clearBundledAgentsCache(): void {
 	bundledAgentsCache = null;
+}
+
+/**
+ * Convert a RoleAsset to an AgentDefinition.
+ * Maps role fields to agent contract: id→name, system prompt, guidelines, tools, model, etc.
+ */
+export function roleToAgentDefinition(role: RoleAsset): AgentDefinition {
+	let systemPrompt = role.prompts.system;
+
+	// Append guidelines block if present
+	if (role.prompts.guidelines && role.prompts.guidelines.length > 0) {
+		const guidelinesBlock = role.prompts.guidelines
+			.map((g) => `- ${g}`)
+			.join("\n");
+		systemPrompt = `${systemPrompt}\n\n## Guidelines\n${guidelinesBlock}`;
+	}
+
+	return {
+		name: role.id,
+		description: role.description,
+		systemPrompt,
+		tools: role.tools.length > 0 ? role.tools : undefined,
+		model: role.model ? [role.model] : undefined,
+		thinkingLevel: role.thinkingLevel
+			? parseConfiguredThinkingLevel(role.thinkingLevel)
+			: undefined,
+		output: role.output,
+		spawns: role.spawns
+			? role.spawns === "*"
+				? "*"
+				: role.spawns.split(",").map((s) => s.trim()).filter(Boolean)
+			: undefined,
+		blocking: role.blocking,
+		source: "project",
+	};
 }
 
 // Re-export for backward compatibility

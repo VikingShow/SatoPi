@@ -18,7 +18,7 @@ export default class Swarm extends Command {
 			options: ACTIONS,
 		}),
 		target: Args.string({
-			description: "Path to loop.yaml (for run/plan) or session name (for resume)",
+			description: "Path to swarm.yaml (for run/plan) or session name (for resume)",
 			required: false,
 		}),
 	};
@@ -32,9 +32,9 @@ export default class Swarm extends Command {
 	};
 
 	static examples = [
-		"# Run a swarm from a loop.yaml\n  stp swarm run ./loop.yaml",
-		"# Run a swarm using the graph engine\n  stp swarm run ./loop.yaml --engine=graph",
-		"# Plan a swarm run\n  stp swarm plan ./loop.yaml",
+		"# Run a swarm from a swarm.yaml\n  stp swarm run ./swarm.yaml",
+		"# Run a swarm using the graph engine\n  stp swarm run ./swarm.yaml --engine=graph",
+		"# Plan a swarm run\n  stp swarm plan ./swarm.yaml",
 		"# Resume a swarm session\n  stp swarm resume my-swarm",
 	];
 	async run(): Promise<void> {
@@ -48,7 +48,7 @@ export default class Swarm extends Command {
 			process.stderr.write(
 				args.action === "resume"
 					? "Usage: stp swarm resume <session-name>\n"
-					: `Usage: stp swarm ${args.action} <path-to-loop.yaml>\n`,
+					: `Usage: stp swarm ${args.action} <path-to-swarm.yaml>\n`,
 			);
 			process.exitCode = 1;
 			return;

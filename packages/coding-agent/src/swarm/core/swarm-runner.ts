@@ -6,7 +6,7 @@
  * dependencies removed. All services are injected via constructor.
  *
  * ## Lifecycle
- *   start() → parse loop.yaml → load plan.md → StageController → Curtain → done
+ *   start() → parse swarm.yaml → load plan.md → StageController → Curtain → done
  *   stop()  → abort stage
  *   pause() → abort (pause semantic is mid-stage abort)
  *   resume()→ not supported in loop mode (restart instead)

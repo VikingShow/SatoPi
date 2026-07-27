@@ -32,6 +32,7 @@ import { theme } from "../theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import { AgentTranscriptViewer } from "./agent-transcript-viewer";
 import { DynamicBorder } from "./dynamic-border";
+import { ProfileRegistry } from "../../agent/agent-profile";
 
 /** Refresh cadence for the relative-time column */
 const AGE_TICK_MS = 5_000;
@@ -529,6 +530,20 @@ export class AgentHubOverlayComponent extends Container {
 		}
 		if (ref.kind === "advisor") {
 			fields.push(theme.fg("warning", "read-only"));
+		}
+		if (ref.kind === "persistent") {
+			const badgeParts: string[] = [theme.fg("accent", "[P]")];
+			let info = "";
+			if (ref.role) info += ref.role;
+			if (ref.profileId) {
+				const profile = ProfileRegistry.global().get(ref.profileId);
+				if (profile) {
+					if (info) info += " ";
+					info += `score:${profile.credit.score}`;
+				}
+			}
+			if (info) badgeParts.push(theme.fg("dim", info));
+			fields.push(...badgeParts);
 		}
 		const unread = this.#irc.unreadCount(ref.id);
 		if (unread > 0) {
