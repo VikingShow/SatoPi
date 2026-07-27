@@ -27,8 +27,11 @@ import {
 	reflectionToLesson,
 } from "../curtain";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
+import type { MnemopiClient } from "../infra/mnemopi-adapter";
 import { streamAgentOutput } from "../render/streaming";
 import type { StageResult } from "../stage/stage-controller";
+import { MultiLessonSink } from "./lesson-sink";
 import type { ContributionData } from "./types";
 
 // ============================================================================
@@ -49,6 +52,10 @@ export interface CurtainRunnerOpts {
 	ircBus?: IrcBus;
 	/** Optional CommBus (injected from AgentRuntime; falls back to global singleton). */
 	commBus?: CommBus;
+	/** Optional remote Hindsight handle — pushes lessons cross-session. Null/absent → local only. */
+	hindsightClient?: SwarmHindsightClient | null;
+	/** Optional semantic memory handle — pushes lessons to Mnemopi. Null/absent → skipped. */
+	mnemopiClient?: MnemopiClient | null;
 	/** Promise that resolves when user applauds. Set up by the API endpoint. */
 	applaudSignal?: AbortSignal;
 }
@@ -96,6 +103,8 @@ export async function runCurtainPipeline(
 		roleAssetManager,
 		profileRegistry,
 		ircBus,
+		hindsightClient,
+		mnemopiClient,
 	} = opts;
 
 	const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}`;
@@ -164,18 +173,12 @@ export async function runCurtainPipeline(
 		"\n",
 	);
 
-	// Save lessons
-	const referencedRunIds: string[] = [];
-	for (const lesson of extraction.lessons) {
-		experienceStore.saveLesson({
-			runId: `${runId}-${lesson.type}`,
-			timestamp: new Date().toISOString(),
-			lesson,
-			stats: extraction.stats,
-			weight: 1.0,
-		});
-		referencedRunIds.push(`${runId}-${lesson.type}`);
-	}
+	// Save lessons — fan out to ExperienceStore (authoritative) + remote/vector
+	// backends (best-effort). referencedRunIds mirror the ExperienceStore runId
+	// convention and drive decayUnreferenced below.
+	const referencedRunIds: string[] = extraction.lessons.map(lesson => `${runId}-${lesson.type}`);
+	const lessonSink = MultiLessonSink.create({ experienceStore, hindsightClient, mnemopiClient });
+	await lessonSink.fanOut(extraction.lessons, extraction.stats, runId);
 
 	// Write summary
 	await experienceStore.writeSummary(runId, summaryMarkdown);

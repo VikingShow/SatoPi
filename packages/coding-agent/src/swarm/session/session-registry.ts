@@ -26,6 +26,7 @@ import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
@@ -48,6 +49,8 @@ export interface SharedServices {
 	profileRegistry: ProfileRegistry;
 	/** P7: Stigmergic MarkEnvironment — cross-agent coordination signals. */
 	markEnvironment: MarkEnvironment;
+	/** Remote Hindsight handle for cross-session recall/retain. Null when unconfigured. */
+	hindsightClient?: SwarmHindsightClient | null;
 }
 
 /** The complete per-session service graph. */
@@ -290,10 +293,10 @@ export class SessionRegistry {
 	getPlanPath(name: string): string {
 		const session = this.#sessions.get(name);
 		if (!session) throw new Error(`Session "${name}" not found`);
-		return path.join(session.swarmDir, ".omp", "plan.md");
+		return path.join(session.swarmDir, ".stp", "plan.md");
 	}
 
 	getPlanArchiveDir(): string {
-		return path.join(this.#shared.workspace, ".omp", "plans");
+		return path.join(this.#shared.workspace, ".stp", "plans");
 	}
 }

@@ -24,6 +24,7 @@ import { ExperienceStore } from "../swarm/curtain/experience";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
 import { ActivityLogger } from "../swarm/hooks/activity-logger";
+import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { ScriptManager } from "../swarm/script/script-manager";
 import { SessionRegistry } from "../swarm/session";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
@@ -73,6 +74,10 @@ async function createSwarmServices(
 	const experienceStore = new ExperienceStore(cwd);
 	await experienceStore.init();
 
+	// Remote Hindsight handle for cross-session recall/retain. Null when the
+	// project has no Hindsight config — sources/sinks then degrade to no-ops.
+	const hindsightClient = createSwarmHindsightClient(settings, cwd);
+
 	const profileRegistry = new ProfileRegistry();
 	const markEnvironment = new MarkEnvironment();
 	const roleAssetManager = new RoleAssetManager(cwd);
@@ -87,6 +92,7 @@ async function createSwarmServices(
 		roleAssetManager,
 		profileRegistry,
 		markEnvironment,
+		hindsightClient,
 	};
 
 	const factory: SessionFactory = async (s, name, swarmDir) => {
@@ -99,6 +105,7 @@ async function createSwarmServices(
 		registerBuiltinHooks(hookPipeline, {
 			offloadManager: new NoopOffloadManager(),
 			profileRegistry: s.profileRegistry,
+			experienceStore: s.experienceStore,
 		});
 
 		// Assemble AgentRuntime with full DI (no global singletons).
@@ -111,6 +118,8 @@ async function createSwarmServices(
 			roleAssetManager: s.roleAssetManager,
 			hookPipeline,
 			ircBus,
+			experienceStore: s.experienceStore,
+			hindsightClient: s.hindsightClient,
 		});
 
 		// SwarmRunner with AgentRuntime — StageController will use
@@ -129,6 +138,7 @@ async function createSwarmServices(
 			roleAssetManager: s.roleAssetManager,
 			hookPipeline,
 			runtime,
+			hindsightClient: s.hindsightClient,
 		});
 
 		// Real ScriptManager with AgentRuntime wired in.

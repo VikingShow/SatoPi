@@ -22,15 +22,15 @@ import * as path from "node:path";
  * Path: .swarm_{name}/.stp/plan.md
  */
 export function getSessionPlanPath(swarmDir: string): string {
-	return path.join(swarmDir, ".omp", "plan.md");
+	return path.join(swarmDir, ".stp", "plan.md");
 }
 
 /**
  * Per-session .stp directory (contains plan.md and session.jsonl).
  * Created lazily on first write.
  */
-export function getSessionOmpDir(swarmDir: string): string {
-	return path.join(swarmDir, ".omp");
+export function getSessionStpDir(swarmDir: string): string {
+	return path.join(swarmDir, ".stp");
 }
 
 /**
@@ -41,5 +41,5 @@ export function getSessionOmpDir(swarmDir: string): string {
  * Path: {workspace}/.stp/plans/
  */
 export function getPlanArchiveDir(workspace: string): string {
-	return path.join(workspace, ".omp", "plans");
+	return path.join(workspace, ".stp", "plans");
 }

@@ -1,7 +1,7 @@
 // Script phase — planning, debate, and task complexity analysis
 
 export { DebateRoundtable } from "./debate-roundtable";
-export { getPlanArchiveDir, getSessionOmpDir, getSessionPlanPath } from "./plan-paths";
+export { getPlanArchiveDir, getSessionPlanPath, getSessionStpDir } from "./plan-paths";
 export { ScriptManager } from "./script-manager";
 export {
 	archivePlanForHistory,

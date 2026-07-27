@@ -4,7 +4,7 @@
  * Shows recent messages between human and agents with color-coded sender types.
  * Messages are displayed in reverse chronological order (newest first).
  */
-import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "./theme";
+import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "../../../swarm/tui/theme";
 
 // ============================================================================
 // ANSI stripping (not exported by theme)

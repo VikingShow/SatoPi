@@ -21,7 +21,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { ExperienceStore } from "../curtain/experience";
-import { getPlanArchiveDir, getSessionOmpDir, getSessionPlanPath } from "./plan-paths";
+import { getPlanArchiveDir, getSessionPlanPath } from "./plan-paths";
 
 // ============================================================================
 // Types

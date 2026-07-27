@@ -29,8 +29,14 @@ import { AgentLauncher } from "../agent-runtime/agent-launcher";
 import { RoleProvider } from "../agent-runtime/role-provider";
 import { CommBus } from "../comm-bus/comm-bus";
 import { ContextPipeline } from "../context-manager/context-pipeline";
+import { ExperienceSource } from "../context-manager/sources/experience-source";
+import { HindsightSource } from "../context-manager/sources/hindsight-source";
+import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
+import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { MnemopiClient } from "../infra/mnemopi-adapter";
 
 // ============================================================================
 // Types
@@ -51,6 +57,12 @@ export interface AssemblerOptions {
 	ircBus?: IrcBus;
 	/** Optional tool registry for resolving tool names to real Tool instances. */
 	toolRegistry?: Map<string, Tool>;
+	/** Local experience store — enables ExperienceSource (past-run lessons). */
+	experienceStore?: ExperienceStore;
+	/** Remote Hindsight handle — enables HindsightSource (cross-session recall). Null when unconfigured. */
+	hindsightClient?: SwarmHindsightClient | null;
+	/** Semantic memory handle — enables MnemopiSource. Null when unavailable. */
+	mnemopiClient?: MnemopiClient | null;
 }
 
 // ============================================================================
@@ -72,10 +84,25 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 	// 1. RoleProvider — resolves AgentSpec.role → ResolvedRole
 	const roleProvider = new RoleProvider(opts.roleAssetManager);
 
-	// 2. ContextPipeline — assembles agent context from registered sources
-	//    Empty for now; sources (OffloadSource, StigmergySource, etc.) can be
-	//    registered later as the architecture evolves.
+	// 2. ContextPipeline — assembles agent context from registered sources.
+	//    Memory sources are registered when their backing handle is available;
+	//    each source no-ops (or is skipped) when its dependency is absent, so an
+	//    unconfigured environment degrades gracefully.
+	//    NOTE: AgentRuntime.spawnOne currently passes a hardcoded phase="stage"
+	//    BuildContext, so phase-filtered sources (e.g. ExperienceSource, which
+	//    applies only to script/script-debate) will not fire until the real
+	//    phase is threaded through spawn. All-phase sources (Mnemopi, Hindsight)
+	//    are unaffected. See spawnOne() for the follow-up.
 	const contextPipeline = new ContextPipeline();
+	if (opts.experienceStore) {
+		contextPipeline.register(new ExperienceSource(opts.experienceStore));
+	}
+	if (opts.mnemopiClient) {
+		contextPipeline.register(new MnemopiSource(opts.mnemopiClient));
+	}
+	if (opts.hindsightClient) {
+		contextPipeline.register(new HindsightSource(opts.hindsightClient));
+	}
 
 	// 3. AgentLauncher — creates Agent instances with full hook wiring
 	const launcher = new AgentLauncher(opts.modelRegistry, opts.settings);

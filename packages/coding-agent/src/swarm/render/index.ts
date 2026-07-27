@@ -1,23 +1,11 @@
 // TUI rendering and streaming output
+//
+// NOTE: The dashboard/panel render functions moved to
+// `modes/components/swarm/` (the system TUI component layer) and are wrapped by
+// SwarmDashboardComponent there. Only the swarm-owned splash/theme/streaming
+// helpers remain re-exported here.
 
-export { renderAgentPanel } from "../tui/agent-panel";
-export {
-	type CommMessage,
-	renderCommPanel,
-} from "../tui/comm-panel";
-export {
-	type AgentContextInfo,
-	type ContextPanelState,
-	type ContextSourceStatus,
-	renderContextPanel,
-} from "../tui/context-panel";
-export { renderPhaseView } from "../tui/phase-view";
-// SatoPi v3 TUI dashboard
 export { renderSplash } from "../tui/splash";
-export {
-	type DashboardInput,
-	renderDashboard,
-} from "../tui/swarm-dashboard";
 export {
 	ansiBold,
 	ansiDim,

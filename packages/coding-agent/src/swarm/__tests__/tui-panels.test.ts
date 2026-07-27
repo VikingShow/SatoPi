@@ -8,9 +8,9 @@
  */
 import { describe, expect, it } from "bun:test";
 import type { AgentState, SwarmState } from "../core/state";
-import { renderAgentPanel } from "../tui/agent-panel";
-import { type CommMessage, renderCommPanel } from "../tui/comm-panel";
-import { type ContextPanelState, renderContextPanel } from "../tui/context-panel";
+import { renderAgentPanel } from "../../modes/components/swarm/agent-panel";
+import { type CommMessage, renderCommPanel } from "../../modes/components/swarm/comm-panel";
+import { type ContextPanelState, renderContextPanel } from "../../modes/components/swarm/context-panel";
 
 // ============================================================================
 // ANSI stripping (local, not exported by theme)

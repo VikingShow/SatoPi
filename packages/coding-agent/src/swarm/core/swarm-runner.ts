@@ -30,6 +30,7 @@ import type { ExperienceStore } from "../curtain/experience";
 import type { CurtainResult } from "../curtain/types";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import { createStageFeedback } from "../infra/swarm-hooks";
 import { stampAndArchivePlanMd } from "../script";
 import { getSessionPlanPath } from "../script/plan-paths";
@@ -57,6 +58,7 @@ export class SwarmRunner implements RunManager {
 	#profileRegistry: ProfileRegistry;
 	#markEnvironment: MarkEnvironment;
 	#roleAssetManager: RoleAssetManager;
+	#hindsightClient: SwarmHindsightClient | null;
 
 	/** v3: Workflow FSM (per-session). */
 	#fsm: WorkflowFsm | undefined;
@@ -80,6 +82,7 @@ export class SwarmRunner implements RunManager {
 		fsm?: WorkflowFsm;
 		hookPipeline?: HookPipeline;
 		runtime?: AgentRuntime;
+		hindsightClient?: SwarmHindsightClient | null;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -95,6 +98,7 @@ export class SwarmRunner implements RunManager {
 		this.#fsm = opts.fsm;
 		this.#hookPipeline = opts.hookPipeline;
 		this.#runtime = opts.runtime;
+		this.#hindsightClient = opts.hindsightClient ?? null;
 	}
 
 	get isRunning(): boolean {
@@ -238,6 +242,7 @@ export class SwarmRunner implements RunManager {
 			roleAssetManager: this.#roleAssetManager,
 			profileRegistry: this.#profileRegistry,
 			commBus: this.#runtime?.commBus,
+			hindsightClient: this.#hindsightClient,
 		});
 		if (result_) this.#lastCurtainResult = { ...result_, iterations: result_.totalTasks };
 	}

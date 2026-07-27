@@ -20,6 +20,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ExtractedLesson, LoopRunStats } from "./extractor";
 
 // ============================================================================
@@ -184,7 +185,7 @@ export class ExperienceStore {
 	#schemaVersion = 0;
 
 	constructor(workspace: string) {
-		this.#basePath = path.join(workspace, ".omp", "experience");
+		this.#basePath = path.join(workspace, ".stp", "experience");
 	}
 
 	async init(): Promise<void> {

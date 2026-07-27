@@ -82,7 +82,7 @@ export class SwarmSessionManager {
 
 	/** The session dir under the swarm directory. */
 	static sessionDir(swarmDir: string): string {
-		return path.join(swarmDir, ".omp", "sessions");
+		return path.join(swarmDir, ".stp", "sessions");
 	}
 
 	// -- Factory --------------------------------------------------------------

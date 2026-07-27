@@ -5,8 +5,8 @@
  * Includes reviewer tag line when a reviewer agent is elected.
  */
 
-import type { AgentState, AgentStatus, SwarmState } from "../core/state";
-import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "./theme";
+import type { AgentState, AgentStatus, SwarmState } from "../../../swarm/core/state";
+import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "../../../swarm/tui/theme";
 
 // ============================================================================
 // ANSI stripping (not exported by theme)

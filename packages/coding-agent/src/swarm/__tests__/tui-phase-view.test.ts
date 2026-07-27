@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "bun:test";
 import type { Chapter, SwarmState } from "../core/state";
-import { renderPhaseView } from "../tui/phase-view";
+import { renderPhaseView } from "../../modes/components/swarm/phase-view";
 import { PHASE_DISPLAY } from "../tui/theme";
 
 /** Minimal SwarmState factory for test isolation */
