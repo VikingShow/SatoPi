@@ -72,7 +72,7 @@ export default class AuthBroker extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(AuthBroker);
 		if (!args.action) {
-			renderCommandHelp("omp", "auth-broker", AuthBroker);
+			renderCommandHelp(APP_NAME, "auth-broker", AuthBroker);
 			return;
 		}
 		const action = args.action as AuthBrokerAction;

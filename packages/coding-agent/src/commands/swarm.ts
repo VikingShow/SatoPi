@@ -1,6 +1,7 @@
 /**
  * Manage swarm runs.
  */
+import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { Args, Command, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
 import { type SwarmAction, type SwarmCommandArgs, runSwarmCommand } from "../cli/swarm-cli";
 import { initTheme } from "../modes/theme/theme";
@@ -31,7 +32,7 @@ export default class Swarm extends Command {
 	async run(): Promise<void> {
 		const { args } = await this.parse(Swarm);
 		if (!args.action) {
-			renderCommandHelp("omp", "swarm", Swarm);
+			renderCommandHelp(APP_NAME, "swarm", Swarm);
 			return;
 		}
 

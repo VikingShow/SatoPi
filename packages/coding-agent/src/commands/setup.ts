@@ -1,6 +1,7 @@
 /**
  * Run onboarding setup or install dependencies for optional features.
  */
+import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
 import { parseArgs } from "../cli/args";
 import { runSetupCommand, type SetupCommandArgs, type SetupComponent } from "../cli/setup-cli";
@@ -48,7 +49,7 @@ export default class Setup extends Command {
 		const { args, flags } = await this.parse(Setup);
 		if (!args.component) {
 			if (flags.check || flags.json) {
-				renderCommandHelp("omp", "setup", Setup);
+				renderCommandHelp(APP_NAME, "setup", Setup);
 				return;
 			}
 			await runOnboardingSetup();
