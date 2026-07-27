@@ -37,6 +37,7 @@ import { ExperienceStore } from "../curtain/experience";
 import { getSessionPlanPath } from "../script/plan-paths";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createStageController, type StageResult } from "../stage/stage-controller";
+import { DebateRoundtable } from "../script/debate-roundtable";
 
 // ============================================================================
 // Types
@@ -268,6 +269,44 @@ export class EmbeddedSwarmBridge {
 		});
 		if (!confirmResult.ok) return [confirmResult.reason ?? "FSM rejected script-confirm transition"];
 
+		// Optional: run plan debate if enabled via settings
+		const enableDebate = this.#config.settings.get("magicKeywords.swarm.enableDebate") as boolean ?? false;
+		if (enableDebate) {
+			const debateResult = await this.#fsm.transition("script-debate", {
+				reason: "starting plan debate",
+			});
+			if (!debateResult.ok) return [debateResult.reason ?? "FSM rejected script-debate transition"];
+
+			this.#listener({ phase: "script-debate", subStatus: "debating plan" });
+
+			const debate = new DebateRoundtable({
+				agentCount: 2,
+				maxRounds: 2,
+				convergenceThreshold: 2,
+				runtime: this.#runtime,
+			});
+			try {
+				const result = await debate.debate(
+					planContent,
+					this.#config.workspace,
+					this.#config.modelRegistry,
+					this.#config.settings,
+				);
+				planContent = result.refinedPlan;
+				// Re-write refined plan to disk for Stage
+				await fs.writeFile(planPath, planContent, "utf-8");
+				this.#planContent = planContent;
+				logger.info("[EmbeddedSwarmBridge] Plan debate complete", {
+					converged: result.converged,
+					rounds: result.rounds.length,
+				});
+			} catch (err) {
+				logger.warn("[EmbeddedSwarmBridge] Plan debate failed, proceeding with draft plan", {
+					error: String(err),
+				});
+			}
+		}
+
 		// Transition: script-confirm → stage
 		const stageResult = await this.#fsm.transition("stage", {
 			reason: "starting stage execution",
@@ -349,11 +388,19 @@ export class EmbeddedSwarmBridge {
 			commBus: this.#runtime.commBus,
 		});
 
-		if (!this.#config.autoApplaud) {
+		if (this.#config.autoApplaud) {
+			// No human wait — proceed directly
+		} else {
 			this.#listener({ phase: "curtain", subStatus: "awaiting applaud" });
-			// Wait for human applaud
+			const CURTAIN_TIMEOUT_MS = 300_000; // 5 minutes
 			await new Promise<void>(resolve => {
 				this.#applaudResolve = resolve;
+				const timer = setTimeout(() => {
+					if (this.#applaudResolve) {
+						this.#applaudResolve();
+						this.#applaudResolve = null;
+					}
+				}, CURTAIN_TIMEOUT_MS);
 			});
 		}
 
@@ -376,8 +423,8 @@ export class EmbeddedSwarmBridge {
 	// ── Steering ───────────────────────────────────────────────────────────
 
 	/** Route a human steering message to the current workers. */
-	async steer(_message: string): Promise<void> {
-		// TODO: Route steering to active workers via CommBus
+	async steer(message: string): Promise<void> {
+		await this.#runtime.commBus.receiveFromHuman(message);
 	}
 
 	/** Pause the current stage. */

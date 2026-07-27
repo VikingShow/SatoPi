@@ -38,9 +38,12 @@ export class SwarmDashboardOverlay implements Component {
 	readonly #stateTracker: StateTrackerLike | null;
 	readonly #activityLogger: ActivityLoggerLike | null;
 
+	readonly #onSteering: ((message: string) => void) | null;
+
 	constructor(deps: SwarmDashboardOverlayDeps) {
 		this.#stateTracker = deps.stateTracker ?? null;
 		this.#activityLogger = deps.activityLogger ?? null;
+		this.#onSteering = deps.onSteering ?? null;
 
 		this.#component = new SwarmDashboardComponent(this.#buildSnapshot());
 
@@ -62,6 +65,12 @@ export class SwarmDashboardOverlay implements Component {
 		// Handle keyboard dismissals — matching the PlanReviewOverlay idiom.
 		if (data === "escape" || data === "q" || data === "\x1b") {
 			this.onClose?.();
+			return;
+		}
+		// "/" enters steering mode — capture next input as steering message
+		if (data === "/" && this.#onSteering) {
+			this.#onSteering(data);
+			return;
 		}
 	}
 
@@ -147,4 +156,6 @@ export interface SwarmDashboardOverlayDeps {
 	stateTracker?: StateTrackerLike;
 	/** ActivityLogger — source of CommMessages for the snapshot. */
 	activityLogger?: ActivityLoggerLike;
+	/** Called when user presses "/" in the dashboard to send a steering message. */
+	onSteering?: (message: string) => void;
 }

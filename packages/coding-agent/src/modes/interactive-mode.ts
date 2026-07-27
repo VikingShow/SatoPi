@@ -1429,6 +1429,19 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.addMessageToChat(message, options);
 	}
 
+
+	/**
+	 * Applaud keywords that trigger Curtain completion when the swarm bridge
+	 * is in "curtain" phase awaiting human confirmation.
+	 */
+	static readonly APPLAUD_KEYWORDS: Record<string, true> = {
+		applaud: true, "👏": true, "完成": true, approve: true, done: true, complete: true,
+	};
+
+	static #isApplaudInput(text: string): boolean {
+		const trimmed = text.trim().toLowerCase();
+		return Object.keys(InteractiveMode.APPLAUD_KEYWORDS).some(kw => trimmed === kw || trimmed.includes(kw));
+	}
 	startPendingSubmission(input: {
 		text: string;
 		images?: ImageContent[];
@@ -1437,6 +1450,13 @@ export class InteractiveMode implements InteractiveModeContext {
 		display?: boolean;
 		streamingBehavior?: "steer" | "followUp";
 	}): SubmittedUserInput {
+		// Intercept applaud when swarm Curtain is awaiting human confirmation
+		const bridge = this.session.embeddedSwarm;
+		if (bridge && bridge.currentPhase === "curtain" && InteractiveMode.#isApplaudInput(input.text)) {
+			bridge.applaud();
+			this.showStatus("👏 Swarm Curtain complete.");
+			return { text: input.text, cancelled: true, started: false };
+		}
 		const submission: SubmittedUserInput = {
 			text: input.text,
 			images: input.images,
@@ -4308,6 +4328,7 @@ export class InteractiveMode implements InteractiveModeContext {
 						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
 						activityLogger: bridge.activityLogger,
+						onSteering: (msg: string) => bridge.steer(msg),
 					}
 				: {},
 		);
