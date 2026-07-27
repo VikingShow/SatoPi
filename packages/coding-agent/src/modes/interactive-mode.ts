@@ -138,6 +138,7 @@ import type { HookEditorComponent } from "./components/hook-editor";
 import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
+import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -541,6 +542,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planModeHasEntered = false;
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
+	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
+	#swarmDashboardHandle: OverlayHandle | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
@@ -2591,6 +2594,13 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#planReviewOverlay = undefined;
 	}
 
+	#hideSwarmDashboard(): void {
+		this.#swarmDashboardOverlay?.dispose();
+		this.#swarmDashboardHandle?.hide();
+		this.#swarmDashboardOverlay = undefined;
+		this.#swarmDashboardHandle = undefined;
+	}
+
 	#getEditorTerminalPath(): string | null {
 		if (process.platform === "win32") {
 			return null;
@@ -4273,6 +4283,38 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	showAgentsDashboard(): void {
 		void this.#selectorController.showAgentsDashboard();
+	}
+
+	/**
+	 * Open the swarm dashboard as a fullscreen overlay.
+	 *
+	 * On a second call while the overlay is already visible the overlay is
+	 * dismissed (toggle behaviour). The overlay shows a placeholder when
+	 * no swarm is active and live-updates via {@link SwarmTuiBinding} when
+	 * a swarm FSM is available.
+	 */
+	showSwarmDashboard(): void {
+		// Toggle: close if already open
+		if (this.#swarmDashboardOverlay) {
+			this.#hideSwarmDashboard();
+			return;
+		}
+
+		const overlay = new SwarmDashboardOverlay({});
+
+		overlay.onClose = () => this.#hideSwarmDashboard();
+		overlay.onRequestRender = () => this.ui.requestRender();
+
+		this.#swarmDashboardOverlay = overlay;
+		this.#swarmDashboardHandle = this.ui.showOverlay(overlay, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: "100%",
+			margin: 0,
+			fullscreen: true,
+		});
+		this.ui.setFocus(overlay);
+		this.ui.requestRender();
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

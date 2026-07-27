@@ -9,9 +9,13 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import chalk from "chalk";
 import type { Chapter } from "../core/state";
 import { renderSplash } from "../../modes/components/swarm/splash";
 import { PHASE_DISPLAY, PI_LOGO_ASCII, sato } from "../../modes/components/swarm/theme";
+
+// Force chalk level for deterministic ANSI output in test environments.
+chalk.level = 1;
 
 // ============================================================================
 // sato colour helpers
@@ -22,7 +26,6 @@ describe("sato colour helpers", () => {
 		const result = sato.success("OK");
 		expect(result).toContain("\x1b[");
 		expect(result).toContain("OK");
-		// Should start with some ANSI and end with reset
 		expect(result).toMatch(/\x1b\[0m$/);
 	});
 
@@ -34,27 +37,32 @@ describe("sato colour helpers", () => {
 
 	it("sato.warning wraps text", () => {
 		const result = sato.warning("WARN");
+		expect(result).toContain("\x1b[");
 		expect(result).toContain("WARN");
 	});
 
 	it("sato.muted wraps text", () => {
 		const result = sato.muted("quiet");
+		expect(result).toContain("\x1b[");
 		expect(result).toContain("quiet");
 	});
 
 	it("sato.dim wraps text", () => {
 		const result = sato.dim("faded");
+		expect(result).toContain("\x1b[");
 		expect(result).toContain("faded");
 	});
 
 	it("sato.bold wraps text in bold", () => {
 		const result = sato.bold("loud");
 		expect(result).toContain("loud");
+		expect(result).toContain("\x1b[1m");
 	});
 
 	it("sato.amber wraps text", () => {
 		const result = sato.amber("gold");
 		expect(result).toContain("gold");
+		expect(result).toContain("\x1b[");
 	});
 
 	it("sato.info wraps text", () => {

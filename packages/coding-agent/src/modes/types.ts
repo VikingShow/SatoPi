@@ -355,6 +355,7 @@ export interface InteractiveModeContext {
 	showHistorySearch(): void;
 	showExtensionsDashboard(): void;
 	showAgentsDashboard(): void;
+	showSwarmDashboard(): void;
 	showModelSelector(options?: { temporaryOnly?: boolean }): void;
 	showPluginSelector(mode?: "install" | "uninstall"): void;
 	showUserMessageSelector(): void;
