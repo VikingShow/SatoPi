@@ -22,7 +22,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ProfileRegistry } from "../../agent/agent-profile";
+import { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
 import { assembleAgentRuntime, type AssemblerOptions } from "./assembler";
@@ -228,9 +228,12 @@ export class EmbeddedSwarmBridge {
 	/** Tear down all services. Idempotent. */
 	async dispose(): Promise<void> {
 		if (this.#disposed) return;
+		// Persist agent profiles before teardown
+		await this.#config.profileRegistry?.save(this.#config.workspace);
 		this.#disposed = true;
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
+		try { this.#experienceStore.close(); } catch { /* best-effort */ }
 		this.#stageController = null;
 		this.#planContent = "";
 		this.#planReady = false;

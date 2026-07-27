@@ -164,6 +164,7 @@ import {
 	resolveAdvisorDeliveryChannel,
 	slugifyAdvisorName,
 } from "../advisor";
+import { ProfileRegistry } from "../agent/agent-profile";
 import { type AsyncJob, type AsyncJobDeliveryState, AsyncJobManager } from "../async";
 import { classifyDifficulty } from "../auto-thinking/classifier";
 import { reset as resetCapabilities } from "../capability";
@@ -8017,12 +8018,14 @@ export class AgentSession {
 
 		const swarmDir = `${process.cwd()}/.swarm_${sessionId}`;
 
+		const profileRegistry = await ProfileRegistry.load(process.cwd());
 		this.#embeddedSwarm = new EmbeddedSwarmBridge(
 			{
 				workspace: process.cwd(),
 				swarmDir,
 				modelRegistry: this.#modelRegistry,
 				settings: this.settings,
+				profileRegistry,
 				maxWorkers: this.settings.get("magicKeywords.swarm.maxWorkers") as number ?? 4,
 				maxRounds: this.settings.get("magicKeywords.swarm.maxRounds") as number ?? 3,
 				autoApplaud: this.settings.get("magicKeywords.swarm.autoApplaud") as boolean ?? false,

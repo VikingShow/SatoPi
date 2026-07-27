@@ -88,7 +88,7 @@ async function createSwarmServices(
 	// for the swarm session. Null when Mnemopi is unavailable or unconfigured.
 	const mnemopiClient = await createSwarmMnemopiClient(settings, cwd);
 
-	const profileRegistry = new ProfileRegistry();
+	const profileRegistry = await ProfileRegistry.load(cwd);
 	const markEnvironment = new MarkEnvironment();
 	const roleAssetManager = new RoleAssetManager(cwd);
 	await roleAssetManager.init();
@@ -241,9 +241,9 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 
 	const swarmName = def.name;
 		
-	try {
-		const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
 
+	try {
 		const registry = new SessionRegistry(shared, factory, 1);
 		const session = await registry.createSession(swarmName);
 
@@ -269,8 +269,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
 			}
 		}
-	} catch {
-		// authStorage cleanup handled by createSwarmServices internally
+	} finally {
+		await shared.profileRegistry.save(cwd);
 	}
 }
 

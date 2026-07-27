@@ -132,7 +132,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 		};
 
 		// Check for an existing checkpoint — when found, restore prior wave progress.
-		const priorCheckpoint = await recoverState(this.#sessionManager, runId);
+		const priorCheckpoint = await recoverState(this.#sessionManager, this.#graphName);
 		if (priorCheckpoint) {
 			this.#graphRunState = priorCheckpoint;
 			logger.info("[GraphRunner] Resuming from prior checkpoint", {
@@ -173,6 +173,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
 		this.#gateController.removeAllListeners();
+		try { this.#experienceStore.close(); } catch { /* best-effort */ }
 		logger.info("[GraphRunner] Disposed");
 	}
 
@@ -271,14 +272,34 @@ export class GraphRunner implements ISwarmOrchestrator {
 							return { nodeId, success: behaviorResult.success, error: behaviorResult.error };
 						}
 
-						const gateResult = await gateController.runGate(node, behaviorResult.output ?? "");
-						if (gateResult.passed) {
+						let lastGateResult = await gateController.runGate(node, behaviorResult.output ?? "");
+						let attempt = 0;
+						while (!lastGateResult.passed) {
+							const action = await gateController.handleGateFailure(node, lastGateResult, attempt);
+							if (action.type === "continue") {
+								// Gate failure skipped by policy — proceed as passed.
+								await stateTracker.updateAgent(nodeId, { status: "completed" });
+								updateCheckpoint(nodeId, "completed");
+								return { nodeId, success: true };
+							}
+							if (action.type === "block") {
+								await stateTracker.updateAgent(nodeId, { status: "failed", error: action.reason });
+								updateCheckpoint(nodeId, "failed", action.reason);
+								return { nodeId, success: false, error: action.reason };
+							}
+							// retry: sleep, then re-run the gate
+							const { promise, resolve } = Promise.withResolvers<void>();
+							setTimeout(resolve, action.delayMs);
+							await promise;
+							lastGateResult = await gateController.runGate(node, behaviorResult.output ?? "");
+							attempt++;
+						}
+						if (lastGateResult.passed) {
 							await stateTracker.updateAgent(nodeId, { status: "completed" });
-						updateCheckpoint(nodeId, "completed");
+							updateCheckpoint(nodeId, "completed");
 							return { nodeId, success: true };
 						}
-
-						return { nodeId, success: false, error: gateResult.errors.join("; ") };
+						return { nodeId, success: false, error: lastGateResult.errors.join("; ") };
 					} catch (err) {
 						const msg = err instanceof Error ? err.message : String(err);
 						await stateTracker.updateAgent(nodeId, { status: "failed", error: msg });

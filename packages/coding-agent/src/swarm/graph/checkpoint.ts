@@ -5,6 +5,10 @@
  * session.jsonl file.  On recovery, replays the session file
  * backwards to reconstruct the most recent state for a given run.
  *
+ * Writes full-state checkpoints as custom entries in the Swarm
+ * session.jsonl file.  On recovery, replays the session file
+ * backwards to reconstruct the most recent state for a given graph.
+ *
  * ## Entry format
  *
  * Each checkpoint is appended via SwarmSessionManager.appendCustomEntry()
@@ -13,7 +17,7 @@
  * ## Recovery
  *
  * recoverState() walks session.jsonl entries from newest to oldest,
- * returning the first graph_checkpoint entry whose runId matches.
+ * returning the first graph_checkpoint entry whose graphName matches.
  * Because checkpoints are full snapshots (not deltas), the first
  * match is the complete most-recent state.
  */
@@ -71,16 +75,16 @@ export function writeCheckpoint(state: GraphRunState, sessionManager: SwarmSessi
 // ============================================================================
 
 /**
- * Reconstruct the most recent GraphRunState for a given run by
+ * Reconstruct the most recent GraphRunState for a given graph by
  * replaying the session file backwards.
  *
  * Walks raw entries newest-first and returns the first graph_checkpoint
- * whose `runId` matches. Returns null if no checkpoint exists for the
- * requested run.
+ * whose `graphName` matches. Returns null if no checkpoint exists for the
+ * requested graph.
  */
 export async function recoverState(
 	sessionManager: SwarmSessionManager,
-	runId: string,
+	graphName: string,
 ): Promise<GraphRunState | null> {
 	const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
 
@@ -88,7 +92,7 @@ export async function recoverState(
 		const entry = raw[i];
 		if (entry.type === "custom" && entry.customType === CTX.GRAPH_CHECKPOINT) {
 			const data = entry.data as GraphRunState | undefined;
-			if (data?.runId === runId) {
+			if (data?.graphName === graphName) {
 				return data;
 			}
 		}

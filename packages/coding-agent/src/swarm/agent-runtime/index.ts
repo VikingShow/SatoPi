@@ -14,7 +14,7 @@
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
-import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
+import type { AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
@@ -130,11 +130,6 @@ export class AgentRuntime {
 	readonly #activityLogger?: ActivityLogger;
 	readonly #toolRegistry?: Map<string, Tool>;
 
-	/** Per-agent message queues for steering messages (populated from CommBus). */
-	readonly #steeringQueues = new Map<string, AgentMessage[]>();
-
-	/** Per-agent message queues for follow-up messages. */
-	readonly #followUpQueues = new Map<string, AgentMessage[]>();
 
 	/** Per-agent queues for system notification (aside) messages. */
 	readonly #asideQueues = new Map<string, AsideMessage[]>();
@@ -268,22 +263,11 @@ export class AgentRuntime {
 	/**
 	 * Queue a human steering message for a specific agent.
 	 *
-	 * The message will be delivered to the agent at the next injection boundary.
-	 * Uses CommBus.receiveFromHuman() to log the message, then queues it
-	 * for delivery to the target agent's steering queue.
+	 * The message is logged via CommBus.receiveFromHuman(). Actual delivery
+	 * to the agent is handled by PhaseBehaviors via handle.send().
 	 */
 	async sendHumanMessage(agentId: string, text: string): Promise<void> {
-		// Log via CommBus
 		await this.#commBus.receiveFromHuman(text, agentId);
-
-		// Queue for agent delivery
-		const queue = this.#steeringQueues.get(agentId) ?? [];
-		queue.push({
-			role: "user",
-			content: [{ type: "text", text: `[Human] ${text}` }],
-			timestamp: Date.now(),
-		});
-		this.#steeringQueues.set(agentId, queue);
 	}
 
 	/**
@@ -377,20 +361,6 @@ export class AgentRuntime {
 
 		// 4. Build AgentLoopConfig hook providers from internal queues
 		const hookProviders: LaunchContext["hookProviders"] = {
-			getSteeringMessages: async () => {
-				const queue = this.#steeringQueues.get(agentId);
-				if (!queue || queue.length === 0) return [];
-				const messages = queue.splice(0);
-				this.#steeringQueues.delete(agentId);
-				return messages;
-			},
-			getFollowUpMessages: async () => {
-				const queue = this.#followUpQueues.get(agentId);
-				if (!queue || queue.length === 0) return [];
-				const messages = queue.splice(0);
-				this.#followUpQueues.delete(agentId);
-				return messages;
-			},
 			getAsideMessages: async () => {
 				const queue = this.#asideQueues.get(agentId);
 				if (!queue || queue.length === 0) return [];
