@@ -29,6 +29,12 @@ import type {
 	GateResult,
 	NodeBehavior,
 } from "./schema";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger } from "../infra/activity-logger";
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
+import { createStageController, type StageOptions, type StageResult } from "../stage/stage-controller";
 
 // ============================================================================
 // CustomNodeBehavior (default)
@@ -255,18 +261,17 @@ export class ScriptNodeBehavior implements NodeBehavior {
 }
 
 // ============================================================================
-// StageNodeBehavior (stub — delegates to CustomNodeBehavior for v1)
+// StageNodeBehavior — Drives real parallel worker agents via StageController
 // ============================================================================
 
 /**
- * Stub behavior for the Stage (execution) phase.
+ * Stage (execution) phase behavior.
  *
- * In the full implementation, this will parse the plan, spawn multiple worker
- * agents via AgentRuntime with a DAG-based task queue, support steering
- * directives from the human, and track per-agent completion.
+ * Parses the plan from the upstream script node, builds a StageController
+ * with real parallel worker agents, and collects per-agent results.
  *
- * For v1, it delegates to CustomNodeBehavior. The real implementation will be
- * wired through PhaseBehaviorNodeAdapter in a follow-up task.
+ * Falls back to CustomNodeBehavior when roleAssetManager or profileRegistry
+ * are not available in the NodeContext.
  */
 export class StageNodeBehavior implements NodeBehavior {
 	readonly name = "stage";
@@ -274,11 +279,59 @@ export class StageNodeBehavior implements NodeBehavior {
 	#delegate = new CustomNodeBehavior();
 
 	async prepare(ctx: NodeContext): Promise<AgentSpec[]> {
-		return this.#delegate.prepare(ctx);
+		if (!(ctx.roleAssetManager && ctx.profileRegistry && ctx.stateTracker && ctx.activityLogger)) {
+			return this.#delegate.prepare(ctx);
+		}
+		// StageController manages its own agent creation — no pre-spawn needed.
+		return [];
 	}
 
-	async execute(ctx: NodeContext, prepared: AgentSpec[]): Promise<NodeResult> {
-		return this.#delegate.execute(ctx, prepared);
+	async execute(ctx: NodeContext, _prepared: AgentSpec[]): Promise<NodeResult> {
+		if (!(ctx.roleAssetManager && ctx.profileRegistry && ctx.stateTracker && ctx.activityLogger)) {
+			logger.info("[StageNodeBehavior] Services unavailable, delegating to CustomNodeBehavior");
+			return this.#delegate.execute(ctx, _prepared);
+		}
+
+		const planContent = this.#extractPlanContent(ctx);
+		const loopConfig = this.#buildLoopConfig();
+
+		logger.info("[StageNodeBehavior] Creating StageController", {
+			nodeId: ctx.node.id,
+			planLength: planContent.length,
+		});
+
+		const stageController = createStageController({
+			workspace: ctx.workspace,
+			swarmName: `graph-${ctx.node.id}`,
+			planContent,
+			loopConfig,
+			stateTracker: ctx.stateTracker!,
+			activityLogger: ctx.activityLogger!,
+			modelRegistry: ctx.modelRegistry,
+			settings: ctx.settings,
+			signal: ctx.signal,
+			profileRegistry: ctx.profileRegistry!,
+			roleAssetManager: ctx.roleAssetManager!,
+			runtime: ctx.runtime,
+			ircBus: ctx.runtime.commBus.ircBus ?? undefined,
+		});
+
+		try {
+			const result: StageResult = await stageController.run();
+
+			logger.info("[StageNodeBehavior] Stage complete", {
+				nodeId: ctx.node.id,
+				status: result.status,
+				agentCount: result.agents.length,
+				tasksCompleted: result.taskProgress.completed,
+			});
+
+			return this.#toNodeResult(ctx.node.id, result);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			logger.error("[StageNodeBehavior] Stage failed", { nodeId: ctx.node.id, error: msg });
+			return { nodeId: ctx.node.id, success: false, error: msg };
+		}
 	}
 
 	async validate(result: NodeResult, gate?: GateSpec): Promise<GateResult> {
@@ -287,6 +340,72 @@ export class StageNodeBehavior implements NodeBehavior {
 
 	async cleanup(ctx: NodeContext): Promise<void> {
 		return this.#delegate.cleanup(ctx);
+	}
+
+	// ── private helpers ───────────────────────────────────────────────────
+
+
+	#extractPlanContent(ctx: NodeContext): string {
+		for (const [, output] of Object.entries(ctx.upstreamOutputs)) {
+			if (output.result && typeof output.result === "string") {
+				return output.result;
+			}
+			if (output.summary) {
+				return output.summary;
+			}
+		}
+		logger.warn("[StageNodeBehavior] No plan content found in upstream outputs, using empty plan");
+		return "# Plan\n\nNo plan content available from upstream script node.";
+	}
+
+	#buildLoopConfig(): LoopSwarmConfig {
+		return {
+			maxIterations: 5,
+			autoRetry: true,
+			humanEscalation: true,
+			agents: {
+				initial: 4,
+				min: 1,
+				max: 12,
+				auto: true,
+				maxRounds: 5,
+				roundsConvergenceThreshold: 3,
+			},
+			debate: {
+				enabled: true,
+				maxRounds: 2,
+			},
+			planDebate: {
+				enabled: true,
+				agentCount: 2,
+				maxRounds: 3,
+				convergenceThreshold: 2,
+			},
+			convergenceThreshold: 2,
+			iterationTimeoutMs: 300_000,
+			enableDeliberation: true,
+		};
+	}
+
+	#toNodeResult(nodeId: string, result: StageResult): NodeResult {
+		const agentResults: Array<{ agentId: string; output: string; error?: string }> = [];
+		for (const [agentId, singles] of result.agentResults) {
+			for (const s of singles) {
+				agentResults.push({
+					agentId,
+					output: s.output ?? "",
+					error: s.error,
+				});
+			}
+		}
+
+		return {
+			nodeId,
+			success: result.status === "completed",
+			output: `Stage ${result.status} — ${result.taskProgress.completed}/${result.taskProgress.total} tasks by ${result.agents.length} agents`,
+			error: result.errors.length > 0 ? result.errors.join("; ") : undefined,
+			agentResults,
+		};
 	}
 }
 

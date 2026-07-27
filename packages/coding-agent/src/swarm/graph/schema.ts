@@ -280,6 +280,10 @@ export interface GateResult {
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { AgentRuntime } from "../agent-runtime";
+import type { RoleAssetManager } from "../../agent/role-asset";
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 
 /**
@@ -302,6 +306,14 @@ export interface NodeContext {
 	signal: AbortSignal;
 	/** Agent runtime for spawning sub-agents. */
 	runtime: AgentRuntime;
+	/** Role asset manager for library-based role resolution. */
+	roleAssetManager?: RoleAssetManager;
+	/** Agent profile registry for cross-run identity. */
+	profileRegistry?: ProfileRegistry;
+	/** State tracker for phase transitions and agent status. */
+	stateTracker?: StateTracker;
+	/** Activity logger for event auditing. */
+	activityLogger?: ActivityLogger;
 }
 
 /**

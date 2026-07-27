@@ -92,6 +92,8 @@ export interface SwarmState {
 	totalTokens?: number;
 	/** Cumulative assistant API request count across all agents in this run. */
 	totalRequests?: number;
+	/** Per-node cumulative token usage (nodeId → token count). */
+	nodeTokens?: Record<string, number>;
 }
 
 // ============================================================================

@@ -58,6 +58,8 @@ export interface CurtainRunnerOpts {
 	mnemopiClient?: MnemopiClient | null;
 	/** Promise that resolves when user applauds. Set up by the API endpoint. */
 	applaudSignal?: AbortSignal;
+	/** Graph name — scopes lessons to a specific graph definition at runtime. */
+	graphName?: string;
 }
 
 export interface CurtainResultData {
@@ -178,7 +180,8 @@ export async function runCurtainPipeline(
 	// convention and drive decayUnreferenced below.
 	const referencedRunIds: string[] = extraction.lessons.map(lesson => `${runId}-${lesson.type}`);
 	const lessonSink = MultiLessonSink.create({ experienceStore, hindsightClient, mnemopiClient });
-	await lessonSink.fanOut(extraction.lessons, extraction.stats, runId);
+	const fanOutMetadata = opts.graphName ? { graphName: opts.graphName } : undefined;
+	await lessonSink.fanOut(extraction.lessons, extraction.stats, runId, fanOutMetadata);
 
 	// Write summary
 	await experienceStore.writeSummary(runId, summaryMarkdown);

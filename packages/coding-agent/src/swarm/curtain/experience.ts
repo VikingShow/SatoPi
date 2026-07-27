@@ -434,8 +434,8 @@ export class ExperienceStore {
 		const db = this.#db!;
 		const weight = entry.weight ?? 1.0;
 		const sql = db.query(`
-			INSERT INTO lessons (run_id, timestamp, lesson_json, stats_json, tags, weight, last_referenced_at)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+			INSERT INTO lessons (run_id, timestamp, lesson_json, stats_json, tags, weight, last_referenced_at, graph_name, node_id, task_hash)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
 		`);
 
 		sql.run(
@@ -446,6 +446,9 @@ export class ExperienceStore {
 			entry.lesson.tags.join(", "),
 			weight,
 			entry.lastReferencedAt ?? null,
+			entry.graphName ?? null,
+			entry.nodeId ?? null,
+			entry.taskHash ?? null,
 		);
 
 		// Also append to jsonl

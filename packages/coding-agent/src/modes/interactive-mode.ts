@@ -138,7 +138,7 @@ import type { HookEditorComponent } from "./components/hook-editor";
 import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
-import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
+import { SwarmDashboardOverlay, type SwarmDashboardOverlayDeps } from "./components/swarm/swarm-dashboard-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -4329,6 +4329,8 @@ export class InteractiveMode implements InteractiveModeContext {
 						stateTracker: { state: bridge.swarmState },
 						activityLogger: bridge.activityLogger,
 						onSteering: (msg: string) => bridge.steer(msg),
+						graphDefinition: (bridge as unknown as Record<string, unknown>).graph as SwarmDashboardOverlayDeps["graphDefinition"],
+						gateController: (bridge as unknown as Record<string, unknown>).gateController as SwarmDashboardOverlayDeps["gateController"],
 					}
 				: {},
 		);

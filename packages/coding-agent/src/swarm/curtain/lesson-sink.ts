@@ -30,7 +30,12 @@ import type { ExtractedLesson, LoopRunStats } from "./extractor";
 export interface LessonSink {
 	readonly name: string;
 	/** Persist a batch of lessons. Implementations must not assume exclusivity. */
-	fanOut(lessons: ExtractedLesson[], stats: LoopRunStats, runId: string): Promise<void>;
+	fanOut(
+		lessons: ExtractedLesson[],
+		stats: LoopRunStats,
+		runId: string,
+		metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
+	): Promise<void>;
 }
 
 // ============================================================================
@@ -50,7 +55,12 @@ export class ExperienceStoreSink implements LessonSink {
 		this.#store = store;
 	}
 
-	async fanOut(lessons: ExtractedLesson[], stats: LoopRunStats, runId: string): Promise<void> {
+	async fanOut(
+		lessons: ExtractedLesson[],
+		stats: LoopRunStats,
+		runId: string,
+		metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
+	): Promise<void> {
 		for (const lesson of lessons) {
 			this.#store.saveLesson({
 				runId: `${runId}-${lesson.type}`,
@@ -58,6 +68,7 @@ export class ExperienceStoreSink implements LessonSink {
 				lesson,
 				stats,
 				weight: 1.0,
+				...(metadata ?? {}),
 			});
 		}
 	}
@@ -76,7 +87,12 @@ export class HindsightSink implements LessonSink {
 		this.#client = client;
 	}
 
-	async fanOut(lessons: ExtractedLesson[], _stats: LoopRunStats, runId: string): Promise<void> {
+	async fanOut(
+		lessons: ExtractedLesson[],
+		_stats: LoopRunStats,
+		runId: string,
+		_metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
+	): Promise<void> {
 		const items: HindsightLessonItem[] = lessons.map(lesson => ({
 			content: lesson.detail,
 			summary: lesson.summary,
@@ -105,7 +121,12 @@ export class MnemopiSink implements LessonSink {
 		this.#client = client;
 	}
 
-	async fanOut(lessons: ExtractedLesson[], _stats: LoopRunStats, _runId: string): Promise<void> {
+	async fanOut(
+		lessons: ExtractedLesson[],
+		_stats: LoopRunStats,
+		_runId: string,
+		_metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
+	): Promise<void> {
 		for (const lesson of lessons) {
 			await this.#client.remember(lesson.detail, {
 				lesson_type: lesson.type,
@@ -140,9 +161,16 @@ export class MultiLessonSink implements LessonSink {
 		this.#sinks = sinks;
 	}
 
-	async fanOut(lessons: ExtractedLesson[], stats: LoopRunStats, runId: string): Promise<void> {
+	async fanOut(
+		lessons: ExtractedLesson[],
+		stats: LoopRunStats,
+		runId: string,
+		metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
+	): Promise<void> {
 		if (lessons.length === 0) return;
-		const results = await Promise.allSettled(this.#sinks.map(s => s.fanOut(lessons, stats, runId)));
+		const results = await Promise.allSettled(
+			this.#sinks.map(s => s.fanOut(lessons, stats, runId, metadata)),
+		);
 		results.forEach((r, i) => {
 			if (r.status === "rejected") {
 				logger.warn(`[LessonSink] sink "${this.#sinks[i]?.name}" failed`, { error: String(r.reason) });

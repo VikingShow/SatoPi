@@ -55,6 +55,9 @@ import { launchStatsDashboard, parseStatsDashboardArgs } from "./helpers/stats-d
 import { handleTodoAcp } from "./helpers/todo";
 import { buildUsageReportText } from "./helpers/usage-report";
 import { parseMarketplaceInstallArgs, parsePluginScopeArgs } from "./marketplace-install-parser";
+import { loadGraphDefinition } from "../swarm/graph/schema";
+import { compileMermaidToGraph } from "../swarm/graph/mermaid-compiler";
+import { convertLoopFileToGraph } from "../swarm/graph/loop-converter";
 import type {
 	BuiltinSlashCommand,
 	ParsedSlashCommand,
@@ -1224,6 +1227,122 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		description: "Open Swarm dashboard",
 		handleTui: (_command, runtime) => {
 			runtime.ctx.showSwarmDashboard();
+			runtime.ctx.editor.setText("");
+		},
+	},
+	{
+		name: "graph",
+		description: "Theatre Graph commands",
+		subcommands: [
+			{ name: "run", description: "Open Swarm dashboard for the graph engine" },
+			{ name: "list", description: "List available graph definition files" },
+			{ name: "compile", description: "Compile Mermaid or loop YAML to a graph definition", usage: "<path>" },
+		],
+		allowArgs: true,
+		handle: async (command, runtime) => {
+			const { verb, rest } = parseSubcommand(command.args);
+			if (!verb) return usage("Usage: /graph [run|list|compile <path>]", runtime);
+			if (verb === "list") {
+				try {
+					const cwd = runtime.cwd;
+					const candidates = [
+						path.join(cwd, "graph.yaml"),
+						path.join(cwd, ".stp", "graph.yaml"),
+						path.join(cwd, "src", "swarm", "graph", "builtin", "theatre.graph.yaml"),
+					];
+					const results: string[] = [];
+					for (const p of candidates) {
+						try { await fs.access(p); results.push(p); } catch { /* skip */ }
+					}
+					if (results.length === 0) {
+						await runtime.output("No graph definition files found in project.");
+					} else {
+						await runtime.output(`Graph definition files:\n${results.map(r => `  ${r}`).join("\n")}`);
+					}
+					return commandConsumed();
+				} catch (err) {
+					return usage(`Failed to list graphs: ${errorMessage(err)}`, runtime);
+				}
+			}
+			if (verb === "compile") {
+				if (!rest) return usage("Usage: /graph compile <path-to-mermaid-or-loop-yaml>", runtime);
+				try {
+					const filePath = path.resolve(runtime.cwd, rest);
+					const content = await fs.readFile(filePath, "utf-8");
+					let def;
+					if (content.includes("graph TD") || content.includes("flowchart") || content.includes("graph LR")) {
+						const name = path.basename(filePath, path.extname(filePath));
+						def = compileMermaidToGraph(content, name);
+					} else {
+						def = await convertLoopFileToGraph(filePath);
+					}
+					await runtime.output(`Compiled graph "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`);
+					return commandConsumed();
+				} catch (err) {
+					return usage(`Compile failed: ${errorMessage(err)}`, runtime);
+				}
+			}
+			if (verb === "run") {
+				await runtime.output("Use /swarm to open the Swarm dashboard.");
+				return commandConsumed();
+			}
+			return usage("Usage: /graph [run|list|compile <path>]", runtime);
+		},
+		handleTui: async (command, runtime) => {
+			const { verb, rest } = parseSubcommand(command.args);
+			if (!verb || verb === "run") {
+				runtime.ctx.showSwarmDashboard();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "list") {
+				try {
+					const cwd = process.cwd();
+					const candidates = [
+						path.join(cwd, "graph.yaml"),
+						path.join(cwd, ".stp", "graph.yaml"),
+						path.join(cwd, "src", "swarm", "graph", "builtin", "theatre.graph.yaml"),
+					];
+					const results: string[] = [];
+					for (const p of candidates) {
+						try { await fs.access(p); results.push(p); } catch { /* skip */ }
+					}
+					if (results.length === 0) {
+						runtime.ctx.showStatus("No graph definition files found in project.");
+					} else {
+						runtime.ctx.showStatus(`Graphs: ${results.map(r => path.relative(cwd, r)).join(", ")}`);
+					}
+				} catch (err) {
+					runtime.ctx.showStatus(`Failed to list graphs: ${errorMessage(err)}`);
+				}
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "compile") {
+				if (!rest) {
+					runtime.ctx.showStatus("Usage: /graph compile <path-to-mermaid-or-loop-yaml>");
+					runtime.ctx.editor.setText("");
+					return;
+				}
+				try {
+					const cwd = process.cwd();
+					const filePath = path.resolve(cwd, rest);
+					const content = await fs.readFile(filePath, "utf-8");
+					let def;
+					if (content.includes("graph TD") || content.includes("flowchart") || content.includes("graph LR")) {
+						const name = path.basename(filePath, path.extname(filePath));
+						def = compileMermaidToGraph(content, name);
+					} else {
+						def = await convertLoopFileToGraph(filePath);
+					}
+					runtime.ctx.showStatus(`Compiled "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`);
+				} catch (err) {
+					runtime.ctx.showStatus(`Compile failed: ${errorMessage(err)}`);
+				}
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>]");
 			runtime.ctx.editor.setText("");
 		},
 	},

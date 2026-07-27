@@ -74,6 +74,10 @@ graph:
       timeout: "30m"
       max_context_tokens: 8000
 
+      # Auto agent count: the loop runtime determines the optimal
+      # number of worker agents from task complexity and plan size.
+      # Equivalent to loopConfig.agents.auto = true
+
     curtain:
       label: "Curtain · Reflection"
       description: |
