@@ -1731,6 +1731,47 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"magicKeywords.swarm.maxWorkers": {
+		type: "number",
+		default: 4,
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Max Workers",
+			description: "Maximum parallel workers during Stage phase (1-12)",
+		},
+	},
+	"magicKeywords.swarm.maxRounds": {
+		type: "number",
+		default: 3,
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Max Rounds",
+			description: "Maximum retry rounds during Stage phase",
+		},
+	},
+	"magicKeywords.swarm.autoApplaud": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Auto Applaud",
+			description: "Automatically complete Curtain without waiting for human applaud",
+		},
+	},
+	"magicKeywords.swarm.enableDebate": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Enable Plan Debate",
+			description: "Run a multi-agent debate to refine the plan before confirming",
+		},
+	},
+
 	// Notifications
 	"completion.notify": {
 		type: "enum",

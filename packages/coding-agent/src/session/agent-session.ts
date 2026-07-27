@@ -247,6 +247,8 @@ import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
 import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
+import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
+import type { SwarmEventCallback } from "../swarm/core/embedded-swarm-bridge";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
 import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
@@ -1728,6 +1730,8 @@ export class AgentSession {
 	/** Aggregate of the most recent stop's recorder closes; awaited by dispose() and
 	 *  used as the open barrier for the next build so two writers never share a file. */
 	#advisorRecorderClosed: Promise<void> = Promise.resolve();
+	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
+	#embeddedSwarm: EmbeddedSwarmBridge | null = null;
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -3320,6 +3324,11 @@ export class AgentSession {
 
 		agent.replaceMessages([summaryMessage, ...preparation.recentMessages]);
 		return false;
+	}
+
+	/** The embedded swarm bridge — created when "swarm" magic keyword is detected. */
+	get embeddedSwarm(): EmbeddedSwarmBridge | null {
+		return this.#embeddedSwarm;
 	}
 
 	/** Model registry for API key resolution and model discovery */
@@ -6122,6 +6131,7 @@ export class AgentSession {
 		this.agent.hasIrcInterrupts = undefined;
 		this.#stopAdvisorRuntime();
 		this.#evalExecutionDisposing = true;
+		this.#embeddedSwarm?.dispose().catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
 	}
 
 	/**
@@ -7962,6 +7972,13 @@ export class AgentSession {
 				attribution: "user",
 				timestamp,
 			});
+
+			// Initialize embedded swarm bridge (fire-and-forget — must not block the prompt)
+			if (!this.#embeddedSwarm) {
+				this.#initializeEmbeddedSwarm().catch(err => {
+					logger.error("Failed to init embedded swarm bridge", { error: String(err) });
+				});
+			}
 		}
 		if (
 			this.#magicKeywordEnabled("workflow") &&
@@ -7978,6 +7995,29 @@ export class AgentSession {
 			});
 		}
 		return keywordNotices;
+	}
+
+	async #initializeEmbeddedSwarm(): Promise<void> {
+		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
+		const swarmDir = `${process.cwd()}/.swarm_${sessionId}`;
+
+		this.#embeddedSwarm = new EmbeddedSwarmBridge(
+			{
+				workspace: process.cwd(),
+				swarmDir,
+				modelRegistry: this.#modelRegistry,
+				settings: this.settings,
+				maxWorkers: this.settings.get("magicKeywords.swarm.maxWorkers") as number ?? 4,
+				maxRounds: this.settings.get("magicKeywords.swarm.maxRounds") as number ?? 3,
+				autoApplaud: this.settings.get("magicKeywords.swarm.autoApplaud") as boolean ?? false,
+			},
+			(_event) => {
+				// Events forwarded to interactive-mode via the public embeddedSwarm getter
+			},
+		);
+
+		await this.#embeddedSwarm.init();
+		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
 	}
 
 	/**

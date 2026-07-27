@@ -4300,7 +4300,17 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 
-		const overlay = new SwarmDashboardOverlay({});
+		// Use real swarm state from the embedded bridge when active
+		const bridge = this.session.embeddedSwarm;
+		const overlay = new SwarmDashboardOverlay(
+			bridge
+				? {
+						fsm: bridge.fsm,
+						stateTracker: { state: bridge.swarmState },
+						activityLogger: bridge.activityLogger,
+					}
+				: {},
+		);
 
 		overlay.onClose = () => this.#hideSwarmDashboard();
 		overlay.onRequestRender = () => this.ui.requestRender();
