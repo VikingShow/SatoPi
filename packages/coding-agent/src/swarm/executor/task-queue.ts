@@ -213,6 +213,26 @@ export class TaskQueue extends EventEmitter {
 	}
 
 	/**
+	 * Release a claimed task back to the ready queue (for retry).
+	 *
+	 * Moves a task from in_progress → ready so it can be claimed again
+	 * by the same or a different agent. Used by StageController's retry logic.
+	 */
+	release(taskId: string, reason?: string): boolean {
+		const task = this.#tasks.get(taskId);
+		if (!task) return false;
+		if (task.status !== "in_progress") return false;
+
+		task.status = "ready";
+		task.assignedTo = undefined;
+		this.#inProgress.delete(taskId);
+		this.#readyQueue.push(taskId);
+
+		this.emit("task:released", taskId, reason);
+		return true;
+	}
+
+	/**
 	 * Add a new task to the queue dynamically (e.g. reviewer-created fix tasks).
 	 */
 	addTask(task: Omit<Task, "status">): void {

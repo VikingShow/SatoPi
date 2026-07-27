@@ -85,6 +85,10 @@ export interface StageOptions {
 	runtime?: AgentRuntime;
 	/** v3: CommBus for inter-agent communication (injected, not global singleton). */
 	commBus?: CommBus;
+	/** P5: Max retries per task before blocking (default 3). */
+	maxRetries?: number;
+	/** P5: Base delay for exponential backoff between retries (default 5000ms). */
+	retryBaseDelayMs?: number;
 }
 
 export interface StageResult {
@@ -372,6 +376,9 @@ export class StageController {
 		signal: AbortSignal | undefined,
 	): Promise<SingleResult[]> {
 		const { activityLogger } = this.#opts;
+		const maxRetries = this.#opts.maxRetries ?? 3;
+		const retryBaseDelayMs = this.#opts.retryBaseDelayMs ?? 5_000;
+		const retryCounts = new Map<string, number>();
 		const results: SingleResult[] = [];
 
 		// Keep claiming and executing tasks until the queue is empty or aborted
@@ -458,21 +465,66 @@ export class StageController {
 					);
 					activityLogger.logBroadcast("system", `${agent.id} completed: ${task.title}`);
 				} else {
-					queue.block(task.id, `Agent ${agent.id} failed with exit ${result.exitCode}`);
-					this.#opts.callbacks?.onTaskFailed(agent.id, task, `exit code ${result.exitCode}`);
+					// P5: Retry non-zero exit codes with exponential backoff
+					const retries = (retryCounts.get(task.id) ?? 0) + 1;
+					if (retries < maxRetries) {
+						retryCounts.set(task.id, retries);
+						const delay = retryBaseDelayMs * 2 ** (retries - 1);
+						activityLogger.logBroadcast(
+							"system",
+							`${agent.id}: task "${task.title}" exit ${result.exitCode} ` +
+								`(attempt ${retries}/${maxRetries}), retrying in ${delay}ms`,
+						);
+						queue.release(task.id, `retry ${retries}/${maxRetries}: exit ${result.exitCode}`);
+						await new Promise(r => setTimeout(r, delay));
+						continue; // retry
+					}
+					queue.block(
+						task.id,
+						`Agent ${agent.id} failed with exit ${result.exitCode} after ${maxRetries} attempts`,
+					);
+					this.#opts.callbacks?.onTaskFailed(
+						agent.id,
+						task,
+						`exit code ${result.exitCode} after ${maxRetries} attempts`,
+					);
 					// v3: also fire HookPipeline error event
 					void this.#opts.hookPipeline?.trigger(
 						"agent:onError",
-						{ agentId: agent.id, taskId: task.id, error: `exit code ${result.exitCode}` },
+						{
+							agentId: agent.id,
+							taskId: task.id,
+							error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
+						},
 						{ phase: "stage" },
 					);
-					activityLogger.logBroadcast("system", `${agent.id} failed: ${task.title} (exit ${result.exitCode})`);
+					activityLogger.logBroadcast(
+						"system",
+						`${agent.id} failed: ${task.title} (exit ${result.exitCode} after ${maxRetries} attempts)`,
+					);
 				}
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
-				queue.block(task.id, msg);
-				this.#opts.callbacks?.onTaskFailed(agent.id, task, msg);
-				activityLogger.logCrash(agent.id, msg);
+				const retries = (retryCounts.get(task.id) ?? 0) + 1;
+
+				if (retries < maxRetries) {
+					// P5: Retry with exponential backoff
+					retryCounts.set(task.id, retries);
+					const delay = retryBaseDelayMs * 2 ** (retries - 1);
+					activityLogger.logBroadcast(
+						"system",
+						`${agent.id}: task "${task.title}" failed (attempt ${retries}/${maxRetries}), ` +
+							`retrying in ${delay}ms: ${msg}`,
+					);
+					queue.release(task.id, `retry ${retries}/${maxRetries}: ${msg}`);
+					await new Promise(r => setTimeout(r, delay));
+					continue; // retry — the released task will be re-claimed
+				}
+
+				// Max retries exhausted — block the task permanently
+				queue.block(task.id, `Failed after ${maxRetries} attempts: ${msg}`);
+				this.#opts.callbacks?.onTaskFailed(agent.id, task, `Failed after ${maxRetries} attempts: ${msg}`);
+				activityLogger.logCrash(agent.id, `Failed after ${maxRetries} attempts: ${msg}`);
 			}
 		}
 
