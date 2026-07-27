@@ -1772,6 +1772,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"swarm.engine": {
+		type: "enum",
+		values: ["graph", "legacy"],
+		default: "legacy",
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Swarm Engine",
+			description: "Graph engine for swarm execution (graph = new Theatre Graph, legacy = current)",
+		},
+	},
+
 	// Notifications
 	"completion.notify": {
 		type: "enum",

@@ -62,6 +62,7 @@ export const CTX = {
 	CONVERSATION: "script_turn" as const,
 	SCRIPT: "script_state" as const,
 	CONVERSATION_SNAPSHOT: "conversation_snapshot" as const,
+	GRAPH_CHECKPOINT: "graph_checkpoint" as const,
 } as const;
 
 // ============================================================================
@@ -218,6 +219,11 @@ export class SwarmSessionManager {
 	 */
 	logConversationSnapshot(turns: Array<{ role: string; content: string }>): void {
 		this.#session.appendCustomEntry(CTX.CONVERSATION_SNAPSHOT, { ts: Date.now(), turns });
+	}
+
+	/** Generic custom entry append — for domain-specific entry types not covered by the typed helpers above. */
+	appendCustomEntry(customType: string, data?: unknown): string {
+		return this.#session.appendCustomEntry(customType, data);
 	}
 
 	// -- Lifecycle ------------------------------------------------------------

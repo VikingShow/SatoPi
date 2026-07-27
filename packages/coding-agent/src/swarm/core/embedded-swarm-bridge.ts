@@ -27,7 +27,7 @@ import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from 
 import type { AgentRuntime } from "../agent-runtime";
 import { assembleAgentRuntime, type AssemblerOptions } from "./assembler";
 import type { LoopSwarmConfig } from "./schema";
-import { StateTracker, type Chapter } from "./state";
+import { StateTracker, type Chapter, type SwarmState } from "./state";
 import { WorkflowFsm, PHASES } from "./workflow-fsm";
 import { runCurtainPipeline, type CurtainResultData } from "../curtain/curtain-runner";
 import { HookPipeline } from "../hook-system/hook-pipeline";
@@ -82,6 +82,31 @@ export interface SwarmAgentEvent {
 	error?: string;
 }
 
+
+// ============================================================================
+// ISwarmOrchestrator — shared interface for SwarmRunner and GraphRunner
+// ============================================================================
+
+/**
+ * Common orchestrator interface implemented by both EmbeddedSwarmBridge
+ * (magic keyword) and GraphRunner (theatre graph engine).  TUI components
+ * and agent-session reference this interface so the engine is swappable.
+ */
+export interface ISwarmOrchestrator {
+	init(): Promise<void>;
+	dispose(): Promise<void>;
+	onPlanUpdated(content: string): void;
+	confirmScript(): Promise<string[]>;
+	steer(message: string): Promise<void>;
+	applaud(): void;
+	pauseStage(): Promise<void>;
+	readonly fsm: WorkflowFsm;
+	readonly stateTracker: StateTracker;
+	readonly activityLogger: ActivityLogger;
+	readonly swarmState: Readonly<SwarmState>;
+	readonly currentPhase: Chapter;
+	readonly isRunning: boolean;
+}
 export type SwarmEventCallback = (event: SwarmPhaseEvent | SwarmAgentEvent) => void;
 
 // ============================================================================

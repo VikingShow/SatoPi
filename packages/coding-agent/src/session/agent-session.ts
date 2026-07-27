@@ -247,7 +247,7 @@ import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
 import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
-import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
+import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
 import type { SwarmEventCallback } from "../swarm/core/embedded-swarm-bridge";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
@@ -1731,7 +1731,7 @@ export class AgentSession {
 	 *  used as the open barrier for the next build so two writers never share a file. */
 	#advisorRecorderClosed: Promise<void> = Promise.resolve();
 	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
-	#embeddedSwarm: EmbeddedSwarmBridge | null = null;
+	#embeddedSwarm: ISwarmOrchestrator | null = null;
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";

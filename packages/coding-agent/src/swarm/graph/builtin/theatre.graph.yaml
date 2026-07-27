@@ -1,0 +1,100 @@
+# Theatre — SatoPi Built-in Three-Phase Workflow Graph
+#
+# This is the built-in graph that runs when the user types "swarm" magic keyword
+# or invokes `stp swarm run`.  It mirrors the existing SwarmRunner lifecycle:
+#   Script → Stage → Curtain
+#
+# Users can extend this graph by copying it to .stp/graphs/ and adding nodes.
+
+name: theatre
+description: "SatoPi built-in three-phase workflow: Script → Stage → Curtain"
+version: 1
+revision: 1
+strategy: waves
+builtin: true
+
+nodes:
+  script:
+    label: "Script · Planning"
+    description: |
+      Interactive planning phase. An agent converses with the user to
+      understand requirements, researches the codebase, and produces a
+      structured plan.md with phase-by-phase task breakdown.
+    type: script
+    role: planner
+    tools:
+      - read
+      - grep
+      - glob
+      - write
+      - edit
+      - todo
+      - agent_ask
+      - web_search
+      - bash
+    outputs:
+      - type: file
+        path: plan.md
+        description: "Structured execution plan with phases and tasks"
+    gate:
+      type: human-review
+      mode: always
+      prompt: "Plan is ready. Review the phases and confirm to launch Stage."
+      options:
+        - "Launch Stage"
+        - "Revise Plan"
+        - "Cancel"
+    timeout: "0"
+
+  stage:
+    label: "Stage · Execution"
+    description: |
+      Parallel execution phase. Parses plan.md into a DAG task queue,
+      spawns worker agents with assigned roles, and executes tasks in
+      waves. Agents can fork themselves for heavy workloads.
+    type: stage
+    role: stage-controller
+    depends_on:
+      - script
+    tools:
+      - read
+      - write
+      - edit
+      - grep
+      - bash
+      - task
+      - irc
+      - todo
+      - agent_fork
+    heavy: true
+    gate:
+      type: compile-check
+      command: "bun check && bun test"
+      mode: on-failure
+    timeout: "30m"
+    max_context_tokens: 8000
+
+  curtain:
+    label: "Curtain · Reflection"
+    description: |
+      Closing phase. Elects a reporter agent to summarize the delivery,
+      runs reflection agents to extract lessons, and persists experience
+      to the ExperienceStore. Optionally awaits human applaud.
+    type: curtain
+    role: reflector
+    depends_on:
+      - stage
+    tools:
+      - read
+      - write
+      - todo
+      - bash
+    gate:
+      type: human-review
+      mode: always
+      prompt: "Delivery complete. Review the summary and applaud to finish."
+      options:
+        - "Applaud"
+        - "Needs Revision"
+    timeout: "5m"
+    continue_on_failure: true
