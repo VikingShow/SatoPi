@@ -1,7 +1,7 @@
 import { padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { gradientEscape, gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
 import { theme } from "../../theme/theme";
-import { renderSplash } from "../../../swarm/tui/splash";
+import { renderSplash } from "../../components/swarm/splash";
 
 export const SETUP_SPLASH_MS = 2600;
 export const SETUP_TICK_MS = 33;
@@ -40,7 +40,7 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 	const w = Math.max(1, width);
 	const h = Math.max(1, height);
 
-	// Use SatoPi brand splash from swarm/tui
+	// Use SatoPi brand splash from modes/components/swarm
 	if (w >= 60 && h >= 28) return renderSplash(w);
 
 	// Compact animated fallback for small terminals

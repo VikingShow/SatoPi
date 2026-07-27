@@ -27,6 +27,7 @@ import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
+import type { MnemopiClient } from "../infra/mnemopi-adapter";
 import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
@@ -51,6 +52,8 @@ export interface SharedServices {
 	markEnvironment: MarkEnvironment;
 	/** Remote Hindsight handle for cross-session recall/retain. Null when unconfigured. */
 	hindsightClient?: SwarmHindsightClient | null;
+	/** Semantic memory handle for swarm recall/storage. Null when unavailable. */
+	mnemopiClient?: MnemopiClient | null;
 }
 
 /** The complete per-session service graph. */

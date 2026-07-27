@@ -1,4 +1,4 @@
-import type { Chapter } from "../core/state";
+import type { Chapter } from "../../../swarm/core/state";
 
 /** SatoPi brand color palette — adapted from swarm-gui CSS design tokens */
 export const SATOPI_COLORS = {

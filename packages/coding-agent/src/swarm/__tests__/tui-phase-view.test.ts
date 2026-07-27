@@ -12,7 +12,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Chapter, SwarmState } from "../core/state";
 import { renderPhaseView } from "../../modes/components/swarm/phase-view";
-import { PHASE_DISPLAY } from "../tui/theme";
+import { PHASE_DISPLAY } from "../../modes/components/swarm/theme";
 
 /** Minimal SwarmState factory for test isolation */
 function makeState(overrides: Partial<SwarmState> = {}): SwarmState {

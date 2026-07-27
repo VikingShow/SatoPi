@@ -135,6 +135,7 @@ export class CurtainBehavior implements PhaseBehavior {
 					"Summarize the completed build for the user. " +
 					"Report what was built, key files created/modified, " +
 					"test results, and any issues or remaining work.",
+				phase: this.phase,
 			},
 			// Reflector: analyzes the run and extracts lessons learned
 			{
@@ -145,6 +146,7 @@ export class CurtainBehavior implements PhaseBehavior {
 					"Analyze the completed swarm run and extract lessons learned. " +
 					"What went well? What could be improved? " +
 					"Are there patterns that should be reused or avoided in future runs?",
+				phase: this.phase,
 			},
 		];
 

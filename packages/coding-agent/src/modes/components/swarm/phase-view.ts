@@ -1,5 +1,5 @@
 import type { Chapter, SwarmState } from "../../../swarm/core/state";
-import { ansiBold, ansiDim, ansiFg, PHASE_DISPLAY, SATOPI_COLORS } from "../../../swarm/tui/theme";
+import { ansiBold, ansiDim, ansiFg, PHASE_DISPLAY, SATOPI_COLORS } from "./theme";
 
 /**
  * Ordered list of all phases in lifecycle sequence.

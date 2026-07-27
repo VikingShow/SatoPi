@@ -6,7 +6,7 @@
  *  - Offload L1→L3 pipeline stats
  *  - Per-agent context window usage
  */
-import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "../../../swarm/tui/theme";
+import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "./theme";
 
 // ============================================================================
 // ANSI stripping (not exported by theme)

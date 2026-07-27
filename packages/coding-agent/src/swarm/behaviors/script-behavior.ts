@@ -64,6 +64,7 @@ export class ScriptBehavior implements PhaseBehavior {
 				roleSource: "library",
 				task: taskPrompt || "Analyze the project and create a build plan.",
 				modelPreference: "smartest",
+				phase: this.phase,
 			},
 		]);
 		this.#planner = planner;

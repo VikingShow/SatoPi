@@ -25,6 +25,8 @@ import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
 import { ActivityLogger } from "../swarm/hooks/activity-logger";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
+import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
+import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
 import { ScriptManager } from "../swarm/script/script-manager";
 import { SessionRegistry } from "../swarm/session";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
@@ -78,6 +80,10 @@ async function createSwarmServices(
 	// project has no Hindsight config — sources/sinks then degrade to no-ops.
 	const hindsightClient = createSwarmHindsightClient(settings, cwd);
 
+	// Mnemopi semantic memory handle — creates a standalone Mnemopi instance
+	// for the swarm session. Null when Mnemopi is unavailable or unconfigured.
+	const mnemopiClient = await createSwarmMnemopiClient(settings, cwd);
+
 	const profileRegistry = new ProfileRegistry();
 	const markEnvironment = new MarkEnvironment();
 	const roleAssetManager = new RoleAssetManager(cwd);
@@ -93,6 +99,7 @@ async function createSwarmServices(
 		profileRegistry,
 		markEnvironment,
 		hindsightClient,
+		mnemopiClient,
 	};
 
 	const factory: SessionFactory = async (s, name, swarmDir) => {
@@ -106,6 +113,12 @@ async function createSwarmServices(
 			offloadManager: new NoopOffloadManager(),
 			profileRegistry: s.profileRegistry,
 			experienceStore: s.experienceStore,
+			mnemopiAdapter: s.mnemopiClient ? new SwarmMnemopiAdapter(s.mnemopiClient, {
+				enabled: true,
+				topK: 5,
+				deduplicate: true,
+				autoStoreThreshold: 5,
+			}) : undefined,
 		});
 
 		// Assemble AgentRuntime with full DI (no global singletons).
@@ -120,6 +133,7 @@ async function createSwarmServices(
 			ircBus,
 			experienceStore: s.experienceStore,
 			hindsightClient: s.hindsightClient,
+			mnemopiClient: s.mnemopiClient,
 		});
 
 		// SwarmRunner with AgentRuntime — StageController will use

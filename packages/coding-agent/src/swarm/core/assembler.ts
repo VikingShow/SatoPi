@@ -88,11 +88,10 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 	//    Memory sources are registered when their backing handle is available;
 	//    each source no-ops (or is skipped) when its dependency is absent, so an
 	//    unconfigured environment degrades gracefully.
-	//    NOTE: AgentRuntime.spawnOne currently passes a hardcoded phase="stage"
-	//    BuildContext, so phase-filtered sources (e.g. ExperienceSource, which
-	//    applies only to script/script-debate) will not fire until the real
-	//    phase is threaded through spawn. All-phase sources (Mnemopi, Hindsight)
-	//    are unaffected. See spawnOne() for the follow-up.
+	//    AgentRuntime.spawnOne() uses spec.phase (when provided by the behavior)
+	//    as BuildContext.phase, so phase-filtered sources like ExperienceSource
+	//    ("script"/"script-debate" only) now fire correctly when the caller
+	//    passes the real phase. Fallback is "stage" for backward compat.
 	const contextPipeline = new ContextPipeline();
 	if (opts.experienceStore) {
 		contextPipeline.register(new ExperienceSource(opts.experienceStore));

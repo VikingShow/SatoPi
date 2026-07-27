@@ -31,6 +31,7 @@ import type { CurtainResult } from "../curtain/types";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
+import type { MnemopiClient } from "../infra/mnemopi-adapter";
 import { createStageFeedback } from "../infra/swarm-hooks";
 import { stampAndArchivePlanMd } from "../script";
 import { getSessionPlanPath } from "../script/plan-paths";
@@ -59,6 +60,7 @@ export class SwarmRunner implements RunManager {
 	#markEnvironment: MarkEnvironment;
 	#roleAssetManager: RoleAssetManager;
 	#hindsightClient: SwarmHindsightClient | null;
+	#mnemopiClient: MnemopiClient | null;
 
 	/** v3: Workflow FSM (per-session). */
 	#fsm: WorkflowFsm | undefined;
@@ -83,6 +85,7 @@ export class SwarmRunner implements RunManager {
 		hookPipeline?: HookPipeline;
 		runtime?: AgentRuntime;
 		hindsightClient?: SwarmHindsightClient | null;
+		mnemopiClient?: MnemopiClient | null;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -99,6 +102,7 @@ export class SwarmRunner implements RunManager {
 		this.#hookPipeline = opts.hookPipeline;
 		this.#runtime = opts.runtime;
 		this.#hindsightClient = opts.hindsightClient ?? null;
+		this.#mnemopiClient = opts.mnemopiClient ?? null;
 	}
 
 	get isRunning(): boolean {
@@ -243,6 +247,7 @@ export class SwarmRunner implements RunManager {
 			profileRegistry: this.#profileRegistry,
 			commBus: this.#runtime?.commBus,
 			hindsightClient: this.#hindsightClient,
+			mnemopiClient: this.#mnemopiClient,
 		});
 		if (result_) this.#lastCurtainResult = { ...result_, iterations: result_.totalTasks };
 	}

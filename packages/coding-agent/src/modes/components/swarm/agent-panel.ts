@@ -6,7 +6,7 @@
  */
 
 import type { AgentState, AgentStatus, SwarmState } from "../../../swarm/core/state";
-import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "../../../swarm/tui/theme";
+import { ansiBold, ansiDim, ansiFg, SATOPI_COLORS } from "./theme";
 
 // ============================================================================
 // ANSI stripping (not exported by theme)

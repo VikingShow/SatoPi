@@ -116,6 +116,7 @@ export class StageBehavior implements PhaseBehavior {
 				role,
 				roleSource: "library" as const,
 				task: initialTask,
+				phase: this.phase,
 			};
 		});
 

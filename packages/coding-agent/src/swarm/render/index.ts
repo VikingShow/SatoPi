@@ -1,11 +1,10 @@
 // TUI rendering and streaming output
 //
-// NOTE: The dashboard/panel render functions moved to
-// `modes/components/swarm/` (the system TUI component layer) and are wrapped by
-// SwarmDashboardComponent there. Only the swarm-owned splash/theme/streaming
-// helpers remain re-exported here.
+// NOTE: The dashboard/panel render functions and shared theme/splash helpers
+// have moved to `modes/components/swarm/` (the system TUI component layer).
+// This barrel re-exports from there for callers that go through `swarm/render`.
 
-export { renderSplash } from "../tui/splash";
+export { renderSplash } from "../../modes/components/swarm/splash";
 export {
 	ansiBold,
 	ansiDim,
@@ -13,5 +12,5 @@ export {
 	PHASE_DISPLAY,
 	PI_LOGO_ASCII,
 	SATOPI_COLORS,
-} from "../tui/theme";
+} from "../../modes/components/swarm/theme";
 export { createStreamProgressHandler, streamAgentOutput } from "./streaming";

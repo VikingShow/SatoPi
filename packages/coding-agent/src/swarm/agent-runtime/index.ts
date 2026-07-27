@@ -342,8 +342,11 @@ export class AgentRuntime {
 		}
 
 		// 3. Assemble context via ContextPipeline
+		//    Use spec.phase when the caller provides it; fall back to "stage"
+		//    so phase-filtered sources (e.g. ExperienceSource for "script"
+		//    / "script-debate") fire correctly.
 		const phaseInfo: PhaseInfo = {
-			phase: "stage",
+			phase: spec.phase ?? "stage",
 			multiAgent: true,
 			humanMode: "observer",
 		};
@@ -437,7 +440,7 @@ export class AgentRuntime {
 		await this.#hookPipeline.trigger(
 			"agent:afterSpawn",
 			{ agentId, role: spec.role, handle },
-			{ agentId, phase: "stage" },
+			{ agentId, phase: spec.phase ?? "stage" },
 		);
 
 		// 6.5 Wire lifecycle callbacks for persistent agents

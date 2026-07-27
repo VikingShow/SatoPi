@@ -41,6 +41,17 @@ export interface AgentSpec {
 	modelPreference?: "cheapest" | "smartest" | "role-default";
 
 	/**
+	 * Workflow phase this agent is spawned in.
+	 *
+	 * When set, spawnOne() uses this as BuildContext.phase instead of the
+	 * hardcoded "stage" fallback, so phase-filtered context sources like
+	 * ExperienceSource (applies only to "script"/"script-debate") fire
+	 * correctly. When omitted, falls back to "stage" for backward
+	 * compatibility.
+	 */
+	phase?: import("../core/state").Chapter;
+
+	/**
 	 * Links this spec to a persistent agent identity in the AgentRegistry.
 	 * When set, the AgentRuntime associates the spawned agent with an existing
 	 * profile so its state (callbacks, status) can be tracked across lifetime events.

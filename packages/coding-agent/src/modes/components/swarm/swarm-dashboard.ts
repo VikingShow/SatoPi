@@ -18,7 +18,7 @@ import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
 import { type ContextPanelState, renderContextPanel } from "./context-panel";
 import { renderPhaseView } from "./phase-view";
-import { ansiDim } from "../../../swarm/tui/theme";
+import { ansiDim } from "./theme";
 
 // ============================================================================
 // Types

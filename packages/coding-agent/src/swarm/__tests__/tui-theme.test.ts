@@ -11,8 +11,8 @@
 
 import { describe, expect, it } from "bun:test";
 import type { Chapter } from "../core/state";
-import { renderSplash } from "../tui/splash";
-import { ansiBold, ansiDim, ansiFg, PHASE_DISPLAY, PI_LOGO_ASCII, SATOPI_COLORS } from "../tui/theme";
+import { renderSplash } from "../../modes/components/swarm/splash";
+import { ansiBold, ansiDim, ansiFg, PHASE_DISPLAY, PI_LOGO_ASCII, SATOPI_COLORS } from "../../modes/components/swarm/theme";
 
 // ============================================================================
 // SATOPI_COLORS
