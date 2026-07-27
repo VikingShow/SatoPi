@@ -1775,7 +1775,7 @@ export const SETTINGS_SCHEMA = {
 	"swarm.engine": {
 		type: "enum",
 		values: ["graph", "legacy"],
-		default: "legacy",
+		default: "graph",
 		ui: {
 			tab: "magic",
 			group: "Swarm",

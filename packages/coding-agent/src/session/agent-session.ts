@@ -248,6 +248,7 @@ import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionStat
 import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
 import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
 import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
+import { GraphRunner } from "../swarm/graph/graph-runner";
 import type { SwarmEventCallback } from "../swarm/core/embedded-swarm-bridge";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
@@ -7999,6 +8000,21 @@ export class AgentSession {
 
 	async #initializeEmbeddedSwarm(): Promise<void> {
 		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
+		const engine = (this.settings.get("swarm.engine") as string) ?? "legacy";
+
+		if (engine === "graph") {
+			const graphPath = path.join(process.cwd(), "src/swarm/graph/builtin/theatre.graph.yaml");
+			this.#embeddedSwarm = new GraphRunner({
+				workspace: process.cwd(),
+				graphPath,
+				modelRegistry: this.#modelRegistry,
+				settings: this.settings,
+			});
+			await this.#embeddedSwarm.init();
+			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
+			return;
+		}
+
 		const swarmDir = `${process.cwd()}/.swarm_${sessionId}`;
 
 		this.#embeddedSwarm = new EmbeddedSwarmBridge(
