@@ -21,7 +21,7 @@ import { type ContextPanelState, renderContextPanel } from "./context-panel";
 import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { renderPhaseView } from "./phase-view";
 import { sato } from "./theme";
-
+import { type GraphViewInput, renderGraphView } from "./graph-view";
 // ============================================================================
 // Types
 // ============================================================================
@@ -33,7 +33,9 @@ export interface DashboardInput {
 	messages: CommMessage[];
 	/** Context & offload pipeline state */
 	context: ContextPanelState;
-}
+	/** Optional graph view — shown when mode is "graph" */
+	graphView?: GraphViewInput;
+ }
 
 // ============================================================================
 // Layout
@@ -45,6 +47,12 @@ export function renderDashboard(input: DashboardInput, width: number = 80): stri
 	const compactThreshold = 60;
 	const twoColumnThreshold = 100;
 
+	// When graph view data is present, show DAG visualization
+	if (input.graphView) {
+		const header = [sato.bold("Theatre Graph"), ""];
+		const graph = renderGraphView(input.graphView);
+		return [...header, ...graph];
+	}
 	if (minWidth < compactThreshold) {
 		return renderCompact(input, minWidth);
 	}
