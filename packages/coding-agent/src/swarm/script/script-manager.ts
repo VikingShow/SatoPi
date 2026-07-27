@@ -12,21 +12,20 @@
  */
 
 import * as fs from "node:fs/promises";
-import type { ModelRegistry, Settings, AgentDefinition, AgentSource } from "@oh-my-pi/pi-coding-agent";
+import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { StateTracker, Chapter } from "../core/state";
-import type { ActivityLogger } from "../hooks/activity-logger";
-import type { ExperienceStore } from "../curtain/experience";
-import type { RunManager } from "../core/services";
-import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
-import { generatePlanningPrompt, runPlanDebate } from "./script-planner";
-import { streamAgentOutput } from "../render/streaming";
-import { getSessionPlanPath } from "./plan-paths";
-import { parseSwarmYaml, validateSwarmDefinition, type LoopSwarmConfig } from "../core/schema";
-import { CommBus } from "../comm-bus/comm-bus";
 import type { AgentRuntime } from "../agent-runtime";
+import { CommBus } from "../comm-bus/comm-bus";
+import { type LoopSwarmConfig, parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
+import type { RunManager } from "../core/services";
+import type { Chapter, StateTracker } from "../core/state";
+import type { ExperienceStore } from "../curtain/experience";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import { getSessionPlanPath } from "./plan-paths";
+import { generatePlanningPrompt, runPlanDebate } from "./script-planner";
 
 // ============================================================================
 // Types
@@ -64,6 +63,7 @@ export class ScriptManager {
 	#runManager: RunManager;
 	#profileRegistry?: ProfileRegistry;
 	#roleAssetManager?: RoleAssetManager;
+	#commBus: CommBus;
 
 	#conversation: ConversationTurn[] = [];
 	#taskDescription = "";
@@ -99,6 +99,7 @@ export class ScriptManager {
 		runManager: RunManager;
 		profileRegistry?: ProfileRegistry;
 		roleAssetManager?: RoleAssetManager;
+		commBus?: CommBus;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -111,19 +112,28 @@ export class ScriptManager {
 		this.#runManager = opts.runManager;
 		this.#profileRegistry = opts.profileRegistry;
 		this.#roleAssetManager = opts.roleAssetManager;
-		// Wire CommBus singleton with the activity logger for unified Human messaging
-		CommBus.global().setActivityLogger(opts.activityLogger);
-
+		// Use injected CommBus, or fall back to global singleton for backward compat
+		this.#commBus = opts.commBus ?? CommBus.global();
+		this.#commBus.setActivityLogger(opts.activityLogger);
 	}
 
 	async #saveConversation(): Promise<void> {
-		try { this.#sessionManager?.logConversationSnapshot(this.#conversation); }
-		catch (err) { logger.warn("Failed to save conversation history", { error: String(err) }); }
+		try {
+			this.#sessionManager?.logConversationSnapshot(this.#conversation);
+		} catch (err) {
+			logger.warn("Failed to save conversation history", { error: String(err) });
+		}
 	}
 
-	getHistory(): ConversationTurn[] { return [...this.#conversation]; }
-	setSessionManager(sm: SwarmSessionManager): void { this.#sessionManager = sm; }
-	get isBusy(): boolean { return this.#busy; }
+	getHistory(): ConversationTurn[] {
+		return [...this.#conversation];
+	}
+	setSessionManager(sm: SwarmSessionManager): void {
+		this.#sessionManager = sm;
+	}
+	get isBusy(): boolean {
+		return this.#busy;
+	}
 
 	getState(): ScriptState {
 		return {
@@ -192,7 +202,7 @@ export class ScriptManager {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
 		// Route through CommBus for unified Human message handling (logging included)
-		await CommBus.global().receiveFromHuman(text, "planner");
+		await this.#commBus.receiveFromHuman(text, "planner");
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
 		this.#planMtime = await this.#getPlanMtime();
@@ -218,8 +228,11 @@ export class ScriptManager {
 
 		const planPath = getSessionPlanPath(this.#swarmDir);
 		let draftPlan: string;
-		try { draftPlan = await Bun.file(planPath).text(); }
-		catch { return { success: false, error: "No plan.md found. Ask the planner to generate one first." }; }
+		try {
+			draftPlan = await Bun.file(planPath).text();
+		} catch {
+			return { success: false, error: "No plan.md found. Ask the planner to generate one first." };
+		}
 
 		const loopConfig = await this.#readLoopConfig();
 		if (!loopConfig) return { success: false, error: "Failed to parse loop.yaml" };
@@ -227,17 +240,27 @@ export class ScriptManager {
 		this.#busy = true;
 		(async () => {
 			try {
-				this.#activityLogger.logBroadcast("system",
-					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`);
+				this.#activityLogger.logBroadcast(
+					"system",
+					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
+				);
 
-				const result = await runPlanDebate(draftPlan, this.#swarmDir, this.#workspace, loopConfig,
-					this.#modelRegistry, this.#settings);
+				const result = await runPlanDebate(
+					draftPlan,
+					this.#swarmDir,
+					this.#workspace,
+					loopConfig,
+					this.#modelRegistry,
+					this.#settings,
+				);
 
 				this.#activityLogger.logPhase("plan-updated");
 				this.#planReady = true;
 				this.#activityLogger.logPhase("debate-done");
-				this.#activityLogger.logBroadcast("system",
-					`Plan debate ${result.converged ? "converged" : "completed"} (${result.refined ? "refined" : "unchanged"}). Review the plan and click "Confirm & Start" to begin.`);
+				this.#activityLogger.logBroadcast(
+					"system",
+					`Plan debate ${result.converged ? "converged" : "completed"} (${result.refined ? "refined" : "unchanged"}). Review the plan and click "Confirm & Start" to begin.`,
+				);
 
 				this.#phase = "script-confirm";
 				await this.#setPhase("script-confirm");
@@ -246,7 +269,9 @@ export class ScriptManager {
 				this.#activityLogger.logBroadcast("system", `[Error] Debate failed: ${String(err)}`);
 				this.#phase = "script";
 				await this.#setPhase("script");
-			} finally { this.#busy = false; }
+			} finally {
+				this.#busy = false;
+			}
 		})();
 
 		return { success: true };
@@ -281,7 +306,7 @@ export class ScriptManager {
 		this.#busy = false;
 		this.#selectedAgentId = undefined;
 		this.#abortController?.abort();
-			this.#phase = "idle";
+		this.#phase = "idle";
 		await this.#setPhase("idle");
 		this.#activityLogger.logPhase("script-cancelled");
 		this.#activityLogger.logBroadcast("system", "Script phase cancelled.");
@@ -290,62 +315,54 @@ export class ScriptManager {
 
 	async #runPlannerAgent(): Promise<void> {
 		this.#busy = true;
-		const msgId = `planner-${Date.now()}`;
 		let planPoll: ReturnType<typeof setInterval> | undefined;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();
-			const loopConfig = await this.#readLoopConfig();
 			const plannerRole = await this.#resolvePlannerRole();
-
-			let displayOutput: string;
 
 			// Phase A4: AgentRuntime is required. Legacy runSubprocess fallback removed.
 			if (!this.#runtime) {
-				throw new Error(
-					"[ScriptManager] AgentRuntime is required. Call setRuntime() before starting the planner.",
-				);
+				throw new Error("[ScriptManager] AgentRuntime is required. Call setRuntime() before starting the planner.");
 			}
+
 			// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
-				const [planner] = await this.#runtime.spawn([{
+			const [planner] = await this.#runtime.spawn([
+				{
 					id: this.#selectedAgentId ?? "planner",
 					role: "planner",
 					roleSource: plannerRole ? "library" : "inline",
-					inline: !plannerRole ? {
-						systemPrompt: this.#buildPlannerSystemPrompt(null),
-						tools: ["write", "read", "grep", "glob", "bash"],
-					} : undefined,
+					inline: !plannerRole
+						? {
+								systemPrompt: this.#buildPlannerSystemPrompt(null),
+								tools: ["write", "read", "grep", "glob", "bash"],
+							}
+						: undefined,
 					task: taskText,
 					modelPreference: "smartest",
-				}]);
+				},
+			]);
 
-				const result = await planner.wait();
-				displayOutput = (result?.output ?? result) ?? "(no output)";
-			} else {
-				if (plannerRole?.tools && plannerRole.tools.length > 0) agentDef.tools = plannerRole.tools;
+			const result = await planner.wait();
+			const displayOutput = result?.output ?? result ?? "(no output)";
 
-				const planPath = getSessionPlanPath(this.#swarmDir);
-				let planFileDetected = false;
-				planPoll = setInterval(() => {
-					try {
-						const file = Bun.file(planPath);
-						if (file.size > 0 && !planFileDetected) {
-							planFileDetected = true;
-							this.#activityLogger.logBroadcast("system",
-								"Writing plan.md... The draft will appear in the Plan panel when complete.");
-						}
-					} catch { /* file not yet created */ }
-				}, 500);
-
-				const result = await streamAgentOutput(
-					{ activityLogger: this.#activityLogger, msgId, from: this.#selectedAgentId ?? "planner" },
-					{ cwd: this.#stateTracker.swarmDir, agent: agentDef, task: taskText, index: 0,
-						signal: this.#abortController?.signal,
-						id: `planner-${Date.now()}`, modelRegistry: this.#modelRegistry, settings: this.#settings,
-						enableLsp: false, keepAlive: false, modelOverride: loopConfig?.model ?? undefined });
-
-				displayOutput = result.output || "(no output)";
-			}
+			// Poll for plan.md creation to notify the user
+			const planPath = getSessionPlanPath(this.#swarmDir);
+			let planFileDetected = false;
+			planPoll = setInterval(() => {
+				try {
+					const file = Bun.file(planPath);
+					if (file.size > 0 && !planFileDetected) {
+						planFileDetected = true;
+						this.#activityLogger.logBroadcast(
+							"system",
+							"Writing plan.md... The draft will appear when complete.",
+						);
+					}
+				} catch {
+					/* file not yet created */
+				}
+			}, 500);
 
 			const recMatch = displayOutput.match(/Recommended:\s*(\d+)\s*agents?/i);
 			if (recMatch) this.#recommendedAgents = parseInt(recMatch[1], 10);
@@ -360,9 +377,11 @@ export class ScriptManager {
 				this.#planReady = true;
 				this.#planMtime = newMtime;
 				this.#activityLogger.logPhase("plan-updated");
-				this.#activityLogger.logBroadcast("system",
+				this.#activityLogger.logBroadcast(
+					"system",
 					"Plan draft is ready. Open the Plan panel to review. " +
-					"Click 'Run Debate' to refine with agent roundtable, or 'Confirm & Start' to begin.");
+						"Click 'Run Debate' to refine with agent roundtable, or 'Confirm & Start' to begin.",
+				);
 			}
 		} catch (err) {
 			if (err instanceof Error && err.name === "AbortError") {
@@ -370,24 +389,37 @@ export class ScriptManager {
 			} else {
 				throw err;
 			}
-		} finally { if (planPoll) clearInterval(planPoll); this.#abortController = null; this.#busy = false; }
+		} finally {
+			if (planPoll) clearInterval(planPoll);
+			this.#abortController = null;
+			this.#busy = false;
+		}
 	}
 
 	async #resolvePlannerRole(): Promise<{ system: string; guidelines: string[]; tools?: string[] } | null> {
 		try {
 			const role = await this.#roleAssetManager?.get("planner");
-			if (role && role.status === "approved") return { system: role.prompts.system, guidelines: role.prompts.guidelines, tools: role.tools };
-		} catch { /* role not found */ }
+			if (role && role.status === "approved")
+				return { system: role.prompts.system, guidelines: role.prompts.guidelines, tools: role.tools };
+		} catch {
+			/* role not found */
+		}
 		return null;
 	}
 
 	#buildPlannerSystemPrompt(role: { system: string; guidelines: string[]; tools?: string[] } | null): string {
 		const parts: string[] = [];
 		if (role) parts.push(role.system);
-		else parts.push("You are a Planner agent in the SatoPi system. Help the user clarify goals and produce a comprehensive, executable plan.");
+		else
+			parts.push(
+				"You are a Planner agent in the SatoPi system. Help the user clarify goals and produce a comprehensive, executable plan.",
+			);
 		if (this.#selectedAgentId && this.#profileRegistry) {
 			const profileCtx = this.#profileRegistry.getPromptContext(this.#selectedAgentId);
-			if (profileCtx) { parts.push(""); parts.push(profileCtx); }
+			if (profileCtx) {
+				parts.push("");
+				parts.push(profileCtx);
+			}
 		}
 		return parts.join("\n");
 	}
@@ -427,32 +459,39 @@ export class ScriptManager {
 			].join(" ");
 		}
 
-		const promptSection = this.#planningPrompt
-			? [this.#planningPrompt, "", "---", ""].join("\n")
-			: "";
+		const promptSection = this.#planningPrompt ? [this.#planningPrompt, "", "---", ""].join("\n") : "";
 
-		return [
-			promptSection,
-			"## Conversation History", "",
-			turnGuidance, "",
-			parts.join("\n\n---\n\n"),
-		].filter(Boolean).join("\n");
+		return [promptSection, "## Conversation History", "", turnGuidance, "", parts.join("\n\n---\n\n")]
+			.filter(Boolean)
+			.join("\n");
 	}
 
-	async #setPhase(phase: Chapter): Promise<void> { await this.#stateTracker.updatePipeline({ phase }); }
+	async #setPhase(phase: Chapter): Promise<void> {
+		await this.#stateTracker.updatePipeline({ phase });
+	}
 
 	async #readLoopConfig(): Promise<LoopSwarmConfig | null> {
 		try {
 			const content = await fs.readFile(this.#yamlPath, "utf-8");
 			const def = parseSwarmYaml(content);
 			const errors = validateSwarmDefinition(def);
-			if (errors.length > 0) { logger.error("YAML validation errors", { errors }); return null; }
+			if (errors.length > 0) {
+				logger.error("YAML validation errors", { errors });
+				return null;
+			}
 			return def.loopConfig ?? null;
-		} catch (err) { logger.error("Failed to read loop config", { error: String(err) }); return null; }
+		} catch (err) {
+			logger.error("Failed to read loop config", { error: String(err) });
+			return null;
+		}
 	}
 
 	async #getPlanMtime(): Promise<number> {
-		try { const stat = await fs.stat(getSessionPlanPath(this.#swarmDir)); return stat.mtimeMs; }
-		catch { return 0; }
+		try {
+			const stat = await fs.stat(getSessionPlanPath(this.#swarmDir));
+			return stat.mtimeMs;
+		} catch {
+			return 0;
+		}
 	}
 }

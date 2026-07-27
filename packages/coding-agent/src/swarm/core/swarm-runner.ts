@@ -14,27 +14,27 @@
 
 import * as fs from "node:fs/promises";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import type { ActivityLogger } from "../hooks/activity-logger";
-import type { ExperienceStore } from "../curtain/experience";
-import type { RunManager } from "../core/services";
+import type { MarkEnvironment } from "../../coordination";
+import type { AgentRuntime } from "../agent-runtime";
 import type { LoopSwarmConfig } from "../core/schema";
 import { parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
+import type { RunManager } from "../core/services";
 import type { StateTracker } from "../core/state";
-import type { CurtainResult } from "../curtain/types";
-import { createStageController, type StageResult } from "../stage/stage-controller";
-import { createStageFeedback } from "../hooks/swarm-hooks";
+import type { WorkflowFsm } from "../core/workflow-fsm";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
+import type { ExperienceStore } from "../curtain/experience";
+import type { CurtainResult } from "../curtain/types";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { ActivityLogger } from "../hooks/activity-logger";
+import { createStageFeedback } from "../hooks/swarm-hooks";
 import { stampAndArchivePlanMd } from "../script";
 import { getSessionPlanPath } from "../script/plan-paths";
-import type { WorkflowFsm } from "../core/workflow-fsm";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { AgentRuntime } from "../agent-runtime";
-import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { MarkEnvironment } from "../../coordination"
-import type { RoleAssetManager } from "../../agent/role-asset";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import { createStageController, type StageResult } from "../stage/stage-controller";
 
 // ============================================================================
 // SwarmRunner
@@ -97,8 +97,12 @@ export class SwarmRunner implements RunManager {
 		this.#runtime = opts.runtime;
 	}
 
-	get isRunning(): boolean { return this.#running; }
-	getLastCurtainResult(): CurtainResult | null { return this.#lastCurtainResult; }
+	get isRunning(): boolean {
+		return this.#running;
+	}
+	getLastCurtainResult(): CurtainResult | null {
+		return this.#lastCurtainResult;
+	}
 
 	/** Wait for the full Stage → Curtain lifecycle to complete. */
 	async waitForCompletion(): Promise<void> {
@@ -171,19 +175,24 @@ export class SwarmRunner implements RunManager {
 				hookPipeline: this.#hookPipeline,
 				fsm: this.#fsm,
 				runtime: this.#runtime,
+				commBus: this.#runtime?.commBus,
 			});
 
-			stage.run().then(async (result) => {
-				logger.info("[SwarmRunner] Stage finished", { status: result.status });
-				if (result.errors.length > 0) logger.info("[SwarmRunner] Stage errors", { errors: result.errors });
-				await this.#runCurtainPipeline(result);
-			}).catch((err) => {
-				logger.error("[SwarmRunner] Stage failed", { error: String(err) });
-			}).finally(() => {
-				this.#running = false;
-				this.#abortController = null;
-				this.#completionPromise.resolve();
-			});
+			stage
+				.run()
+				.then(async result => {
+					logger.info("[SwarmRunner] Stage finished", { status: result.status });
+					if (result.errors.length > 0) logger.info("[SwarmRunner] Stage errors", { errors: result.errors });
+					await this.#runCurtainPipeline(result);
+				})
+				.catch(err => {
+					logger.error("[SwarmRunner] Stage failed", { error: String(err) });
+				})
+				.finally(() => {
+					this.#running = false;
+					this.#abortController = null;
+					this.#completionPromise.resolve();
+				});
 
 			return { success: true };
 		} catch (err) {
@@ -228,6 +237,7 @@ export class SwarmRunner implements RunManager {
 			settings: this.#settings,
 			roleAssetManager: this.#roleAssetManager,
 			profileRegistry: this.#profileRegistry,
+			commBus: this.#runtime?.commBus,
 		});
 		if (result_) this.#lastCurtainResult = { ...result_, iterations: result_.totalTasks };
 	}

@@ -111,13 +111,6 @@ export class StateTracker {
 	#persistScheduled = false;
 	/** OH-MY-PI SessionManager for dual-write persistence (optional). */
 	#sessionManager: SwarmSessionManager | null = null;
-	/**
-	 * Optional real-time notification callback.  When set, every
-	 * updateAgent() and updatePipeline() call fires this with a
-	 * descriptive payload so the SSE broadcaster can push the state
-	 * change to connected clients immediately — no polling delay.
-	 */
-	#onStateChange: ((event: { type: "agent_state" | "pipeline_state"; [key: string]: unknown }) => void) | null = null;
 
 	constructor(workspaceDir: string, name: string) {
 		this.#swarmDir = path.join(workspaceDir, `.swarm_${name}`);
@@ -139,14 +132,6 @@ export class StateTracker {
 	 */
 	setSessionManager(sm: SwarmSessionManager): void {
 		this.#sessionManager = sm;
-	}
-
-	/**
-	 * Optional hook: called after every updateAgent / updatePipeline so
-	 * the ActivityLogger can push real-time state updates via SSE.
-	 */
-	setStateChangeNotifier(fn: (event: { type: "agent_state" | "pipeline_state"; [key: string]: unknown }) => void): void {
-		this.#onStateChange = fn;
 	}
 
 	get swarmDir(): string {
@@ -207,14 +192,6 @@ export class StateTracker {
 		if (!agent) return;
 		Object.assign(agent, update);
 		await this.#persist();
-		if (this.#onStateChange) {
-			this.#onStateChange({
-				type: "agent_state",
-				agent: name,
-				from: name,
-				...update,
-			});
-		}
 	}
 
 	/** Increment praise count for a set of workers. */
@@ -224,14 +201,6 @@ export class StateTracker {
 			if (agent) agent.praiseCount++;
 		}
 		await this.#persist();
-		if (this.#onStateChange) {
-			for (const id of agentIds) {
-				const agent = this.#state.agents[id];
-				if (agent) {
-					this.#onStateChange({ type: "agent_state", agent: id, from: id, praiseCount: agent.praiseCount });
-				}
-			}
-		}
 	}
 
 	/** Increment criticism count for a set of workers. */
@@ -241,14 +210,6 @@ export class StateTracker {
 			if (agent) agent.criticismCount++;
 		}
 		await this.#persist();
-		if (this.#onStateChange) {
-			for (const id of agentIds) {
-				const agent = this.#state.agents[id];
-				if (agent) {
-					this.#onStateChange({ type: "agent_state", agent: id, from: id, criticismCount: agent.criticismCount });
-				}
-			}
-		}
 	}
 
 	/** Increment conflict count for a worker. */
@@ -256,9 +217,6 @@ export class StateTracker {
 		const agent = this.#state.agents[agentId];
 		if (agent) agent.conflictCount++;
 		await this.#persist();
-		if (this.#onStateChange && agent) {
-			this.#onStateChange({ type: "agent_state", agent: agentId, from: agentId, conflictCount: agent.conflictCount });
-		}
 	}
 
 	/** Get a quality score for a worker (praise - criticism - conflictCount). */
@@ -341,15 +299,6 @@ export class StateTracker {
 	async updatePipeline(update: Partial<SwarmState>): Promise<void> {
 		Object.assign(this.#state, update);
 		await this.#persist();
-		if (this.#onStateChange) {
-			const payload: Record<string, unknown> = { type: "pipeline_state" };
-			if (update.loopIteration !== undefined) payload.loopIteration = update.loopIteration;
-			if (update.roundtablePhase !== undefined) payload.roundtablePhase = update.roundtablePhase;
-			if (update.todos !== undefined) payload.todos = update.todos;
-			if (update.totalTokens !== undefined) payload.totalTokens = update.totalTokens;
-			if (update.totalRequests !== undefined) payload.totalRequests = update.totalRequests;
-			this.#onStateChange(payload as { type: "agent_state" | "pipeline_state"; [key: string]: unknown });
-		}
 	}
 
 	async appendLog(agentName: string, message: string): Promise<void> {
