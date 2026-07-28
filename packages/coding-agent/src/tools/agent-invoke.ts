@@ -12,7 +12,7 @@ import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import { createAgentSession } from "../sdk";
-import type { AgentProgress, SingleResult } from "../task/types";
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type AgentProgress, type SingleResult } from "../task/types";
 
 const agentInvokeSchema = type({
 	profileId: type("string").describe("Profile ID of the persistent agent to invoke"),
@@ -91,6 +91,18 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			}
 		}
 
+		// Emit lifecycle event so the TUI panel picks up this persistent agent
+		const eventBus = _context?.eventBus;
+		eventBus?.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, {
+			id: agentId,
+			agent: profileId,
+			agentSource: "project" as const,
+			description: profileId,
+			status: "started" as const,
+			index: 0,
+			detached: true,
+		});
+
 		// Subscribe for live progress streaming
 		const progress: AgentProgress[] = [];
 		const unsub = session.subscribe(event => {
@@ -124,6 +136,14 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			const result = await session.wait();
 
 			ProfileRegistry.global().recordTaskCompleted(profileId, result.exitCode === 0);
+			eventBus?.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, {
+				id: agentId,
+				agent: profileId,
+				agentSource: "project" as const,
+				status: result.exitCode === 0 ? ("completed" as const) : ("failed" as const),
+				index: 0,
+				detached: true,
+			});
 
 			const final: SingleResult = {
 				index: 0,
@@ -156,6 +176,14 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			unsub();
 			const msg = err instanceof Error ? err.message : String(err);
 			try { ProfileRegistry.global().recordTaskCompleted(profileId, false); } catch { /* best-effort */ }
+			eventBus?.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, {
+				id: agentId,
+				agent: profileId,
+				agentSource: "project" as const,
+				status: "failed" as const,
+				index: 0,
+				detached: true,
+			});
 			return {
 				content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 				isError: true,

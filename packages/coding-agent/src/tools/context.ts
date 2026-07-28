@@ -2,6 +2,7 @@ import type { AgentToolContext, ToolCallContext } from "@oh-my-pi/pi-agent-core"
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { EventBus } from "../utils/event-bus";
 
 declare module "@oh-my-pi/pi-agent-core" {
 	interface AgentToolContext extends CustomToolContext {
@@ -10,6 +11,7 @@ declare module "@oh-my-pi/pi-agent-core" {
 		toolNames?: string[];
 		agentRuntime?: AgentRuntime;
 		toolCall?: ToolCallContext;
+		eventBus?: EventBus;
 	}
 }
 
@@ -18,6 +20,7 @@ export class ToolContextStore {
 	#hasUI = false;
 	#toolNames: string[] = [];
 	#agentRuntime: AgentRuntime | undefined;
+	#eventBus: EventBus | undefined;
 
 	constructor(private readonly getBaseContext: () => CustomToolContext) {}
 
@@ -29,6 +32,7 @@ export class ToolContextStore {
 			hasUI: this.#hasUI,
 			toolNames: this.#toolNames,
 			toolCall,
+			eventBus: this.#eventBus,
 		};
 	}
 
@@ -46,5 +50,9 @@ export class ToolContextStore {
 
 	setToolNames(names: string[]): void {
 		this.#toolNames = names;
+	}
+
+	setEventBus(eventBus: EventBus): void {
+		this.#eventBus = eventBus;
 	}
 }

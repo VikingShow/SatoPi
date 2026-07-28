@@ -2268,6 +2268,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			autoApprove: options.autoApprove ?? false,
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
+		toolContextStore.setEventBus(eventBus);
 
 		if (options.agentRuntime) {
 			toolContextStore.setAgentRuntime(options.agentRuntime);
