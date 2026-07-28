@@ -25,6 +25,9 @@ import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { createStreamProgressHandler } from "../render/streaming";
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { AgentHandle } from "../agent-runtime/agent-handle";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -73,6 +76,12 @@ export interface SwarmExecutorOptions {
 	 */
 	executor?: AgentExecutor;
 	/**
+	 * Phase A2: v3 AgentRuntime for in-process agent spawning.
+	 * When provided, agents are spawned via {@link AgentRuntime.spawn}
+	 * instead of the legacy subprocess-based runSubprocess.
+	 */
+	runtime?: AgentRuntime;
+	/**
 	 * Optional tool hooks passed through to the subprocess's AgentLoopConfig.
 	 * beforeToolCall can block write/edit/bash calls (e.g. deliberation phase).
 	 * afterToolCall is used for lock release coordination.
@@ -108,8 +117,17 @@ export interface SwarmExecutorOptions {
  * - Tool access: configurable via SwarmAgent.allowedTools / blockedTools
  */
 export class SubprocessAgentExecutor implements AgentExecutor {
+	#runtime?: AgentRuntime;
+
+	constructor(runtime?: AgentRuntime) {
+		this.#runtime = runtime;
+	}
+
 	async execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult> {
-		return executeSwarmAgent(agent, index, options);
+		return executeSwarmAgent(agent, index, {
+			...options,
+			runtime: options.runtime ?? this.#runtime,
+		});
 	}
 }
 
@@ -148,7 +166,13 @@ export async function executeSwarmAgent(
 		toolHooks,
 		agentOverrides,
 		activityLogger,
+		runtime,
 	} = options;
+
+	// Phase A2: Use AgentRuntime.spawn() when runtime is provided.
+	if (runtime) {
+		return executeWithRuntime(agent, index, options, runtime);
+	}
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
 
@@ -272,4 +296,133 @@ function buildSystemPrompt(agent: SwarmAgent): string {
 		parts.push(agent.extraContext);
 	}
 	return parts.join("\n\n");
+}
+
+/**
+ * Execute a swarm agent via AgentRuntime.spawn() (v3 in-process path).
+ */
+async function executeWithRuntime(
+	agent: SwarmAgent,
+	index: number,
+	options: SwarmExecutorOptions,
+	runtime: AgentRuntime,
+): Promise<SingleResult> {
+	const { workspace, swarmName, iteration, signal, onProgress, modelRegistry, settings,
+		stateTracker, timeoutMs = DEFAULT_AGENT_TIMEOUT_MS, onStarted, toolHooks,
+		agentOverrides, activityLogger, executor, transformContext, afterToolCall,
+	} = options;
+
+	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
+
+	// Notify the caller for abort tracking.
+	const agentController = new AbortController();
+	onStarted?.(agentController);
+
+	await stateTracker.updateAgent(agent.name, {
+		status: "running",
+		iteration,
+		startedAt: Date.now(),
+	});
+	await stateTracker.appendLog(agent.name, `Starting iteration ${iteration} (v3 runtime)`);
+
+	const streamMsgId = `${agentId}-${Date.now()}`;
+	activityLogger?.logStreamStart(streamMsgId, agent.name);
+
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+	try {
+		const spec: AgentSpec = {
+			id: agent.name,
+			role: agent.role,
+			roleSource: "library",
+			task: agent.task,
+			profileId: agent.profileId,
+		};
+
+		const handles = await runtime.spawn([spec]);
+		const handle = handles[0];
+
+		// Wire tool events to activity logger
+		if (activityLogger) {
+			handle.bridgeToolEvents(activityLogger);
+		}
+
+		// Stream output to SSE
+		const streamPromise = (async () => {
+			for await (const chunk of handle.outputStream()) {
+				activityLogger?.logStreamDelta(streamMsgId, agent.name, chunk);
+				onProgress?.(agent.name, {
+					index,
+					id: agentId,
+					agent: agent.name,
+					agentSource: "project" as AgentSource,
+					status: "running",
+					task: agent.task,
+					recentTools: [],
+					recentOutput: [],
+					toolCount: 0,
+					requests: 0,
+					tokens: 0,
+					cost: 0,
+					durationMs: 0,
+					thinkingDelta: chunk,
+				});
+			}
+		})();
+
+		// Set up timeout
+		if (timeoutMs > 0) {
+			timeoutId = setTimeout(() => {
+				handle.abort(`Agent "${agent.name}" timed out after ${timeoutMs}ms`);
+			}, timeoutMs);
+		}
+
+		const result = await handle.wait(timeoutMs > 0 ? timeoutMs : 300_000);
+
+		// Wait for streaming to drain
+		await streamPromise;
+
+		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);
+		await stateTracker.updateAgent(agent.name, {
+			status,
+			completedAt: Date.now(),
+			error: result.error,
+		});
+		await stateTracker.appendLog(
+			agent.name,
+			`Iteration ${iteration} ${status}${result.error ? `: ${result.error}` : ""}`,
+		);
+
+		activityLogger?.logStreamEnd(streamMsgId, agent.name, result.output, undefined);
+		return result;
+	} catch (err) {
+		const error = err instanceof Error ? err.message : String(err);
+		const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+		stateTracker.updateAgent(agent.name, {
+			status: "failed",
+			completedAt: Date.now(),
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
+		}).catch(() => {});
+		stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`).catch(() => {});
+		activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
+
+		const failResult: SingleResult = {
+			index,
+			id: agentId,
+			agent: agent.name,
+			agentSource: "project" as AgentSource,
+			task: agent.task,
+			exitCode: 1,
+			output: "",
+			stderr: error,
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
+		};
+		return failResult;
+	} finally {
+		if (timeoutId) clearTimeout(timeoutId);
+	}
 }

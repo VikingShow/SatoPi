@@ -15,6 +15,7 @@ import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
+import { AgentRegistry } from "../../registry/agent-registry";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
 import { IrcBus } from "../../irc/bus";
 import { RoleAssetManager } from "../../agent/role-asset";
@@ -97,7 +98,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 		this.#experienceStore = new ExperienceStore(workspace);
 		await this.#experienceStore.init();
 
-		this.#fsm = new WorkflowFsm(this.#stateTracker, this.#activityLogger, "stage");
+		const startPhase = this.#detectStartPhase();
+		this.#fsm = new WorkflowFsm(this.#stateTracker, this.#activityLogger, startPhase);
 		for (const def of PHASES) this.#fsm.registerPhase(def);
 
 		this.#hookPipeline = new HookPipeline();
@@ -195,6 +197,20 @@ export class GraphRunner implements ISwarmOrchestrator {
 		};
 		writeCheckpoint(this.#graphRunState, this.#sessionManager);
 	}
+
+	/**
+	 * Auto-detect the FSM start phase from the graph's first wave.
+	 * If the first node in the first wave has type "script", start in "script";
+	 * otherwise default to "stage".
+	 */
+	#detectStartPhase(): Chapter {
+		const firstWave = this.#waves[0];
+		if (!firstWave || firstWave.length === 0) return "stage";
+		const firstNodeId = firstWave[0];
+		const firstNode = this.#graph.nodes[firstNodeId];
+		if (firstNode?.type === "script") return "script";
+		return "stage";
+	}
 	async dispose(): Promise<void> {
 		if (this.#disposed) return;
 		this.#disposed = true;
@@ -266,6 +282,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 							label: node.label,
 							description: node.description,
 							role: node.role,
+							profileId: node.profile_id,
 							tools: node.tools,
 							type: node.type ?? "custom",
 							dependsOn: node.depends_on ?? [],
@@ -277,6 +294,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 						experience: "",
 						signal: abortSignal,
 						runtime,
+						agentRegistry: AgentRegistry.global(),
 						roleAssetManager,
 						profileRegistry,
 						stateTracker,

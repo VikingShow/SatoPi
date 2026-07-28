@@ -88,6 +88,8 @@ export interface GraphNode {
 	type?: NodeType;
 	/** Agent role profile to use for this node's agent. */
 	role: string;
+	/** Persistent agent profile ID — when set, routes to an existing persistent agent instead of spawning ephemeral. */
+	profile_id?: string;
 	/** Tools available to the agent executing this node. */
 	tools: string[];
 	/** Node names this node depends on (must complete before this node starts). */
@@ -284,6 +286,7 @@ import type { Settings } from "../../config/settings";
 import type { AgentRuntime } from "../agent-runtime";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { AgentRegistry } from "../../registry/agent-registry";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
@@ -308,6 +311,8 @@ export interface NodeContext {
 	signal: AbortSignal;
 	/** Agent runtime for spawning sub-agents. */
 	runtime: AgentRuntime;
+	/** Agent registry for persistent agent routing and lifecycle management. */
+	agentRegistry: AgentRegistry;
 	/** Role asset manager for library-based role resolution. */
 	roleAssetManager?: RoleAssetManager;
 	/** Agent profile registry for cross-run identity. */
@@ -381,6 +386,7 @@ interface RawGraphNode {
 	description: string;
 	type?: string;
 	role: string;
+	profile_id?: string;
 	tools: string[];
 	depends_on?: string[];
 	outputs?: RawNodeOutput[];
@@ -573,6 +579,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			description: rawNode.description,
 			type: rawNode.type as NodeType | undefined,
 			role: rawNode.role,
+			profile_id: rawNode.profile_id,
 			tools: rawNode.tools.map(t => String(t).trim()).filter(Boolean),
 			depends_on: Array.isArray(rawNode.depends_on) ? rawNode.depends_on : [],
 			outputs: rawNode.outputs?.map(normalizeNodeOutput),

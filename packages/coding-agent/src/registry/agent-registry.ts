@@ -196,6 +196,17 @@ export class AgentRegistry {
 		return this.#refs.get(id);
 	}
 
+	/**
+	 * Find an agent by its persistent profile ID.
+	 * Returns the first matching agent ref, or undefined if none found.
+	 */
+	findByProfileId(profileId: string): AgentRef | undefined {
+		for (const ref of this.#refs.values()) {
+			if (ref.profileId === profileId) return ref;
+		}
+		return undefined;
+	}
+
 	list(): AgentRef[] {
 		return [...this.#refs.values()];
 	}

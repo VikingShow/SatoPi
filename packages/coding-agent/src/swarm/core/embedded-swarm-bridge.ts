@@ -108,7 +108,7 @@ export interface ISwarmOrchestrator {
 	readonly stateTracker: StateTracker;
 	readonly activityLogger: ActivityLogger;
 	readonly swarmState: Readonly<SwarmState>;
-	readonly currentPhase: Chapter;
+	readonly currentPhase: Chapter | null;
 	readonly isRunning: boolean;
 }
 export type SwarmEventCallback = (event: SwarmPhaseEvent | SwarmAgentEvent) => void;

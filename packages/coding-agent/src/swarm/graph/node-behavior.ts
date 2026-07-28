@@ -35,6 +35,7 @@ import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import type { AgentRegistry } from "../../registry/agent-registry";
 import { createStageController, type StageOptions, type StageResult } from "../stage/stage-controller";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import { ScriptBehavior } from "../behaviors/script-behavior";
@@ -128,6 +129,11 @@ export class CustomNodeBehavior implements NodeBehavior {
 			return { nodeId: ctx.node.id, success: true, output: "(no agents to execute)" };
 		}
 
+		// If node references a persistent agent, route to it
+		if (ctx.node.profileId && ctx.agentRegistry) {
+			return this.#executePersistent(ctx, prepared[0]!);
+		}
+
 		const spec = prepared[0]!;
 
 		logger.info("[CustomNodeBehavior] Spawning agent", {
@@ -174,6 +180,50 @@ export class CustomNodeBehavior implements NodeBehavior {
 				agentResults: [{ agentId: spec.id, output: "", error: message }],
 			};
 		}
+	}
+
+	/**
+	 * Route execution to a persistent agent identified by ctx.node.profileId.
+	 * If an idle persistent agent with matching profile already exists, it is
+	 * reused; otherwise a new persistent agent is spawned.
+	 */
+	async #executePersistent(ctx: NodeContext, spec: AgentSpec): Promise<NodeResult> {
+		const registry = ctx.agentRegistry!;
+		const existing = registry.list().find(ref => ref.profileId === ctx.node.profileId);
+
+		if (existing && existing.status === "idle" && existing.session) {
+			// Reuse: steer the existing agent
+			logger.info("[CustomNodeBehavior] Routing to persistent agent", {
+				nodeId: ctx.node.id,
+				profileId: ctx.node.profileId,
+				existingAgentId: existing.id,
+			});
+			// TODO: steer existing agent via IRC with the spec's task, then
+			// wait for and return its result. For now, falls through to spawn.
+		}
+
+		// Spawn new persistent agent
+		logger.info("[CustomNodeBehavior] Spawning new persistent agent", {
+			nodeId: ctx.node.id,
+			profileId: ctx.node.profileId,
+		});
+
+		const handles = await ctx.runtime.spawn([spec]);
+		this.#handles = handles;
+
+		const handle = handles[0]!;
+		const result = await handle.wait();
+
+		const output = typeof result?.output === "string" ? result.output : String(result ?? "");
+		const success = !result?.error;
+
+		return {
+			nodeId: ctx.node.id,
+			success,
+			output,
+			error: result?.error,
+			agentResults: [{ agentId: spec.id, output, error: result?.error }],
+		};
 	}
 
 	// ======================================================================

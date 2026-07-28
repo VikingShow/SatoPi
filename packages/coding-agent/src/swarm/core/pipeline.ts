@@ -6,12 +6,11 @@
  * - Waves execute sequentially (wave N+1 starts after wave N completes)
  * - For pipeline mode, iterations repeat the full DAG execution
  */
-import type { AgentProgress, AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
+import type { AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { AgentExecutor } from "../executor/executor";
-import { executeSwarmAgent } from "../executor/executor";
 import type { SwarmDefinition } from "./schema";
 import type { StateTracker } from "./state";
 
@@ -69,10 +68,9 @@ export interface PipelineOptions {
 	afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 	/**
 	 * Phase A2: v3 AgentRuntime for in-process agent spawning.
-	 * When provided, agents are spawned via {@link AgentRuntime.spawn}
-	 * instead of the legacy subprocess-based {@link executeSwarmAgent}.
+	 * Required — all agents are spawned via {@link AgentRuntime.spawn}.
 	 */
-	runtime?: AgentRuntime;
+	runtime: AgentRuntime;
 }
 
 export interface PipelineProgress {
@@ -360,7 +358,7 @@ export class PipelineController {
 			executor?: AgentExecutor;
 			hooks?: PipelineHooks;
 			pipelineCtx: PipelineContext;
-			runtime?: AgentRuntime;
+			runtime: AgentRuntime;
 			transformContext?: (messages: unknown[], signal?: AbortSignal) => Promise<unknown>;
 			afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 		},
@@ -399,142 +397,81 @@ export class PipelineController {
 			const startIdx = agentIndex;
 			agentIndex += wave.length;
 
-			if (runtime) {
-				// ================================================================
-				// Phase A2: v3 AgentRuntime.spawn() path (in-process agents).
-				// ================================================================
-				for (let batch = 0; batch < wave.length; batch += CONCURRENCY_LIMIT) {
-					const batchNames = wave.slice(batch, batch + CONCURRENCY_LIMIT);
-					const specs: AgentSpec[] = batchNames.map(name => {
-						const agent = this.#def.agents.get(name)!;
-						return {
-							id: agent.name,
-							role: agent.role,
-							roleSource: "library" as const,
-							task: agent.task,
-							profileId: agent.profileId,
-						};
+			// ================================================================
+			// Phase A2: v3 AgentRuntime.spawn() path (in-process agents).
+			// ================================================================
+			for (let batch = 0; batch < wave.length; batch += CONCURRENCY_LIMIT) {
+				const batchNames = wave.slice(batch, batch + CONCURRENCY_LIMIT);
+				const specs: AgentSpec[] = batchNames.map(name => {
+					const agent = this.#def.agents.get(name)!;
+					return {
+						id: agent.name,
+						role: agent.role,
+						roleSource: "library" as const,
+						task: agent.task,
+						profileId: agent.profileId,
+					};
+				});
+
+				const handles = await runtime.spawn(specs);
+
+				// Register handles for abort tracking.
+				for (let i = 0; i < batchNames.length; i++) {
+					this.#activeHandles.set(batchNames[i], handles[i]);
+					await this.#stateTracker.updateAgent(batchNames[i], {
+						status: "running",
+						iteration,
+						startedAt: Date.now(),
 					});
-
-					const handles = await runtime.spawn(specs);
-
-					// Register handles for abort tracking.
-					for (let i = 0; i < batchNames.length; i++) {
-						this.#activeHandles.set(batchNames[i], handles[i]);
-						await this.#stateTracker.updateAgent(batchNames[i], {
-							status: "running",
-							iteration,
-							startedAt: Date.now(),
-						});
-					}
-
-					// Wait for all handles in this batch.
-					for (let i = 0; i < batchNames.length; i++) {
-						const agentName = batchNames[i];
-						const agent = this.#def.agents.get(agentName)!;
-						const handle = handles[i];
-						const currentIndex = startIdx + batch + i;
-
-						try {
-							const result = await handle.wait();
-							await this.#stateTracker.updateAgent(agentName, {
-								status: result.exitCode === 0 ? "completed" : "failed",
-								completedAt: Date.now(),
-								error: result.error,
-							});
-							await this.#stateTracker.appendLog(
-								agentName,
-								result.exitCode === 0
-									? `Iteration ${iteration} completed`
-									: `Iteration ${iteration} failed: ${result.error ?? "non-zero exit"}`,
-							);
-							waveResults.push({ agentName, result });
-						} catch (err) {
-							const error = err instanceof Error ? err.message : String(err);
-							const failResult: SingleResult = {
-								index: currentIndex,
-								id: `swarm-${this.#def.name}-${agentName}-${iteration}`,
-								agent: agentName,
-								agentSource: "project" as AgentSource,
-								task: agent.task,
-								exitCode: 1,
-								output: "",
-								stderr: error,
-								truncated: false,
-								durationMs: 0,
-								tokens: 0,
-								requests: 0,
-								error,
-							};
-							await this.#stateTracker.updateAgent(agentName, {
-								status: "failed",
-								completedAt: Date.now(),
-								error,
-							});
-							waveResults.push({ agentName, result: failResult });
-						} finally {
-							this.#activeHandles.delete(agentName);
-						}
-					}
 				}
-			} else {
-				// ================================================================
-				// Legacy path: subprocess-based executeSwarmAgent().
-				// ================================================================
-				for (let batch = 0; batch < wave.length; batch += CONCURRENCY_LIMIT) {
-					const batchSlice = wave.slice(batch, batch + CONCURRENCY_LIMIT);
-					const batchResults = await Promise.all(
-						batchSlice.map(async (agentName, i) => {
-							const agent = this.#def.agents.get(agentName)!;
-							const currentIndex = startIdx + batch + i;
-							try {
-								const result = await executeSwarmAgent(agent, currentIndex, {
-									workspace: options.workspace,
-									swarmName: this.#def.name,
-									iteration,
-									modelOverride: agent.model ?? this.#def.model,
-									signal: options.signal,
-									onProgress: (_name: string, _progress: AgentProgress) => {
-										options.emitProgress(waveIdx);
-									},
-									transformContext: options.transformContext,
-									afterToolCall: options.afterToolCall,
-									modelRegistry: options.modelRegistry,
-									settings: options.settings,
-									stateTracker: this.#stateTracker,
-									// P0-2: Register controller so the pipeline can abort this agent on shutdown.
-									onStarted: controller => {
-										this.#activeControllers.set(agentName, controller);
-									},
-									// P1-2: Inject custom executor if provided.
-									executor,
-								});
-								return { agentName, result };
-							} catch (err) {
-								const error = err instanceof Error ? err.message : String(err);
-								const failResult: SingleResult = {
-									index: currentIndex,
-									id: `swarm-${this.#def.name}-${agentName}-${iteration}`,
-									agent: agentName,
-									agentSource: "project" as AgentSource,
-									task: agent.task,
-									exitCode: 1,
-									output: "",
-									stderr: error,
-									truncated: false,
-									durationMs: 0,
-									tokens: 0,
-									requests: 0,
-									error,
-								};
-								return { agentName, result: failResult };
-							} finally {
-								// P0-2: Clean up controller reference after agent completes or fails.
-								this.#activeControllers.delete(agentName);
-							}
-						}),
-					);
-					waveResults.push(...batchResults);
+
+				// Wait for all handles in this batch.
+				for (let i = 0; i < batchNames.length; i++) {
+					const agentName = batchNames[i];
+					const agent = this.#def.agents.get(agentName)!;
+					const handle = handles[i];
+					const currentIndex = startIdx + batch + i;
+
+					try {
+						const result = await handle.wait();
+						await this.#stateTracker.updateAgent(agentName, {
+							status: result.exitCode === 0 ? "completed" : "failed",
+							completedAt: Date.now(),
+							error: result.error,
+						});
+						await this.#stateTracker.appendLog(
+							agentName,
+							result.exitCode === 0
+								? `Iteration ${iteration} completed`
+								: `Iteration ${iteration} failed: ${result.error ?? "non-zero exit"}`,
+						);
+						waveResults.push({ agentName, result });
+					} catch (err) {
+						const error = err instanceof Error ? err.message : String(err);
+						const failResult: SingleResult = {
+							index: currentIndex,
+							id: `swarm-${this.#def.name}-${agentName}-${iteration}`,
+							agent: agentName,
+							agentSource: "project" as AgentSource,
+							task: agent.task,
+							exitCode: 1,
+							output: "",
+							stderr: error,
+							truncated: false,
+							durationMs: 0,
+							tokens: 0,
+							requests: 0,
+							error,
+						};
+						await this.#stateTracker.updateAgent(agentName, {
+							status: "failed",
+							completedAt: Date.now(),
+							error,
+						});
+						waveResults.push({ agentName, result: failResult });
+					} finally {
+						this.#activeHandles.delete(agentName);
+					}
 				}
 			}
 
