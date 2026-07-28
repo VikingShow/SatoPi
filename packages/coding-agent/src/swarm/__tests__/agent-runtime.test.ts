@@ -17,10 +17,11 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // Mock session factory for AgentLauncher tests — avoids pulling in full SDK
+// Variant A: agent stays "running" for basic lifecycle tests
 const mockSession = {
 	agent: {
 		setAsideMessageProvider: () => {},
-		subscribe: () => () => {}, // returns unsubscribe fn
+		subscribe: () => () => {},
 		prompt: async () => {},
 		steer: () => {},
 		followUp: () => {},
@@ -28,6 +29,19 @@ const mockSession = {
 	prompt: async () => {},
 };
 const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
+
+// Variant B: fires agent_end synchronously — for tests needing handle.wait() to resolve
+const mockCompletingSession = {
+	agent: {
+		setAsideMessageProvider: () => {},
+		subscribe: (cb: (event: { type: string }) => void) => { cb({ type: "agent_end" }); return () => {}; },
+		prompt: async () => {},
+		steer: () => {},
+		followUp: () => {},
+	},
+	prompt: async () => {},
+};
+const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
 import type { AgentEvent, AgentMessage, AgentTool, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
@@ -487,7 +501,7 @@ describe("AgentRuntime", () => {
 
 		settings = {} as Settings;
 
-		launcher = new AgentLauncher(modelRegistry, settings, mockSessionFactory);
+		launcher = new AgentLauncher(modelRegistry, settings, mockCompletingSessionFactory);
 	});
 
 	describe("spawn()", () => {
@@ -698,7 +712,7 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockSessionFactory);
+		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockCompletingSessionFactory);
 
 		const runtime = new AgentRuntime({
 			roleProvider: brokenRoleProvider,
@@ -723,7 +737,7 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockSessionFactory);
+		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockCompletingSessionFactory);
 
 		// Create a ContextPipeline that throws on assemble
 		const brokenPipeline = {
