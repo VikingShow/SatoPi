@@ -50,10 +50,10 @@ function startupMarker(text) {
 
 function getNativesDir() {
 	const xdgDataHome = process.env.XDG_DATA_HOME;
-	if (xdgDataHome && fs.existsSync(path.join(xdgDataHome, "omp"))) {
-		return path.join(xdgDataHome, "omp", "natives");
+	if (xdgDataHome && fs.existsSync(path.join(xdgDataHome, "stp"))) {
+		return path.join(xdgDataHome, "stp", "natives");
 	}
-	return path.join(os.homedir(), ".omp", "natives");
+	return path.join(os.homedir(), ".stp", "natives");
 }
 
 function resolveLeafPackageDir(platformTag) {
@@ -105,9 +105,9 @@ export function getAddonFilenames({ tag, arch, variant }) {
 
 /**
  * Decide whether the loader should mirror the package's `native/<filename>.node`
- * into the per-version cache directory (`~/.omp/natives/<version>/`) before loading.
+ * into the per-version cache directory (`~/.stp/natives/<version>/`) before loading.
  *
- * Windows-only safety net for `bun install -g` updates: when a previous `omp`
+ * Windows-only safety net for `bun install -g` updates: when a previous `stp`
  * process is running, bun cannot overwrite the locked `.node` inside
  * `node_modules/@oh-my-pi/pi-natives/native/`, leaving an old binary next to a
  * newer `index.js` and producing `<sym> is not a function` crashes on the next
@@ -655,7 +655,7 @@ function initLoaderContext() {
 	const versionedDir = path.join(nativesDir, packageVersion);
 	const userDataDir =
 		process.platform === "win32"
-			? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "omp")
+			? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "stp")
 			: path.join(os.homedir(), ".local", "bin");
 
 	const isCompiledBinary = detectCompiledBinary({

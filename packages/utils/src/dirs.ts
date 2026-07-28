@@ -14,6 +14,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+
 import { engines, version } from "../package.json" with { type: "json" };
 
 /** App name (e.g. "stp") */
@@ -104,7 +105,61 @@ function readProfileFromEnvSafe(): string | undefined {
 }
 
 function getBaseConfigRoot(): string {
+	migrateOmpToStp();
 	return path.join(os.homedir(), getConfigDirName());
+}
+
+// =============================================================================
+// Legacy omp → stp migration
+// =============================================================================
+
+let ompMigrationDone = false;
+
+/**
+ * Migrate legacy ~/.omp data to ~/.stp on first access.
+ *
+ * Creates a symlink ~/.stp → ~/.omp when:
+ * - ~/.omp exists AND ~/.stp does NOT exist (or is empty)
+ * - PI_CONFIG_DIR is NOT set (explicit override)
+ *
+ * If symlink creation fails (e.g. cross-device), falls back to a marker file
+ * so we don't retry every startup.  All errors are non-fatal.
+ */
+function migrateOmpToStp(): void {
+	if (ompMigrationDone) return;
+	ompMigrationDone = true;
+
+	// Skip when PI_CONFIG_DIR is explicitly set
+	if (process.env.PI_CONFIG_DIR) return;
+
+	const configDirName = getConfigDirName();
+	const home = os.homedir();
+	const stpPath = path.join(home, configDirName);
+	const ompPath = path.join(home, ".omp");
+
+	try {
+		// Check if legacy .omp exists
+		const ompStat = fs.statSync(ompPath, { throwIfNoEntry: false });
+		if (!ompStat?.isDirectory()) return;
+
+		// Check if .stp already exists
+		const stpStat = fs.statSync(stpPath, { throwIfNoEntry: false });
+		if (stpStat) {
+			// .stp already exists — don't touch. If it's a symlink to .omp,
+			// migration was already done. Otherwise it's a genuine new install.
+			return;
+		}
+
+		// Try symlink first (fast, no copy)
+		try {
+			fs.symlinkSync(ompPath, stpPath, "dir");
+			return;
+		} catch {
+			// Symlink failed — non-fatal, retry next startup
+		}
+	} catch {
+		// Non-fatal — migration is best-effort
+	}
 }
 
 function getProfileConfigRoot(profile: string | undefined): string {

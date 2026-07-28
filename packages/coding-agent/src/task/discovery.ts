@@ -24,7 +24,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { isProviderEnabled } from "../capability";
 import { findAllNearestProjectConfigDirs, getConfigDirs } from "../config";
 import { listClaudePluginRoots } from "../discovery/helpers";
-import { listOmpExtensionRoots } from "../discovery/omp-extension-roots";
+import { listOmpExtensionRoots } from "../discovery/extension-roots";
 import { loadBundledAgents, parseAgent, roleToAgentDefinition } from "./agents";
 import { RoleAssetManager } from "../agent/role-asset";
 import type { AgentDefinition, AgentSource } from "./types";

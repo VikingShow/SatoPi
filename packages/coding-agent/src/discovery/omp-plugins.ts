@@ -13,7 +13,7 @@
  * extension package never shadows the user's own `.stp/` configuration on
  * dedup.
  *
- * @see ./omp-extension-roots.ts
+ * @see ./extension-roots.ts
  * @see ../../docs/extension-loading.md
  */
 import * as path from "node:path";
@@ -29,7 +29,7 @@ import { type SlashCommand, slashCommandCapability } from "../capability/slash-c
 import { type CustomTool, toolCapability } from "../capability/tool";
 import type { LoadContext, LoadResult } from "../capability/types";
 import { buildRuleFromMarkdown, createSourceMeta, loadFilesFromDir, scanSkillsFromDir } from "./helpers";
-import { listOmpExtensionRoots, type OmpExtensionRoot } from "./omp-extension-roots";
+import { listOmpExtensionRoots, type OmpExtensionRoot } from "./extension-roots";
 
 const PROVIDER_ID = "omp-plugins";
 const DISPLAY_NAME = "OMP Extension Packages";

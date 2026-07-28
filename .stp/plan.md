@@ -1,70 +1,70 @@
-# Plan: 修复 SP-2, SP-3, SP-5（不含 SP-1, SP-4）
+# Plan: ~/.omp → ~/.stp 配置目录安全迁移
 
 ## Overview
-基于 `satopi-holistic-audit-2026-07-28.md`，修复 SP-2（双执行路径未收敛）、SP-3（TUI 双主题体系）、SP-5（文档架构地图缺失）。SP-1（Mega-File 三巨头）和 SP-4（安全纵深不足）按用户要求暂不修复。
+代码层已部分迁移至 `.stp`（`dirs.ts` 中 `CONFIG_DIR_NAME = ".stp"`），但 Rust crash handler、JS natives loader、多个脚本和测试仍硬编码 `.omp`，且磁盘上实际数据都在 `~/.omp`，`~/.stp` 仅有骨架。需完成代码层对齐 + 数据层自动迁移。
 
-## Phase 1: SP-2 — 双执行路径收敛
-**Contract:** 删除 swarm 中所有 legacy `runSubprocess` 路径，统一为 `AgentRuntime.spawn()`。
+## Phase 1: 修复代码层的 split-brain（Rust + JS natives）
+**Contract:** 所有路径解析层统一使用 `.stp`，通过 `PI_CONFIG_DIR` 可覆盖。
 
-- [ ] **Task: curtain-runner.ts 切换至 AgentRuntime.spawn**
-  - Files: `packages/coding-agent/src/swarm/curtain/curtain-runner.ts`
-  - Change: `curtain-runner.ts` 当前在 line 307 使用 `streamAgentOutput()`（runSubprocess 封装）运行 reporter agent。改为通过注入的 `AgentRuntime` 调用 `runtime.spawn()`。需在 CurtainRunner 构造函数中增加 `#runtime: AgentRuntime` 字段，spawn 时构造 AgentSpec（id、role、task），等待 handle.wait() 获取结果。删除 `streamAgentOutput` import。
-  - Acceptance: curtain-runner 不再 import `streamAgentOutput` 或 `runSubprocess`。`bun check` 零新错误。
+- [ ] **Task: Rust crash_handler.rs 对齐 .stp**
+  - Files: `crates/pi-natives/src/crash_handler.rs`
+  - Change: 将 `DEFAULT_CONFIG_DIR` 从 `".omp"` 改为 `".stp"`（line 49），`APP_NAME` 从 `"omp"` 改为 `"stp"`（line 55）。保留 `PI_CONFIG_DIR` 环境变量读取逻辑，确保 TS 侧的 override 也生效。同时将 crash log 写入路径中的 `omp-crash.log` 改为 `stp-crash.log`。
+  - Acceptance: Rust 侧所有默认路径指向 `.stp`。`cargo check` 通过。
   - Depends: none
 
-- [ ] **Task: debate-roundtable.ts 移除 runSubprocess 降级路径**
-  - Files: `packages/coding-agent/src/swarm/script/debate-roundtable.ts`
-  - Change: 删除 line 16 的 `import { runSubprocess }` 和 line 17 的 `import type { AgentDefinition }`。删除 line 172-195 的 `runSubprocess(...)` 降级分支。将 `DebateRoundtableConfig.runtime` 从可选改为必需，构造函数中直接断言 `this.#runtime` 非空。参考已有 line 133-165 的 v3 spawn 路径。
-  - Acceptance: debate-roundtable 不再 import `runSubprocess` 或 `AgentDefinition`。`bun check` 零新错误。
+- [ ] **Task: JS natives loader 对齐 .stp**
+  - Files: `packages/natives/native/loader-state.js`
+  - Change: `getNativesDir()` 中的 `path.join(os.homedir(), ".omp", "natives")` 改为 `path.join(os.homedir(), ".stp", "natives")`（约 line 56）。同时将 `XDG_DATA_HOME` 下的 `omp` 子目录改为 `stp`。
+  - Acceptance: natives loader 从 `.stp/natives` 加载 addon，不再引用 `.omp`。
   - Depends: none
 
-- [ ] **Task: executor.ts 标记废弃，清理无用导出**
-  - Files: `packages/coding-agent/src/swarm/executor/executor.ts`, `packages/coding-agent/src/swarm/executor/index.ts`
-  - Change: `executeSwarmAgent` 函数和 `SubprocessAgentExecutor` 类添加 `/** @deprecated Use AgentRuntime.spawn() instead. */` JSDoc 注释。保留函数体不动（现有测试和可能的 SDK 消费者仍依赖）。从 `index.ts` barrel export 中移除已无消费方的 export（保留 `TaskQueue`、`TodoTracker`、`AgentExecutor` 接口）。
-  - Acceptance: `bun check` 零新错误。已确认的消费者（curtain-runner、debate-roundtable）不再引用 legacy 路径。
-  - Depends: "curtain-runner.ts 切换至 AgentRuntime.spawn", "debate-roundtable.ts 移除 runSubprocess 降级路径"
-
-- [ ] **Task: render/streaming.ts 标记废弃**
-  - Files: `packages/coding-agent/src/swarm/render/streaming.ts`
-  - Change: `streamAgentOutput` 函数和 `createStreamProgressHandler` 函数添加 `/** @deprecated Use AgentRuntime.spawn() + AgentHandle.bridgeToolEvents() instead. */` JSDoc 注释。保留函数体不动（executor.ts 的 executeSwarmAgent 内部仍引用 `createStreamProgressHandler`）。
-  - Acceptance: `bun check` 零新错误。streaming.ts 函数均标记 @deprecated。
-  - Depends: "curtain-runner.ts 切换至 AgentRuntime.spawn"
-
-## Phase 2: SP-3 — TUI 双主题统一
-**Contract:** Swarm dashboard 主题接入主 TUI 的 Theme 系统，硬编码 ANSI escape 替换为 Theme token。
-
-- [ ] **Task: swarm dashboard theme.ts 改为 Theme interface 薄封装**
-  - Files: `packages/coding-agent/src/modes/components/swarm/theme.ts`, `packages/coding-agent/src/modes/theme/theme.ts`
-  - Change: 将 `sato` 对象的 chalk.hex() 函数改为接收 `Theme` 参数的工厂函数。导出一个 `createSatoTheme(theme: Theme): SatoThemeColors`，内部从 `theme.fg`/`theme.bg` 等读取颜色，用 chalk 做包装。`sato` 保留为默认导出（用于不需要 theme 的场景），但增加 `createSatoFromTheme()` 作为推荐路径。保持向后兼容：现有所有 `sato.success("text")` 调用继续有效。
-  - Acceptance: swarm dashboard 可通过传入 `Theme` 实例来使用主 TUI 的颜色系统。`bun check` 零新错误。现有 dashboard 渲染输出不变。
+- [ ] **Task: 移除 omp-extension-roots.ts 中的硬编码 .omp**
+  - Files: `packages/coding-agent/src/discovery/omp-extension-roots.ts`
+  - Change: line 85 的 `path.join(ctx.cwd, ".omp")` 改为使用 `CONFIG_DIR_NAME`（即 `.stp`），去掉硬编码。引入 `CONFIG_DIR_NAME` from `@oh-my-pi/pi-utils`。
+  - Acceptance: 项目级 config 路径不再硬编码 `.omp`。`bun check` 通过。
   - Depends: none
 
-- [ ] **Task: 硬编码 ANSI escape 替换为 Theme token**
-  - Files: `packages/coding-agent/src/modes/components/segment-track.ts`, `packages/coding-agent/src/modes/components/diff.ts`, `packages/coding-agent/src/modes/components/welcome.ts`, `packages/coding-agent/src/modes/components/user-message.ts`, `packages/coding-agent/src/modes/components/status-line/component.ts`
-  - Change: 将 8 个文件中直接写的 `\x1b[...m` ANSI escape 序列替换为 `theme.fg(...)` / `theme.bg(...)` / `theme.bold(...)` 等调用。对于确实需要 raw escape 的性能关键路径（如 segment-track 的 powerline 渲染），保留但添加注释说明为何绕过 Theme。优先级：welcome.ts 的 `gradientEscape` → 改为 Theme 驱动渐变；diff.ts 的 DIM/DIM_OFF → `theme.muted()`；user-message.ts 的 bold/underline → `theme.bold()` / `theme.underline()`。
-  - Acceptance: 8 个文件中的裸 `\x1b[` 字符串减少 ≥80%。`bun check` 零新错误。`bun test` 渲染相关测试通过。
+## Phase 2: 数据层自动迁移（~/.omp → ~/.stp）
+**Contract:** 启动时若 `~/.stp` 不存在或为空且有 `~/.omp` 数据，自动迁移。
+
+- [ ] **Task: 在 dirs.ts 中实现 auto-migrate 逻辑**
+  - Files: `packages/utils/src/dirs.ts`
+  - Change: 在 `getBaseConfigRoot()` 调用后（或首次路径解析时），增加一个 `migrateOmpToStp()` 函数：(1) 检查 `~/.omp` 是否存在且 `~/.stp` 不存在/为空；(2) 若需要迁移，尝试 symlink `~/.omp` → `~/.stp`（首选）；若 symlink 失败则 copy（fallback）；(3) 若 `PI_CONFIG_DIR` 已设置则跳过迁移；(4) 迁移成功后写一个 `~/.stp/.migrated-from-omp` 标记文件；(5) 所有 I/O 错误不崩溃，仅 logger.warn。
+  - Acceptance: 新安装中 `~/.stp` 自动指向 `~/.omp` 数据。已有 `~/.stp` 的用户不受影响。
   - Depends: none
 
-## Phase 3: SP-5 — 文档补完
-**Contract:** 编写 ARCHITECTURE.md 架构地图，增强 CONTRIBUTING.md。
-
-- [ ] **Task: 编写 ARCHITECTURE.md**
-  - Files: `ARCHITECTURE.md`（新建，项目根目录）
-  - Change: 编写架构地图文档，包含：(1) 总体架构图（packages 依赖关系 mermaid 图）；(2) coding-agent 内部子系统划分（session → tools → swarm → modes → cli 数据流）；(3) Rust-TS 桥接说明（pi-natives → crates）；(4) 关键文件索引（agent-session.ts、sdk.ts、interactive-mode.ts 等大文件的作用说明）；(5) 开发工作流（setup → dev → test → build）。参考已有 `docs/swarm-architecture-v3.md` 中 v3 六层架构图。控制在 5-8KB。
-  - Acceptance: `ARCHITECTURE.md` 存在于项目根目录，包含 mermaid 架构图、子系统说明、文件索引。`bun check` 不检查 .md 文件。
+- [ ] **Task: 兼容性：agent/ 子目录读取时 fallback 到 .omp**
+  - Files: `packages/utils/src/dirs.ts`
+  - Change: `DirResolver` 的 `agentSubdir` 和 `rootSubdir` 在 `~/.stp/<subdir>` 不存在时，fallback 检查 `~/.omp/<subdir>` 是否存在（仅当 `.stp` 与 `.omp` 非同一路径时）。这覆盖了 agent.db、models.db、sessions/、blobs/、rules/ 等所有子目录。不阻塞启动——fallback 失败时静默返回 `.stp` 路径。
+  - Acceptance: 迁移前的 agent 数据持续可访问。无需手动 `PI_CONFIG_DIR=.omp`。
   - Depends: none
 
-- [ ] **Task: 增强 CONTRIBUTING.md**
-  - Files: `CONTRIBUTING.md`
-  - Change: 在现有 vouch 流程外增加：(1) 本地开发环境搭建（bun setup 前置条件）；(2) 代码规范概览（引用 AGENTS.md 的关键规则：`#private`、barrel exports、prompt 文件规范）；(3) 测试运行方法（`bun test <package>`）；(4) 提交前检查清单（bun check + bun test）。控制在 2-3KB 增量。
-  - Acceptance: CONTRIBUTING.md 包含开发环境搭建、代码规范引用、测试运行、提交前检查清单四个新章节。
-  - Depends: none
+## Phase 3: 清理残留引用（scripts、tests、docs）
+**Contract:** 项目代码中不再有误导性的 `.omp` 硬编码。
+
+- [ ] **Task: 更新 scripts/ 中的 .omp 硬编码**
+  - Files: `scripts/session-stats/audit.ts`, `scripts/session-stats/analyze.py`, `scripts/install.ps1`
+  - Change: `audit.ts:47,49` — `~/.omp/agent/sessions` → 使用 `getAgentDir()` 或 `~/.stp/agent/sessions`；`analyze.py:25` — `Path.home() / ".omp" / "stats.db"` → `.stp`；`install.ps1:105` — `.omp` → `.stp`。
+  - Acceptance: 所有 scripts/ 中的 `.omp` 硬编码替换为 `.stp` 或动态解析。
+  - Depends: Phase 1 全部完成
+
+- [ ] **Task: 更新 tests 中的 .omp 引用**
+  - Files: `packages/coding-agent/test/markit-converters.test.ts`, `packages/ai/test/helpers/index.ts`, `crates/pi-natives/src/fd.rs`
+  - Change: 测试中的 `PI_CONFIG_DIR=".omp"` 改为 `".stp"`，`~/.omp/auth-gateway.token` 改为 `~/.stp/auth-gateway.token`，`.omp/skills/opt/scripts` → `.stp/skills/opt/scripts`。
+  - Acceptance: `bun test` 相关测试通过。
+  - Depends: Phase 1 全部完成
+
+- [ ] **Task: 更新 Dockerfile 和 infra 中的 .omp 引用**
+  - Files: `Dockerfile.robomp`, `infra/`（如有）
+  - Change: `Dockerfile.robomp:66-67` 的 `.omp/agent` → `.stp/agent`。
+  - Acceptance: Docker 构建中路径指向 `.stp`。
+  - Depends: Phase 1 全部完成
 
 ## Phase 4: 验证
-**Contract:** 全量测试 + 类型检查。
+**Contract:** 全链路验证迁移无数据丢失。
 
-- [ ] **Task: 全量回归验证**
-  - Files: `packages/coding-agent/src/swarm/__tests__/`, `packages/coding-agent/test/`
-  - Change: 运行 `bun check` 类型检查，运行 `bun test packages/coding-agent/src/swarm/__tests__/` 全量 swarm 测试。验证无回归。debate-roundtable 和 curtain-runner 的测试如果依赖 mock runSubprocess，需同步更新 mock 为 AgentRuntime。
-  - Acceptance: `bun check` 零新错误，`bun test packages/coding-agent/src/swarm/__tests__/` ≤ 原有 3 个 pre-existing 失败（tui-panels.test.ts ANSI 渲染）。
-  - Depends: Phase 1 + Phase 2 + Phase 3 全部完成
+- [ ] **Task: 端到端迁移验证**
+  - Files: `packages/utils/src/dirs.ts`, `packages/utils/test/`
+  - Change: 编写测试：(1) 创建 temp `~/.omp` 含 agent.db + sessions，启动 → `~/.stp` 为 symlink 到 `~/.omp`；(2) `PI_CONFIG_DIR=.omp` 时迁移跳过；(3) 已有 `~/.stp` 时不触发迁移。运行全量 `bun test packages/utils/test/`。
+  - Acceptance: 迁移逻辑的 3 个场景通过测试。`bun check` 零新错误。
+  - Depends: Phase 2 全部完成
