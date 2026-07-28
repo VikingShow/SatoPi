@@ -31,7 +31,7 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-natives": "catalog:",
+    "@oh-my-pi/pi-natives": "workspace:*",
     "handlebars": "catalog:",
     "winston": "catalog:",
     "winston-daily-rotate-file": "catalog:"

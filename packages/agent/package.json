@@ -35,12 +35,12 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-ai": "catalog:",
-    "@oh-my-pi/pi-catalog": "catalog:",
-    "@oh-my-pi/pi-natives": "catalog:",
-    "@oh-my-pi/pi-utils": "catalog:",
-    "@oh-my-pi/pi-wire": "catalog:",
-    "@oh-my-pi/snapcompact": "catalog:",
+    "@oh-my-pi/pi-ai": "workspace:*",
+    "@oh-my-pi/pi-catalog": "workspace:*",
+    "@oh-my-pi/pi-natives": "workspace:*",
+    "@oh-my-pi/pi-utils": "workspace:*",
+    "@oh-my-pi/pi-wire": "workspace:*",
+    "@oh-my-pi/snapcompact": "workspace:*",
     "@opentelemetry/api": "catalog:"
   },
   "devDependencies": {

@@ -38,9 +38,9 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "catalog:",
-    "@oh-my-pi/pi-catalog": "catalog:",
-    "@oh-my-pi/pi-utils": "catalog:",
-    "@oh-my-pi/pi-wire": "catalog:",
+    "@oh-my-pi/pi-catalog": "workspace:*",
+    "@oh-my-pi/pi-utils": "workspace:*",
+    "@oh-my-pi/pi-wire": "workspace:*",
     "arktype": "catalog:",
     "zod": "catalog:"
   },

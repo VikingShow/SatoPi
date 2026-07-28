@@ -1,6 +1,6 @@
 # SatoPi Architecture
 
-SatoPi — multi-agent CLI, fork of [oh-my-pi](https://github.com/can1357/oh-my-pi). `omp` binary (Bun + Rust), 40+ LLM providers, 32 tools, swarm orchestration.
+SatoPi — multi-agent CLI, fork of [oh-my-pi](https://github.com/can1357/oh-my-pi). `stp` binary (Bun + Rust), 40+ LLM providers, 32 tools, swarm orchestration.
 
 ## Package Map
 
@@ -128,4 +128,4 @@ Never `tsc`/`npx tsc` — `bun run check` is the gate.
 - **No `console.log`.** Use `@oh-my-pi/pi-utils` logger → `~/.stp/logs/`. Prevents TUI corruption.
 - **TUI sanitization.** All displayed text: tabs→spaces, truncation, path shortening.
 - **Generated models.json.** Never hand-edit. Fix source, run `bun run gen:models`.
-- **Zero oh-my-pi modifications in swarm.** New swarm code in `swarm/` only; existing APIs unchanged.
+- **Zero upstream modifications in swarm.** New swarm code in `swarm/` only; existing APIs unchanged.

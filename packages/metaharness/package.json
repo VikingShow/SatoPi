@@ -25,12 +25,12 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@oh-my-pi/hashline": "catalog:",
-		"@oh-my-pi/pi-agent-core": "catalog:",
-		"@oh-my-pi/pi-ai": "catalog:",
-		"@oh-my-pi/pi-catalog": "catalog:",
-		"@oh-my-pi/pi-coding-agent": "catalog:",
-		"@oh-my-pi/pi-utils": "catalog:",
+		"@oh-my-pi/hashline": "workspace:*",
+		"@oh-my-pi/pi-agent-core": "workspace:*",
+		"@oh-my-pi/pi-ai": "workspace:*",
+		"@oh-my-pi/pi-catalog": "workspace:*",
+		"@oh-my-pi/pi-coding-agent": "workspace:*",
+		"@oh-my-pi/pi-utils": "workspace:*",
 		"@oh-my-pi/typescript-edit-benchmark": "workspace:*",
 		"clsx": "^2.1.1",
 		"d3-scale": "^4.0.2",

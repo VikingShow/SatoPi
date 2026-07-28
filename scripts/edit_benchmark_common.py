@@ -609,22 +609,22 @@ class VerbosePrinter:
             sys.stderr.flush()
 
 
-def resolve_repo_omp_bin() -> str | None:
+def resolve_repo_stp_bin() -> str | None:
     cli_path = REPO_ROOT / "packages/coding-agent" / "src/cli.ts"
     if not cli_path.exists():
         return None
     return str(cli_path)
 
 
-def resolve_omp_bin(raw: str | None) -> str:
+def resolve_stp_bin(raw: str | None) -> str:
     if raw:
         return raw
-    repo_bin = resolve_repo_omp_bin()
+    repo_bin = resolve_repo_stp_bin()
     if repo_bin:
         return repo_bin
-    found = shutil.which("omp")
+    found = shutil.which("stp") or shutil.which("omp")
     if not found:
-        raise SystemExit("Could not find `omp` on PATH and could not resolve the repo CLI. Set --omp-bin or OMP_BIN.")
+        raise SystemExit("Could not find `stp` or `omp` on PATH and could not resolve the repo CLI. Set --stp-bin or STP_BIN.")
     return found
 
 
@@ -707,7 +707,7 @@ def run_benchmark_for_model(
     *,
     spec: BenchmarkSpec,
     model: str,
-    omp_bin: str,
+    stp_bin: str,
     workspace: Path,
     timeout: float,
     log_mode: str | None,
@@ -730,7 +730,7 @@ def run_benchmark_for_model(
 
     try:
         with RpcClient(
-            executable=omp_bin,
+            executable=stp_bin,
             model=model,
             cwd=workspace,
             env={**spec.env},
@@ -814,10 +814,8 @@ def run_benchmark_for_model(
         feedback=feedback.strip(),
         error=error_msg,
     )
-
-
 async def run_all(spec: BenchmarkSpec, args: argparse.Namespace) -> dict[str, dict[str, Any]]:
-    omp_bin = resolve_omp_bin(args.omp_bin)
+    stp_bin = resolve_stp_bin(args.stp_bin)
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     workspace_root = Path(tempfile.gettempdir()) / f"{spec.workspace_prefix}-{timestamp}"
@@ -836,7 +834,7 @@ async def run_all(spec: BenchmarkSpec, args: argparse.Namespace) -> dict[str, di
                 run_benchmark_for_model,
                 spec=spec,
                 model=model,
-                omp_bin=omp_bin,
+                stp_bin=stp_bin,
                 workspace=workspace,
                 timeout=args.timeout,
                 log_mode="verbose" if args.verbose else ("print" if args.print else None),
@@ -882,9 +880,9 @@ async def run_all(spec: BenchmarkSpec, args: argparse.Namespace) -> dict[str, di
 def parse_args(description: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        "--omp-bin",
-        default=os.environ.get("OMP_BIN"),
-        help="Executable to launch. Defaults to the repo checkout CLI, then falls back to `omp` on PATH.",
+        "--stp-bin",
+        default=os.environ.get("STP_BIN"),
+        help="Executable to launch. Defaults to the repo checkout CLI, then falls back to `stp` (or `omp`) on PATH.",
     )
     parser.add_argument(
         "--timeout", type=float, default=60.0, help="Per-turn timeout in seconds."

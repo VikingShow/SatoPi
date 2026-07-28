@@ -42,13 +42,13 @@ Script（起草剧本）→ Stage（上台演出）→ Curtain（谢幕）
 
 | 幕 | 阶段 | 描述 |
 |----|------|------|
-| **Script** 起草剧本 | `script` → `script-debate` → `script-confirm` | 苏格拉底式对话澄清任务需求，然后多 Agent 圆桌辩论将计划精炼到 `.omp/plan.md` |
+| **Script** 起草剧本 | `script` → `script-debate` → `script-confirm` | 苏格拉底式对话澄清任务需求，然后多 Agent 圆桌辩论将计划精炼到 `.stp/plan.md` |
 | **Stage** 上台演出 | `stage` ⇄ `paused` / `blocked` | Agent 从 DAG 任务队列认领任务并行执行，通过 Stigmergy（环境标记）和 IRC（直接通信）协调 |
 | **Curtain** 谢幕 | `curtain` → `idle` | 经验提取、根因分析、反思 — 经验教训持久化供后续运行使用 |
 
 状态机严格执行此流转：`idle → script → script-debate → script-confirm → stage ⇄ (paused | blocked) → curtain → idle`。非法转换被拒绝 — 阶段权威仅存在于后端。
 
-SatoPi 在 omp 之上扩展了多 Agent Swarm 架构：**script** 阶段通过苏格拉底对话与圆桌辩论完成规划，**stage** 阶段让 Agent 并行执行 DAG 任务队列，**curtain** 阶段进行复盘分析。
+SatoPi 在 stp 之上扩展了多 Agent Swarm 架构：**script** 阶段通过苏格拉底对话与圆桌辩论完成规划，**stage** 阶段让 Agent 并行执行 DAG 任务队列，**curtain** 阶段进行复盘分析。
 
 ---
 
@@ -175,7 +175,7 @@ cd packages/swarm-gui
 bun run dev        # Vite HMR 开发服务器
 ```
 
-### omp CLI（从源码运行）
+### stp CLI（从源码运行）
 
 ```sh
 bun dev            # 交互式 TUI
@@ -256,7 +256,7 @@ swarm:
 *「演出前，先写好剧本。」*
 
 1. **开始规划** — 在聊天框输入任务，Planner Agent 开始苏格拉底式对话
-2. **计划成型** — 需求足够清晰后 Planner 将计划写入 `.omp/plan.md`
+2. **计划成型** — 需求足够清晰后 Planner 将计划写入 `.stp/plan.md`
 3. **运行辩论** — 多 Agent 圆桌辩论进行多轮精炼，Jaccard 相似度检测收敛（≥85%）
 4. **确认并启动** — 确认后转入 stage 阶段，并行启动 Agent 执行 DAG 任务队列
 5. **取消** — 随时可中止
@@ -285,7 +285,7 @@ sed -i 's/model: .*/model: YOUR-MODEL/' .swarm-workspace/loop.yaml
 | `packages/coding-agent/src/swarm/` | 后端 Swarm 逻辑（~80 个 .ts 文件，15 个子目录） |
 | `packages/swarm-gui/src/` | React 前端（Zustand + Tailwind + SSE 实时流） |
 | `.swarm-workspace/loop.yaml` | Swarm 配置 |
-| `.omp/plan.md` | Script 阶段生成的执行计划 |
+| `.stp/plan.md` | Script 阶段生成的执行计划 |
 
 ## 架构总览
 
@@ -315,7 +315,7 @@ packages/swarm-gui/src/
 
 ---
 
-## 安装 omp
+## 安装 stp
 
 **macOS · Linux**
 

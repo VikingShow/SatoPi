@@ -5,12 +5,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
-const linkScript = path.join(repoRoot, "scripts", "link-omp.sh");
-const targetWrapper = path.join(repoRoot, "packages", "coding-agent", "scripts", "omp");
+const linkScript = path.join(repoRoot, "scripts", "link-stp.sh");
+const targetWrapper = path.join(repoRoot, "packages", "coding-agent", "scripts", "stp");
 const tempDirs: string[] = [];
 
 function makeTempDir() {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-link-"));
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-link-"));
 	tempDirs.push(dir);
 	return dir;
 }
@@ -41,7 +41,7 @@ afterEach(() => {
 	}
 });
 
-describe("scripts/link-omp.sh", () => {
+describe("scripts/link-stp.sh", () => {
 	it("falls back to BUN_INSTALL/bin when bun cannot resolve the global bin", () => {
 		const dir = makeTempDir();
 		const bunInstall = path.join(dir, "bun-install");
@@ -66,7 +66,7 @@ describe("scripts/link-omp.sh", () => {
 
 		expect(result.status).toBe(0);
 		expect(result.stderr).toBe("");
-		expect(fs.readlinkSync(path.join(bunInstall, "bin", "omp"))).toBe(targetWrapper);
+		expect(fs.readlinkSync(path.join(bunInstall, "bin", "stp"))).toBe(targetWrapper);
 	});
 
 	it("uses bun pm -g bin when it succeeds", () => {
@@ -93,7 +93,7 @@ describe("scripts/link-omp.sh", () => {
 
 		expect(result.status).toBe(0);
 		expect(result.stderr).toBe("");
-		expect(fs.readlinkSync(path.join(globalBin, "omp"))).toBe(targetWrapper);
-		expect(fs.existsSync(path.join(dir, "unused-bun-install", "bin", "omp"))).toBe(false);
+		expect(fs.readlinkSync(path.join(globalBin, "stp"))).toBe(targetWrapper);
+		expect(fs.existsSync(path.join(dir, "unused-bun-install", "bin", "stp"))).toBe(false);
 	});
 });

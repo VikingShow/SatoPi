@@ -1,4 +1,4 @@
-# Contributing to oh-my-pi
+# Contributing to SatoPi
 
 Thanks for your interest in contributing. This project uses a lightweight
 **vouch** system to decide who can open pull requests. Please read this before
@@ -63,11 +63,11 @@ bun install                # install all workspace dependencies
 bun run build:native       # compile the Rust crate (pi-natives)
 ```
 
-Then link the `omp` CLI globally so `omp` runs your local checkout:
+Then link the `stp` CLI globally so `stp` runs your local checkout:
 
 ```sh
 bun --cwd=packages/coding-agent link
-sh scripts/link-omp.sh
+sh scripts/link-stp.sh
 ```
 
 Or run all three steps at once:

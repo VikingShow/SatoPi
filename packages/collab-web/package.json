@@ -37,7 +37,7 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-wire": "catalog:",
+    "@oh-my-pi/pi-wire": "workspace:*",
     "lucide-react": "catalog:",
     "marked": "catalog:",
     "react": "catalog:",
