@@ -80,7 +80,7 @@ export async function collectConfigCandidates(
 	let current = cwd;
 	while (true) {
 		for (const filename of filenames) {
-			candidates.add(path.resolve(current, ".omp", filename));
+			candidates.add(path.resolve(current, CONFIG_DIR_NAME, filename));
 			candidates.add(path.resolve(current, filename));
 		}
 		if (current === (repoRoot ?? home)) break;
