@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+
+- Added inline TUI renderer for `agent_invoke` persistent agent calls — transcripts now show a "Invoke Agent" framed block (matching the `task` tool's visual style exactly) with live progress streaming, output preview, yield tree, and auto-dismiss after 5s.
+- Status bar now shows `🤖 2p·3a` (or `🤖 N pgent` / `🤖 N agents`) to distinguish persistent agents from task subagents at a glance.
+### Fixed
+
+- Fixed a bug where swarm `agent-launcher.ts` did not pass `agentDisplayName` to `createAgentSession`, causing all swarm-spawned persistent agents to appear as "main" in the agent registry instead of their `spec.id`.
 ## [16.5.0] - 2026-07-13
 
 ### Breaking Changes

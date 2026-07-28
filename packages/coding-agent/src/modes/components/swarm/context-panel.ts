@@ -1,19 +1,13 @@
 /**
- * Context & Offload Panel — renders ContextManager + Offload pipeline status.
- *
- * Shows:
- *  - Context pipeline sources (active / inactive)
- *  - Offload L1→L3 pipeline stats
- *  - Per-agent context window usage
- *
- * When an AgentSession is provided, per-agent context windows are derived
- * from live session data instead of requiring pre-built ContextPanelState.
+ * Context Panel — renders context pipeline and offload status inside a system
+ * `framedBlock`.  Uses the global `theme` for all colours.
  */
 
+import type { Component } from "@oh-my-pi/pi-tui";
 import { AgentRegistry } from "../../../registry/agent-registry";
 import type { AgentSession } from "../../../session/agent-session";
-import { makeFooter, makeHeader, padLine } from "./panel-utils";
-import { sato } from "./theme";
+import type { Theme } from "../../theme/theme";
+import { swarmPanel } from "./swarm-panel-block";
 
 // ============================================================================
 // Types
@@ -44,53 +38,46 @@ export interface ContextPanelState {
 // ============================================================================
 
 export function renderContextPanel(
-	state: ContextPanelState | null | undefined,
-	maxWidth: number,
+	state: ContextPanelState,
+	theme: Theme,
 	agentSession?: AgentSession,
-): string[] {
-	if (!state) return emptyPanel(maxWidth, "No context state");
+): Component {
+	return swarmPanel("Context", ({ innerWidth, theme: t }) => {
+		const enrichedAgents = deriveAgentContext(agentSession, state.agents);
+		const lines: string[] = [];
 
-	// Derive agent context windows from AgentSession/AgentRegistry when
-	// provided and state.agents is empty or not comprehensive.
-	const enrichedAgents = deriveAgentContext(agentSession, state.agents);
+		// Sources
+		lines.push(...renderSources(state.sources, t));
+		if (state.l1PendingCount > 0 || state.l2LastFlushSeconds > 0) {
+			const parts: string[] = [];
+			if (state.l1PendingCount > 0) parts.push(t.fg("warning", `L1: ${state.l1PendingCount} pending`));
+			if (state.l2LastFlushSeconds > 0)
+				parts.push(t.fg("dim", `L2 flush: ${state.l2LastFlushSeconds}s ago`));
+			lines.push(`  ${parts.join("  ")}`);
+		}
 
-	const innerWidth = maxWidth - 4;
-	if (innerWidth < 10) return [];
+		// L3 graph stats
+		if (state.l3Nodes > 0 || state.l3Edges > 0) {
+			lines.push(t.fg("dim", `  L3: ${state.l3Nodes} nodes, ${state.l3Edges} edges`));
+		}
 
-	const sources = state.sources;
-	const l1PendingCount = state.l1PendingCount;
-	const l2LastFlushSeconds = state.l2LastFlushSeconds;
-	const l3Nodes = state.l3Nodes;
-	const l3Edges = state.l3Edges;
-	const lines: string[] = [];
-	lines.push(makeHeader("Context", maxWidth));
+		// Agent context windows
+		if (enrichedAgents.length > 0) {
+			lines.push("");
+			lines.push(...renderAgentWindows(enrichedAgents, innerWidth, t));
+		}
 
-	// Sources
-	lines.push(...renderSources(sources, innerWidth, maxWidth));
-
-	// Offload pipeline
-	lines.push(padLine("", maxWidth));
-	lines.push(...renderOffloadPipeline({ l1PendingCount, l2LastFlushSeconds, l3Nodes, l3Edges }, innerWidth, maxWidth));
-
-	// Agent context windows
-	if (enrichedAgents.length > 0) {
-		lines.push(padLine("", maxWidth));
-		lines.push(...renderAgentWindows(enrichedAgents, innerWidth, maxWidth));
-	}
-
-	lines.push(makeFooter(maxWidth));
-
-	return lines;
+		if (lines.length === 0) {
+			return [t.fg("dim", "  No context data")];
+		}
+		return lines;
+	}, theme, { applyBg: false });
 }
 
 // ============================================================================
 // Internal
 // ============================================================================
 
-/**
- * Derive AgentContextInfo from AgentSession + AgentRegistry when the
- * pre-built state doesn't include agent windows.
- */
 function deriveAgentContext(
 	agentSession: AgentSession | undefined,
 	existingAgents: AgentContextInfo[],
@@ -99,88 +86,39 @@ function deriveAgentContext(
 	if (!agentSession) return [];
 
 	const refs = AgentRegistry.global().list();
-	if (refs.length === 0) return [];
-
-	return refs.map(ref => {
-		const session = ref.session ?? agentSession;
-		const stats = session.getSessionStats();
-		return {
+	return refs
+		.filter(ref => ref.kind === "persistent" || ref.kind === "sub")
+		.map(ref => ({
 			agentId: ref.displayName,
-			tokensUsed: stats.tokens.total,
+			tokensUsed: 0,
 			tokenBudget: 0,
-		};
+		}));
+}
+
+function renderSources(sources: ContextSourceStatus[], theme: Theme): string[] {
+	return sources.map(s => {
+		const glyph = s.active ? theme.fg("success", "●") : theme.fg("dim", "○");
+		return `  ${glyph} ${s.name}`;
 	});
 }
 
-function renderSources(sources: ContextSourceStatus[], _innerWidth: number, maxWidth: number): string[] {
-	const lines: string[] = [];
-	lines.push(padLine(` ${sato.bold("Sources:")}`, maxWidth));
-
-	for (const src of sources) {
-		const glyph = src.active ? sato.success("✓") : sato.muted("·");
-		const name = src.active ? sato.text(src.name) : sato.muted(src.name);
-		lines.push(padLine(`   ${glyph} ${name}`, maxWidth));
-	}
-
-	return lines;
-}
-
-function renderOffloadPipeline(
-	state: { l1PendingCount: number; l2LastFlushSeconds: number; l3Nodes: number; l3Edges: number },
-	_innerWidth: number,
-	maxWidth: number,
+function renderAgentWindows(
+	agents: AgentContextInfo[],
+	_maxWidth: number,
+	theme: Theme,
 ): string[] {
-	const lines: string[] = [];
-	lines.push(padLine(` ${sato.bold("Offload:")}`, maxWidth));
+	return agents.map(a => {
+		const usage = a.tokenBudget > 0 ? Math.round((a.tokensUsed / a.tokenBudget) * 100) : 0;
+		const bar = renderUsageBar(usage, 10, theme);
+		return `  ${a.agentId}  ${bar}  ${theme.fg("dim", `${a.tokensUsed}/${a.tokenBudget}`)}`;
+	});
+}
 
-	const l1Text = state.l1PendingCount > 0 ? sato.warning(`${state.l1PendingCount} pending`) : sato.success("drained");
-	lines.push(padLine(`   L1 (summarisation): ${l1Text}`, maxWidth));
-
-	const l2Text = formatTimeAgo(state.l2LastFlushSeconds);
-	lines.push(padLine(`   L2 (MMD injection): last flush ${l2Text}`, maxWidth));
-
-	lines.push(
-		padLine(
-			`   L3 (knowledge graph): ${sato.info(String(state.l3Nodes))} nodes, ${sato.info(String(state.l3Edges))} edges`,
-			maxWidth,
-		),
+function renderUsageBar(pct: number, width: number, theme: Theme): string {
+	const filled = Math.round((pct / 100) * width);
+	const empty = width - filled;
+	const color = pct > 80 ? "error" : pct > 50 ? "warning" : "success";
+	return (
+		theme.fg(color, "█".repeat(filled)) + theme.fg("dim", "░".repeat(empty))
 	);
-
-	return lines;
-}
-
-function renderAgentWindows(agents: AgentContextInfo[], _innerWidth: number, maxWidth: number): string[] {
-	const lines: string[] = [];
-	lines.push(padLine(` ${sato.bold("Agent Windows:")}`, maxWidth));
-
-	for (const agent of agents) {
-		const pct = agent.tokenBudget > 0 ? Math.round((agent.tokensUsed / agent.tokenBudget) * 100) : 0;
-		const colorFn = pct > 80 ? sato.danger : pct > 50 ? sato.warning : sato.success;
-		const bar = colorFn(`${pct}%`);
-		const tokens = formatNumber(agent.tokensUsed);
-		const budget = formatNumber(agent.tokenBudget);
-		const name = agent.agentId.length > 20 ? `${agent.agentId.slice(0, 17)}...` : agent.agentId.padEnd(20);
-
-		const line = `   ${name} ${bar}  (${tokens} / ${budget} tokens)`;
-		lines.push(padLine(line, maxWidth));
-	}
-
-	return lines;
-}
-
-function formatTimeAgo(seconds: number): string {
-	if (seconds < 5) return sato.success("just now");
-	if (seconds < 60) return sato.muted(`${seconds}s ago`);
-	if (seconds < 3600) return sato.muted(`${Math.floor(seconds / 60)}m ago`);
-	return sato.muted(`${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m ago`);
-}
-
-function formatNumber(n: number): string {
-	return n.toLocaleString("en-US");
-}
-
-function emptyPanel(maxWidth: number, message: string): string[] {
-	const innerWidth = maxWidth - 4;
-	if (innerWidth < 5) return [];
-	return [makeHeader("Context", maxWidth), padLine(` ${sato.dim(message)}`, maxWidth), makeFooter(maxWidth)];
 }

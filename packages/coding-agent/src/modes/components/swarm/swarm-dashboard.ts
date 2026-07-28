@@ -1,150 +1,134 @@
 /**
  * SwarmDashboard — unified SatoPi TUI dashboard.
  *
- * Assembles all TUI panels into a single multi-section view:
- *   1. Phase lifecycle progress bar
- *   2. Agent status panel
- *   3. Communications log
- *   4. Context & Offload status
+ * Assembles all TUI panels into a single multi-section view using `Component`
+ * composition. Each panel is now a `Component` backed by `framedBlock`.
  *
- * Automatically adapts layout to terminal width:
+ * Layout adapts to terminal width:
  *   >= 100 cols → two-column (agents | comm/context)
  *   >= 60 cols  → single-column
- *   < 60 cols   → compact mode (abbreviated labels)
+ *   < 60 cols   → compact mode
  */
 
+import type { Component } from "@oh-my-pi/pi-tui";
+import { Container } from "@oh-my-pi/pi-tui";
 import type { AgentRef } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
+import type { Theme } from "../../theme/theme";
 import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
 import { type ContextPanelState, renderContextPanel } from "./context-panel";
 import { type GraphViewInput, renderGraphView } from "./graph-view";
 import { renderPhaseView } from "./phase-view";
-import { sato } from "./theme";
+
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface DashboardInput {
-	/** Agent refs from AgentRegistry (primary source for agent list) */
 	agents: AgentRef[];
-	/** Current swarm pipeline state (optional enrichment) */
 	swarm: SwarmState;
-	/** Recent communication messages (newest first) */
 	messages: CommMessage[];
-	/** Context & offload pipeline state */
 	context: ContextPanelState;
-	/** Optional graph view — shown when mode is "graph" */
 	graphView?: GraphViewInput;
+	theme: Theme;
 }
 
 // ============================================================================
-// Layout
+// Public API
 // ============================================================================
 
-/** Render the full SatoPi dashboard. */
-export function renderDashboard(input: DashboardInput, width: number = 80): string[] {
-	const minWidth = Math.max(40, width);
-	const compactThreshold = 60;
-	const twoColumnThreshold = 100;
+export function renderDashboard(input: DashboardInput): Component {
+	const { theme, graphView } = input;
 
-	// When graph view data is present, show DAG visualization
-	if (input.graphView) {
-		const header = [sato.bold("Theatre Graph"), ""];
-		const graph = renderGraphView(input.graphView);
-		return [...header, ...graph];
+	// Graph-only mode
+	if (graphView && graphView.graph && Object.keys(graphView.graph.nodes).length > 0) {
+		return renderGraphView(graphView, theme);
 	}
-	if (minWidth < compactThreshold) {
-		return renderCompact(input, minWidth);
-	}
-	if (minWidth >= twoColumnThreshold) {
-		return renderTwoColumn(input, minWidth);
-	}
-	return renderSingleColumn(input, minWidth);
+
+	return {
+		render: (width: number): readonly string[] => {
+			if (width < 60) return renderCompact(input, width);
+			if (width < 100) return renderSingleColumn(input, width);
+			return renderTwoColumn(input, width);
+		},
+		invalidate: () => {},
+	};
 }
 
-// ── Single Column (60-99 cols) ────────────────────────────────────────────
+// ============================================================================
+// Layouts
+// ============================================================================
 
 function renderSingleColumn(input: DashboardInput, width: number): string[] {
 	const lines: string[] = [];
+	const { agents, swarm, messages, context, theme } = input;
 
-	// Phase bar
-	lines.push(...renderPhaseView(input.swarm));
+	lines.push(...renderPhaseView(swarm, theme));
 	lines.push("");
-
-	// Agent panel (primary source: AgentRef[], swarm enrichment: SwarmState)
-	lines.push(...renderAgentPanel(input.agents, input.swarm, width));
+	lines.push(...renderAgentPanel(agents, swarm, theme).render(width));
 	lines.push("");
-
-	// Comm panel (last 5 messages)
-	const recentMsgs = input.messages.slice(0, 5);
-	lines.push(...renderCommPanel(recentMsgs, width));
+	lines.push(...renderCommPanel(messages, theme).render(width));
 	lines.push("");
-
-	// Context panel
-	lines.push(...renderContextPanel(input.context, width));
+	lines.push(...renderContextPanel(context, theme).render(width));
 
 	return lines;
 }
 
-// ── Two Column (>= 100 cols) ──────────────────────────────────────────────
-
 function renderTwoColumn(input: DashboardInput, width: number): string[] {
 	const lines: string[] = [];
-	const leftWidth = Math.floor(width / 2) - 1;
-	const rightWidth = width - leftWidth - 3;
+	const { agents, swarm, messages, context, theme } = input;
+
+	const leftWidth = Math.floor(width * 0.45);
+	const rightWidth = width - leftWidth - 2;
 
 	// Phase bar (full width)
-	lines.push(...renderPhaseView(input.swarm));
+	lines.push(...renderPhaseView(swarm, theme));
 	lines.push("");
 
-	// Left: Agent panel | Right: Comm + Context
-	const agentLines = renderAgentPanel(input.agents, input.swarm, leftWidth);
-	const recentMsgs = input.messages.slice(0, 5);
-	const commLines = renderCommPanel(recentMsgs, rightWidth);
-	const contextLines = renderContextPanel(input.context, rightWidth);
+	// Left: Agent panel
+	const agentLines = renderAgentPanel(agents, swarm, theme).render(leftWidth);
 
-	// Interleave right panels
-	const rightCombined = [...commLines, ...contextLines];
+	// Right: Comm + Context stacked
+	const recentMsgs = messages.slice(0, 5);
+	const commLines = renderCommPanel(recentMsgs, theme).render(rightWidth);
+	const contextLines = renderContextPanel(context, theme).render(rightWidth);
 
-	const maxRows = Math.max(agentLines.length, rightCombined.length);
-	for (let i = 0; i < maxRows; i++) {
-		const left = i < agentLines.length ? agentLines[i] : " ".repeat(leftWidth);
-		const right = i < rightCombined.length ? rightCombined[i] : "";
-		lines.push(`${left} ${sato.dim("│")} ${right}`);
+	// Interleave
+	const maxLeft = agentLines.length;
+	const maxRight = Math.max(commLines.length, contextLines.length);
+	const spacer = "  ";
+
+	for (let i = 0; i < Math.max(maxLeft, maxRight); i++) {
+		const left = i < maxLeft ? agentLines[i] : "";
+		const right = i < maxRight
+			? (i < commLines.length ? commLines[i] : contextLines[i - commLines.length] ?? "")
+			: "";
+		lines.push(`${left.padEnd(leftWidth)}${spacer}${right}`);
 	}
 
 	return lines;
 }
 
-// ── Compact (< 60 cols) ───────────────────────────────────────────────────
-
 function renderCompact(input: DashboardInput, _width: number): string[] {
 	const lines: string[] = [];
+	const { agents, swarm, theme } = input;
 
-	const phase = input.swarm.phase ?? "idle";
-	const agentCount = input.agents.length > 0 ? input.agents.length : Object.keys(input.swarm.agents ?? {}).length;
-	const status = input.swarm.status ?? "idle";
-	lines.push(sato.dim(`[${status}] phase=${phase} agents=${agentCount}`));
+	lines.push(...renderPhaseView(swarm, theme));
 
-	// Use AgentRef list when available; fall back to swarm state
-	if (input.agents.length > 0) {
-		for (const ref of input.agents) {
-			const glyph =
-				ref.status === "running" ? "◌" : ref.status === "idle" ? "✓" : ref.status === "aborted" ? "✗" : "·";
-			lines.push(`  ${glyph} ${ref.displayName} [${ref.status}]`);
+	const agentCount = agents.length > 0 ? agents.length : Object.keys(swarm.agents ?? {}).length;
+	const status = swarm.status ?? "idle";
+	lines.push(theme.fg("dim", `[${status}] phase=${swarm.phase ?? "idle"} agents=${agentCount}`));
+
+	if (agents.length > 0) {
+		for (const ref of agents) {
+			const glyph = ref.status === "running" ? "◌" : (ref.status === "idle" || ref.status === "parked") ? "✓" : "·";
+			lines.push(`  ${glyph} ${ref.displayName}`);
 		}
 	} else {
-		for (const agent of Object.values(input.swarm.agents ?? {})) {
-			const glyph =
-				agent.status === "completed"
-					? "✓"
-					: agent.status === "running"
-						? "◌"
-						: agent.status === "failed"
-							? "✗"
-							: "·";
-			lines.push(`  ${glyph} ${agent.name} [${agent.status}]`);
+		for (const agent of Object.values(swarm.agents ?? {})) {
+			const glyph = agent.status === "completed" ? "✓" : agent.status === "running" ? "◌" : "·";
+			lines.push(`  ${glyph} ${agent.role ?? "agent"}`);
 		}
 	}
 

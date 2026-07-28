@@ -7,8 +7,7 @@
  */
 
 import type { Chapter, SwarmState, TodoItem } from "../../../swarm/core/state";
-import { sato } from "./theme";
-
+import type { Theme } from "../../theme/theme";
 // ============================================================================
 // Constants
 // ============================================================================
@@ -57,34 +56,34 @@ const PHASE_LABEL: Record<Chapter, string> = {
  *   Line 1:  ○ Idle → ◇ Script → ◆ Debate → ● Stage → ...
  *   Line 2:  ─ status: Running  [tasks 3/7]  [12m 34s] ─
  */
-export function renderPhaseView(state: SwarmState): string[] {
+export function renderPhaseView(state: SwarmState, theme: Theme): string[] {
 	const currentPhase = state.phase ?? "idle";
 
 	const icons = PHASE_ORDER.map(phase => {
 		const isCurrent = phase === currentPhase;
 		const icon = PHASE_ICON[phase];
 		const label = PHASE_LABEL[phase];
-		const coloredIcon = isCurrent ? sato.bold(sato.amber(icon)) : sato.dim(icon);
-		const coloredLabel = isCurrent ? sato.bold(label) : sato.dim(label);
+		const coloredIcon = isCurrent ? theme.bold(theme.fg("warning", icon)) : theme.fg("dim", icon);
+		const coloredLabel = isCurrent ? theme.bold(label) : theme.fg("dim", label);
 		return `${coloredIcon} ${coloredLabel}`;
 	});
 
-	const arrow = sato.dim(" → ");
+	const arrow = theme.fg("dim", " → ");
 	const phaseLine = icons.join(arrow);
 
 	// Sub-status line
 	const status = state.status ?? "idle";
-	const statusLabel = sato.amber(status.charAt(0).toUpperCase() + status.slice(1));
+	const statusLabel = theme.fg("warning", status.charAt(0).toUpperCase() + status.slice(1));
 
 	const progress = computeTaskProgress(state.todos ?? []);
-	const taskPart = progress.total > 0 ? sato.dim(`[tasks ${progress.done}/${progress.total}]`) : "";
+	const taskPart = progress.total > 0 ? theme.fg("dim", `[tasks ${progress.done}/${progress.total}]`) : "";
 
-	const duration = state.startedAt != null ? sato.dim(`[${formatDuration(Date.now() - state.startedAt)}]`) : "";
+	const duration = state.startedAt != null ? theme.fg("dim", `[${formatDuration(Date.now() - state.startedAt)}]`) : "";
 
-	const parts = [sato.dim("status:"), statusLabel, taskPart, duration].filter(Boolean);
+	const parts = [theme.fg("dim", "status:"), statusLabel, taskPart, duration].filter(Boolean);
 	const subLine = `─ ${parts.join("  ")} ${"─".repeat(4)}`;
 
-	return [phaseLine, sato.dim(subLine)];
+	return [phaseLine, theme.fg("dim", subLine)];
 }
 
 // ============================================================================
@@ -97,7 +96,7 @@ interface TaskProgress {
 }
 
 function computeTaskProgress(todos: TodoItem[]): TaskProgress {
-	const done = todos.filter(t => t.status === "done" || t.status === "completed").length;
+	const done = todos.filter(t => t.status === "completed").length;
 	return { done, total: todos.length };
 }
 

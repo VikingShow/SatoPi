@@ -41,7 +41,7 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 	const h = Math.max(1, height);
 
 	// Use SatoPi brand splash from modes/components/swarm
-	if (w >= 60 && h >= 28) return renderSplash(w);
+	if (w >= 60 && h >= 28) return renderSplash(w, theme);
 
 	// Compact animated fallback for small terminals
 	const progress = Math.max(0, Math.min(1, elapsedMs / SETUP_SPLASH_MS));

@@ -167,7 +167,7 @@ import {
 	parseLoopLimitArgs,
 } from "./loop-limit";
 import { OAuthManualInputManager } from "./oauth-manual-input";
-import { countRunningSubagentBadgeAgents, getRunningSubagentBadgeRegistry } from "./running-subagent-badge";
+import { countRunningPersistentAgents, countRunningSubagentBadgeAgents, getRunningSubagentBadgeRegistry } from "./running-subagent-badge";
 import {
 	type ObservableSession,
 	type SessionObserverChangeKind,
@@ -1655,8 +1655,9 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.syncRunningSubagentBadge();
 			});
 		}
-		const count = countRunningSubagentBadgeAgents(registry);
-		this.statusLine.setSubagentCount(count);
+		const persistentCount = countRunningPersistentAgents(registry);
+		const subCount = countRunningSubagentBadgeAgents(registry);
+		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();
 	}
 
@@ -1991,7 +1992,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const agentRefs = AgentRegistry.global().list();
 		if (agentRefs.length > 1) {
 			// Multi-agent: show the rich agent panel from AgentRegistry
-			const lines = renderAgentPanel(agentRefs, undefined, this.ui.terminal.columns);
+			const lines = renderAgentPanel(agentRefs, undefined, theme).render(this.ui.terminal.columns);
 			if (lines.length === 0) return;
 			this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
 		} else {

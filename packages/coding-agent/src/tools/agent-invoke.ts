@@ -1,9 +1,8 @@
 /**
- * agent-invoke.ts — Agent Invoke tool
+ * agent-invoke.ts — Agent Invoke tool.
  *
  * LLM-invokable tool that calls a persistent agent by profileId.
- * If the agent is already running and idle, it steers a new task.
- * Otherwise, it spawns a fresh persistent agent via createAgentSession.
+ * Supports inline progress streaming via session.subscribe().
  */
 
 import type { AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
@@ -11,11 +10,9 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry } from "../registry/agent-registry";
+import type { AgentSession } from "../session/agent-session";
 import { createAgentSession } from "../sdk";
-
-// ============================================================================
-// Schema
-// ============================================================================
+import type { AgentProgress, SingleResult } from "../task/types";
 
 const agentInvokeSchema = type({
 	profileId: type("string").describe("Profile ID of the persistent agent to invoke"),
@@ -24,121 +21,145 @@ const agentInvokeSchema = type({
 
 type AgentInvokeParams = typeof agentInvokeSchema.infer;
 
-// ============================================================================
-// agentInvokeTool
-// ============================================================================
+export interface AgentInvokeDetails {
+	progress: AgentProgress[];
+	results: SingleResult[];
+	profileId: string;
+	displayName: string;
+	kind: "persistent";
+}
 
-export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
+export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails> = {
 	name: "agent_invoke",
 	approval: "write" as const,
 	label: "Invoke Agent",
-	summary: "Call a persistent agent by profileId — spawns or steers as needed",
+	summary: "Call a persistent agent by profileId",
 	parameters: agentInvokeSchema,
-	description: [
-		"Call a persistent agent by its profile ID. If the agent is already running",
-		"and idle, the task is routed to it directly. Otherwise a new persistent agent",
-		"is spawned with the given profile and task.",
-		"",
-		"Parameters:",
-		"- `profileId`: The profile ID of the persistent agent to invoke.",
-		"- `task`: The task description for the agent to work on.",
-	].join("\n"),
-	concurrency: "exclusive" as const,
-	loadMode: "discoverable" as const,
-	lenientArgValidation: false,
-
-	/** Dynamically hidden when no agent profiles are registered. */
-	get hidden(): boolean {
-		return ProfileRegistry.global().list().length === 0;
-	},
+	description:
+		"Call a persistent agent by its profile ID. Spawns a new session or steers an existing idle one.",
 
 	async execute(
+		this: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails>,
 		_toolCallId: string,
 		params: AgentInvokeParams,
 		signal?: AbortSignal,
-		_onUpdate?: (partial: AgentToolResult<string>) => void,
+		_onUpdate?: (partial: AgentToolResult<AgentInvokeDetails>) => void,
 		_context?: AgentToolContext,
-	): Promise<AgentToolResult<string>> {
+	): Promise<AgentToolResult<AgentInvokeDetails>> {
 		const registry = AgentRegistry.global();
 		const { profileId, task } = params;
+		const agentId = `persist-${profileId}`;
 
-		// Find existing persistent idle agent by profileId
+		// Find existing persistent idle agent
 		const existing = registry
 			.list()
 			.find(ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle");
 
 		let session: AgentSession | undefined;
-		if (existing?.session) {
-			// Steer the existing session with the new task
-			logger.info("[agent_invoke] Steering existing persistent agent", {
-				id: existing.id,
-				profileId,
-			});
-			session = existing.session;
-		} else {
-			// Spawn new persistent agent session
-			logger.info("[agent_invoke] Creating new persistent agent session", { profileId });
-			signal?.throwIfAborted();
+		let displayName = agentId;
 
+		if (existing?.session) {
+			session = existing.session;
+			displayName = existing.displayName;
+		} else {
+			signal?.throwIfAborted();
 			try {
 				const result = await createAgentSession({
 					agentKind: "persistent",
 					persistentProfileId: profileId,
-					agentId: `persist-${profileId}`,
+					agentId,
+					agentDisplayName: agentId,
 					autoApprove: true,
 					hasUI: false,
 					hasIrcInterrupts: true,
 				});
 				session = result.session;
-				// Register in the agent registry
 				registry.register({
-					id: `persist-${profileId}`,
-					displayName: `persist-${profileId}`,
+					id: agentId,
+					displayName: agentId,
 					kind: "persistent",
 					profileId,
 					session,
 				});
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
-				logger.error("[agent_invoke] Session creation failed", { profileId, error: msg });
 				return {
 					content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 					isError: true,
+					details: { progress: [], results: [], profileId, displayName: agentId, kind: "persistent" },
 				};
 			}
 		}
 
-		// Start the task and wait for completion
+		// Subscribe for live progress streaming
+		const progress: AgentProgress[] = [];
+		const unsub = session.subscribe(event => {
+			if (event.type === "tool_execution_update") {
+				const snap: AgentProgress = {
+					index: 0,
+					id: agentId,
+					agent: profileId,
+					agentSource: "project",
+					status: "running",
+					task,
+					toolCount: progress.length > 0 ? (progress[progress.length - 1].toolCount ?? 0) + 1 : 1,
+					tokens: 0,
+					cost: 0,
+					durationMs: 0,
+					recentTools: [],
+					recentOutput: [],
+					requests: 0,
+				};
+				progress.push(snap);
+				_onUpdate?.({
+					content: [{ type: "text", text: "..." }],
+					details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
+				});
+			}
+		});
+
 		try {
 			signal?.throwIfAborted();
 			await session.prompt(task);
 			const result = await session.wait();
 
-			// Track profile credit
-			const profileRegistry = ProfileRegistry.global();
-			profileRegistry.recordTaskCompleted(profileId, result.exitCode === 0);
+			ProfileRegistry.global().recordTaskCompleted(profileId, result.exitCode === 0);
 
+			const final: SingleResult = {
+				index: 0,
+				id: agentId,
+				agent: profileId,
+				agentSource: "project",
+				task,
+				exitCode: result.exitCode ?? -1,
+				output: result.output || result.stderr || "(no output)",
+				stderr: "",
+				truncated: false,
+				durationMs: 0,
+				tokens: 0,
+				requests: 0,
+			};
+
+			unsub();
 			return {
-				content: [
-					{
-						type: "text",
-						text: result.output || result.stderr || "(no output)",
-					},
-				],
+				content: [{ type: "text", text: result.output || result.stderr || "(no output)" }],
 				isError: result.exitCode !== 0,
+				details: {
+					progress: [...progress],
+					results: [final],
+					profileId,
+					displayName,
+					kind: "persistent",
+				},
 			};
 		} catch (err) {
+			unsub();
 			const msg = err instanceof Error ? err.message : String(err);
-			logger.error("[agent_invoke] Task execution failed", { profileId, error: msg });
-			// Still record the failure in profile
-			try {
-				ProfileRegistry.global().recordTaskCompleted(profileId, false);
-			} catch {
-				// best-effort
-			}
+			try { ProfileRegistry.global().recordTaskCompleted(profileId, false); } catch { /* best-effort */ }
 			return {
 				content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 				isError: true,
+				details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
 			};
 		}
 	},

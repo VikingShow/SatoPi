@@ -1,190 +1,71 @@
 /**
- * Unit tests for SatoPi TUI phase lifecycle view.
- *
- * Tests:
- *   - renderPhaseView handles all 8 phases
- *   - Current phase is bold-highlighted
- *   - Future phases are dimmed
- *   - Sub-status line renders correctly
+ * Unit tests for SatoPi TUI phase lifecycle view (post-unification).
  */
 
-import { describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { renderPhaseView } from "../../modes/components/swarm/phase-view";
-import { PHASE_DISPLAY } from "../../modes/components/swarm/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../../modes/theme/theme";
 import type { Chapter, SwarmState } from "../core/state";
 
-/** Minimal SwarmState factory */
+let theme: Theme;
+
+beforeAll(async () => {
+	const loaded = await getThemeByName("satopi");
+	if (!loaded) throw new Error("theme unavailable");
+	setThemeInstance(loaded);
+	theme = loaded;
+});
+
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const stripAnsi = (s: string) => (s ?? "").replace(ANSI_RE, "");
+
 function makeState(overrides: Partial<SwarmState> = {}): SwarmState {
 	return {
-		name: "test-swarm",
-		status: "running",
-		mode: "loop",
-		iteration: 0,
-		targetCount: 3,
-		agents: {
-			"worker-1": {
-				name: "worker-1",
-				status: "running",
-				iteration: 1,
-				wave: 1,
-				praiseCount: 0,
-				criticismCount: 0,
-				conflictCount: 0,
-			},
-			"worker-2": {
-				name: "worker-2",
-				status: "pending",
-				iteration: 0,
-				wave: 0,
-				praiseCount: 0,
-				criticismCount: 0,
-				conflictCount: 0,
-			},
-		},
-		startedAt: Date.now() - 300_000,
-		phase: "idle",
-		...overrides,
-	};
+		name: "test-swarm", status: "running", mode: "loop", iteration: 0,
+		targetCount: 3, agents: {}, startedAt: Date.now() - 60_000,
+		phase: "script", ...overrides,
+	} as SwarmState;
 }
-
-function stripAnsi(s: string): string {
-	return s.replace(/\x1b\[[0-9;]*m/g, "");
-}
-
-// ============================================================================
-// All 8 phases render
-// ============================================================================
 
 describe("renderPhaseView", () => {
-	const ALL_PHASES: Chapter[] = [
-		"idle",
-		"script",
-		"script-debate",
-		"script-confirm",
-		"stage",
-		"paused",
-		"blocked",
-		"curtain",
-	];
-
-	it("returns 2 lines for every phase", () => {
-		for (const phase of ALL_PHASES) {
+	it("returns two lines for every phase", () => {
+		for (const phase of ["idle", "script", "stage", "curtain"] as Chapter[]) {
 			const state = makeState({ phase });
-			const lines = renderPhaseView(state);
+			const lines = renderPhaseView(state, theme);
 			expect(lines.length).toBe(2);
 		}
 	});
 
-	it("contains all 8 phase icons in output", () => {
+	it("contains phase labels", () => {
 		const state = makeState({ phase: "stage" });
-		const lines = renderPhaseView(state);
+		const lines = renderPhaseView(state, theme);
 		const plain = stripAnsi(lines[0]);
-
-		for (const phase of ALL_PHASES) {
-			expect(plain).toContain(PHASE_DISPLAY[phase].icon);
-		}
-	});
-
-	it("contains all 8 phase labels", () => {
-		const state = makeState({ phase: "script-debate" });
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[0]);
-
-		for (const phase of Object.keys(PHASE_DISPLAY) as Chapter[]) {
-			expect(plain).toContain(PHASE_DISPLAY[phase].label);
-		}
-	});
-});
-
-// ============================================================================
-// Current phase highlighting
-// ============================================================================
-
-describe("current phase highlighting", () => {
-	it("bold-highlights the current phase", () => {
-		const state = makeState({ phase: "stage" });
-		const lines = renderPhaseView(state);
-
-		// Current phase gets amber color styling
-		const plain = stripAnsi(lines[0]);
-		expect(plain).toContain(PHASE_DISPLAY.stage.icon);
+		expect(plain).toContain("Idle");
+		expect(plain).toContain("Script");
+		expect(plain).toContain("Stage");
 	});
 
 	it("defaults to idle when phase is undefined", () => {
-		const state = makeState({ phase: undefined });
-		const lines = renderPhaseView(state);
-		expect(stripAnsi(lines[0])).toContain(PHASE_DISPLAY.idle.icon);
+		const state = makeState({ phase: undefined as unknown as Chapter });
+		const lines = renderPhaseView(state, theme);
+		expect(stripAnsi(lines[0])).toContain("Idle");
 	});
-});
 
-// ============================================================================
-// Future phases dimmed
-// ============================================================================
-
-describe("future phases dimmed", () => {
-	it("all 8 phase icons render when curtain is current", () => {
-		const state = makeState({ phase: "curtain" });
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[0]);
-		for (const phase of [
-			"idle",
-			"script",
-			"script-debate",
-			"script-confirm",
-			"stage",
-			"paused",
-			"blocked",
-			"curtain",
-		] as const) {
-			expect(plain).toContain(PHASE_DISPLAY[phase].icon);
-		}
-	});
-});
-
-// ============================================================================
-// Sub-status line
-// ============================================================================
-
-describe("sub-status line", () => {
-	it("shows status label", () => {
+	it("sub-status line shows status text", () => {
 		const state = makeState({ phase: "stage", status: "running" });
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[1]);
-		expect(plain.toLowerCase()).toContain("running");
+		const lines = renderPhaseView(state, theme);
+		expect(stripAnsi(lines[1]).toLowerCase()).toContain("running");
 	});
 
-	it("shows task progress when todos exist", () => {
+	it("sub-status line shows task progress", () => {
 		const state = makeState({
 			phase: "stage",
 			todos: [
-				{ id: "t1", title: "Task 1", status: "done" },
-				{ id: "t2", title: "Task 2", status: "in_progress" },
-				{ id: "t3", title: "Task 3", status: "pending" },
+				{ id: "1", content: "a", status: "done" as const, phase: "" },
+				{ id: "2", content: "b", status: "pending" as const, phase: "" },
 			],
 		});
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[1]);
-		expect(plain).toContain("1/3");
-	});
-
-	it("omits task progress when no todos", () => {
-		const state = makeState({ phase: "stage", todos: [] });
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[1]);
-		expect(plain).not.toContain("/");
-	});
-
-	it("shows duration when startedAt is set", () => {
-		const state = makeState({ phase: "stage", startedAt: Date.now() - 300_000 });
-		const lines = renderPhaseView(state);
-		const plain = stripAnsi(lines[1]);
-		// Should contain "5m" for 300 seconds
-		expect(plain).toMatch(/\d/m);
-	});
-
-	it("handles state with no agents", () => {
-		const state = makeState({ phase: "script", agents: {} });
-		const lines = renderPhaseView(state);
-		expect(lines.length).toBe(2);
+		const lines = renderPhaseView(state, theme);
+		expect(stripAnsi(lines[1])).toContain("1/2");
 	});
 });

@@ -253,6 +253,7 @@ export class StatusLineComponent implements Component {
 	#autoCompactEnabled: boolean = true;
 	#hookStatuses: Map<string, string> = new Map();
 	#subagentCount: number = 0;
+	#persistentAgentCount: number = 0; // persistent agents only
 	/**
 	 * Active-processing accounting for the `time_spent` segment, keyed per
 	 * {@link AgentSession} so the focus-controller mid-turn attach path
@@ -399,6 +400,14 @@ export class StatusLineComponent implements Component {
 
 	setSubagentCount(count: number): void {
 		this.#subagentCount = count;
+		// Reset persistent count when caller uses the old single-count API
+		this.#persistentAgentCount = 0;
+	}
+
+	/** Set separate counts for persistent agents and task subagents. */
+	setSubagentCounts(persistentCount: number, subCount: number): void {
+		this.#persistentAgentCount = persistentCount;
+		this.#subagentCount = subCount;
 	}
 
 	/**
@@ -1117,9 +1126,23 @@ export class StatusLineComponent implements Component {
 	}
 
 	#subagentBadgeText(): string | undefined {
-		if (this.#subagentCount === 0) return undefined;
-		const noun = this.#subagentCount === 1 ? "agent" : "agents";
-		return theme.fg("statusLineSubagents", `${theme.icon.agents} ${this.#subagentCount} ${noun}`);
+		const pCount = this.#persistentAgentCount;
+		const sCount = this.#subagentCount;
+
+		// Both: compact combined format
+		if (pCount > 0 && sCount > 0) {
+			return theme.fg("statusLineSubagents", `${theme.icon.agents} ${pCount}p·${sCount}a`);
+		}
+		// Persistent only
+		if (pCount > 0) {
+			return theme.fg("statusLineSubagents", `${theme.icon.agents} ${pCount} pgent`);
+		}
+		// Task subagents only — existing behaviour
+		if (sCount > 0) {
+			const noun = sCount === 1 ? "agent" : "agents";
+			return theme.fg("statusLineSubagents", `${theme.icon.agents} ${sCount} ${noun}`);
+		}
+		return undefined;
 	}
 
 	#buildStatusLine(width: number): string {

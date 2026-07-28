@@ -63,7 +63,7 @@ function renderNestedCycleLine(theme: Theme): string {
  * For running status, uses animated spinner if spinnerFrame is provided.
  * Maps AgentProgress status to styled icon format.
  */
-function getStatusIcon(status: AgentProgress["status"], theme: Theme, spinnerFrame?: number): string {
+export function getStatusIcon(status: AgentProgress["status"], theme: Theme, spinnerFrame?: number): string {
 	switch (status) {
 		case "pending":
 			return formatStatusIcon("pending", theme);
@@ -81,7 +81,7 @@ function getStatusIcon(status: AgentProgress["status"], theme: Theme, spinnerFra
 /**
  * Append tool-count, context, and cost stats to a status line string.
  */
-function appendAgentStats(
+export function appendAgentStats(
 	line: string,
 	opts: {
 		toolCount?: number;
@@ -310,7 +310,7 @@ function extractMissingYieldWarning(output: string): { warning?: string; rest: s
 	return { warning: firstLine, rest };
 }
 
-function buildTreePrefix(ancestors: boolean[], theme: Theme): string {
+export function buildTreePrefix(ancestors: boolean[], theme: Theme): string {
 	return ancestors.map(hasNext => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
 }
 
@@ -700,7 +700,7 @@ function formatAgentHeaderLabel(args: Partial<TaskParams> | undefined): string |
 }
 
 /** Dim `⟨agent⟩` badge for a non-default agent type; empty for the generic worker. */
-function agentTypeBadge(agent: string | undefined, theme: Theme): string {
+export function agentTypeBadge(agent: string | undefined, theme: Theme): string {
 	const trimmed = agent?.trim();
 	if (!trimmed || trimmed === "task") return "";
 	return ` ${theme.fg("dim", `${theme.format.bracketLeft}${trimmed}${theme.format.bracketRight}`)}`;
@@ -871,7 +871,7 @@ export function renderCall(args: TaskParams, options: TaskRenderOptions, theme: 
 /**
  * Render streaming progress for a single agent.
  */
-function renderAgentProgress(
+export function renderAgentProgress(
 	progress: AgentProgress,
 	prefix: string,
 	continuePrefix: string,
@@ -1209,7 +1209,7 @@ function renderFindings(
 /**
  * Render final result for a single agent.
  */
-function renderAgentResult(
+export function renderAgentResult(
 	result: SingleResult,
 	prefix: string,
 	continuePrefix: string,
@@ -1419,7 +1419,7 @@ function renderAgentResult(
  * order. Because a finished agent's runtime is fixed, finalization renders
  * the same order and rows never reshuffle.
  */
-function orderProgressForDisplay(progress: readonly AgentProgress[]): AgentProgress[] {
+export function orderProgressForDisplay(progress: readonly AgentProgress[]): AgentProgress[] {
 	const finished: AgentProgress[] = [];
 	const unfinished: AgentProgress[] = [];
 	for (const p of progress) {
@@ -1434,7 +1434,7 @@ function orderProgressForDisplay(progress: readonly AgentProgress[]): AgentProgr
  * the finalized list matches the live-progress order produced by
  * {@link orderProgressForDisplay}.
  */
-function orderResultsForDisplay(results: readonly SingleResult[]): SingleResult[] {
+export function orderResultsForDisplay(results: readonly SingleResult[]): SingleResult[] {
 	return [...results].sort((a, b) => a.durationMs - b.durationMs || a.index - b.index);
 }
 
@@ -1701,7 +1701,7 @@ function isTaskToolDetails(value: unknown): value is TaskToolDetails {
 // Nested subagent snapshots sit one or more levels below the frame border, so
 // they keep tree guides to convey depth (the parent prepends its own continue
 // prefix). Only the top-level agent list drops guides (the frame is its box).
-function nestedMarkers(isLast: boolean, theme: Theme): { prefix: string; continuePrefix: string } {
+export function nestedMarkers(isLast: boolean, theme: Theme): { prefix: string; continuePrefix: string } {
 	return {
 		prefix: isLast ? theme.fg("dim", theme.tree.last) : theme.fg("dim", theme.tree.branch),
 		continuePrefix: isLast ? "   " : `${theme.fg("dim", theme.tree.vertical)}  `,

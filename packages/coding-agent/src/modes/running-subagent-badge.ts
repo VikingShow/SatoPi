@@ -12,3 +12,7 @@ export function countRunningSubagentBadgeAgents(registry: AgentRegistry): number
 	return registry.list().filter(ref => ref.kind !== "main" && ref.kind !== "advisor" && ref.status === "running")
 		.length;
 }
+
+export function countRunningPersistentAgents(registry: AgentRegistry): number {
+	return registry.list().filter(ref => ref.kind === "persistent" && ref.status === "running").length;
+}

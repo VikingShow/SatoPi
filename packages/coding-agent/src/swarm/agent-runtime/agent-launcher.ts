@@ -197,6 +197,7 @@ export class AgentLauncher {
 			toolNames,
 			modelRegistry: this.#modelRegistry,
 			agentId: spec.id,
+			agentDisplayName: spec.id,
 			settings: this.#settings,
 			// ContextPipeline-driven transform: prepend injectedMessages + L3 compact
 			// (merged with SDK's extension-emit / steering-wrap pipeline)

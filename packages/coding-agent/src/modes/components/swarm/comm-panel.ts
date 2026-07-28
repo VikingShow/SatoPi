@@ -1,12 +1,11 @@
 /**
- * Communication Panel — renders CommBus message log.
- *
- * Shows recent messages between human and agents with colour-coded sender
- * types. Messages are displayed in chronological order (oldest first).
+ * Comm Panel — renders recent agent communication messages inside a system
+ * `framedBlock`.  Uses the global `theme` for all colours.
  */
 
-import { makeFooter, makeHeader, padLine } from "./panel-utils";
-import { sato } from "./theme";
+import type { Component } from "@oh-my-pi/pi-tui";
+import type { Theme } from "../../theme/theme";
+import { swarmPanel } from "./swarm-panel-block";
 
 // ============================================================================
 // Types
@@ -23,76 +22,51 @@ export interface CommMessage {
 // Public API
 // ============================================================================
 
-/**
- * Render the comm log panel.
- *
- * Returns an array of chalk-coloured strings, one per display line.
- * Shows at most 20 messages; older ones are summarised.
- */
-export function renderCommPanel(messages: CommMessage[] | null | undefined, maxWidth: number): string[] {
-	const innerWidth = maxWidth - 4;
-	if (innerWidth < 10) return [];
-
-	const msgs = messages ?? [];
-	const lines: string[] = [];
-
-	lines.push(makeHeader("Comm", maxWidth));
-
-	if (msgs.length === 0) {
-		lines.push(padLine(` ${sato.dim("No messages")}`, maxWidth));
-	} else {
-		// Show last 20 messages
-		const shown = msgs.length > 20 ? msgs.slice(-20) : msgs;
-		for (const msg of shown) {
-			lines.push(formatMessageLine(msg, innerWidth, maxWidth));
+export function renderCommPanel(messages: CommMessage[], theme: Theme): Component {
+	return swarmPanel("Comm", ({ innerWidth, theme }) => {
+		if (messages.length === 0) {
+			return [theme.fg("dim", "  No messages")];
 		}
-		if (msgs.length > 20) {
-			lines.push(padLine(` ${sato.dim(`... ${msgs.length - 20} older messages`)}`, maxWidth));
-		}
-	}
 
-	lines.push(makeFooter(maxWidth, `${msgs.length} message${msgs.length === 1 ? "" : "s"}`));
-
-	return lines;
+		const shown = messages.slice(0, 10);
+		return shown.map(msg => formatMessageLine(msg, innerWidth, theme));
+	}, theme);
 }
 
 // ============================================================================
 // Internal
 // ============================================================================
 
-function senderColor(sender: string): (text: string) => string {
-	if (sender === "human") return sato.amber;
-	if (sender === "planner" || sender.startsWith("agent-") || sender.startsWith("worker-")) return sato.info;
-	if (sender === "system") return sato.muted;
-	return sato.text;
-}
-
-function formatTime(ts: number): string {
-	const d = new Date(ts);
-	const h = String(d.getHours()).padStart(2, "0");
-	const m = String(d.getMinutes()).padStart(2, "0");
-	const s = String(d.getSeconds()).padStart(2, "0");
-	return `${h}:${m}:${s}`;
-}
-
-function formatMessageLine(msg: CommMessage, innerWidth: number, maxWidth: number): string {
-	const time = sato.dim(`[${formatTime(msg.timestamp)}]`);
-	const from = senderColor(msg.from)(msg.from);
-	const to = senderColor(msg.to)(msg.to);
-	const arrow = sato.dim("→"); // →
-
-	// Body: clip to fit
-	const prefix = ` ${time} ${from} ${arrow} ${to}: `;
-	const prefixLen = prefix.replace(/\x1b\[[0-9;]*m/g, "").length;
-	const bodyBudget = innerWidth - prefixLen;
-
-	let body: string;
-	if (bodyBudget < 5) {
-		body = sato.dim("…");
-	} else {
-		const raw = msg.body.replace(/\n/g, " ");
-		body = raw.length > bodyBudget ? `${raw.slice(0, bodyBudget - 1)}…` : raw; // …
+function senderColor(sender: string, theme: Theme): (text: string) => string {
+	// Reviewer-like roles get amber/warning colour
+	if (sender.toLowerCase().includes("reviewer")) {
+		return (text: string) => theme.fg("warning", text);
 	}
+	return (text: string) => theme.fg("accent", text);
+}
 
-	return padLine(`${prefix}"${body}"`, maxWidth);
+function formatTime(ts: number, theme: Theme): string {
+	const date = new Date(ts);
+	const h = date.getHours().toString().padStart(2, "0");
+	const m = date.getMinutes().toString().padStart(2, "0");
+	const s = date.getSeconds().toString().padStart(2, "0");
+	return theme.fg("dim", `${h}:${m}:${s}`);
+}
+
+function formatMessageLine(msg: CommMessage, maxWidth: number, theme: Theme): string {
+	const color = senderColor(msg.from, theme);
+	const time = formatTime(msg.timestamp, theme);
+	const from = color(msg.from);
+	const to = msg.to !== "all" ? ` → ${theme.fg("muted", msg.to)}` : "";
+
+	// Truncate body to fit
+	const prefix = ` ${time} ${from}${to}: `;
+	const prefixLen = prefix.replace(/\x1b\[[0-9;]*m/g, "").length;
+	const bodyBudget = Math.max(5, maxWidth - prefixLen - 1);
+	const body =
+		msg.body.length > bodyBudget
+			? `${msg.body.slice(0, bodyBudget - 2)}…`
+			: msg.body;
+
+	return `${prefix}${body}`;
 }

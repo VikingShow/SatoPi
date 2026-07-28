@@ -11,6 +11,7 @@ import { lspToolRenderer } from "../lsp/render";
 import type { Theme } from "../modes/theme/theme";
 import { taskToolRenderer } from "../task/renderer";
 import { webSearchToolRenderer } from "../web/search/render";
+import { agentInvokeRenderer } from "./agent-invoke-render";
 import { askToolRenderer } from "./ask";
 import { astEditToolRenderer } from "./ast-edit";
 import { astGrepToolRenderer } from "./ast-grep";
@@ -80,6 +81,7 @@ export type ToolRenderer = {
 };
 
 export const toolRenderers: Record<string, ToolRenderer> = {
+	agent_invoke: agentInvokeRenderer as ToolRenderer,
 	ask: askToolRenderer as ToolRenderer,
 	ast_grep: astGrepToolRenderer as ToolRenderer,
 	ast_edit: astEditToolRenderer as ToolRenderer,
