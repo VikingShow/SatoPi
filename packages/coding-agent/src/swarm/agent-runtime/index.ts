@@ -80,8 +80,8 @@ export interface AgentRuntimeOptions {
 	/** Shared service for agent creation + launch. */
 	launcher: AgentLauncher;
 
-	/** Communication bus for human steering and system messages. */
-	ircBus: IrcBus;
+	/** Communication bus for human steering and system messages. Defaults to IrcBus.global(). */
+	ircBus?: IrcBus;
 
 	/** Hook pipeline for lifecycle events. */
 	hookPipeline: HookPipeline;
@@ -298,7 +298,7 @@ export class AgentRuntime {
 
 	/** The communication bus for human steering and agent messaging. */
 	get ircBus(): IrcBus {
-		return this.#ircBus;
+		return this.#ircBus!;
 	}
 
 	/** The context pipeline for registering additional context sources. */
