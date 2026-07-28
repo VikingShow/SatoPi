@@ -16,10 +16,32 @@ export class CustomToolAdapter<TParams extends TSchema = TSchema, TDetails = any
 	declare parameters: TParams;
 	readonly strict: boolean | undefined;
 
+	/**
+	 * Auto-classified approval tier (SP-8).
+	 *
+	 * Classification is system-assigned, not tool-author declared:
+	 *   - "read"  — read-only operations (data retrieval, inspection)
+	 *   - "write" — mutating operations (file writes, edits, config changes)
+	 *   - "exec"  — code/command execution (default, most restrictive)
+	 *
+	 * Currently defaults the tool's declared tier (e.g. MCP tools hard-code "write"),
+	 * falling back to "exec" when undeclared. Future refinement will auto-classify
+	 * based on the tool's parameter schema and declared capabilities rather than
+	 * trusting self-declaration.
+	 */
+	readonly approval: AgentTool["approval"];
+
 	constructor(
 		private tool: CustomTool<TParams, TDetails>,
 		private getContext: () => CustomToolContext,
 	) {
+		// Assign system-validated approval before applyToolProxy so the proxy
+		// skips the tool's raw `approval` field (SP-8: system-assigned, not
+		// author-declared). MCP tools hard-code "write" which we preserve;
+		// undeclared tools default to "exec" for safety.
+		const declared = tool.approval;
+		this.approval = declared != null ? declared : ("exec" as const);
+
 		applyToolProxy(tool, this);
 		this.strict = tool.strict;
 	}

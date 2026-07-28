@@ -11,6 +11,8 @@
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Types
@@ -115,6 +117,7 @@ export async function runRoundtable(
 	members: string[],
 	topic: string,
 	partial?: Partial<RoundtableConfig>,
+	hookPipeline?: HookPipeline,
 ): Promise<RoundtableResult> {
 	if (members.length === 0) {
 		return { converged: true, rounds: 0, responses: [], finalPositions: [] };
@@ -144,6 +147,14 @@ export async function runRoundtable(
 		// ── Collect responses ──────────────────────────────────────
 		logRoundStart(topic, round, config.rounds);
 
+		// Hook: roundtable:beforeRound — per-member before each round
+		if (hookPipeline) {
+			for (const memberId of members) {
+				const rtx: HookContext = { phase: undefined, agentId: memberId };
+				await hookPipeline.trigger("roundtable:beforeRound", { agentId: memberId, round }, rtx);
+			}
+		}
+
 		const responseMap = await ircBus.collectResponses(
 			facilitatorId,
 			members,
@@ -165,6 +176,14 @@ export async function runRoundtable(
 			respondentCount: roundResponses.length,
 			totalMembers: members.length,
 		});
+
+		// Hook: roundtable:afterRound — per-member after each round
+		if (hookPipeline) {
+			for (const memberId of members) {
+				const rtx: HookContext = { phase: undefined, agentId: memberId };
+				await hookPipeline.trigger("roundtable:afterRound", { agentId: memberId }, rtx);
+			}
+		}
 
 		// ── Check convergence (skip round 1 — nothing to compare) ──
 		if (round > 1) {
@@ -190,6 +209,11 @@ export async function runRoundtable(
 					round,
 					similarity: similarity.toFixed(3),
 				});
+				// Hook: roundtable:converged — early convergence
+				if (hookPipeline) {
+					const rtx: HookContext = { phase: undefined };
+					await hookPipeline.trigger("roundtable:converged", { agentIds: members }, rtx);
+				}
 				return {
 					converged: true,
 					rounds: round,

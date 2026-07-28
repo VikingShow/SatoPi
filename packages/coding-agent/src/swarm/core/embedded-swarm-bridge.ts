@@ -112,6 +112,7 @@ export interface ISwarmOrchestrator {
 	readonly swarmState: Readonly<SwarmState>;
 	readonly currentPhase: Chapter | null;
 	readonly isRunning: boolean;
+	readonly runtime: AgentRuntime;
 }
 export type SwarmEventCallback = (event: SwarmPhaseEvent | SwarmAgentEvent) => void;
 
@@ -507,6 +508,10 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 	get currentPhase(): Chapter | null {
 		return this.#fsm?.phase ?? null;
+	}
+
+	get runtime(): AgentRuntime {
+		return this.#runtime;
 	}
 
 	get isRunning(): boolean {

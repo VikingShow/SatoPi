@@ -16,6 +16,8 @@ import type { IrcBus } from "../../irc/bus";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { type RoundtableConfig, runRoundtable } from "./roundtable";
 import { runVote } from "./vote";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Types
@@ -80,9 +82,12 @@ export class CommChannel {
 	readonly #observers = new Set<string>();
 	readonly #activityLogger?: ActivityLogger;
 
-	constructor(ircBus: IrcBus, members: string[], observers: string[], activityLogger?: ActivityLogger) {
+	readonly #hookPipeline: HookPipeline | undefined;
+
+	constructor(ircBus: IrcBus, members: string[], observers: string[], activityLogger?: ActivityLogger, hookPipeline?: HookPipeline) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
+		this.#hookPipeline = hookPipeline;
 		for (const m of members) this.#members.add(m);
 		for (const o of observers) this.#observers.add(o);
 	}
@@ -126,6 +131,12 @@ export class CommChannel {
 	 * observers (suppressRelay).  Equivalent to AgentChannel.broadcast().
 	 */
 	async send(from: string, body: string): Promise<void> {
+		// Hook: comm:beforeBroadcast
+		if (this.#hookPipeline) {
+			const ctx: HookContext = { phase: undefined, agentId: from };
+			await this.#hookPipeline.trigger("comm:beforeBroadcast", { from, message: body }, ctx);
+		}
+
 		this.#activityLogger?.logBroadcast(from, body);
 		const memberList = [...this.#members];
 
@@ -133,6 +144,12 @@ export class CommChannel {
 
 		// Secret CC to observers — suppressed from UI relay
 		await Promise.all([...this.#observers].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
+
+		// Hook: comm:afterBroadcast
+		if (this.#hookPipeline) {
+			const ctx: HookContext = { phase: undefined, agentId: from };
+			await this.#hookPipeline.trigger("comm:afterBroadcast", { from, message: body }, ctx);
+		}
 	}
 
 	/**

@@ -24,13 +24,21 @@ import type { AgentSession } from "../../session/agent-session";
  * streaming — no direct Agent manipulation needed.
  */
 export class AgentHandle {
+	/** Maximum number of delta messages retained before evicting oldest. */
+	static readonly MAX_MESSAGES = 10_000;
+
 	readonly id: string;
 	readonly role: string;
 	readonly #agent: Agent;
 	readonly #session: AgentSession | null;
 	#status: "running" | "completed" | "failed" | "aborted" = "running";
+	#completed = false;
 	#completionPromise: Promise<SingleResult>;
 	#resolveCompletion!: (result: SingleResult) => void;
+	/** Accumulated message deltas (capped). */
+	#messages: string[] = [];
+	/** Unsubscribe for completion-tracking subscription. */
+	#unsubscribeCompletion: (() => void) | null = null;
 	/** Callback invoked on successful completion. */
 	onComplete?: (result: { agentId: string; output: string }) => void;
 	/** Callback invoked on error/abort. */
@@ -129,7 +137,12 @@ export class AgentHandle {
 			setTimeout(() => reject(new Error(`Agent "${this.id}" timed out after ${timeoutMs}ms`)), timeoutMs),
 		);
 
-		return Promise.race([this.#completionPromise, timeout]);
+		const result = await Promise.race([this.#completionPromise, timeout]);
+		this.#completed = true;
+		this.#messages.length = 0;
+		this.#unsubscribeCompletion?.();
+		this.#unsubscribeCompletion = null;
+		return result;
 	}
 
 	/**
@@ -278,9 +291,7 @@ export class AgentHandle {
 	 * with the assembled SingleResult.
 	 */
 	#wireCompletionTracking(): void {
-		const messages: string[] = [];
-
-		this.#agent.subscribe((event: AgentEvent) => {
+		this.#unsubscribeCompletion = this.#agent.subscribe((event: AgentEvent) => {
 			switch (event.type) {
 				case "message_start":
 					// Track the full message text for the result
@@ -289,11 +300,11 @@ export class AgentHandle {
 				case "message_update": {
 					const content = (event.message as { content?: unknown }).content;
 					if (typeof content === "string") {
-						messages.push(content);
+						this.#pushMessage(content);
 					} else if (Array.isArray(content)) {
 						for (const block of content) {
 							if (block.type === "text") {
-								messages.push(block.text);
+								this.#pushMessage(block.text);
 							}
 						}
 					}
@@ -301,7 +312,7 @@ export class AgentHandle {
 				}
 
 				case "agent_end": {
-					const output = messages.join("\n") || "(no output)";
+					const output = this.#messages.join("\n") || "(no output)";
 					if (this.#status === "running") {
 						this.#status = "completed";
 						this.onComplete?.({ agentId: this.id, output });
@@ -324,5 +335,15 @@ export class AgentHandle {
 				}
 			}
 		});
+	}
+
+	/**
+	 * Append a message delta, evicting the oldest when at capacity.
+	 */
+	#pushMessage(text: string): void {
+		if (this.#messages.length >= AgentHandle.MAX_MESSAGES) {
+			this.#messages.shift();
+		}
+		this.#messages.push(text);
 	}
 }

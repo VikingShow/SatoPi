@@ -23,7 +23,7 @@ import type { MmdInjector } from "../../offload/mermaid/injector";
 import type { AgentSession } from "../../session/agent-session";
 import { createAgentSession } from "../../sdk";
 import type { Tool, ToolSession } from "../../tools";
-import type { AssembledContext } from "../context-manager/context-pipeline";
+import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { AgentHandle } from "./agent-handle";
 import type { AgentSpec } from "./agent-spec";
@@ -111,6 +111,14 @@ export interface LaunchContext {
 	 * so tools like `agent_invoke` can spawn and steer persistent agents.
 	 */
 	agentRuntime?: AgentRuntime;
+	/**
+	 * Optional ContextPipeline reference for building transformContext.
+	 * When provided, the launcher calls pipeline.toTransformContext(assembledContext)
+	 * and passes the result to createAgentSession() as transformContext,
+	 * so ContextPipeline's injected-message prepend + L3 compact flow
+	 * merges with the SDK's extension-emit / steering-wrap pipeline.
+	 */
+	pipeline?: ContextPipeline;
  }
 
 /**
@@ -181,6 +189,12 @@ export class AgentLauncher {
 
 		// 3. Resolve tool names for selection
 		const toolNames = this.#resolveTools(resolvedRole, assembledContext);
+
+		// 3.5 Build transformContext from ContextPipeline (SP-7: pipeline-driven context)
+		const transformCtx = ctx.pipeline?.toTransformContext(assembledContext, {
+			compactWindow: ctx.contextWindow,
+		});
+
 		const { session } = await this.#sessionFactory({
 		// 4. Create AgentSession (replaces new Agent — gets yield/skills/MCP/IRC/streaming for free)
 			model,
@@ -188,11 +202,9 @@ export class AgentLauncher {
 			toolNames,
 			modelRegistry: this.#modelRegistry,
 			settings: this.#settings,
-			// MMD injection from ContextPipeline — SDK transformContext injects per-turn
-			injectedMessages: assembledContext.injectedMessages,
-			// L3 compact context — SDK transformContext applies if both are set
-			offloadManager: ctx.offloadManager,
-			contextWindow: ctx.contextWindow,
+			// ContextPipeline-driven transform: prepend injectedMessages + L3 compact
+			// (merged with SDK's extension-emit / steering-wrap pipeline)
+			transformContext: transformCtx,
 			// Future: MMD per-turn injection
 			mmdInjector: ctx.mmdInjector,
 			activeMmd: ctx.activeMmd,
@@ -202,6 +214,9 @@ export class AgentLauncher {
 			enableLsp: false,
 			hasUI: false,
 			autoApprove: true,
+			hasIrcInterrupts: true,
+			getSteeringMessages: hookProviders.getSteeringMessages,
+			getFollowUpMessages: hookProviders.getFollowUpMessages,
 		});
 
 		// 4.5 Wire AgentRuntime into the session's tool context so tools like
@@ -221,7 +236,7 @@ export class AgentLauncher {
 		// 7. Launch the agent asynchronously
 		//    Use fire-and-forget: the handle's wait() method lets callers
 		//    await completion when they need results.
-		this.#startAgent(session, spec, hookProviders, ctx.signal).catch(err => {
+		this.#startAgent(session, spec).catch(err => {
 			logger.warn("[AgentLauncher] Unhandled startAgent error", {
 				agentId: spec.id,
 				error: err instanceof Error ? err.message : String(err),
@@ -320,76 +335,16 @@ export class AgentLauncher {
 		return [...toolSet];
 	}
 
-
 	/**
-	 * Start the SatoPi agent loop asynchronously.
+	 * Start the SatoPi agent loop.
 	 *
-	 * Launches a live steering-message feed that continuously polls the CommBus
-	 * for human steering messages and injects them into the running agent's
-	 * steering queue. The feed runs concurrently with the prompt loop so that
-	 * steering messages arriving after agent start can reach the agent without
-	 * waiting for the current turn to complete (SatoPi P2-14).
+	 * Steering and follow-up messages are wired through the AgentLoopConfig
+	 * hooks (getSteeringMessages / getFollowUpMessages) passed to the Agent
+	 * during session creation. The AgentLoopConfig drains both the external
+	 * CommBus-based providers and the Agent's own internal queues at each
+	 * injection boundary — no separate polling loop needed.
 	 */
-	async #startAgent(
-		session: AgentSession,
-		spec: AgentSpec,
-		hookProviders: LaunchContext["hookProviders"],
-		signal?: AbortSignal,
-	): Promise<void> {
-		// Pre-load initial steering messages from CommBus (first batch)
-		try {
-			if (hookProviders.getSteeringMessages) {
-				const steeringMessages = await hookProviders.getSteeringMessages();
-				for (const msg of steeringMessages) {
-					session.agent.steer(msg);
-				}
-			}
-		} catch (err) {
-			logger.warn("[AgentLauncher] Failed to pre-load steering messages", {
-				agentId: spec.id,
-				error: err instanceof Error ? err.message : String(err),
-			});
-		}
-
-		// Live steering feed: poll CommBus for new steering messages
-		// and inject them into the agent's steering queue so human steering
-		// that arrives after agent start can reach the running agent.
-		let feedActive = true;
-		void (async () => {
-			if (!hookProviders.getSteeringMessages) return;
-			while (feedActive && !signal?.aborted) {
-				try {
-					const msgs = await hookProviders.getSteeringMessages();
-					for (const msg of msgs) {
-						session.agent.steer(msg);
-					}
-				} catch (err) {
-					logger.warn("[AgentLauncher] Steering feed poll failed", {
-						agentId: spec.id,
-						error: err instanceof Error ? err.message : String(err),
-					});
-				}
-				// Yield between polls so the CommBus has time to accumulate messages
-				await new Promise<void>(r => setTimeout(r, 1_000));
-			}
-		})();
-
-		// Pre-load follow-up messages
-		try {
-			if (hookProviders.getFollowUpMessages) {
-				const followUpMessages = await hookProviders.getFollowUpMessages();
-				for (const msg of followUpMessages) {
-					session.agent.followUp(msg);
-				}
-			}
-		} catch (err) {
-			logger.warn("[AgentLauncher] Failed to pre-load follow-up messages", {
-				agentId: spec.id,
-				error: err instanceof Error ? err.message : String(err),
-			});
-		}
-
-		// Start the agent loop via session.prompt() — blocks until completion
+	async #startAgent(session: AgentSession, spec: AgentSpec): Promise<void> {
 		try {
 			await session.prompt(spec.task);
 		} catch (err) {
@@ -397,8 +352,6 @@ export class AgentLauncher {
 				agentId: spec.id,
 				error: err instanceof Error ? err.message : String(err),
 			});
-		} finally {
-			feedActive = false;
 		}
 	}
 }

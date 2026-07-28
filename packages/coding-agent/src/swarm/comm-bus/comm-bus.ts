@@ -16,6 +16,8 @@
 
 import type { IrcBus } from "../../irc/bus";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 import { CommChannel } from "./comm-channel";
 
 // ============================================================================
@@ -56,11 +58,13 @@ export class CommBus {
 
 	#ircBus: IrcBus | null = null;
 	#activityLogger: ActivityLogger | undefined;
+	#hookPipeline: HookPipeline | undefined;
 	readonly #channels = new Map<string, CommChannel>();
 
-	constructor(ircBus?: IrcBus, activityLogger?: ActivityLogger) {
+	constructor(ircBus?: IrcBus, activityLogger?: ActivityLogger, hookPipeline?: HookPipeline) {
 		this.#ircBus = ircBus ?? null;
 		this.#activityLogger = activityLogger;
+		this.#hookPipeline = hookPipeline;
 	}
 
 	/** Wire (or re-wire) the IrcBus and ActivityLogger references. */
@@ -76,6 +80,11 @@ export class CommBus {
 		return this.#ircBus;
 	}
 
+	/** Set the HookPipeline reference (post-construction wiring). */
+	setHookPipeline(hookPipeline: HookPipeline): void {
+		this.#hookPipeline = hookPipeline;
+	}
+
 	// -- human interface -------------------------------------------------
 
 	/**
@@ -87,6 +96,11 @@ export class CommBus {
 	 * Replaces the ad-hoc `activityLogger.logBroadcast("human", text)` pattern.
 	 */
 	async receiveFromHuman(text: string, target?: string): Promise<void> {
+		const hookCtx: HookContext = { phase: undefined, agentId: target };
+
+		// Hook: comm:beforeMessage — before sending a message
+		await this.#hookPipeline?.trigger("comm:beforeMessage", { from: "human", to: target, message: text }, hookCtx);
+
 		this.#activityLogger?.logBroadcast("human", text);
 		if (target && this.#ircBus) {
 			// Deliver to target agent via IrcBus (suppressed — human messages
@@ -95,6 +109,9 @@ export class CommBus {
 				// Best-effort: target agent may not exist yet
 			});
 		}
+
+		// Hook: comm:afterMessage — after the message was sent
+		await this.#hookPipeline?.trigger("comm:afterMessage", { from: "human", to: target, message: text }, hookCtx);
 	}
 
 	// -- channels --------------------------------------------------------

@@ -8,6 +8,8 @@
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Types
@@ -69,6 +71,7 @@ export async function runVote(
 	question: string,
 	candidates: string[],
 	timeoutMs: number = DEFAULT_VOTE_TIMEOUT_MS,
+	hookPipeline?: HookPipeline,
 ): Promise<VoteResult> {
 	if (members.length === 0) {
 		return {
@@ -99,6 +102,12 @@ export async function runVote(
 		candidates: isOpen ? "<open>" : candidates,
 		voterCount: members.length,
 	});
+
+	// Hook: vote:start
+	if (hookPipeline) {
+		const vtx: HookContext = { phase: undefined };
+		await hookPipeline.trigger("vote:start", { agentIds: members, topic: question }, vtx);
+	}
 
 	const responseMap = await ircBus.collectResponses(
 		facilitatorId,
@@ -136,6 +145,12 @@ export async function runVote(
 		totalVotes++;
 	}
 
+	// Hook: vote:tally
+	if (hookPipeline) {
+		const vtx: HookContext = { phase: undefined };
+		await hookPipeline.trigger("vote:tally", { agentIds: members, topic: question }, vtx);
+	}
+
 	// ── Rank ──────────────────────────────────────────────────
 	const ranked = [...tallies.entries()].sort((a, b) => b[1] - a[1]);
 
@@ -150,6 +165,12 @@ export async function runVote(
 		totalVotes,
 		tallies: Object.fromEntries(tallies),
 	});
+
+	// Hook: vote:result
+	if (hookPipeline) {
+		const vtx: HookContext = { phase: undefined };
+		await hookPipeline.trigger("vote:result", { agentIds: members, topic: question }, vtx);
+	}
 
 	return { winner, deputyIds, scores, tallies, totalVotes };
 }

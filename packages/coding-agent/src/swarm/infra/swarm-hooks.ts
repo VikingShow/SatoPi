@@ -1,6 +1,14 @@
 /**
  * swarm-hooks.ts — AgentProfile + Stigmergy lifecycle feedback for StageController
  *
+ * NOTE: This module is NOT part of the hook-system/HookPipeline infrastructure.
+ * It provides StageController callbacks (StageCallbacks interface) that wire
+ * Profile credit updates and Stigmergy mark placement into the stage lifecycle.
+ *
+ * For the HookPipeline-based plugin system with priority-ordered pipeline hooks
+ * (ProfileHook, StigmergyHook, OffloadHook, MnemopiHook, ExperienceHook,
+ * VerificationHook), see ../hook-system/.
+ *
  * 设计原则：
  * 1. StageController 零依赖 — 通过 StageCallbacks 接口注入
  * 2. ProfileRegistry + MarkEnvironment 通过 SwarmHooksConfig 注入

@@ -30,7 +30,9 @@ import {
 	type AgentMessage,
 	type AgentState,
 	type AgentTool,
+	type AgentToolContext,
 	type AgentToolResult,
+	type AgentToolUpdateCallback,
 	type AgentTurnEndContext,
 	AppendOnlyContextManager,
 	type AsideMessage,
@@ -341,6 +343,7 @@ import { normalizeModelContextImages } from "../utils/image-loading";
 import { describeAttachedImagesForTextModel } from "../utils/image-vision-fallback";
 import { formatLocalCalendarDate } from "../utils/local-date";
 import { generateSessionTitle } from "../utils/title-generator";
+import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../tools/approval";
 import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
 import type { VibeModeState } from "../vibe/state";
 import type { AuthStorage } from "./auth-storage";
@@ -6508,7 +6511,8 @@ export class AgentSession {
 	 * Get a tool by name from the registry.
 	 */
 	getToolByName(name: string): AgentTool | undefined {
-		return this.#toolRegistry.get(name);
+		const tool = this.#toolRegistry.get(name);
+		return tool ? this.#wrapToolForApproval(tool) : undefined;
 	}
 
 	/** True when the current registry entry for `name` came from a built-in factory. */
@@ -6847,6 +6851,114 @@ export class AgentSession {
 		}) as T;
 	}
 
+	/**
+	 * Wrap every tool (builtin, MCP, or custom) with an approval gate so the
+	 * per-tool approval check always runs, regardless of whether
+	 * `ExtensionToolWrapper` is present (SP-8).
+	 *
+	 * Builtin tools (read, write, bash, grep, etc.) carry their own dynamic
+	 * `approval` declarations — e.g. `read` returns "exec" for ssh:// paths.
+	 * This wrapper gates every tool uniformly using its self-declared tier.
+	 *
+	 * Resolution order:
+	 *  1. CLI `--auto-approve` / `--yolo` → yolo mode
+	 *  2. User `tools.approval.<tool>` policies always authoritative
+	 *  3. Tool self-declared tier compared against active mode
+	 *
+	 * The wrapper also emits `tool_approval_requested` / `tool_approval_resolved`
+	 * extension events when a runner is available, matching the previous
+	 * `ExtensionToolWrapper` behavior.
+	 */
+	#wrapToolForApproval<T extends AgentTool>(tool: T): T {
+		return new Proxy(tool, {
+			get: (target, prop) => {
+				if (prop !== "execute") return target[prop as keyof T];
+				return async (
+					toolCallId: string,
+					params: unknown,
+					signal: AbortSignal | undefined,
+					onUpdate: AgentToolUpdateCallback<unknown>,
+					context: AgentToolContext | undefined,
+				) => {
+					// Resolve settings: context takes precedence (for test isolation /
+					// per-tool-call overrides), falling back to session-level settings.
+					const cSettings = context?.settings;
+					const cliAutoApprove = context?.autoApprove === true || this.#autoApprove === true;
+					const configuredMode = (
+						cSettings?.get("tools.approvalMode") ?? this.settings.get("tools.approvalMode") ?? "yolo"
+					) as ApprovalMode;
+					const approvalMode: ApprovalMode = cliAutoApprove ? "yolo" : configuredMode;
+					const userPolicies = (
+						cSettings?.get("tools.approval") ?? this.settings.get("tools.approval") ?? {}
+					) as Record<string, unknown>;
+					const approvalCheck = requiresApproval(target, params, approvalMode, userPolicies);
+
+					if (approvalCheck.required) {
+						const runner = this.#extensionRunner;
+						const hasApprovalHandlers =
+							runner?.hasHandlers("tool_approval_requested") ||
+							runner?.hasHandlers("tool_approval_resolved");
+						const sessionId = context?.sessionManager?.getSessionId() ?? this.sessionId;
+						if (hasApprovalHandlers && runner) {
+							await runner.emit({
+								type: "tool_approval_requested",
+								sessionId,
+								toolName: target.name,
+								toolCallId,
+								...(approvalCheck.reason ? { reason: approvalCheck.reason } : {}),
+								approvalMode,
+							});
+						}
+
+						const resolveApproval = async (approved: boolean, reason?: string) => {
+							if (!hasApprovalHandlers || !runner) return;
+							await runner.emit({
+								type: "tool_approval_resolved",
+								sessionId,
+								toolName: target.name,
+								toolCallId,
+								approved,
+								...(reason ? { reason } : {}),
+							});
+						};
+
+						// Check if UI is available
+						if (!runner?.hasUI()) {
+							const reason = "no interactive UI available";
+							await resolveApproval(false, reason);
+							throw new Error(
+								`Tool "${target.name}" requires approval but no interactive UI available.\n` +
+									`Options:\n` +
+									`  1. Set tools.approvalMode: yolo in /settings\n` +
+									`  2. Add tools.approval.${target.name}: allow to config\n` +
+									`  3. Use an interactive UI to approve the tool call`,
+							);
+						}
+
+						const uiContext = runner.getUIContext();
+						let choice: string | undefined;
+						try {
+							choice = await uiContext.select(formatApprovalPrompt(target, params, approvalCheck.reason), [
+								"Approve",
+								"Deny",
+							]);
+						} catch (err) {
+							await resolveApproval(false, err instanceof Error ? err.message : "approval aborted");
+							throw err;
+						}
+						const approved = choice === "Approve";
+						await resolveApproval(approved, approved ? undefined : "denied by user");
+						if (!approved) {
+							throw new Error(`Tool call denied by user: ${target.name}`);
+						}
+					}
+
+					return await target.execute(toolCallId, params as never, signal, onUpdate, context);
+				};
+			},
+		}) as T;
+	}
+
 	#isExplicitAutoApproveMode(): boolean {
 		return (
 			this.#autoApprove ||
@@ -6865,7 +6977,7 @@ export class AgentSession {
 		for (const name of toolNames) {
 			const tool = this.#toolRegistry.get(name);
 			if (tool) {
-				tools.push(this.#wrapToolForAcpPermission(tool));
+				tools.push(this.#wrapToolForAcpPermission(this.#wrapToolForApproval(tool)));
 				validToolNames.push(name);
 			}
 		}
@@ -6873,7 +6985,7 @@ export class AgentSession {
 		if (isAutoQaEnabled(this.settings) && !validToolNames.includes("report_tool_issue")) {
 			const qaTool = this.#toolRegistry.get("report_tool_issue");
 			if (qaTool) {
-				tools.push(this.#wrapToolForAcpPermission(qaTool));
+				tools.push(this.#wrapToolForAcpPermission(this.#wrapToolForApproval(qaTool)));
 				validToolNames.push("report_tool_issue");
 			}
 		}
@@ -7565,7 +7677,7 @@ export class AgentSession {
 		const activeTools = activeToolNames
 			.map(name => this.#toolRegistry.get(name))
 			.filter((tool): tool is AgentTool => tool !== undefined)
-			.map(tool => this.#wrapToolForAcpPermission(tool));
+			.map(tool => this.#wrapToolForAcpPermission(this.#wrapToolForApproval(tool)));
 		this.agent.setTools(activeTools);
 	}
 
@@ -8028,6 +8140,7 @@ export class AgentSession {
 				settings: this.settings,
 			});
 			await bridge.init();
+			this.setToolContextAgentRuntime(bridge.runtime);
 			this.#embeddedSwarm = bridge;
 			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
 			return;
@@ -8053,6 +8166,7 @@ export class AgentSession {
 		);
 
 		await bridge.init();
+		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
 	}

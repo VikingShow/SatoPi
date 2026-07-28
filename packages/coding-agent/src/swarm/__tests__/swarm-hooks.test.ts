@@ -1,4 +1,9 @@
 /**
+ * Extended coverage: Verifies all 15 untriggered HookEvent types are
+ * fireable through HookPipeline.trigger() with correct payload shapes,
+ * and that the trigger integration sites work for each file.
+ */
+/**
  * swarm-hooks.test.ts — createStageFeedback integration tests
  *
  * Coverage:
@@ -10,7 +15,7 @@
  * 6. onStageComplete does not throw
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
@@ -217,5 +222,380 @@ describe("createStageFeedback (StageController callbacks)", () => {
 				taskProgress: { total: 1, completed: 1 },
 			}),
 		).not.toThrow();
+	});
+});
+
+// ============================================================================
+// Hook event coverage — verify all 15 previously untriggered event types
+// ============================================================================
+
+import { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../hook-system/types";
+
+/** Helper to create a hook that records events it receives. */
+function makeRecordingHook(name: string, priority: number, events: HookEvent[], log: string[]): HookRegistration {
+	return {
+		name,
+		priority,
+		events,
+		handler: async <K extends HookEvent>(event: K, _payload: HookPayloadMap[K], _ctx: HookContext) => {
+			log.push(event);
+		},
+	};
+}
+
+function ctx(phase?: string, agentId?: string): HookContext {
+	return { phase: phase as HookContext["phase"], agentId };
+}
+
+describe("Hook event trigger coverage (15 untriggered types)", () => {
+	// -----------------------------------------------------------------------
+	// Comm events (4)
+	// -----------------------------------------------------------------------
+
+	test("comm:beforeMessage fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("comm-hook", 0, ["comm:beforeMessage"], log));
+		await pipeline.trigger("comm:beforeMessage", { from: "a1", to: "a2", message: "hello" }, ctx());
+		expect(log).toEqual(["comm:beforeMessage"]);
+	});
+
+	test("comm:afterMessage fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("comm-hook", 0, ["comm:afterMessage"], log));
+		await pipeline.trigger("comm:afterMessage", { from: "human", to: "a1", message: "hey" }, ctx());
+		expect(log).toEqual(["comm:afterMessage"]);
+	});
+
+	test("comm:beforeBroadcast fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("comm-hook", 0, ["comm:beforeBroadcast"], log));
+		await pipeline.trigger("comm:beforeBroadcast", { from: "facilitator", message: "announcement" }, ctx());
+		expect(log).toEqual(["comm:beforeBroadcast"]);
+	});
+
+	test("comm:afterBroadcast fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("comm-hook", 0, ["comm:afterBroadcast"], log));
+		await pipeline.trigger("comm:afterBroadcast", { from: "facilitator", message: "done" }, ctx());
+		expect(log).toEqual(["comm:afterBroadcast"]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Roundtable events (3)
+	// -----------------------------------------------------------------------
+
+	test("roundtable:beforeRound fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("rt-hook", 0, ["roundtable:beforeRound"], log));
+		await pipeline.trigger("roundtable:beforeRound", { agentId: "a1", round: 2 }, ctx("script", "a1"));
+		expect(log).toEqual(["roundtable:beforeRound"]);
+	});
+
+	test("roundtable:afterRound fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("rt-hook", 0, ["roundtable:afterRound"], log));
+		await pipeline.trigger("roundtable:afterRound", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["roundtable:afterRound"]);
+	});
+
+	test("roundtable:converged fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("rt-hook", 0, ["roundtable:converged"], log));
+		await pipeline.trigger("roundtable:converged", { agentIds: ["a1", "a2"] }, ctx("script"));
+		expect(log).toEqual(["roundtable:converged"]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Vote events (3)
+	// -----------------------------------------------------------------------
+
+	test("vote:start fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("vote-hook", 0, ["vote:start"], log));
+		await pipeline.trigger("vote:start", { agentIds: ["a1", "a2"], topic: "best plan" }, ctx("script"));
+		expect(log).toEqual(["vote:start"]);
+	});
+
+	test("vote:tally fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("vote-hook", 0, ["vote:tally"], log));
+		await pipeline.trigger("vote:tally", { agentIds: ["a1"], topic: "election" }, ctx("script"));
+		expect(log).toEqual(["vote:tally"]);
+	});
+
+	test("vote:result fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("vote-hook", 0, ["vote:result"], log));
+		await pipeline.trigger("vote:result", { agentIds: ["a1"], topic: "winner" }, ctx("script"));
+		expect(log).toEqual(["vote:result"]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Context events (4)
+	// -----------------------------------------------------------------------
+
+	test("context:beforeInjection fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("ctx-hook", 0, ["context:beforeInjection"], log));
+		await pipeline.trigger("context:beforeInjection", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["context:beforeInjection"]);
+	});
+
+	test("context:afterInjection fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("ctx-hook", 0, ["context:afterInjection"], log));
+		await pipeline.trigger("context:afterInjection", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["context:afterInjection"]);
+	});
+
+	test("context:beforeCompaction fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("ctx-hook", 0, ["context:beforeCompaction"], log));
+		await pipeline.trigger("context:beforeCompaction", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["context:beforeCompaction"]);
+	});
+
+	test("context:afterCompaction fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("ctx-hook", 0, ["context:afterCompaction"], log));
+		await pipeline.trigger("context:afterCompaction", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["context:afterCompaction"]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Offload events (3)
+	// -----------------------------------------------------------------------
+
+	test("offload:afterL1 fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("offload-hook", 0, ["offload:afterL1"], log));
+		await pipeline.trigger("offload:afterL1", { agentId: "a1" }, ctx("script", "a1"));
+		expect(log).toEqual(["offload:afterL1"]);
+	});
+
+	test("offload:beforeFlush fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("offload-hook", 0, ["offload:beforeFlush"], log));
+		await pipeline.trigger("offload:beforeFlush", {}, ctx("script"));
+		expect(log).toEqual(["offload:beforeFlush"]);
+	});
+
+	test("offload:afterFlush fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("offload-hook", 0, ["offload:afterFlush"], log));
+		await pipeline.trigger("offload:afterFlush", {}, ctx("script"));
+		expect(log).toEqual(["offload:afterFlush"]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Workflow event (1)
+	// -----------------------------------------------------------------------
+
+	test("workflow:phaseTimeout fires with correct payload", async () => {
+		const pipeline = new HookPipeline();
+		const log: string[] = [];
+		pipeline.register(makeRecordingHook("wf-hook", 0, ["workflow:phaseTimeout"], log));
+		await pipeline.trigger("workflow:phaseTimeout", { phase: "script" }, ctx("script"));
+		expect(log).toEqual(["workflow:phaseTimeout"]);
+	});
+});
+
+// ============================================================================
+// E2E: Hook events fire through real integration points (SP-7 verification)
+// ============================================================================
+
+import { IrcBus } from "../../irc/bus";
+import { CommBus } from "../comm-bus/comm-bus";
+import { CommChannel } from "../comm-bus/comm-channel";
+import { runVote } from "../comm-bus/vote";
+import { runRoundtable } from "../comm-bus/roundtable";
+import type { AssembledContext } from "../context-manager/context-pipeline";
+import { ContextPipeline } from "../context-manager/context-pipeline";
+import { StateTracker } from "../core/state";
+import type { PhaseDefinition } from "../core/workflow-fsm";
+import { WorkflowFsm } from "../core/workflow-fsm";
+import { ActivityLogger } from "../infra/activity-logger";
+import { OffloadManager } from "../../offload/manager";
+import { MemorySessionStorage } from "../../session/session-storage";
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+
+describe("Hook event trigger E2E (real integration points)", () => {
+	let hookPipeline: HookPipeline;
+	let fired: string[];
+
+	const ALL_EVENTS: HookEvent[] = [
+		"comm:beforeMessage", "comm:afterMessage",
+		"comm:beforeBroadcast", "comm:afterBroadcast",
+		"vote:start", "vote:tally", "vote:result",
+		"roundtable:beforeRound", "roundtable:afterRound", "roundtable:converged",
+		"context:beforeInjection", "context:afterInjection",
+		"context:beforeCompaction", "context:afterCompaction",
+		"offload:afterL1", "offload:beforeFlush", "offload:afterFlush",
+		"workflow:phaseTimeout",
+	];
+
+	beforeEach(() => {
+		IrcBus.resetGlobalForTests();
+		hookPipeline = new HookPipeline();
+		fired = [];
+		hookPipeline.register({
+			name: "e2e-spy",
+			priority: 0,
+			events: ALL_EVENTS,
+			handler: async (event) => { fired.push(event); },
+		});
+	});
+
+	afterEach(() => {
+		IrcBus.resetGlobalForTests();
+	});
+
+	// ── Comm: beforeMessage / afterMessage ──────────────────────
+
+	test("comm:beforeMessage and comm:afterMessage fire through CommBus.receiveFromHuman", async () => {
+		const bus = IrcBus.global();
+		const commBus = new CommBus(bus, undefined, hookPipeline);
+
+		await commBus.receiveFromHuman("hello", "agent-1");
+
+		expect(fired).toContain("comm:beforeMessage");
+		expect(fired).toContain("comm:afterMessage");
+	});
+
+	// ── Comm: beforeBroadcast / afterBroadcast ─────────────────
+
+	test("comm:beforeBroadcast and comm:afterBroadcast fire through CommChannel.send", async () => {
+		const bus = IrcBus.global();
+		const channel = new CommChannel(bus, ["a1"], [], undefined, hookPipeline);
+
+		await channel.send("a1", "broadcast message");
+
+		expect(fired).toContain("comm:beforeBroadcast");
+		expect(fired).toContain("comm:afterBroadcast");
+	});
+
+	// ── Vote: start / tally / result ───────────────────────────
+
+	test("vote:start, vote:tally, vote:result fire through runVote", async () => {
+		const bus = IrcBus.global();
+
+		await runVote(bus, ["ghost-1", "ghost-2"], "Pick one", ["a", "b"], 50, hookPipeline);
+
+		expect(fired).toContain("vote:start");
+		expect(fired).toContain("vote:tally");
+		expect(fired).toContain("vote:result");
+	});
+
+	// ── Roundtable: beforeRound / afterRound / converged ───────
+
+	test("roundtable:beforeRound, afterRound, converged fire through runRoundtable", async () => {
+		const bus = IrcBus.global();
+
+		// Ghost agents produce empty responses → Jaccard=1 →
+		// convergenceStreak=1 makes round 2 converge immediately.
+		await runRoundtable(bus, ["ghost-1", "ghost-2"], "design discussion", {
+			rounds: 3,
+			timeoutMs: 50,
+			convergenceStreak: 1,
+		}, hookPipeline);
+
+		expect(fired).toContain("roundtable:beforeRound");
+		expect(fired).toContain("roundtable:afterRound");
+		expect(fired).toContain("roundtable:converged");
+	});
+
+	// ── Context: before/afterInjection, before/afterCompaction ─
+
+	test("all four context events fire through ContextPipeline.toTransformContext", async () => {
+		const pipeline = new ContextPipeline(hookPipeline);
+		const injectedMsg: AgentMessage = {
+			role: "user",
+			content: "injected context",
+			timestamp: 0,
+		};
+		const assembled: AssembledContext = {
+			systemPrompt: "",
+			taskPrompt: "test",
+			tools: [],
+			injectedMessages: [injectedMsg],
+			metadata: {},
+		};
+
+		// compactWindow > 0 triggers both injection and compaction hooks
+		const transform = pipeline.toTransformContext(assembled, {
+			compactWindow: 1000,
+			agentId: "a1",
+		});
+		await transform([]);
+
+		expect(fired).toContain("context:beforeInjection");
+		expect(fired).toContain("context:afterInjection");
+		expect(fired).toContain("context:beforeCompaction");
+		expect(fired).toContain("context:afterCompaction");
+	});
+
+	// ── Workflow: phaseTimeout ─────────────────────────────────
+
+	test("workflow:phaseTimeout fires through WorkflowFsm timed transition", async () => {
+		const stateTracker = new StateTracker("/tmp/test-e2e-swarm", "test");
+		const activityLogger = new ActivityLogger("/tmp/test-e2e-swarm", "test");
+		const fsm = new WorkflowFsm(stateTracker, activityLogger, "idle", hookPipeline);
+
+		const idleDef: PhaseDefinition = {
+			phase: "idle",
+			allowedFrom: ["script"],
+			allowedTo: ["script"],
+			capabilities: {},
+			defaultTimeoutMs: 0,
+		};
+		const scriptDef: PhaseDefinition = {
+			phase: "script",
+			allowedFrom: ["idle"],
+			allowedTo: ["idle"],
+			capabilities: {},
+			defaultTimeoutMs: 100,
+			timedTransitionTarget: "idle",
+		};
+		fsm.registerPhase(idleDef);
+		fsm.registerPhase(scriptDef);
+
+		vi.useFakeTimers();
+		await fsm.transition("script");
+		vi.advanceTimersByTime(150);
+		vi.useRealTimers();
+
+		expect(fired).toContain("workflow:phaseTimeout");
+	});
+
+	// ── Offload: afterL1 / beforeFlush / afterFlush ────────────
+
+	test("offload:afterL1, beforeFlush, afterFlush fire through OffloadManager", async () => {
+		const storage = new MemorySessionStorage();
+		const mgr = new OffloadManager("/tmp/test-e2e-swarm", "test-agent", "sess-1", storage, hookPipeline);
+
+		await mgr.summarizeL1("agent-1", "summary of work done");
+		expect(fired).toContain("offload:afterL1");
+
+		await mgr.forceFlush();
+		expect(fired).toContain("offload:beforeFlush");
+		expect(fired).toContain("offload:afterFlush");
 	});
 });

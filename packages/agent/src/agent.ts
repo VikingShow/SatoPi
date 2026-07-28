@@ -314,6 +314,19 @@ export interface AgentOptions {
 	 * across turns so DeepSeek/Anthropic prefix caches hit at maximum rate.
 	 */
 	appendOnlyContext?: AppendOnlyContextManager;
+	/**
+	 * External steering message provider, composited with the internal
+	 * steering queue. When set, returns from this provider are merged with
+	 * messages pushed via {@link steer}.
+	 */
+	getSteeringMessages?: () => Promise<AgentMessage[]>;
+
+	/**
+	 * External follow-up message provider, composited with the internal
+	 * follow-up queue. When set, returns from this provider are merged with
+	 * messages pushed via {@link followUp}.
+	 */
+	getFollowUpMessages?: () => Promise<AgentMessage[]>;
 }
 
 export interface AgentPromptOptions {
@@ -383,6 +396,8 @@ export class Agent {
 	#abortOnFabricatedToolResult?: boolean;
 	#getToolChoice?: () => ToolChoiceDirective | undefined;
 	#onPayload?: SimpleStreamOptions["onPayload"];
+	#externalGetSteeringMessages?: () => Promise<AgentMessage[]>;
+	#externalGetFollowUpMessages?: () => Promise<AgentMessage[]>;
 	#onResponse?: SimpleStreamOptions["onResponse"];
 	#onSseEvent?: SimpleStreamOptions["onSseEvent"];
 	#onAssistantMessageEvent?: (message: AssistantMessage, event: AssistantMessageEvent) => void;
@@ -469,6 +484,8 @@ export class Agent {
 		this.#telemetry = opts.telemetry;
 		this.#appendOnlyContext = opts.appendOnlyContext;
 		this.#transformProviderContext = opts.transformProviderContext;
+		this.#externalGetSteeringMessages = opts.getSteeringMessages;
+		this.#externalGetFollowUpMessages = opts.getFollowUpMessages;
 	}
 
 	/**
@@ -1178,11 +1195,13 @@ export class Agent {
 			getDisableReasoning: () => this.#state.disableReasoning,
 			getServiceTier: this.#serviceTierResolver,
 			getSteeringMessages: async () => {
+				const external = (await this.#externalGetSteeringMessages?.()) ?? [];
 				if (skipInitialSteeringPoll) {
 					skipInitialSteeringPoll = false;
-					return [];
+					return external;
 				}
-				return this.#dequeueSteeringMessages();
+				const internal = this.#dequeueSteeringMessages();
+				return [...external, ...internal];
 			},
 			hasSteeringMessages: () => {
 				if (this.#steeringQueue.length === 0) {
@@ -1198,7 +1217,11 @@ export class Agent {
 				return { queued: true, source: "system" };
 			},
 			hasIrcInterrupts: this.hasIrcInterrupts,
-			getFollowUpMessages: async () => this.#dequeueFollowUpMessages(),
+			getFollowUpMessages: async () => {
+				const external = (await this.#externalGetFollowUpMessages?.()) ?? [];
+				const internal = this.#dequeueFollowUpMessages();
+				return [...external, ...internal];
+			},
 			getAsideMessages: async () => (await this.#asideMessageProvider?.()) ?? [],
 			onBeforeYield: () => this.#onBeforeYield?.(),
 			telemetry: this.#telemetry,

@@ -15,6 +15,8 @@ import type { AgentLoopConfig, AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type CompactContextConfig, compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
 import type { Chapter } from "../core/state";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Types
@@ -124,6 +126,11 @@ export interface ContextSource {
  */
 export class ContextPipeline {
 	private sources: ContextSource[] = [];
+	#hookPipeline: HookPipeline | undefined;
+
+	constructor(hookPipeline?: HookPipeline) {
+		this.#hookPipeline = hookPipeline;
+	}
 
 	/**
 	 * Register a context source. Sources are sorted by priority on assemble.
@@ -214,18 +221,45 @@ export class ContextPipeline {
 	 */
 	toTransformContext(
 		assembled: AssembledContext,
-		opts?: { compactWindow?: number },
+		opts?: { compactWindow?: number; agentId?: string },
 	): Exclude<AgentLoopConfig["transformContext"], undefined> {
 		const injected = assembled.injectedMessages;
+		const hookPipeline = this.#hookPipeline;
+		const agentId = opts?.agentId;
 		return async (messages: AgentMessage[], _signal?: AbortSignal): Promise<AgentMessage[]> => {
+			// Hook: context:beforeInjection
+			if (hookPipeline) {
+				const ctx: HookContext = { phase: undefined, agentId };
+				await hookPipeline.trigger("context:beforeInjection", { agentId }, ctx);
+			}
+
 			let result = injected.length === 0 ? messages : [...injected, ...messages];
+
+			// Hook: context:afterInjection
+			if (hookPipeline) {
+				const ctx: HookContext = { phase: undefined, agentId };
+				await hookPipeline.trigger("context:afterInjection", { agentId }, ctx);
+			}
+
 			// L3 compact context if configured
 			if (opts?.compactWindow) {
+				// Hook: context:beforeCompaction
+				if (hookPipeline) {
+					const ctx: HookContext = { phase: undefined, agentId };
+					await hookPipeline.trigger("context:beforeCompaction", { agentId }, ctx);
+				}
+
 				const compacted = compactContext(result, new Map(), {
 					...DEFAULT_COMPACT_CONFIG,
 					contextWindow: opts.compactWindow,
 				});
 				result = compacted.messages;
+
+				// Hook: context:afterCompaction
+				if (hookPipeline) {
+					const ctx: HookContext = { phase: undefined, agentId };
+					await hookPipeline.trigger("context:afterCompaction", { agentId }, ctx);
+				}
 			}
 			return result;
 		};

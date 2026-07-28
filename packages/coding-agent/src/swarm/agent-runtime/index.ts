@@ -14,7 +14,7 @@
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
-import type { AsideMessage } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
@@ -133,6 +133,10 @@ export class AgentRuntime {
 
 	/** Per-agent queues for system notification (aside) messages. */
 	readonly #asideQueues = new Map<string, AsideMessage[]>();
+	/** Per-agent queues for human steering messages (drained by hookProviders). */
+	readonly #steeringQueues = new Map<string, AgentMessage[]>();
+	/** Per-agent queues for follow-up messages (drained by hookProviders). */
+	readonly #followUpQueues = new Map<string, AgentMessage[]>();
 
 	constructor(options: AgentRuntimeOptions) {
 		this.#roleProvider = options.roleProvider;
@@ -267,6 +271,15 @@ export class AgentRuntime {
 	 * to the agent is handled by PhaseBehaviors via handle.send().
 	 */
 	async sendHumanMessage(agentId: string, text: string): Promise<void> {
+		// Push to steering queue (drained by hookProviders.getSteeringMessages)
+		const queue = this.#steeringQueues.get(agentId) ?? [];
+		queue.push({
+			role: "user",
+			content: [{ type: "text", text }],
+			timestamp: Date.now(),
+		});
+		this.#steeringQueues.set(agentId, queue);
+		// Also deliver via CommBus for real-time IRC routing
 		await this.#commBus.receiveFromHuman(text, agentId);
 	}
 
@@ -373,6 +386,20 @@ export class AgentRuntime {
 				this.#asideQueues.delete(agentId);
 				return messages;
 			},
+			getSteeringMessages: async () => {
+				const queue = this.#steeringQueues.get(agentId);
+				if (!queue || queue.length === 0) return [];
+				const messages = queue.splice(0);
+				this.#steeringQueues.delete(agentId);
+				return messages;
+			},
+			getFollowUpMessages: async () => {
+				const queue = this.#followUpQueues.get(agentId);
+				if (!queue || queue.length === 0) return [];
+				const messages = queue.splice(0);
+				this.#followUpQueues.delete(agentId);
+				return messages;
+			},
 		};
 
 		// 4.5 Register persistent agent in global AgentRegistry
@@ -399,6 +426,7 @@ export class AgentRuntime {
 			activityLogger: this.#activityLogger,
 			toolRegistry: this.#toolRegistry,
 			agentRuntime: this,
+			pipeline: this.#contextPipeline,
 		};
 
 		let handle: AgentHandle;

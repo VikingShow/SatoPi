@@ -336,7 +336,7 @@ export class StateTracker {
 			// queued behind us see fresh data.
 			const snapshot = this.#state;
 			try {
-				this.#sessionManager?.logSwarmState(snapshot);
+				await this.#sessionManager?.logSwarmState(snapshot);
 			} catch {
 				// Swallow persist errors — we don't want state tracking
 				// failures to crash the pipeline. The in-memory state is

@@ -51,6 +51,7 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
+import type { CreateAgentSessionOptions } from "../../sdk";
 import type { Tool } from "../../tools";
 // Dependencies
 import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
@@ -346,6 +347,159 @@ describe("AgentHandle", () => {
 			}
 		});
 	});
+
+	describe("message cap and cleanup", () => {
+		/**
+		 * Contract: AgentHandle MUST never retain more than 10,000 messages.
+		 * When the cap is hit, the oldest message MUST be evicted.
+		 *
+		 * Exercises the real #pushMessage code path by firing message_update
+		 * events through a mocked Agent's subscribe callback, then asserting
+		 * the assembled output (via onComplete) excludes the evicted message.
+		 */
+		test("caps messages at MAX_MESSAGES and evicts oldest", () => {
+			// Build a minimal mock Agent that captures the subscribe callback
+			// so we can dispatch events directly — this is the only way to
+			// reach the private #pushMessage path without spinning up a full
+			// Agent loop.
+			const listeners = new Set<(e: AgentEvent) => void>();
+			let unsubscribeCalled = false;
+			const mockAgent = {
+				subscribe: (fn: (e: AgentEvent) => void) => {
+					listeners.add(fn);
+					return () => {
+						listeners.delete(fn);
+						unsubscribeCalled = true;
+					};
+				},
+				steer: () => {},
+				followUp: () => {},
+				abort: () => {},
+			};
+
+			const handle = new AgentHandle(
+				"cap-test",
+				"worker",
+				mockAgent as unknown as Agent,
+				{} as unknown as AgentSession,
+			);
+
+			// The constructor wires completion tracking via subscribe,
+			// so we should have exactly one listener registered.
+			expect(listeners.size).toBe(1);
+			const emit = [...listeners][0];
+
+			// Push MAX_MESSAGES + 1 message_update events — one over the cap.
+			const extra = 1;
+			const total = AgentHandle.MAX_MESSAGES + extra;
+			for (let i = 0; i < total; i++) {
+				emit({
+					type: "message_update",
+					message: {
+						role: "assistant",
+						content: `msg-${i}`,
+						timestamp: Date.now(),
+					},
+					assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: `msg-${i}` },
+				} as unknown as AgentEvent);
+			}
+
+			// Capture the assembled output via onComplete callback.
+			let capturedOutput = "";
+			handle.onComplete = result => {
+				capturedOutput = result.output;
+			};
+
+			// Fire agent_end — this joins #messages with "\n" and resolves.
+			emit({
+				type: "agent_end",
+				messages: [],
+			} as unknown as AgentEvent);
+
+			// The output must NOT contain msg-0 (oldest, evicted).
+			expect(capturedOutput).not.toContain("msg-0");
+			// The output MUST contain msg-1 (oldest retained after eviction).
+			expect(capturedOutput).toContain("msg-1");
+			// The output MUST contain the last message pushed.
+			expect(capturedOutput).toContain(`msg-${AgentHandle.MAX_MESSAGES}`);
+			// Status transitions to "completed" on agent_end.
+			expect(handle.status).toBe("completed");
+		});
+
+		/**
+		 * Contract: After wait() resolves, the internal messages buffer MUST
+		 * be cleared and the completion-tracking subscription MUST be
+		 * unsubscribed so no further events affect the handle.
+		 *
+		 * Verifies both cleanup actions happen by checking that a second
+		 * agent_end event after wait() does NOT trigger onComplete again.
+		 */
+		test("wait() cleans up messages and unsubscribes completion listener", async () => {
+			const listeners = new Set<(e: AgentEvent) => void>();
+			let unsubscribeCount = 0;
+			const mockAgent = {
+				subscribe: (fn: (e: AgentEvent) => void) => {
+					listeners.add(fn);
+					return () => {
+						listeners.delete(fn);
+						unsubscribeCount++;
+					};
+				},
+				steer: () => {},
+				followUp: () => {},
+				abort: () => {},
+			};
+
+			const handle = new AgentHandle(
+				"cleanup-test",
+				"worker",
+				mockAgent as unknown as Agent,
+				{} as unknown as AgentSession,
+			);
+
+			expect(listeners.size).toBe(1);
+			const emit = [...listeners][0];
+
+			// Push a few messages so there is something to clear.
+			for (let i = 0; i < 5; i++) {
+				emit({
+					type: "message_update",
+					message: {
+						role: "assistant",
+						content: `msg-${i}`,
+						timestamp: Date.now(),
+					},
+					assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: `msg-${i}` },
+				} as unknown as AgentEvent);
+			}
+
+			// Complete the agent — this resolves the completion promise.
+			emit({
+				type: "agent_end",
+				messages: [],
+			} as unknown as AgentEvent);
+
+			// Call wait() — this should clear messages and unsubscribe.
+			const result = await handle.wait(1000);
+			expect(result.exitCode).toBe(0);
+			expect(typeof result.output).toBe("string");
+
+			// Verify unsubscribe was called during wait() cleanup.
+			expect(unsubscribeCount).toBe(1);
+
+			// After cleanup, firing another agent_end should NOT trigger
+			// onComplete again (listener was removed).
+			let onCompleteCallCount = 0;
+			handle.onComplete = () => {
+				onCompleteCallCount++;
+			};
+			emit({
+				type: "agent_end",
+				messages: [],
+			} as unknown as AgentEvent);
+			expect(onCompleteCallCount).toBe(0);
+		});
+	});
 });
 
 // ============================================================================
@@ -458,6 +612,52 @@ describe("AgentLauncher", () => {
 		// Should not throw — aside provider is wired
 		const handle = await launcher.launch(ctx);
 		expect(handle).toBeInstanceOf(AgentHandle);
+	});
+
+	test("SP-7: hasIrcInterrupts reaches Agent through spawn path", async () => {
+		// Factory that creates a real Agent and wires hasIrcInterrupts
+		// the same way createAgentSession does: options.hasIrcInterrupts
+		// becomes a () => true function on the agent.
+		const hasIrcSessionFactory = async (options: CreateAgentSessionOptions) => {
+			const agent = new Agent({
+				initialState: {
+					systemPrompt: options.systemPrompt ?? [],
+					messages: [],
+					tools: [],
+				},
+			});
+			// Simulate what createAgentSession + agent-session do:
+			// AgentLoopConfig gets hasIrcInterrupts: () => true
+			// then agent-session overrides agent.hasIrcInterrupts with real check.
+			// For the E2E test we just verify the final observable: the function
+			// is set and returns true.
+			if (options.hasIrcInterrupts) {
+				agent.hasIrcInterrupts = () => true;
+			}
+			return {
+				session: {
+					agent,
+					prompt: async () => {},
+					setToolContextAgentRuntime: () => {},
+				} as unknown as AgentSession,
+			};
+		};
+
+		const ctx = makeLaunchContext();
+		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, hasIrcSessionFactory);
+
+		const handle = await launcher.launch(ctx);
+		expect(handle).toBeInstanceOf(AgentHandle);
+		expect(handle.id).toBe("agent-1");
+
+		// Access the internal Agent through AgentHandle
+		const agent = handle.agent;
+		expect(agent).toBeInstanceOf(Agent);
+
+		// hasIrcInterrupts is set and returns true
+		expect(agent.hasIrcInterrupts).toBeDefined();
+		expect(typeof agent.hasIrcInterrupts).toBe("function");
+		expect(agent.hasIrcInterrupts!()).toBe(true);
 	});
 });
 
@@ -656,6 +856,136 @@ describe("AgentRuntime", () => {
 
 			// Should not throw
 			await runtime.sendSystemNotification("agent-1", "System update available");
+		});
+	});
+
+	describe("steering/followUp hooks (SP-7)", () => {
+		test("AgentLoopConfig hooks are wired through AgentLauncher", async () => {
+			let capturedOptions: CreateAgentSessionOptions | undefined;
+			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
+				capturedOptions = options;
+				return { session: mockCompletingSession as unknown as AgentSession };
+			};
+
+			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
+
+			const runtime = new AgentRuntime({
+				roleProvider,
+				contextPipeline,
+				launcher: capturingLauncher,
+				commBus,
+				hookPipeline,
+				modelRegistry,
+				settings,
+				toolRegistry,
+			});
+
+			const handles = await runtime.spawn([makeSpec({ id: "steer-hook-test", role: "planner" })]);
+			expect(handles.length).toBe(1);
+
+			expect(capturedOptions).toBeDefined();
+			if (!capturedOptions) throw new Error("capturedOptions is undefined");
+
+			// Verify getSteeringMessages and getFollowUpMessages are wired (not undefined)
+			expect(typeof capturedOptions.getSteeringMessages).toBe("function");
+			expect(typeof capturedOptions.getFollowUpMessages).toBe("function");
+
+			// Both should return empty arrays when no messages have been queued
+			const steering = await capturedOptions.getSteeringMessages!();
+			expect(steering).toEqual([]);
+			const followUp = await capturedOptions.getFollowUpMessages!();
+			expect(followUp).toEqual([]);
+		});
+
+		test("steering messages flow from sendHumanMessage through getSteeringMessages", async () => {
+			let capturedOptions: CreateAgentSessionOptions | undefined;
+			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
+				capturedOptions = options;
+				return { session: mockCompletingSession as unknown as AgentSession };
+			};
+
+			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
+
+			const runtime = new AgentRuntime({
+				roleProvider,
+				contextPipeline,
+				launcher: capturingLauncher,
+				commBus,
+				hookPipeline,
+				modelRegistry,
+				settings,
+				toolRegistry,
+			});
+
+			await runtime.spawn([makeSpec({ id: "steer-flow-test", role: "planner" })]);
+			expect(capturedOptions).toBeDefined();
+			if (!capturedOptions) throw new Error("capturedOptions is undefined");
+
+			// Push steering messages via the public API
+			await runtime.sendHumanMessage("steer-flow-test", "First steering message");
+			await runtime.sendHumanMessage("steer-flow-test", "Second steering message");
+
+			// Drain via the hook — should return both messages
+			const steering = await capturedOptions.getSteeringMessages!();
+			expect(steering.length).toBe(2);
+
+			const firstText = steering[0]?.content?.find((c: { type: string }) => c.type === "text");
+			expect(firstText).toBeDefined();
+			expect("text" in (firstText as Record<string, unknown>)
+				? (firstText as Record<string, unknown>).text
+				: undefined
+			).toBe("First steering message");
+
+			const secondText = steering[1]?.content?.find((c: { type: string }) => c.type === "text");
+			expect(secondText).toBeDefined();
+			expect("text" in (secondText as Record<string, unknown>)
+				? (secondText as Record<string, unknown>).text
+				: undefined
+			).toBe("Second steering message");
+
+			// Queue is drained — second call should return empty
+			const drained = await capturedOptions.getSteeringMessages!();
+			expect(drained).toEqual([]);
+		});
+
+		test("steering hooks remain wired after spawn for follow-up agent lifecycle", async () => {
+			let capturedOptions: CreateAgentSessionOptions | undefined;
+			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
+				capturedOptions = options;
+				return { session: mockCompletingSession as unknown as AgentSession };
+			};
+
+			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
+
+			const runtime = new AgentRuntime({
+				roleProvider,
+				contextPipeline,
+				launcher: capturingLauncher,
+				commBus,
+				hookPipeline,
+				modelRegistry,
+				settings,
+				toolRegistry,
+			});
+
+			// Spawn two agents — each gets independent steering queues
+			await runtime.spawn([
+				makeSpec({ id: "agent-a", role: "planner" }),
+				makeSpec({ id: "agent-b", role: "backend-dev" }),
+			]);
+
+			// Push steering to only one agent
+			await runtime.sendHumanMessage("agent-a", "Steering for A only");
+
+			// The captured options reflect the LAST spawn call (agent-b).
+			// Each spawn call re-captures options, so this tests the wiring pattern.
+			expect(capturedOptions).toBeDefined();
+			if (!capturedOptions) throw new Error("capturedOptions is undefined");
+			expect(typeof capturedOptions.getSteeringMessages).toBe("function");
+
+			// agent-b's queue should be empty (steering was sent to agent-a)
+			const bSteering = await capturedOptions.getSteeringMessages!();
+			expect(bSteering).toEqual([]);
 		});
 	});
 

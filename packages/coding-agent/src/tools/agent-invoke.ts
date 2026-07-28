@@ -69,7 +69,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 
 		if (!runtime) {
 			return {
-				content: [{ type: "text", text: "agent_invoke: AgentRuntime not available in tool context." }],
+				content: [{ type: "text", text: "agent_invoke requires a swarm session with AgentRuntime. Use this tool within a swarm-managed session." }],
 				isError: true,
 			};
 		}

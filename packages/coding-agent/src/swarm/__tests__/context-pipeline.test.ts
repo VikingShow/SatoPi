@@ -9,6 +9,7 @@
  * 5. Empty pipeline — assemble with no sources returns base context
  * 6. Multiple sources — all applicable sources contribute
  * 7. Error isolation — one source failing doesn't crash the pipeline
+ * 8. SP-7 E2E — toTransformContext produces expected output; SDK merge works
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
@@ -16,6 +17,7 @@ import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@oh-my-pi/pi-ai";
 import {
 	type AgentSpecLike,
+	type AssembledContext,
 	type BuildContext,
 	type ContextFragment,
 	ContextPipeline,
@@ -421,6 +423,179 @@ describe("ContextPipeline", () => {
 		expect(result).toBeInstanceOf(Promise);
 		const resolved = await result;
 		expect(resolved).toHaveLength(1);
+	});
+
+	// ── SP-7 E2E: toTransformContext during spawn + SDK merge ───────────
+
+	test("toTransformContext produces expected output from registered sources (E2E)", async () => {
+		pipeline.register(
+			mockSource({
+				name: "experience",
+				priority: 0,
+				build: async () => ({
+					injectedMessages: [
+						{ role: "user", content: "EXP: prior session summary", timestamp: 0 },
+					],
+				}),
+			}),
+		);
+		pipeline.register(
+			mockSource({
+				name: "mmd",
+				priority: 1,
+				build: async () => ({
+					injectedMessages: [
+						{ role: "user", content: "MMD: current plan state", timestamp: 0 },
+					],
+				}),
+			}),
+		);
+
+		const assembled = await pipeline.assemble(DEFAULT_SPEC, DEFAULT_PHASE, DEFAULT_BUILD_CONTEXT);
+		const transform = pipeline.toTransformContext(assembled);
+
+		const conversation: AgentMessage[] = [
+			{ role: "user", content: "Hello, agent", timestamp: 0 },
+			{ role: "assistant", content: "Hi! How can I help?", timestamp: 0 },
+		] as AgentMessage[];
+
+		const result = await transform(conversation);
+
+		// Injected messages are prepended in source priority order (0, then 1),
+		// followed by the original conversation
+		expect(result).toHaveLength(4);
+		expect((result[0] as UserMessage).content).toBe("EXP: prior session summary");
+		expect((result[1] as UserMessage).content).toBe("MMD: current plan state");
+		expect((result[2] as UserMessage).content).toBe("Hello, agent");
+		expect((result[3] as AssistantMessage).content).toBe("Hi! How can I help?");
+	});
+
+	test("pipeline transform merges correctly with SDK-style default transform", async () => {
+		// The SDK merge pattern (from sdk.ts:2702-2718):
+		//   1. SDK runs its own transforms first (extension emit, steering wrap, mark env)
+		//   2. Then calls pipelineTransform(result, signal) for injectedMessages + L3 compact
+		//
+		// This test simulates that: SDK adds "mark env" content, then pipeline prepends
+		// injected messages. Both contributions MUST be visible in the final output.
+
+		pipeline.register(
+			mockSource({
+				name: "stigmergy",
+				priority: 1,
+				build: async () => ({
+					injectedMessages: [
+						{ role: "user", content: "STIG: workspace state summary", timestamp: 0 },
+					],
+				}),
+			}),
+		);
+
+		const assembled = await pipeline.assemble(DEFAULT_SPEC, DEFAULT_PHASE, DEFAULT_BUILD_CONTEXT);
+		const pipelineTransform = pipeline.toTransformContext(assembled);
+
+		// Simulate the SDK's merge wrapper (mirrors sdk.ts:2703-2718)
+		const sdkMergedTransform = async (messages: AgentMessage[], signal?: AbortSignal) => {
+			// Step 1: SDK adds mark-environment context (simulating extension emit + steering wrap + mark env)
+			const withMarkEnv: AgentMessage[] = [
+				{
+					role: "user",
+					content: "MARK_ENV: current file tree and recent changes",
+					timestamp: Date.now(),
+				},
+				...messages,
+			];
+			// Step 2: Pipeline handles injectedMessages + L3 compact
+			return pipelineTransform(withMarkEnv, signal);
+		};
+
+		const conversation: AgentMessage[] = [
+			{ role: "user", content: "What's the status?", timestamp: 0 },
+		] as AgentMessage[];
+
+		const result = await sdkMergedTransform(conversation);
+
+		// Order: pipeline-injected (prepended) → mark-env (from SDK, next) → original conversation
+		expect(result).toHaveLength(3);
+		expect((result[0] as UserMessage).content).toBe("STIG: workspace state summary");
+		expect((result[1] as UserMessage).content).toBe("MARK_ENV: current file tree and recent changes");
+		expect((result[2] as UserMessage).content).toBe("What's the status?");
+	});
+
+	test("SDK merge: pipeline transform with compaction respects SDK pre-processing", async () => {
+		// When the pipeline has compactWindow, the SDK still pre-processes first.
+		// The pipeline's compact step operates on the SDK-transformed messages.
+
+		pipeline.register(
+			mockSource({
+				name: "core",
+				priority: 0,
+				build: async () => ({
+					injectedMessages: [
+						{ role: "user", content: "CORE: system instructions", timestamp: 0 },
+					],
+				}),
+			}),
+		);
+
+		const assembled = await pipeline.assemble(DEFAULT_SPEC, DEFAULT_PHASE, DEFAULT_BUILD_CONTEXT);
+
+		// With compactWindow, the pipeline compacts after prepending
+		const pipelineTransform = pipeline.toTransformContext(assembled, { compactWindow: 8000 });
+
+		// SDK-style merge wrapper
+		const sdkMerged = async (messages: AgentMessage[], signal?: AbortSignal) => {
+			const withSdkCtx: AgentMessage[] = [
+				{ role: "user", content: "SDK: mark env context", timestamp: Date.now() },
+				...messages,
+			];
+			return pipelineTransform(withSdkCtx, signal);
+		};
+
+		const conversation: AgentMessage[] = [
+			{ role: "user", content: "proceed", timestamp: 0 },
+		] as AgentMessage[];
+
+		const result = await sdkMerged(conversation);
+
+		// Pipeline injected message prepended first, SDK mark env stays,
+		// original conversation at the end. With compactWindow=8000 and only
+		// 3 small messages, nothing is compacted away — all messages survive.
+		expect(result.length).toBeGreaterThanOrEqual(3);
+		expect((result[0] as UserMessage).content).toBe("CORE: system instructions");
+
+		// Both SDK mark env and original conversation must be present
+		const contents = result.map(m => {
+			if (typeof m.content === "string") return m.content;
+			return "";
+		});
+		expect(contents).toContain("SDK: mark env context");
+		expect(contents).toContain("proceed");
+	});
+
+	test("SDK merge: without pipeline, SDK-only transform still injects mark env", async () => {
+		// Regression guard: when no pipeline is provided, the SDK's own
+		// transformContext (sdk.ts:2720-2749) must still work. We test that
+		// the pipeline transform itself is a no-op identity when assembled
+		// context has no injectedMessages, which simulates the "no pipeline"
+		// path being delegated to SDK-only behavior.
+
+		const assembled: AssembledContext = {
+			systemPrompt: "",
+			taskPrompt: "test",
+			tools: [],
+			injectedMessages: [],
+			metadata: {},
+		};
+		const pipelineTransform = pipeline.toTransformContext(assembled);
+
+		const messages: AgentMessage[] = [
+			{ role: "user", content: "hello", timestamp: 0 },
+		] as AgentMessage[];
+
+		const result = await pipelineTransform(messages);
+
+		// Pipeline is identity — SDK would handle its own transforms in the real path
+		expect(result).toBe(messages);
 	});
 
 	// ── Multiple sources ────────────────────────────────────────────────

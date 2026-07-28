@@ -2,11 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import { Agent, type AgentTool, type AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import { type } from "arktype";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
 
@@ -189,5 +191,116 @@ describe("tools.approvalMode setting", () => {
 		// fix is to construct the runner unconditionally; this test makes that contract explicit so
 		// a future change to make the runner optional again cannot silently re-open the hole.
 		expect(session.extensionRunner).toBeDefined();
+	});
+
+	describe("SP-8: custom tool approval independent of ExtensionToolWrapper", () => {
+		let sp8TempDir: string;
+		let sp8Session: AgentSession;
+
+		beforeAll(async () => {
+			sp8TempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-sp8-${Snowflake.next()}-`));
+			const cwd = path.join(sp8TempDir, "cwd");
+			fs.mkdirSync(cwd, { recursive: true });
+
+			const customTool: AgentTool = {
+				name: "custom_write_tool",
+				label: "Custom Write",
+				description: "A custom tool with write-tier approval",
+				parameters: type({ value: "string" }),
+				approval: "write" as const,
+				async execute() {
+					return { content: [{ type: "text" as const, text: "custom tool executed" }] };
+				},
+			};
+
+			const sp8SessionManager = SessionManager.inMemory(cwd);
+			const agent = new Agent({
+				getApiKey: () => "test-key",
+				initialState: {
+					model: getBundledModel("openai", "gpt-4o-mini")!,
+					systemPrompt: ["Test"],
+					tools: [customTool],
+					messages: [],
+				},
+			});
+
+			sp8Session = new AgentSession({
+				agent,
+				sessionManager: sp8SessionManager,
+				settings: Settings.isolated(BASE_SETTINGS),
+				modelRegistry: {} as unknown as ModelRegistry,
+				toolRegistry: new Map([[customTool.name, customTool]]),
+				// No extensionRunner → ExtensionToolWrapper is NOT applied
+			});
+		});
+
+		afterAll(async () => {
+			await sp8Session.dispose();
+			for (let attempt = 0; attempt < 5; attempt++) {
+				try {
+					removeSyncWithRetries(sp8TempDir);
+					break;
+				} catch (err) {
+					const code = (err as NodeJS.ErrnoException).code;
+					if (code !== "EBUSY" && code !== "ENOTEMPTY" && code !== "EPERM") throw err;
+					if (attempt === 4) break;
+					await Bun.sleep(50 * (attempt + 1));
+				}
+			}
+		});
+
+		function sp8Settings(extraSettings: Record<string, unknown> = {}): Settings {
+			return Settings.isolated({ ...BASE_SETTINGS, ...extraSettings });
+		}
+
+		it("write-tier custom tool requires approval in always-ask mode without ExtensionToolWrapper", async () => {
+			const tool = sp8Session.getToolByName("custom_write_tool");
+			expect(tool).toBeDefined();
+			const settings = sp8Settings({ "tools.approvalMode": "always-ask" });
+			await expect(
+				tool!.execute("sp8-1", { value: "test" }, undefined, undefined, {
+					settings,
+				} as AgentToolContext),
+			).rejects.toThrow(/requires approval but no interactive UI available/);
+		});
+
+		it("write-tier custom tool auto-approved in write mode without ExtensionToolWrapper", async () => {
+			const tool = sp8Session.getToolByName("custom_write_tool");
+			expect(tool).toBeDefined();
+			const settings = sp8Settings({ "tools.approvalMode": "write" });
+			const result = await tool!.execute("sp8-2", { value: "test" }, undefined, undefined, {
+				settings,
+			} as AgentToolContext);
+			expect(textOf(result)).toContain("custom tool executed");
+		});
+
+		it("custom tool blocked by deny policy even in yolo mode without ExtensionToolWrapper", async () => {
+			const tool = sp8Session.getToolByName("custom_write_tool");
+			expect(tool).toBeDefined();
+			const settings = sp8Settings({
+				"tools.approvalMode": "yolo",
+				"tools.approval": { custom_write_tool: "deny" },
+			});
+			await expect(
+				tool!.execute("sp8-3", { value: "test" }, undefined, undefined, {
+					settings,
+				} as AgentToolContext),
+			).rejects.toThrow(/blocked by user policy/);
+		});
+
+		it("contrast: ExtensionToolWrapper-wrapped tool also enforces approval gate", async () => {
+			// The parent describe's `session` has every tool wrapped with
+			// ExtensionToolWrapper (via createAgentSession). Verify that the
+			// approval gate still fires on the bash tool, proving both paths
+			// (Proxy-only and Proxy+ExtensionToolWrapper) enforce the gate.
+			const bash = session.getToolByName("bash");
+			expect(bash).toBeDefined();
+			const settings = sp8Settings({ "tools.approvalMode": "always-ask" });
+			await expect(
+				bash!.execute("sp8-contrast", { command: "echo blocked" }, undefined, undefined, {
+					settings,
+				} as AgentToolContext),
+			).rejects.toThrow(/requires approval but no interactive UI available/);
+		});
 	});
 });

@@ -27,6 +27,8 @@
 
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { Chapter, StateTracker } from "./state";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Interfaces
@@ -298,6 +300,9 @@ export class WorkflowFsm {
 	/** Injected activity logger for event recording. */
 	#activityLogger: ActivityLogger;
 
+	/** Optional hook pipeline for lifecycle events. */
+	#hookPipeline: HookPipeline | undefined;
+
 	/** Pending human-decision resolver — set by waitForHumanDecision(). */
 	#humanResolve: ((value: unknown) => void) | null = null;
 	/** Pending human-decision rejecter — paired with #humanResolve for cancellation. */
@@ -311,9 +316,15 @@ export class WorkflowFsm {
 	 * @param activityLogger  Existing ActivityLogger instance for event recording.
 	 * @param initialPhase  Starting phase (defaults to "idle").
 	 */
-	constructor(stateTracker: StateTracker, activityLogger: ActivityLogger, initialPhase: Chapter = "idle") {
+	constructor(
+		stateTracker: StateTracker,
+		activityLogger: ActivityLogger,
+		initialPhase: Chapter = "idle",
+		hookPipeline?: HookPipeline,
+	) {
 		this.#stateTracker = stateTracker;
 		this.#activityLogger = activityLogger;
+		this.#hookPipeline = hookPipeline;
 		this.#phase = initialPhase;
 		this.#subStatus = "";
 		this.#running = ACTIVE_PHASES.has(initialPhase);
@@ -553,6 +564,12 @@ export class WorkflowFsm {
 
 			const def = this.#phases.get(armedPhase);
 			if (!def) return;
+
+			// Hook: workflow:phaseTimeout
+			if (this.#hookPipeline) {
+				const ctx: HookContext = { phase: armedPhase };
+				void this.#hookPipeline.trigger("workflow:phaseTimeout", { phase: armedPhase }, ctx);
+			}
 
 			// Use the explicit timedTransitionTarget if configured, otherwise pick
 			// the first allowedTo that isn't the current phase.

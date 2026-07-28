@@ -12,6 +12,7 @@
  * route events to the correct SSE subscribers.
  */
 
+import { logger } from "@oh-my-pi/pi-utils";
 import type { ReviewVerdict } from "../core/pipeline";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
@@ -115,8 +116,10 @@ export interface ActivityBroadcaster {
 export class ActivityLogger {
 	readonly #sessionName: string;
 	#broadcaster: ActivityBroadcaster | null = null;
+	#pendingWrites = 0;
 	#writeQueue: Promise<void> = Promise.resolve();
 	#sessionManager: SwarmSessionManager | null = null;
+	#overflowSilenced = false;
 
 	constructor(swarmDir: string, sessionName: string) {
 		this.#sessionName = sessionName;
@@ -143,14 +146,34 @@ export class ActivityLogger {
 	 * and pushes to SSE. Serialized via writeQueue to preserve event ordering.
 	 * Fire-and-forget: callers never await this.
 	 */
+	private static readonly MAX_PENDING_WRITES = 256;
+
 	private log(entry: ActivityEntry): void {
+		// Drop oldest when over capacity — fire-and-forget semantics
+		// mean we can't reject callers, so just don't enqueue.
+		if (this.#pendingWrites >= ActivityLogger.MAX_PENDING_WRITES) {
+			if (!this.#overflowSilenced) {
+				this.#overflowSilenced = true;
+				logger.warn("[ActivityLogger] Write queue overflow — dropping events");
+			}
+			return;
+		}
+
+		this.#pendingWrites++;
 		this.#writeQueue = this.#writeQueue
 			.then(async () => {
 				this.#sessionManager?.logActivity(entry);
 				this.#broadcaster?.broadcast(this.#sessionName, entry);
 			})
-			.catch(() => {
-				// Swallow errors — logging must never crash the loop
+			.catch(err => {
+				logger.warn("[ActivityLogger] Write failed", { error: String(err) });
+			})
+			.finally(() => {
+				this.#pendingWrites--;
+				// Reset overflow silenced when queue drains enough
+				if (this.#overflowSilenced && this.#pendingWrites < ActivityLogger.MAX_PENDING_WRITES / 2) {
+					this.#overflowSilenced = false;
+				}
 			});
 	}
 
@@ -396,5 +419,13 @@ export class ActivityLogger {
 	 *  negotiate access to a conflicted file. */
 	logFileCoordination(file: string, from: string, body: string): void {
 		this.log({ ts: Date.now(), type: "file_coordination", file, from, body });
+	}
+
+	/**
+	 * Drain the write queue — awaits all pending writes.
+	 * Call during graceful shutdown to ensure all events are persisted.
+	 */
+	async drain(): Promise<void> {
+		await this.#writeQueue;
 	}
 }

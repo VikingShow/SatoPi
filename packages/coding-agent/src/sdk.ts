@@ -1,6 +1,7 @@
 import {
 	Agent,
 	type AgentEvent,
+	type AgentLoopConfig,
 	type AgentMessage,
 	type AgentTelemetryConfig,
 	type AgentTool,
@@ -112,6 +113,7 @@ import {
 	SecretObfuscator,
 } from "./secrets";
 import { AgentSession, type PlanYolo, type Prewalk } from "./session/agent-session";
+import type { AgentRuntime } from "./swarm/agent-runtime";
 import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
 import type { AuthStorage } from "./session/auth-storage";
 import {
@@ -572,6 +574,14 @@ export interface CreateAgentSessionOptions {
 	injectedMessages?: AgentMessage[];
 
 	/**
+	 * Optional transformContext from ContextPipeline (SP-7).
+	 * When provided, the SDK wraps it: the pipeline handles injected-message prepend
+	 * and L3 compact context, while the SDK still runs extension-emit, steering-wrap,
+	 * and MarkEnvironment context injection. Without it, the SDK builds its own
+	 * full transformContext including injectedMessages + compactContext paths.
+	 */
+	transformContext?: AgentLoopConfig["transformContext"];
+	/**
 	 * Opt-in OpenTelemetry instrumentation forwarded to the underlying Agent.
 	 * Passing `{}` enables the loop's GenAI-semantic-convention spans. See
 	 * {@link AgentTelemetryConfig} for the full surface (hooks, content capture,
@@ -594,6 +604,15 @@ export interface CreateAgentSessionOptions {
 
 	/** Whether to auto-approve all tool calls (--auto-approve CLI flag). Default: false */
 	autoApprove?: boolean;
+	/** Whether IRC interrupts should be checked during tool execution. Default: false */
+	hasIrcInterrupts?: boolean;
+	/** External steering message provider, composited with the internal Agent steering queue. */
+	getSteeringMessages?: () => Promise<AgentMessage[]>;
+	/** External follow-up message provider, composited with the internal Agent follow-up queue. */
+	getFollowUpMessages?: () => Promise<AgentMessage[]>;
+
+	/** AgentRuntime for swarm-managed sessions; injected into tool context for agent_invoke. */
+	agentRuntime?: AgentRuntime;
 }
 
 /** Result from createAgentSession */
@@ -2680,36 +2699,54 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return obfuscateMessages(obfuscator, converted);
 		};
 
-		const transformContext = async (messages: AgentMessage[], _signal?: AbortSignal) => {
-			const withContext = await extensionRunner.emitContext(messages);
-			let result = wrapSteeringForModel(withContext);
-			// Inject stigmergy environment context for all agents
-			const markEnv = MarkEnvironment.global();
-			const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
-			if (markCtx) {
-				result = [
-					{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
-					...result,
-				];
-			}
-			// Inject ContextPipeline pre-computed messages (MMD, experience, etc.)
-			if (options.injectedMessages && options.injectedMessages.length > 0) {
-				result = [...options.injectedMessages, ...result];
-			}
-			// Apply L3 compact context (fusion with SatoPi compaction)
-			if (options.offloadManager && options.contextWindow) {
-				try {
-					const compacted = compactContext(result, new Map(), {
-						...DEFAULT_COMPACT_CONFIG,
-						contextWindow: options.contextWindow,
-					});
-					result = compacted.messages;
-				} catch (err) {
-					logger.debug("[createAgentSession] Compact context skipped", { error: String(err) });
+		const pipelineTransform = options.transformContext;
+		const transformContext = pipelineTransform
+			? async (messages: AgentMessage[], signal?: AbortSignal) => {
+				// SDK-only transforms: extension emit, steering wrap, mark env
+				const withContext = await extensionRunner.emitContext(messages);
+				let result = wrapSteeringForModel(withContext);
+				// Inject stigmergy environment context for all agents
+				const markEnv = MarkEnvironment.global();
+				const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
+				if (markCtx) {
+					result = [
+						{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
+						...result,
+					];
 				}
+				// Pipeline handles injectedMessages + L3 compact
+				return pipelineTransform(result, signal);
 			}
-			return result;
-		};
+			: async (messages: AgentMessage[], _signal?: AbortSignal) => {
+				const withContext = await extensionRunner.emitContext(messages);
+				let result = wrapSteeringForModel(withContext);
+				// Inject stigmergy environment context for all agents
+				const markEnv = MarkEnvironment.global();
+				const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
+				if (markCtx) {
+					result = [
+						{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
+						...result,
+					];
+				}
+				// Inject ContextPipeline pre-computed messages (MMD, experience, etc.)
+				if (options.injectedMessages && options.injectedMessages.length > 0) {
+					result = [...options.injectedMessages, ...result];
+				}
+				// Apply L3 compact context (fusion with SatoPi compaction)
+				if (options.offloadManager && options.contextWindow) {
+					try {
+						const compacted = compactContext(result, new Map(), {
+							...DEFAULT_COMPACT_CONFIG,
+							contextWindow: options.contextWindow,
+						});
+						result = compacted.messages;
+					} catch (err) {
+						logger.debug("[createAgentSession] Compact context skipped", { error: String(err) });
+					}
+				}
+				return result;
+			};
 		// Per-request provider-context transforms. Obfuscate FIRST so secrets are
 		// redacted from text before snapcompact rasterizes it into PNG frames, then
 		// clamp images to the active provider budget before the request is sent.
@@ -2846,6 +2883,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					? new AppendOnlyContextManager()
 					: undefined
 				: undefined,
+			hasIrcInterrupts: options.hasIrcInterrupts ? () => true : undefined,
+			getSteeringMessages: options.getSteeringMessages,
+			getFollowUpMessages: options.getFollowUpMessages,
 			// Stigmergy: place marks on tool execution (auto-gated by context ratio 0.5)
 			afterToolCall: (ctx, _signal) => {
 				const markEnv = MarkEnvironment.global();
@@ -3016,6 +3056,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// Register the tool context runtime setter so swarm layers can inject
 		// AgentRuntime — needed by agent_invoke to spawn/steer persistent agents.
 		session._registerToolContextRuntimeSetter(r => toolContextStore.setAgentRuntime(r as any));
+
+		// If this session is swarm-managed, wire the AgentRuntime into the tool context
+		// so agent_invoke can spawn/steer persistent agents from the main agent session.
+		if (options.agentRuntime) {
+			session.setToolContextAgentRuntime(options.agentRuntime);
+		}
 		if (asyncJobManager) {
 			session.yieldQueue.register<AsyncResultEntry>("async-result", {
 				isStale: entry => asyncJobManager.isDeliverySuppressed(entry.jobId),

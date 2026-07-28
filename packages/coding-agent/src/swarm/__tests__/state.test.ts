@@ -7,7 +7,7 @@
  *   - resetAgentStatuses: clears all agent state for retry
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -21,6 +21,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	vi.restoreAllMocks();
 	await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -211,6 +212,86 @@ describe("resetAgentStatuses", () => {
 		expect(agents["worker-1"]).toBeDefined();
 		expect(agents["worker-1"].praiseCount).toBe(0);
 		expect(agents["worker-1"].status).toBe("pending");
+
+		await sm.close();
+	});
+});
+
+// ============================================================================
+// writeChain integrity (SP-6)
+// ============================================================================
+
+describe("writeChain integrity (SP-6)", () => {
+	it("survives logSwarmState rejection without corrupting subsequent writes", async () => {
+		const st = new StateTracker(tmpDir, "test-sp6");
+		const sm = await SwarmSessionManager.create(tmpDir);
+		st.setSessionManager(sm);
+
+		// Initialize first — this triggers a #persist() through the real logSwarmState.
+		await st.init(["worker-1"], 5, "loop");
+
+		// Spy: first call throws to simulate a disk failure. Subsequent calls
+		// fall through to the default vi.fn() which returns undefined (void).
+		const logSpy = vi.spyOn(sm, "logSwarmState");
+		logSpy.mockImplementationOnce(() => {
+			throw new Error("Simulated disk failure");
+		});
+
+		// First updateAgent — logSwarmState throws, but the try/catch in
+		// #persist() swallows the error. The updateAgent call should NOT throw.
+		await st.updateAgent("worker-1", { status: "running", iteration: 1 });
+
+		// In-memory state MUST be correct despite the persistence error.
+		// The state mutation (Object.assign) happens BEFORE #persist() runs.
+		expect(st.state.agents["worker-1"]!.status).toBe("running");
+		expect(st.state.agents["worker-1"]!.iteration).toBe(1);
+		expect(logSpy).toHaveBeenCalledTimes(1);
+
+		// Second updateAgent — the write chain MUST NOT be corrupted.
+		// If the chain were corrupted, this call would hang or silently
+		// skip the persist (because .then() on a rejected promise skips
+		// the success handler).
+		await st.updateAgent("worker-1", { status: "completed", iteration: 2 });
+
+		// In-memory state MUST reflect the second update.
+		expect(st.state.agents["worker-1"]!.status).toBe("completed");
+		expect(st.state.agents["worker-1"]!.iteration).toBe(2);
+
+		// Second logSwarmState was called — proves the write chain
+		// processed the second persist callback.
+		expect(logSpy).toHaveBeenCalledTimes(2);
+
+		await sm.close();
+	});
+
+	it("preserves write ordering after a rejected persist", async () => {
+		const st = new StateTracker(tmpDir, "test-sp6-ordering");
+		const sm = await SwarmSessionManager.create(tmpDir);
+		st.setSessionManager(sm);
+
+		await st.init(["alpha", "beta"], 5, "loop");
+
+		// First logSwarmState call (from the second updateAgent) throws.
+		const logSpy = vi.spyOn(sm, "logSwarmState");
+		logSpy.mockImplementationOnce(() => {
+			throw new Error("Simulated disk failure");
+		});
+
+		// Update alpha — triggers the throwing logSwarmState.
+		await st.updateAgent("alpha", { status: "running", iteration: 1 });
+
+		// Update beta — this persist MUST succeed even though the
+		// previous one's logSwarmState threw.
+		await st.updateAgent("beta", { status: "completed", iteration: 3 });
+
+		// Both agents' in-memory state MUST be correct.
+		expect(st.state.agents["alpha"]!.status).toBe("running");
+		expect(st.state.agents["alpha"]!.iteration).toBe(1);
+		expect(st.state.agents["beta"]!.status).toBe("completed");
+		expect(st.state.agents["beta"]!.iteration).toBe(3);
+
+		// logSwarmState was called for both persists (first threw, second succeeded).
+		expect(logSpy).toHaveBeenCalledTimes(2);
 
 		await sm.close();
 	});

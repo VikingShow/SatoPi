@@ -429,6 +429,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 	get swarmState(): Readonly<SwarmState> { return this.#stateTracker.state; }
 	get currentPhase(): Chapter | null { return this.#fsm?.phase ?? null; }
 	get isRunning(): boolean { return !this.#disposed && (this.#fsm?.state.running ?? false); }
+
+	get runtime(): AgentRuntime { return this.#runtime; }
 	get graph(): GraphDefinition { return this.#graph; }
 	get gateController(): GateController { return this.#gateController; }
 }

@@ -13,6 +13,8 @@
 import { logger } from "@oh-my-pi/pi-utils";
 import { OffloadStore, type OffloadEntry } from "./store"
 import type { SessionStorage } from "../session/session-storage"
+import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
+import type { HookContext } from "../swarm/hook-system/types";
 
 // ---------------------------------------------------------------------------
 // Unified interface
@@ -36,11 +38,13 @@ export interface IOffloadManager {
 export class OffloadManager implements IOffloadManager {
 	readonly #store: OffloadStore;
 	readonly #sessionId: string;
+	readonly #hookPipeline: HookPipeline | undefined;
 	#iteration = 0;
 
-	constructor(workspace: string, agentName: string, sessionId: string, storage: SessionStorage) {
+	constructor(workspace: string, agentName: string, sessionId: string, storage: SessionStorage, hookPipeline?: HookPipeline) {
 		this.#store = new OffloadStore(workspace, agentName, storage);
 		this.#sessionId = sessionId;
+		this.#hookPipeline = hookPipeline;
 	}
 
 	/** Set the current iteration for entry tagging. */
@@ -66,14 +70,32 @@ export class OffloadManager implements IOffloadManager {
 
 		await this.#store.appendEntry(agentId, this.#sessionId, entry);
 		logger.debug("[OffloadManager] L1 entry stored", { agentId, summaryLen: summary.length });
+
+		// Hook: offload:afterL1
+		if (this.#hookPipeline) {
+			const ctx: HookContext = { phase: undefined, agentId };
+			await this.#hookPipeline.trigger("offload:afterL1", { agentId }, ctx);
+		}
 	}
 
 	async forceFlush(): Promise<void> {
+		// Hook: offload:beforeFlush
+		if (this.#hookPipeline) {
+			const ctx: HookContext = { phase: undefined };
+			await this.#hookPipeline.trigger("offload:beforeFlush", {}, ctx);
+		}
+
 		// The store is write-through (JSONL append), so no buffered data to flush.
 		// L2 attribution (PlanNodeAttributor) is triggered separately when phase
 		// boundaries and plan.md are available. This method ensures any pending
 		// writes are visible.
 		logger.debug("[OffloadManager] forceFlush (write-through, no buffered data)");
+
+		// Hook: offload:afterFlush
+		if (this.#hookPipeline) {
+			const ctx: HookContext = { phase: undefined };
+			await this.#hookPipeline.trigger("offload:afterFlush", {}, ctx);
+		}
 	}
 
 	// -- Context direction -----------------------------------------------------

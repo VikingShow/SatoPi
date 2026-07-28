@@ -1,8 +1,7 @@
 /**
- * Swarm agent execution via SatoPi's subagent infrastructure.
+ * Swarm agent execution — in-process via AgentRuntime.spawn().
  *
- * Wraps `runSubprocess` to spawn individual swarm agents with full tool access.
- * Each agent runs in the swarm workspace with its task instructions as the user prompt.
+ * Each agent runs with its task instructions as the user prompt.
  *
  * ## Extensibility
  *
@@ -10,7 +9,7 @@
  * strategies (e.g. remote agents, HTTP-triggered agents) without modifying
  * the pipeline controller.
  */
-import * as path from "node:path";
+
 import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
 import type {
 	AgentDefinition,
@@ -20,14 +19,12 @@ import type {
 	Settings,
 	SingleResult,
 } from "@oh-my-pi/pi-coding-agent";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
-import { createStreamProgressHandler } from "../render/streaming";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
+
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -39,10 +36,9 @@ const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 /**
  * Injectable agent execution strategy.
  *
- * The default implementation (`SubprocessAgentExecutor`) spawns a local
- * subprocess via `runSubprocess`. Callers can inject a custom executor
- * through `SwarmExecutorOptions.executor` to support remote agents,
- * sandboxed environments, or testing mocks.
+ * The default path uses AgentRuntime.spawn() in-process.
+ * Callers can inject a custom executor through SwarmExecutorOptions.executor
+ * to support remote agents, sandboxed environments, or testing mocks.
  */
 export interface AgentExecutor {
 	execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult>;
@@ -65,24 +61,23 @@ export interface SwarmExecutorOptions {
 	 */
 	timeoutMs?: number;
 	/**
-	 * Callback invoked after the subprocess has started.
+	 * Callback invoked when the agent starts.
 	 * Receives an AbortController that the caller can use to
 	 * terminate the agent externally (e.g. on pipeline abort).
 	 */
 	onStarted?: (controller: AbortController) => void;
 	/**
-	 * Custom executor override. When provided the pipeline uses this
-	 * instead of the default `SubprocessAgentExecutor`.
+	 * Custom executor override. When provided the pipeline delegates
+	 * agent execution to this executor.
 	 */
 	executor?: AgentExecutor;
 	/**
-	 * Phase A2: v3 AgentRuntime for in-process agent spawning.
-	 * When provided, agents are spawned via {@link AgentRuntime.spawn}
-	 * instead of the legacy subprocess-based runSubprocess.
+	 * v3 AgentRuntime for in-process agent spawning.
+	 * Required for swarm agent execution.
 	 */
 	runtime?: AgentRuntime;
 	/**
-	 * Optional tool hooks passed through to the subprocess's AgentLoopConfig.
+	 * Optional tool hooks passed through to the runtime.
 	 * beforeToolCall can block write/edit/bash calls (e.g. deliberation phase).
 	 * afterToolCall is used for lock release coordination.
 	 */
@@ -97,47 +92,19 @@ export interface SwarmExecutorOptions {
 	agentOverrides?: Partial<AgentDefinition>;
 	/** Optional activity logger for SSE streaming output. */
 	activityLogger?: ActivityLogger;
-	/** Optional: transform context hook forwarded to runSubprocess. */
+	/** Optional: transform context hook. */
 	transformContext?: (messages: unknown[], signal?: AbortSignal) => Promise<unknown>;
-	/** Optional: after-tool-call hook forwarded to runSubprocess. */
+	/** Optional: after-tool-call hook. */
 	afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 }
 
-// ============================================================================
-// Default executor — spawns a local SatoPi subprocess
-// ============================================================================
+
 
 /**
- * Default agent executor: spawns a local SatoPi subprocess.
+ * Execute a single swarm agent.
  *
- * The agent receives:
- * - System prompt: built from role + extra_context
- * - User prompt (task): the full task instructions from the YAML
- * - Working directory: the swarm workspace
- * - Tool access: configurable via SwarmAgent.allowedTools / blockedTools
- */
-export class SubprocessAgentExecutor implements AgentExecutor {
-	#runtime?: AgentRuntime;
-
-	constructor(runtime?: AgentRuntime) {
-		this.#runtime = runtime;
-	}
-
-	async execute(agent: SwarmAgent, index: number, options: SwarmExecutorOptions): Promise<SingleResult> {
-		return executeSwarmAgent(agent, index, {
-			...options,
-			runtime: options.runtime ?? this.#runtime,
-		});
-	}
-}
-
-/** Shared singleton to avoid re-allocating. */
-const defaultExecutor = new SubprocessAgentExecutor();
-
-/**
- * Execute a single swarm agent as a SatoPi subagent.
- *
- * Used by both SubprocessAgentExecutor and PipelineController.
+ * Delegates to a custom AgentExecutor if provided, otherwise uses
+ * AgentRuntime.spawn() via executeWithRuntime().
  */
 export async function executeSwarmAgent(
 	agent: SwarmAgent,
@@ -145,158 +112,20 @@ export async function executeSwarmAgent(
 	options: SwarmExecutorOptions,
 ): Promise<SingleResult> {
 	// Delegate to custom executor if provided.
-	// Use instanceof rather than reference equality — a new SubprocessAgentExecutor()
-	// is still the default type and would otherwise cause infinite recursion.
-	if (options.executor && !(options.executor instanceof SubprocessAgentExecutor)) {
+	if (options.executor) {
 		return options.executor.execute(agent, index, options);
 	}
 
-	const {
-		workspace,
-		swarmName,
-		iteration,
-		modelOverride,
-		signal,
-		onProgress,
-		modelRegistry,
-		settings,
-		stateTracker,
-		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
-		onStarted,
-		toolHooks,
-		agentOverrides,
-		activityLogger,
-		runtime,
-	} = options;
+	const { runtime } = options;
 
-	// Phase A2: Use AgentRuntime.spawn() when runtime is provided.
-	if (runtime) {
-		return executeWithRuntime(agent, index, options, runtime);
+	if (!runtime) {
+		throw new Error("AgentRuntime is required for swarm agent execution");
 	}
 
-	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
-
-	// P1-5: Pass tool restrictions from SwarmAgent schema to AgentDefinition.
-	const agentDef: AgentDefinition = {
-		name: agent.name,
-		description: `Swarm agent: ${agent.role}`,
-		systemPrompt: buildSystemPrompt(agent),
-		source: "project" as AgentSource,
-		...(agent.allowedTools ? { tools: agent.allowedTools } : {}),
-		...(agent.blockedTools ? { blockedTools: agent.blockedTools } : {}),
-		// Merge caller-provided AgentDefinition overrides (systemPrompt, tools, blockedTools, source, etc.).
-		...agentOverrides,
-	};
-
-	// Build a per-agent timeout controller and combine with the caller's signal.
-	// The caller can terminate the agent via onStarted's controller.
-	const agentController = new AbortController();
-	const effectiveSignal =
-		signal && timeoutMs > 0 ? AbortSignal.any([signal, agentController.signal]) : (signal ?? agentController.signal);
-
-	// Arm the timeout if enabled.
-	let timeoutId: ReturnType<typeof setTimeout> | undefined;
-	if (timeoutMs > 0) {
-		timeoutId = setTimeout(() => {
-			agentController.abort(
-				new DOMException(`Agent "${agent.name}" timed out after ${timeoutMs}ms`, "TimeoutError"),
-			);
-		}, timeoutMs);
-	}
-
-	// Notify the caller so they can abort us on pipeline shutdown.
-	onStarted?.(agentController);
-
-	await stateTracker.updateAgent(agent.name, {
-		status: "running",
-		iteration,
-		startedAt: Date.now(),
-	});
-	await stateTracker.appendLog(agent.name, `Starting iteration ${iteration}`);
-
-	// SSE streaming: signal the frontend that this agent has started producing output.
-	const streamMsgId = `${agentId}-${Date.now()}`;
-	activityLogger?.logStreamStart(streamMsgId, agent.name);
-
-	try {
-		const result = await runSubprocess({
-			cwd: workspace,
-			agent: agentDef,
-			task: agent.task,
-			index,
-			id: agentId,
-			modelOverride,
-			signal: effectiveSignal,
-			maxRuntimeMs: timeoutMs > 0 ? timeoutMs : undefined,
-			onProgress: activityLogger
-				? createStreamProgressHandler(activityLogger, streamMsgId, agent.name, progress =>
-						onProgress?.(agent.name, progress),
-					)
-				: (progress: AgentProgress) => onProgress?.(agent.name, progress),
-			modelRegistry,
-			settings,
-			enableLsp: false,
-			artifactsDir: path.join(stateTracker.swarmDir, "context"),
-			keepAlive: false,
-			beforeToolCall: toolHooks?.beforeToolCall,
-			afterToolCall: options.afterToolCall ?? toolHooks?.afterToolCall,
-			transformContext: options.transformContext,
-		});
-
-		const status = result.exitCode === 0 ? ("completed" as const) : ("failed" as const);
-		await stateTracker.updateAgent(agent.name, {
-			status,
-			completedAt: Date.now(),
-			error: result.error,
-		});
-		await stateTracker.appendLog(
-			agent.name,
-			`Iteration ${iteration} ${status}${result.error ? `: ${result.error}` : ""}`,
-		);
-
-		activityLogger?.logStreamEnd(streamMsgId, agent.name, result.output, result.thinking);
-		return result;
-	} catch (err) {
-		const error = err instanceof Error ? err.message : String(err);
-		// Distinguish timeout from other failures.
-		const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
-		const status = isTimeout ? ("failed" as const) : ("failed" as const);
-		await stateTracker.updateAgent(agent.name, {
-			status,
-			completedAt: Date.now(),
-			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
-		});
-		await stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`);
-		activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
-
-		const failResult: SingleResult = {
-			index,
-			id: agentId,
-			agent: agent.name,
-			agentSource: "project" as AgentSource,
-			task: agent.task,
-			exitCode: 1,
-			output: "",
-			stderr: error,
-			truncated: false,
-			durationMs: 0,
-			tokens: 0,
-			requests: 0,
-			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
-		};
-		return failResult;
-	} finally {
-		if (timeoutId) clearTimeout(timeoutId);
-	}
+	return executeWithRuntime(agent, index, options, runtime);
 }
 
-function buildSystemPrompt(agent: SwarmAgent): string {
-	const parts = [`You are a ${agent.role}.`];
-	if (agent.extraContext) {
-		parts.push(agent.extraContext);
-	}
-	return parts.join("\n\n");
-}
+
 
 /**
  * Execute a swarm agent via AgentRuntime.spawn() (v3 in-process path).

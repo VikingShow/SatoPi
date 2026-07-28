@@ -212,7 +212,9 @@ export interface CustomTool<TParams extends TSchema = TSchema, TDetails = any> {
 	/** Original MCP tool name for discovery/search metadata. */
 	mcpToolName?: string;
 
-	/** Capability tier declaration used by approval gates. Omitted means "exec". */
+	/** Capability tier used by approval gates. System-assigned by {@link CustomToolAdapter};
+	 *  not meant to be self-declared by tool authors. Omitted defaults to "exec" (most
+	 *  restrictive). MCP tools in tool-bridge.ts hard-code "write". */
 	approval?: ToolApproval;
 
 	/** Lines appended after the standard approval prompt header. */
