@@ -299,6 +299,7 @@ import {
 import { invalidateHostMetadata } from "../ssh/connection-manager";
 import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
 import { GraphRunner } from "../swarm/graph/graph-runner";
+import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import {
 	AUTO_THINKING,
@@ -1736,6 +1737,7 @@ export class AgentSession {
 	#advisorRecorderClosed: Promise<void> = Promise.resolve();
 	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
 	#embeddedSwarm: ISwarmOrchestrator | null = null;
+	#swarmServices = new Map<string, SessionServices>();
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -17166,5 +17168,50 @@ export class AgentSession {
 	 */
 	get extensionRunner(): ExtensionRunner | undefined {
 		return this.#extensionRunner;
+	}
+
+	// =========================================================================
+	// Swarm Session Management
+	// =========================================================================
+
+	/**
+	 * Create a new swarm session with the full service graph wired up.
+	 * Delegates to the swarm/ session factory for actual construction.
+	 */
+	static async createSwarmSession(
+		shared: SharedServices,
+		factory: SessionFactory,
+		name: string,
+	): Promise<SessionServices> {
+		const { createSwarmSession } = await import("../swarm/session/create-swarm-session");
+		return createSwarmSession(shared, factory, name);
+	}
+
+	/** Register an active swarm session for disposal tracking. */
+	registerSwarmSession(session: SessionServices): void {
+		this.#swarmServices.set(session.name, session);
+	}
+
+	/** Look up an active swarm session by name. */
+	getSwarmSession(name: string): SessionServices | undefined {
+		return this.#swarmServices.get(name);
+	}
+
+	/** Destroy a single swarm session and remove it from the registry. */
+	async destroySwarmSession(name: string): Promise<void> {
+		const session = this.#swarmServices.get(name);
+		if (!session) return;
+		const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
+		await destroySwarmSession(session, (this.settings.get("workspace") as string) ?? process.cwd());
+		this.#swarmServices.delete(name);
+	}
+
+	/** Destroy all active swarm sessions. */
+	async destroyAllSwarmSessions(): Promise<void> {
+		for (const [_name, session] of this.#swarmServices) {
+			const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
+			await destroySwarmSession(session, (this.settings.get("workspace") as string) ?? process.cwd());
+		}
+		this.#swarmServices.clear();
 	}
 }

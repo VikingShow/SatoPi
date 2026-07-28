@@ -7,6 +7,34 @@
  */
 
 import { detectCycles } from "../core/dag";
+import {
+	type GateMode,
+	type GateResult,
+	type GateSpec,
+	type GateType,
+	normalizeGateSpec,
+	normalizeRetrySpec,
+	type RawGateSpec,
+	type RawRetrySpec,
+	type RetryOnFailure,
+	type RetrySpec,
+	type RetryStrategy,
+	VALID_GATE_MODES,
+	VALID_GATE_TYPES,
+} from "./schema-gate";
+
+// Re-export gate types so existing imports from "./schema" still work.
+export type {
+	GateMode,
+	GateResult,
+	GateSpec,
+	GateType,
+	RawGateSpec,
+	RawRetrySpec,
+	RetryOnFailure,
+	RetrySpec,
+	RetryStrategy,
+};
 
 // ============================================================================
 // Discriminated unions
@@ -17,18 +45,6 @@ export type NodeType = "script" | "stage" | "curtain" | "custom";
 
 /** Execution strategy for wave scheduling. */
 export type Strategy = "waves" | "dynamic";
-
-/** Gate types map to built-in verification steps. */
-export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script";
-
-/** When the gate check should run. */
-export type GateMode = "always" | "on-failure" | "never";
-
-/** Retry backoff strategy. */
-export type RetryStrategy = "exponential" | "constant" | "linear";
-
-/** What happens when all retry attempts are exhausted. */
-export type RetryOnFailure = "block" | "skip" | "ask-human";
 
 // ============================================================================
 // Core types
@@ -43,34 +59,6 @@ export interface NodeOutput {
 	id: string;
 	/** Human-readable description of the output. */
 	description?: string;
-}
-
-/**
- * Gate specification — a verification gate that runs before/after a node.
- */
-export interface GateSpec {
-	/** Built-in gate type or custom script gate. */
-	type: GateType;
-	/** Shell command for compile-check/test/lsp/script gates. */
-	command?: string;
-	/** Prompt text for human-review gates. */
-	prompt?: string;
-	/** Choices presented to the human reviewer. */
-	options?: string[];
-	/** When the gate should trigger (default: "always"). */
-	mode?: GateMode;
-}
-
-/** Retry configuration for node execution failures. */
-export interface RetrySpec {
-	/** Maximum number of retry attempts (>= 1). */
-	maxAttempts: number;
-	/** Backoff strategy for inter-attempt delays. */
-	strategy: RetryStrategy;
-	/** Base delay in milliseconds before the first retry. */
-	baseDelayMs: number;
-	/** Behavior when all attempts are exhausted. */
-	onFailure: RetryOnFailure;
 }
 
 /**
@@ -267,20 +255,6 @@ export interface NodeResult {
 	agentResults?: Array<{ agentId: string; output: string; error?: string }>;
 }
 
-/**
- * Outcome of gate validation after node execution.
- */
-export interface GateResult {
-	/** Whether all gates passed. */
-	passed: boolean;
-	/** Descriptions of failed gates. */
-	failures: string[];
-	/** Whether the human must review before proceeding. */
-	humanReviewRequired: boolean;
-	/** Recommended retry strategy based on failure type. */
-	retryStrategy?: "immediate" | "fixup" | "human";
-}
-
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
@@ -366,21 +340,6 @@ interface RawNodeOutput {
 	description?: string;
 }
 
-interface RawGateSpec {
-	type: string;
-	command?: string;
-	prompt?: string;
-	options?: string[];
-	mode?: string;
-}
-
-interface RawRetrySpec {
-	max_attempts: number;
-	strategy: string;
-	base_delay_ms: number;
-	on_failure: string;
-}
-
 interface RawGraphNode {
 	label: string;
 	description: string;
@@ -441,62 +400,11 @@ interface RawGraphDefinition {
 
 const VALID_NODE_TYPES: Record<string, true> = { script: true, stage: true, curtain: true, custom: true };
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
-const VALID_GATE_TYPES: Record<string, true> = {
-	"compile-check": true,
-	test: true,
-	lsp: true,
-	"human-review": true,
-	script: true,
-};
-const VALID_GATE_MODES: Record<string, true> = { always: true, "on-failure": true, never: true };
-const VALID_RETRY_STRATEGIES: Record<string, true> = { exponential: true, constant: true, linear: true };
-const VALID_ON_FAILURE: Record<string, true> = { block: true, skip: true, "ask-human": true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;
 
 // ============================================================================
 // Parsing helpers
 // ============================================================================
-
-function normalizeRetrySpec(raw: RawRetrySpec): RetrySpec {
-	if (raw.max_attempts < 1) {
-		throw new Error("retry.max_attempts must be >= 1");
-	}
-	if (!VALID_RETRY_STRATEGIES[raw.strategy]) {
-		throw new Error(
-			`Invalid retry strategy '${raw.strategy}'. Must be one of: ${Object.keys(VALID_RETRY_STRATEGIES).join(", ")}`,
-		);
-	}
-	if (raw.base_delay_ms < 0) {
-		throw new Error("retry.base_delay_ms must be >= 0");
-	}
-	if (!VALID_ON_FAILURE[raw.on_failure]) {
-		throw new Error(
-			`Invalid on_failure '${raw.on_failure}'. Must be one of: ${Object.keys(VALID_ON_FAILURE).join(", ")}`,
-		);
-	}
-	return {
-		maxAttempts: raw.max_attempts,
-		strategy: raw.strategy as RetryStrategy,
-		baseDelayMs: raw.base_delay_ms,
-		onFailure: raw.on_failure as RetryOnFailure,
-	};
-}
-
-function normalizeGateSpec(raw: RawGateSpec): GateSpec {
-	if (!VALID_GATE_TYPES[raw.type]) {
-		throw new Error(`Invalid gate type '${raw.type}'. Must be one of: ${Object.keys(VALID_GATE_TYPES).join(", ")}`);
-	}
-	if (raw.mode !== undefined && !VALID_GATE_MODES[raw.mode]) {
-		throw new Error(`Invalid gate mode '${raw.mode}'. Must be one of: ${Object.keys(VALID_GATE_MODES).join(", ")}`);
-	}
-	return {
-		type: raw.type as GateType,
-		command: raw.command,
-		prompt: raw.prompt,
-		options: raw.options,
-		mode: raw.mode as GateMode | undefined,
-	};
-}
 
 function normalizeNodeOutput(raw: RawNodeOutput): NodeOutput {
 	if (!raw.id || typeof raw.id !== "string") {

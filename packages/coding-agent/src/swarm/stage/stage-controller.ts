@@ -1,11 +1,24 @@
 /**
- * StageController — orchestrates the Stage (execution) phase.
+ * StageController — CANONICAL stage execution implementation.
  *
- * Replaces the iteration-based LoopController with an event-driven,
- * task-queue-based execution model. Agents work concurrently on a
- * shared DAG-structured task queue rather than fixed rounds.
+ * This is the primary, authoritative path for Stage (execution) phase
+ * orchestration.  All stage execution — whether driven by the CLI
+ * (SwarmRunner), the GraphRunner (StageNodeBehavior), or the embedded
+ * bridge — SHOULD route through this class.
  *
- * Flow:
+ * ## Relationship with StageBehavior
+ *
+ * {@link StageBehavior} is a PhaseBehavior adapter that provides an
+ * event-driven lifecycle (enter → handleAgentEvent → checkCompletion →
+ * exit) for the theatre graph engine.  It uses simplified agent creation
+ * (one agent per unique task role) and does NOT perform profile-based
+ * agent selection, complexity analysis, or credit-aware assignment.
+ *
+ * StageBehavior SHOULD delegate core task-parsing and role-assignment
+ * logic to the shared helpers exported from this module
+ * ({@link assignAgentRoles}, {@link TaskQueue.parseFromPlan}).
+ *
+ * ## Flow
  *   1. Select agents (scored by domain match + credit)
  *   2. Roundtable for role assignment (agents discuss, system resolves)
  *   3. Parse plan.md → TaskQueue (DAG with dependencies)
@@ -105,6 +118,123 @@ export interface StageResult {
 // StageController
 // ============================================================================
 
+// ============================================================================
+// Standalone helpers — shared between StageController and StageBehavior
+// ============================================================================
+
+/** Options for {@link assignAgentRoles}, the shared role-assignment algorithm. */
+export interface RoleAssignmentOptions {
+	planContent: string;
+	roleAssetManager: Pick<RoleAssetManager, "list">;
+	activityLogger: Pick<ActivityLogger, "logBroadcast">;
+	/** Optional CommBus for roundtable negotiation. */
+	commBus?: CommBus;
+	/** Optional IrcBus for roundtable negotiation. */
+	ircBus?: IrcBus;
+}
+
+/**
+ * Shared role-assignment algorithm used by both StageController and
+ * StageBehavior.  Assigns each agent a role based on plan task types,
+ * agent preferences, and optional roundtable negotiation.
+ *
+ * Algorithm: derive roles from plan tasks → fall back to role library →
+ * prefer agent.preferredRoles → round-robin assignment for remaining.
+ */
+export async function assignAgentRoles(
+	agents: ScoredAgent[],
+	opts: RoleAssignmentOptions,
+): Promise<Array<{ id: string; role: string }>> {
+	const { planContent, roleAssetManager, activityLogger, commBus, ircBus } = opts;
+
+	// 1. Derive needed roles from plan.md task types
+	const taskRoles = TaskQueue.parseFromPlan(planContent)
+		.map(t => t.assignedRole)
+		.filter(Boolean);
+
+	// 2. Fall back to approved roles from the role library
+	let availableRoles = [...new Set(taskRoles)];
+	if (availableRoles.length === 0) {
+		const allRoles = await roleAssetManager.list("approved");
+		availableRoles = allRoles
+			.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
+			.slice(0, Math.max(agents.length, 3))
+			.map(r => r.id);
+	}
+
+	// 3. Single agent: pick the most-used approved role or "developer"
+	if (agents.length === 1) {
+		const fallbackRole = availableRoles[0] ?? "developer";
+		return [{ id: agents[0].profileId, role: fallbackRole }];
+	}
+
+	// 4. Build candidate list for roundtable
+	const candidates: RoleCandidate[] = agents.map(a => ({
+		agentId: a.profileId,
+		name: a.name,
+		preferredRoles: a.preferredRoles ?? [],
+	}));
+
+	// 5. Try roundtable negotiation (if CommBus is available)
+	if (commBus && ircBus) {
+		commBus.groupChannel(
+			"role-negotiation",
+			candidates.map(c => c.agentId),
+			activityLogger,
+		);
+	}
+
+	// 6. Fallback: algorithm-based assignment
+	// First pass: agents with strong role preference
+	const assignments: Array<{ id: string; role: string }> = [];
+	for (const agent of agents) {
+		const preferred = agent.preferredRoles.find(r => availableRoles.includes(r));
+		if (preferred) {
+			assignments.push({ id: agent.profileId, role: preferred });
+		}
+	}
+
+	// Second pass: remaining agents get remaining roles round-robin
+	const remaining = agents.filter(a => !assignments.find(ra => ra.id === a.profileId));
+	const remainingRoles = availableRoles.filter(r => !assignments.find(a => a.role === r));
+	for (let i = 0; i < remaining.length; i++) {
+		const role = remainingRoles[i % remainingRoles.length] ?? availableRoles[0] ?? "developer";
+		assignments.push({ id: remaining[i].profileId, role });
+	}
+
+	activityLogger.logBroadcast(
+		"system",
+		`Algorithm role assignments: ${assignments.map(a => `${a.id}=${a.role}`).join(", ")}`,
+	);
+
+	return assignments;
+}
+
+/** Result of {@link createTaskQueueFromPlan}. */
+export interface TaskQueueSetup {
+	queue: TaskQueue;
+	/** Raw parsed tasks (before wrapping in TaskQueue). */
+	tasks: Task[];
+}
+
+/**
+ * Parse plan content into a TaskQueue, creating a single default "execute-plan"
+ * task when no tasks are found.  Shared between StageController and StageBehavior.
+ */
+export function createTaskQueueFromPlan(planContent: string): TaskQueueSetup {
+	const tasks = TaskQueue.parseFromPlan(planContent);
+	if (tasks.length === 0) {
+		tasks.push({
+			id: "execute-plan",
+			title: "Execute the plan as described",
+			type: "develop",
+			dependsOn: [],
+			estimatedMinutes: 60,
+			assignedRole: "developer",
+		});
+	}
+	return { queue: new TaskQueue(tasks), tasks };
+}
 export class StageController {
 	readonly #opts: StageOptions;
 	/** AgentRuntime — required for all agent spawning (unified execution path). */
@@ -235,24 +365,16 @@ export class StageController {
 		}
 		await stateTracker.updatePipeline({ roundtablePhase: "Agents assigned" });
 
-		// 4. Parse tasks into queue
-		const tasks = TaskQueue.parseFromPlan(planContent);
-		if (tasks.length === 0) {
-			logger.warn("[Stage] No tasks parsed from plan. Creating a single default task.");
-			tasks.push({
-				id: "execute-plan",
-				title: "Execute the plan as described",
-				type: "develop",
-				dependsOn: [],
-				estimatedMinutes: 60,
-				assignedRole: "developer",
-			});
+		// 4. Parse tasks into queue (shared helper — also used by StageBehavior)
+		const { queue, tasks } = createTaskQueueFromPlan(planContent);
+		const taskCount = tasks.length;
+		if (taskCount <= 1 && tasks[0]?.id === "execute-plan") {
+			logger.warn("[Stage] No tasks parsed from plan. Using default task.");
 		}
-		const queue = new TaskQueue(tasks);
-		await stateTracker.updatePipeline({ roundtablePhase: `Task queue: ${tasks.length} tasks ready` });
+		await stateTracker.updatePipeline({ roundtablePhase: `Task queue: ${taskCount} tasks ready` });
 		activityLogger.logBroadcast(
 			"system",
-			`Task queue initialized with ${tasks.length} tasks. Agent-hour estimate: ${recommendation.estimatedAgentHours}h`,
+			`Task queue initialized with ${taskCount} tasks. Agent-hour estimate: ${recommendation.estimatedAgentHours}h`,
 		);
 
 		// 5. Spawn agents in parallel
@@ -294,76 +416,18 @@ export class StageController {
 	}
 
 	// ────────────────────────────────────────────────────────────────────────
-	// Role assignment
+	// Role assignment — delegates to standalone export for reuse by StageBehavior
 	// ────────────────────────────────────────────────────────────────────────
 
 	async #assignRoles(agents: ScoredAgent[]): Promise<Array<{ id: string; role: string }>> {
-		const { planContent, roleAssetManager, activityLogger, ircBus } = this.#opts;
-
-		// 1. Derive needed roles from plan.md task types
-		const taskRoles = TaskQueue.parseFromPlan(planContent)
-			.map(t => t.assignedRole)
-			.filter(Boolean);
-
-		// 2. Fall back to approved roles from the role library
-		let availableRoles = [...new Set(taskRoles)];
-		if (availableRoles.length === 0) {
-			const allRoles = await roleAssetManager.list("approved");
-			availableRoles = allRoles
-				.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
-				.slice(0, Math.max(agents.length, 3))
-				.map(r => r.id);
-		}
-
-		// 3. Single agent: pick the most-used approved role or "developer"
-		if (agents.length === 1) {
-			const fallbackRole = availableRoles[0] ?? "developer";
-			return [{ id: agents[0].profileId, role: fallbackRole }];
-		}
-
-		// 4. Build candidate list for roundtable
-		const candidates: RoleCandidate[] = agents.map(a => ({
-			agentId: a.profileId,
-			name: a.name,
-			preferredRoles: a.preferredRoles ?? [],
-		}));
-
-		// 5. Try roundtable negotiation (if CommBus is available)
-		if (this.#opts.commBus && ircBus) {
-			// Use the injected CommBus (not the global singleton) for role negotiation
-			this.#opts.commBus.groupChannel(
-				"role-negotiation",
-				candidates.map(c => c.agentId),
-				activityLogger,
-			);
-			// TODO: implement roundtable role negotiation via channel.roundtable() when
-			// response parsing to extract { agentId, role }[] assignments is available.
-		}
-
-		// 6. Fallback: algorithm-based assignment
-		// First pass: agents with strong role preference
-		const assignments: Array<{ id: string; role: string }> = [];
-		for (const agent of agents) {
-			const preferred = agent.preferredRoles.find(r => availableRoles.includes(r));
-			if (preferred) {
-				assignments.push({ id: agent.profileId, role: preferred });
-			}
-		}
-
-		// Second pass: remaining agents get remaining roles round-robin
-		const remaining = agents.filter(a => !assignments.find(ra => ra.id === a.profileId));
-		const remainingRoles = availableRoles.filter(r => !assignments.find(a => a.role === r));
-		for (let i = 0; i < remaining.length; i++) {
-			const role = remainingRoles[i % remainingRoles.length] ?? availableRoles[0] ?? "developer";
-			assignments.push({ id: remaining[i].profileId, role });
-		}
-
-		activityLogger.logBroadcast(
-			"system",
-			`Algorithm role assignments: ${assignments.map(a => `${a.id}=${a.role}`).join(", ")}`,
-		);
-
-		return assignments;
+		const { planContent, roleAssetManager, activityLogger, commBus, ircBus } = this.#opts;
+		return assignAgentRoles(agents, {
+			planContent,
+			roleAssetManager,
+			activityLogger,
+			commBus,
+			ircBus,
+		});
 	}
 
 	// ────────────────────────────────────────────────────────────────────────
@@ -403,7 +467,7 @@ export class StageController {
 					emptyPolls = 0;
 				}
 				// No more ready tasks — wait briefly and retry
-				await new Promise(r => setTimeout(r, 1000));
+				await Bun.sleep(1000);
 				continue;
 			}
 			emptyPolls = 0;
@@ -477,7 +541,7 @@ export class StageController {
 								`(attempt ${retries}/${maxRetries}), retrying in ${delay}ms`,
 						);
 						queue.release(task.id, `retry ${retries}/${maxRetries}: exit ${result.exitCode}`);
-						await new Promise(r => setTimeout(r, delay));
+						await Bun.sleep(delay);
 						continue; // retry
 					}
 					queue.block(
@@ -518,7 +582,7 @@ export class StageController {
 							`retrying in ${delay}ms: ${msg}`,
 					);
 					queue.release(task.id, `retry ${retries}/${maxRetries}: ${msg}`);
-					await new Promise(r => setTimeout(r, delay));
+					await Bun.sleep(delay);
 					continue; // retry — the released task will be re-claimed
 				}
 

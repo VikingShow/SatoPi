@@ -100,10 +100,11 @@ export interface SwarmExecutorOptions {
 /**
  * Execute a single swarm agent.
  *
- * Delegates to a custom AgentExecutor if provided, otherwise uses
- * AgentRuntime.spawn() via executeWithRuntime().
+ * The runtime parameter MUST be provided — the legacy subprocess fallback
+ * has been removed (v3). Throws if runtime is not provided.
  */
-export async function executeSwarmAgent(
+// biome-ignore lint/correctness/noUnusedVariables: internal, used by tests
+async function executeSwarmAgent(
 	agent: SwarmAgent,
 	index: number,
 	options: SwarmExecutorOptions,
@@ -157,7 +158,7 @@ async function executeWithRuntime(
 	const streamMsgId = `${agentId}-${Date.now()}`;
 	activityLogger?.logStreamStart(streamMsgId, agent.name);
 
-	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	let timeoutId: Timer | undefined;
 
 	try {
 		const spec: AgentSpec = {

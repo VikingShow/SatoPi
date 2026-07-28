@@ -52,9 +52,9 @@ export class AgentHandle {
 		this.#session = session;
 
 		// Build completion promise — resolved when the agent finishes
-		this.#completionPromise = new Promise<SingleResult>(resolve => {
-			this.#resolveCompletion = resolve;
-		});
+		const { promise: completionPromise, resolve: resolveCompletion } = Promise.withResolvers<SingleResult>();
+		this.#completionPromise = completionPromise;
+		this.#resolveCompletion = resolveCompletion;
 
 		// Listen for agent end events
 		this.#wireCompletionTracking();
@@ -134,9 +134,8 @@ export class AgentHandle {
 	 * within a timeout (300s default).
 	 */
 	async wait(timeoutMs = 300_000): Promise<SingleResult> {
-		const timeout = new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`Agent "${this.id}" timed out after ${timeoutMs}ms`)), timeoutMs),
-		);
+		const { promise: timeout, reject: timeoutReject } = Promise.withResolvers<never>();
+		setTimeout(() => timeoutReject(new Error(`Agent "${this.id}" timed out after ${timeoutMs}ms`)), timeoutMs);
 
 		const result = await Promise.race([this.#completionPromise, timeout]);
 		this.#completed = true;
@@ -265,9 +264,9 @@ export class AgentHandle {
 				if (buffer.length > 0) {
 					yield buffer.shift()!;
 				} else {
-					const result = await new Promise<IteratorResult<string>>(resolve => {
-						resolveNext = resolve;
-					});
+					const { promise: iterPromise, resolve: iterResolve } = Promise.withResolvers<IteratorResult<string>>();
+					resolveNext = iterResolve;
+					const result = await iterPromise;
 					if (result.done) break;
 					yield result.value;
 				}

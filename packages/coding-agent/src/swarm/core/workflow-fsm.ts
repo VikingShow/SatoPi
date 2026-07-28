@@ -309,7 +309,7 @@ export class WorkflowFsm {
 	#humanReject: ((reason: Error) => void) | null = null;
 
 	/** Active timed-transition timer handle. */
-	#timer: ReturnType<typeof setTimeout> | null = null;
+	#timer: Timer | null = null;
 
 	/**
 	 * @param stateTracker  Existing StateTracker instance for persistence.

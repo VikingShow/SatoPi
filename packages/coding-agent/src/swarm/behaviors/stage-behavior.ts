@@ -1,18 +1,34 @@
 /**
- * StageBehavior — PhaseBehavior implementation for the Stage (execution) phase.
+ * StageBehavior — PhaseBehavior adapter for the Stage (execution) phase.
  *
- * Wraps the StageController execution logic into a pluggable behavior that
- * the orchestrator can drive through the standard PhaseBehavior lifecycle.
+ * This is the event-driven PhaseBehavior wrapper used by the theatre
+ * graph engine (GraphRunner → PhaseBehaviorNodeAdapter).  It provides
+ * an enter → handleAgentEvent → checkCompletion → exit lifecycle rather
+ * than the monolithic blocking run() of {@link StageController}.
+ *
+ * ## Relationship with StageController
+ *
+ * {@link StageController} is the **canonical** stage execution
+ * implementation.  It performs profile-based agent selection, complexity
+ * analysis, credit-aware role assignment, and retry-with-backoff task
+ * execution — the full-featured path used by SwarmRunner, EmbeddedBridge,
+ * and StageNodeBehavior.
+ *
+ * StageBehavior is a **simplified adapter** that:
+ *   - Creates one agent per unique task role (no profile selection)
+ *   - Delegates task-queue setup to {@link createTaskQueueFromPlan}
+ *   - Uses AgentRuntime + CommBus + TaskQueue directly for the
+ *     event-driven lifecycle that the graph engine requires
+ *
+ * Both paths share {@link createTaskQueueFromPlan} and
+ * {@link assignAgentRoles} exported from stage-controller.ts.
  *
  * Data flow:
- *   1. enter() → parse plan → spawn worker agents → create swarm channel
+ *   1. enter() → parse plan → create channel → spawn worker agents
  *   2. handleHumanMessage() → broadcast steering directives to all workers
  *   3. handleAgentEvent() → track task completion, detect conflicts
  *   4. checkCompletion() → detect when all agents have finished
  *   5. exit() → clean up agent handles, task queue, and channel
- *
- * This behavior does NOT import StageController — it uses AgentRuntime,
- * CommBus, TaskQueue, and HookPipeline directly.
  */
 
 import { logger } from "@oh-my-pi/pi-utils";

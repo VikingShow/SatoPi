@@ -75,7 +75,8 @@ export class SwarmSessionManager {
 	/** Session data dir: .stp/sessions/swarm-{name}/.stp/sessions/ */
 	readonly #sessionDir: string;
 
-	private constructor(session: SessionManager, swarmDir: string, sessionDir: string) {
+	/** @internal Use static factory methods: {@link create}, {@link open}, {@link openOrCreate}. */
+	constructor(session: SessionManager, swarmDir: string, sessionDir: string) {
 		this.#session = session;
 		this.#swarmDir = swarmDir;
 		this.#sessionDir = sessionDir;
@@ -263,7 +264,7 @@ export class SwarmSessionManager {
 				error: String(err),
 			});
 			try {
-				const oldFilePath = (oldSession as any).getSessionFile?.() as string | undefined;
+				const oldFilePath = oldSession.getSessionFile();
 				if (oldFilePath) {
 					const reopened = await SwarmSessionManager.open(oldFilePath, this.#swarmDir);
 					// SatoPi: within the same class body, JavaScript #private fields
@@ -383,12 +384,12 @@ export class SwarmSessionManager {
 
 	/** Get the session header including parentSession information. */
 	getHeader(): Record<string, unknown> | null {
-		return (this.#session as any).getHeader?.() ?? null;
+		return this.#session.getHeader() ?? null;
 	}
 
 	/** Get the current session file path. */
 	getSessionFile(): string | undefined {
-		return (this.#session as any).getSessionFile?.();
+		return this.#session.getSessionFile();
 	}
 
 	/** Create a standalone session file from a specific branch point. */

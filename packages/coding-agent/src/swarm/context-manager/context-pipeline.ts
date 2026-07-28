@@ -125,7 +125,7 @@ export interface ContextSource {
  * ```
  */
 export class ContextPipeline {
-	private sources: ContextSource[] = [];
+	#sources: ContextSource[] = [];
 	#hookPipeline: HookPipeline | undefined;
 
 	constructor(hookPipeline?: HookPipeline) {
@@ -136,7 +136,7 @@ export class ContextPipeline {
 	 * Register a context source. Sources are sorted by priority on assemble.
 	 */
 	register(source: ContextSource): void {
-		this.sources.push(source);
+		this.#sources.push(source);
 	}
 
 	/**
@@ -151,7 +151,7 @@ export class ContextPipeline {
 	 * one failing source does not crash the pipeline.
 	 */
 	async assemble(spec: AgentSpecLike, phase: PhaseInfo, base: BuildContext): Promise<AssembledContext> {
-		const applicable = this.sources
+		const applicable = this.#sources
 			.filter(s => s.appliesTo(phase.phase, spec.role))
 			.sort((a, b) => a.priority - b.priority);
 
@@ -269,6 +269,6 @@ export class ContextPipeline {
 	 * Get registered sources for debugging.
 	 */
 	listSources(): ReadonlyArray<{ name: string; priority: number }> {
-		return this.sources.map(s => ({ name: s.name, priority: s.priority })).sort((a, b) => a.priority - b.priority);
+		return this.#sources.map(s => ({ name: s.name, priority: s.priority })).sort((a, b) => a.priority - b.priority);
 	}
 }

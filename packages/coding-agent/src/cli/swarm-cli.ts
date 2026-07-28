@@ -157,6 +157,7 @@ async function createSwarmServices(
 		} else {
 			// Legacy SwarmRunner with AgentRuntime — StageController uses
 			// runtime.spawn() instead of the legacy streamAgentOutput path.
+			process.stderr.write("WARNING: SwarmRunner is deprecated; prefer --engine graph (GraphRunner).\n");
 			runManager = new SwarmRunner({
 				modelRegistry: s.modelRegistry,
 				settings: s.settings,
@@ -272,6 +273,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			process.stderr.write(`Graph "${swarmName}" started.\n`);
 		} else {
 			process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
+			process.stderr.write("WARNING: SwarmRunner waitForCompletion is deprecated; prefer GraphRunner.\n");
 			await (session.runManager as SwarmRunner).waitForCompletion();
 			const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
 			if (curtainResult) {

@@ -4,6 +4,7 @@
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  * An AgentSpec describes WHAT to spawn — the AgentRuntime handles HOW.
  */
+import type { Chapter } from "../core/state";
 
 /**
  * Declarative specification for spawning an agent.
@@ -49,7 +50,7 @@ export interface AgentSpec {
 	 * correctly. When omitted, falls back to "stage" for backward
 	 * compatibility.
 	 */
-	phase?: import("../core/state").Chapter;
+	phase?: Chapter;
 
 	/**
 	 * Links this spec to a persistent agent identity in the AgentRegistry.

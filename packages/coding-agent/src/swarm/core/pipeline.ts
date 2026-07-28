@@ -175,6 +175,9 @@ export interface LoopPipelineHooks extends PipelineHooks {
 // Controller
 // ============================================================================
 
+/**
+ * @deprecated Use {@link GraphRunner} and {@link PhaseBehavior} instead.
+ */
 export class PipelineController {
 	#def: SwarmDefinition;
 	#waves: string[][];
@@ -193,12 +196,12 @@ export class PipelineController {
 	}
 
 	/** The swarm definition — accessible to subclasses like LoopController. */
-	protected get def(): SwarmDefinition {
+	get def(): SwarmDefinition {
 		return this.#def;
 	}
 
 	/** The state tracker — accessible to subclasses like LoopController. */
-	protected get stateTracker(): StateTracker {
+	get stateTracker(): StateTracker {
 		return this.#stateTracker;
 	}
 

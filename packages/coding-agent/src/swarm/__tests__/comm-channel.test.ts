@@ -19,8 +19,9 @@ import { IrcBus } from "../../irc/bus";
 import { CommBus } from "../comm-bus/comm-bus";
 import { CommChannel } from "../comm-bus/comm-channel";
 import { createEndpoint } from "../comm-bus/endpoint";
-import { jaccardSimilarity, runRoundtable, tokenize } from "../comm-bus/roundtable";
+import { runRoundtable } from "../comm-bus/roundtable";
 import { parseVote, runVote } from "../comm-bus/vote";
+import { jaccardSimilarity, tokenize } from "../core/convergence";
 import { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================

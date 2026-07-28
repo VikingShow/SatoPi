@@ -21,6 +21,7 @@ import { AgentRegistry } from "../../registry/agent-registry";
 import type { Tool } from "../../tools";
 import type { CommBus } from "../comm-bus/comm-bus";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
+import { jaccardSimilarity } from "../core/convergence.js";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentHandle } from "./agent-handle";
@@ -162,7 +163,7 @@ export class AgentRuntime {
 	 * @returns AgentHandle[] — each handle provides wait(), send(), abort(), outputStream()
 	 */
 	async spawn(specs: AgentSpec[]): Promise<AgentHandle[]> {
-		const handles = await Promise.all(specs.map(spec => this.spawnOne(spec)));
+		const handles = await Promise.all(specs.map(spec => this.#spawnOne(spec)));
 		return handles;
 	}
 
@@ -320,7 +321,7 @@ export class AgentRuntime {
 	 * 5. AgentLauncher.launch(launchContext)
 	 * 6. HookPipeline.trigger("agent:afterSpawn")
 	 */
-	private async spawnOne(spec: AgentSpec): Promise<AgentHandle> {
+	async #spawnOne(spec: AgentSpec): Promise<AgentHandle> {
 		const agentId = spec.id;
 
 		// 1. Before-spawn hook
@@ -463,37 +464,4 @@ export class AgentRuntime {
 
 		return handle;
 	}
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Compute Jaccard similarity between two texts.
- *
- * Tokenizes each text into a set of lowercase words, then computes
- * |intersection| / |union|. Returns 0 for empty inputs.
- */
-function jaccardSimilarity(a: string, b: string): number {
-	const tokenize = (text: string): Set<string> => {
-		const words = text
-			.toLowerCase()
-			.split(/[^a-z0-9]+/)
-			.filter(w => w.length > 2);
-		return new Set(words);
-	};
-
-	const setA = tokenize(a);
-	const setB = tokenize(b);
-
-	if (setA.size === 0 && setB.size === 0) return 1;
-	if (setA.size === 0 || setB.size === 0) return 0;
-
-	let intersection = 0;
-	for (const token of setA) {
-		if (setB.has(token)) intersection++;
-	}
-
-	return intersection / (setA.size + setB.size - intersection);
 }

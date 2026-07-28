@@ -6,38 +6,13 @@
  * and phase orchestration (RunManager, ScriptManager, SteeringSink).
  */
 
-import type { ExecutorOptions, SingleResult } from "@oh-my-pi/pi-coding-agent";
 import type { CurtainResult } from "../curtain/types";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
-// Agent execution & communication
-// ============================================================================
-
-/** Abstraction over subprocess agent execution. */
-export interface SwarmAgentRunner {
-	/** Spawn a local subprocess agent and return its result. */
-	runSubprocess(options: ExecutorOptions): Promise<SingleResult>;
-}
-
-/** Abstraction over IRC-style inter-agent communication. */
-export interface SwarmMessageBus {
-	/** Broadcast a message to all agents on a channel. */
-	broadcast(channel: string, sender: string, body: string): void;
-	/** Send a directed message to a specific agent. */
-	send(target: string, sender: string, body: string): void;
-	/** Register a handler for incoming messages on a channel. */
-	onMessage(channel: string, handler: (sender: string, body: string) => void): () => void;
-}
-
-/** Holds injectable services for the swarm pipeline. */
-export interface SwarmServices {
-	agentRunner?: SwarmAgentRunner;
-	messageBus?: SwarmMessageBus;
-}
-
-// ============================================================================
 // Phase orchestration — extracted from monitor/api-routes.ts
+// ============================================================================
+
 // ============================================================================
 
 /** Controls the swarm loop lifecycle. Implemented by SwarmRunManager. */

@@ -17,97 +17,16 @@ import type { ReviewVerdict } from "../core/pipeline";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
-// Types
+// Types (imported from shared module; re-exported for backward compat)
 // ============================================================================
 
-export type ActivityEventType =
-	| "broadcast"
-	| "subgroup"
-	| "steering"
-	| "steering_ack"
-	| "phase"
-	| "convergence"
-	| "verdict"
-	| "conflict"
-	| "scaling"
-	| "nomination"
-	| "crash"
-	| "tool_call"
-	| "error_flag"
-	| "file_change"
-	| "stream_start"
-	| "stream_delta"
-	| "stream_end"
-	| "stream_thinking"
-	| "deliberation_challenge"
-	| "deliberation_rebuttal"
-	| "deliberation_ruling"
-	| "reviewer_individual"
-	| "file_coordination"
-	| "agent_state"
-	| "pipeline_state";
+export type {
+	ActivityBroadcaster,
+	ActivityEntry,
+	ActivityEventType,
+} from "../../session/activity-types";
 
-export interface ActivityEntry {
-	ts: number;
-	type: ActivityEventType;
-	from?: string;
-	to?: string;
-	body?: string;
-	/** Phase-specific fields */
-	phase?: string;
-	round?: number;
-	iteration?: number;
-	/** Convergence-specific fields */
-	scope?: string;
-	jaccard?: number;
-	converged?: boolean;
-	/** Verdict-specific fields */
-	passed?: boolean;
-	approval?: number;
-	total?: number;
-	findings?: string[];
-	disagreed?: boolean;
-	praised?: string[];
-	criticized?: string[];
-	/** Conflict-specific fields */
-	file?: string;
-	writers?: string[];
-	severity?: string;
-	/** Scaling-specific fields */
-	action?: string;
-	agent?: string;
-	reason?: string;
-	/** Nomination-specific fields */
-	elected?: string | null;
-	votes?: Record<string, string[]>;
-	/** Crash-specific fields */
-	error?: string;
-	/** Steering-ack fields (P2-3) */
-	messageId?: string;
-	acknowledgedBy?: string;
-	/** Tool-call fields (P2-10) */
-	toolName?: string;
-	toolInput?: string;
-	toolOutput?: string;
-	toolError?: string;
-	toolDurationMs?: number;
-	/** Error-flag fields (P2-11) */
-	errorFlag?: string;
-	recoverable?: boolean;
-	suggestion?: string;
-	/** File-change fields */
-	linesChanged?: number;
-	/** Stream-end fields */
-	thinking?: string;
-}
-
-// ============================================================================
-// MonitorServer interface (forward declaration — avoids circular import)
-// ============================================================================
-
-export interface ActivityBroadcaster {
-	broadcast(sessionName: string, entry: ActivityEntry): void;
-}
+import type { ActivityBroadcaster, ActivityEntry } from "../../session/activity-types";
 
 // ============================================================================
 // ActivityLogger
@@ -146,12 +65,12 @@ export class ActivityLogger {
 	 * and pushes to SSE. Serialized via writeQueue to preserve event ordering.
 	 * Fire-and-forget: callers never await this.
 	 */
-	private static readonly MAX_PENDING_WRITES = 256;
+	static #MAX_PENDING_WRITES = 256;
 
-	private log(entry: ActivityEntry): void {
+	#log(entry: ActivityEntry): void {
 		// Drop oldest when over capacity — fire-and-forget semantics
 		// mean we can't reject callers, so just don't enqueue.
-		if (this.#pendingWrites >= ActivityLogger.MAX_PENDING_WRITES) {
+		if (this.#pendingWrites >= ActivityLogger.#MAX_PENDING_WRITES) {
 			if (!this.#overflowSilenced) {
 				this.#overflowSilenced = true;
 				logger.warn("[ActivityLogger] Write queue overflow — dropping events");
@@ -171,7 +90,7 @@ export class ActivityLogger {
 			.finally(() => {
 				this.#pendingWrites--;
 				// Reset overflow silenced when queue drains enough
-				if (this.#overflowSilenced && this.#pendingWrites < ActivityLogger.MAX_PENDING_WRITES / 2) {
+				if (this.#overflowSilenced && this.#pendingWrites < ActivityLogger.#MAX_PENDING_WRITES / 2) {
 					this.#overflowSilenced = false;
 				}
 			});
@@ -180,31 +99,31 @@ export class ActivityLogger {
 	// -- IRC messaging --------------------------------------------------------
 
 	logBroadcast(from: string, body: string): void {
-		this.log({ ts: Date.now(), type: "broadcast", from, to: "all", body });
+		this.#log({ ts: Date.now(), type: "broadcast", from, to: "all", body });
 	}
 
 	logSubGroup(group: string, from: string, body: string): void {
-		this.log({ ts: Date.now(), type: "subgroup", from, to: group, body });
+		this.#log({ ts: Date.now(), type: "subgroup", from, to: group, body });
 	}
 
 	logSteering(from: string, to: string, body: string): void {
-		this.log({ ts: Date.now(), type: "steering", from, to, body });
+		this.#log({ ts: Date.now(), type: "steering", from, to, body });
 	}
 
 	// -- Phase transitions ----------------------------------------------------
 
 	logPhase(phase: string, round?: number, iteration?: number): void {
-		this.log({ ts: Date.now(), type: "phase", phase, round, iteration });
+		this.#log({ ts: Date.now(), type: "phase", phase, round, iteration });
 	}
 
 	logConvergence(scope: string, jaccard: number, converged: boolean): void {
-		this.log({ ts: Date.now(), type: "convergence", scope, jaccard, converged });
+		this.#log({ ts: Date.now(), type: "convergence", scope, jaccard, converged });
 	}
 
 	// -- Review & verdict -----------------------------------------------------
 
 	logVerdict(verdict: ReviewVerdict): void {
-		this.log({
+		this.#log({
 			ts: Date.now(),
 			type: "verdict",
 			passed: verdict.passed,
@@ -220,25 +139,25 @@ export class ActivityLogger {
 	// -- File conflicts -------------------------------------------------------
 
 	logConflict(file: string, writers: string[], severity: string): void {
-		this.log({ ts: Date.now(), type: "conflict", file, writers, severity });
+		this.#log({ ts: Date.now(), type: "conflict", file, writers, severity });
 	}
 
 	// -- Scaling --------------------------------------------------------------
 
 	logScaling(action: "add" | "remove", agent: string, reason: string): void {
-		this.log({ ts: Date.now(), type: "scaling", action, agent, reason });
+		this.#log({ ts: Date.now(), type: "scaling", action, agent, reason });
 	}
 
 	// -- Nomination -----------------------------------------------------------
 
 	logNomination(round: number, elected: string | null, votes: Record<string, string[]>): void {
-		this.log({ ts: Date.now(), type: "nomination", round, elected, votes });
+		this.#log({ ts: Date.now(), type: "nomination", round, elected, votes });
 	}
 
 	// -- Crash ----------------------------------------------------------------
 
 	logCrash(agent: string, error: string): void {
-		this.log({ ts: Date.now(), type: "crash", agent, error });
+		this.#log({ ts: Date.now(), type: "crash", agent, error });
 	}
 
 	// -- Agent / Pipeline state (P1-1 real-time sync) ---------------------------
@@ -259,7 +178,7 @@ export class ActivityLogger {
 			modelName?: string;
 		},
 	): void {
-		this.log({
+		this.#log({
 			ts: Date.now(),
 			type: "agent_state",
 			agentName: worker,
@@ -280,7 +199,7 @@ export class ActivityLogger {
 		totalTokens?: number;
 		totalRequests?: number;
 	}): void {
-		this.log({
+		this.#log({
 			ts: Date.now(),
 			type: "pipeline_state",
 			...fields,
@@ -291,7 +210,7 @@ export class ActivityLogger {
 
 	/** Logged when a worker agent acknowledges receipt of a steering message. */
 	logSteeringAck(agentName: string, messageId: string): void {
-		this.log({ ts: Date.now(), type: "steering_ack", from: agentName, messageId, acknowledgedBy: agentName });
+		this.#log({ ts: Date.now(), type: "steering_ack", from: agentName, messageId, acknowledgedBy: agentName });
 	}
 
 	// -- Tool Call (P2-10) ---------------------------------------------------
@@ -305,7 +224,7 @@ export class ActivityLogger {
 		error?: string,
 		durationMs?: number,
 	): void {
-		this.log({
+		this.#log({
 			ts: Date.now(),
 			type: "tool_call",
 			agent: agentName,
@@ -327,7 +246,7 @@ export class ActivityLogger {
 		recoverable: boolean,
 		suggestion?: string,
 	): void {
-		this.log({
+		this.#log({
 			ts: Date.now(),
 			type: "error_flag",
 			agent: agentName,
@@ -347,14 +266,14 @@ export class ActivityLogger {
 		action: "created" | "modified" | "deleted",
 		linesChanged?: number,
 	): void {
-		this.log({ ts: Date.now(), type: "file_change", agent: agentName, file, action, linesChanged });
+		this.#log({ ts: Date.now(), type: "file_change", agent: agentName, file, action, linesChanged });
 	}
 
 	// -- Streaming Delta (P3-1) ----------------------------------------------
 
 	/** Start of a streaming response — frontend creates a placeholder bubble. */
 	logStreamStart(msgId: string, from: string): void {
-		this.log({ ts: Date.now(), type: "stream_start", messageId: msgId, from, body: "" });
+		this.#log({ ts: Date.now(), type: "stream_start", messageId: msgId, from, body: "" });
 	}
 
 	/** Incremental text chunk — frontend appends to the streaming bubble.
@@ -385,24 +304,24 @@ export class ActivityLogger {
 
 	/** End of a streaming response — frontend finalises the bubble. */
 	logStreamEnd(msgId: string, from: string, finalBody: string, thinking?: string): void {
-		this.log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody, thinking });
+		this.#log({ ts: Date.now(), type: "stream_end", messageId: msgId, from, body: finalBody, thinking });
 	}
 
 	// ── Deliberation events (P2 — GUI channel routing) ──────────────
 
 	/** Worker challenges a peer's output during the deliberation phase. */
 	logDeliberationChallenge(from: string, body: string, round: number): void {
-		this.log({ ts: Date.now(), type: "deliberation_challenge", from, body, round });
+		this.#log({ ts: Date.now(), type: "deliberation_challenge", from, body, round });
 	}
 
 	/** Worker rebuts a challenge during the deliberation phase. */
 	logDeliberationRebuttal(from: string, body: string, round: number): void {
-		this.log({ ts: Date.now(), type: "deliberation_rebuttal", from, body, round });
+		this.#log({ ts: Date.now(), type: "deliberation_rebuttal", from, body, round });
 	}
 
 	/** Reviewer issues a ruling during the deliberation resolution sub-round. */
 	logDeliberationRuling(from: string, body: string, round: number): void {
-		this.log({ ts: Date.now(), type: "deliberation_ruling", from, body, round });
+		this.#log({ ts: Date.now(), type: "deliberation_ruling", from, body, round });
 	}
 
 	// ── Cloner individual verdict (P2 — per-cloner insight) ─────────
@@ -410,7 +329,7 @@ export class ActivityLogger {
 	/** Emit a single cloner's verdict before aggregation. Enables the
 	 *  frontend to show per-cloner findings in dedicated channels. */
 	logReviewerIndividual(reviewerId: string, passed: boolean, findings: string[]): void {
-		this.log({ ts: Date.now(), type: "reviewer_individual", from: reviewerId, passed, findings });
+		this.#log({ ts: Date.now(), type: "reviewer_individual", from: reviewerId, passed, findings });
 	}
 
 	// ── File coordination (P2 — file-conflict channel routing) ───────
@@ -418,7 +337,7 @@ export class ActivityLogger {
 	/** Emit a file-specific coordination message when workers need to
 	 *  negotiate access to a conflicted file. */
 	logFileCoordination(file: string, from: string, body: string): void {
-		this.log({ ts: Date.now(), type: "file_coordination", file, from, body });
+		this.#log({ ts: Date.now(), type: "file_coordination", file, from, body });
 	}
 
 	/**

@@ -1,12 +1,4 @@
 /**
- * Directed Acyclic Graph operations for swarm agent dependencies.
- *
- * Builds a dependency graph from waits_for / reports_to relationships,
- * detects cycles, and produces execution waves via topological sort.
- */
-import type { SwarmDefinition } from "./schema";
-
-/**
  * Build a dependency map: agent name → set of agents it depends on.
  *
  * Dependencies come from:
@@ -14,47 +6,6 @@ import type { SwarmDefinition } from "./schema";
  * 2. Implicit from `reports_to` (if A reports_to B, then B depends on A)
  * 3. For pipeline/sequential mode with no explicit deps: chain by YAML declaration order
  */
-export function buildDependencyGraph(def: SwarmDefinition): Map<string, Set<string>> {
-	const deps = new Map<string, Set<string>>();
-
-	for (const name of def.agents.keys()) {
-		deps.set(name, new Set());
-	}
-
-	// Explicit waits_for
-	for (const [name, agent] of def.agents) {
-		for (const dep of agent.waitsFor) {
-			if (deps.has(dep)) {
-				deps.get(name)!.add(dep);
-			}
-		}
-	}
-
-	// reports_to implies the target waits for the reporter
-	for (const [name, agent] of def.agents) {
-		for (const target of agent.reportsTo) {
-			if (deps.has(target)) {
-				deps.get(target)!.add(name);
-			}
-		}
-	}
-
-	// For pipeline/sequential with no explicit deps, chain by declaration order
-	if ((def.mode === "pipeline" || def.mode === "sequential") && !hasExplicitDeps(deps)) {
-		for (let i = 1; i < def.agentOrder.length; i++) {
-			deps.get(def.agentOrder[i])!.add(def.agentOrder[i - 1]);
-		}
-	}
-
-	return deps;
-}
-
-function hasExplicitDeps(deps: Map<string, Set<string>>): boolean {
-	for (const s of deps.values()) {
-		if (s.size > 0) return true;
-	}
-	return false;
-}
 
 /**
  * Detect cycles in the dependency graph.

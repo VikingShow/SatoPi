@@ -12,6 +12,8 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { Settings } from "../../config/settings";
+import { loadMnemopiConfig } from "../../mnemopi/config";
+import { loadMnemopi, loadMnemopiCore } from "../../mnemopi/state";
 import type { MnemopiClient } from "./mnemopi-adapter";
 
 /**
@@ -26,12 +28,8 @@ import type { MnemopiClient } from "./mnemopi-adapter";
  */
 export async function createSwarmMnemopiClient(settings: Settings, workspace: string): Promise<MnemopiClient | null> {
 	try {
-		const [{ loadMnemopiConfig }, { loadMnemopi, loadMnemopiCore }] = await Promise.all([
-			import("../../mnemopi/config"),
-			import("../../mnemopi/state"),
-		]);
-
 		const config = loadMnemopiConfig(settings, workspace);
+
 		if (!config) return null;
 
 		const [{ Mnemopi }] = await Promise.all([loadMnemopi(), loadMnemopiCore()]);

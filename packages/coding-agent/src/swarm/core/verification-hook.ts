@@ -38,10 +38,13 @@ export interface VerificationResult {
 // ============================================================================
 
 export class VerificationHook {
-	constructor(
-		private readonly workspace: string,
-		private readonly activityLogger?: ActivityLogger,
-	) {}
+	#workspace: string;
+	#activityLogger: ActivityLogger | undefined;
+
+	constructor(workspace: string, activityLogger?: ActivityLogger) {
+		this.#workspace = workspace;
+		this.#activityLogger = activityLogger;
+	}
 
 	/**
 	 * Run each verification command sequentially.
@@ -55,11 +58,11 @@ export class VerificationHook {
 	async run(commands: string[]): Promise<VerificationResult> {
 		const results: VerificationCommandResult[] = [];
 
-		this.activityLogger?.logBroadcast(
+		this.#activityLogger?.logBroadcast(
 			"system",
 			`[verification] Starting ${commands.length} verification command(s): ${commands.join(", ")}`,
 		);
-		logger.info("VerificationHook: starting", { commands, workspace: this.workspace });
+		logger.info("VerificationHook: starting", { commands, workspace: this.#workspace });
 
 		for (const command of commands) {
 			const result = await this.#runCommand(command);
@@ -71,7 +74,7 @@ export class VerificationHook {
 					? `${result.output.slice(0, 2000)}... (truncated, ${result.output.length} chars total)`
 					: result.output;
 
-			this.activityLogger?.logBroadcast(
+			this.#activityLogger?.logBroadcast(
 				"system",
 				`[verification] ${status}: \`${command}\` (exit ${result.exitCode})\n${truncated}`,
 			);
@@ -80,7 +83,7 @@ export class VerificationHook {
 
 		const passed = results.every(r => r.exitCode === 0);
 
-		this.activityLogger?.logBroadcast(
+		this.#activityLogger?.logBroadcast(
 			"system",
 			`[verification] ${passed ? "ALL PASSED" : "FAILED"} — ${results.filter(r => r.exitCode === 0).length}/${results.length} commands succeeded`,
 		);
@@ -95,7 +98,7 @@ export class VerificationHook {
 	async #runCommand(command: string): Promise<VerificationCommandResult> {
 		try {
 			const proc = Bun.spawn(["bash", "-c", command], {
-				cwd: this.workspace,
+				cwd: this.#workspace,
 				stdout: "pipe",
 				stderr: "pipe",
 			});

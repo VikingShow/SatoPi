@@ -6,9 +6,9 @@
  * lightweight value objects — they carry no runtime state.
  */
 
-export type EndpointCapability = "send" | "receive" | "broadcast" | "interrupt" | "vote" | "roundtable";
+type EndpointCapability = "send" | "receive" | "broadcast" | "interrupt" | "vote" | "roundtable";
 
-export interface CommEndpoint {
+interface CommEndpoint {
 	readonly id: string;
 	readonly kind: "human" | "agent" | "system";
 	readonly capabilities: ReadonlySet<EndpointCapability>;

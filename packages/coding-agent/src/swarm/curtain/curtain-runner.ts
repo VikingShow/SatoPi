@@ -10,14 +10,16 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import { enqueueMemoryConsolidation } from "../../memories";
 import type { AgentRuntime } from "../agent-runtime";
 import { CommBus } from "../comm-bus";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import {
+	type DeepReflection,
 	type ExperienceStore,
 	type ExtractedLesson,
 	extractLessons,
@@ -29,6 +31,8 @@ import {
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
+import curtainReporterPrompt from "../prompts/curtain-reporter.md" with { type: "text" };
+import { archivePlanForHistory } from "../script/script-planner";
 import type { StageResult } from "../stage/stage-controller";
 import { MultiLessonSink } from "./lesson-sink";
 import type { ContributionData } from "./types";
@@ -190,7 +194,6 @@ export async function runCurtainPipeline(
 	// Trigger memory consolidation so experience DB → memory_summary.md sync
 	// happens inline rather than only on next startup.
 	try {
-		const { enqueueMemoryConsolidation } = await import("../../memories");
 		enqueueMemoryConsolidation?.();
 	} catch {
 		// Non-critical — consolidation runs on startup independently
@@ -202,7 +205,6 @@ export async function runCurtainPipeline(
 
 	// Archive plan
 	try {
-		const { archivePlanForHistory } = await import("../script/script-planner");
 		await archivePlanForHistory(stateTracker.swarmDir, workspace);
 	} catch (err) {
 		logger.warn("[Curtain] Plan archival failed", { error: String(err) });
@@ -277,24 +279,16 @@ async function runReporterAgent(
 		/* use default */
 	}
 
-	const systemPrompt =
-		reporterPrompt ??
-		`You are a ${reporterName} Reporter agent. Summarize the completed build for the user. Be clear, concise, and honest about issues.`;
+	const [reporterSystemPrompt, reporterTaskTemplate] = curtainReporterPrompt.split("\n---\n");
+	const systemPrompt = reporterPrompt ?? prompt.render(reporterSystemPrompt, { reporterName });
 
 	try {
 		const _msgId = `curtain-${reporterName}-${Date.now()}`;
-		const reportTask = [
-			"## Build Complete — Report to User",
-			"",
-			`Status: ${result.status}`,
-			`Tasks: ${result.taskProgress.completed}/${result.taskProgress.total}`,
-			"",
-			"## Instructions",
-			"1. Check workspace for files created/modified",
-			"2. Report a summary: what was built, key files, test results, known issues",
-			"3. Be honest — if something is incomplete, say so",
-			"4. Structure for readability (sections, bullet points)",
-		].join("\n");
+		const reportTask = prompt.render(reporterTaskTemplate, {
+			status: result.status,
+			completed: String(result.taskProgress.completed),
+			total: String(result.taskProgress.total),
+		});
 
 		let reportOutput: string | null = null;
 
@@ -328,7 +322,7 @@ interface ReflectionResult {
 	lessons: ExtractedLesson[];
 	stats: LoopRunStats;
 	reflectionSummary: string;
-	deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null;
+	deepReflection: DeepReflection | null;
 }
 
 async function runReflectionPipeline(
@@ -347,7 +341,7 @@ async function runReflectionPipeline(
 	const extraction = extractLessons(result, agentCount);
 
 	// Deep reflection (LLM, best-effort)
-	let deepReflection: Awaited<ReturnType<typeof reflectDeep>> | null = null;
+	let deepReflection: DeepReflection | null = null;
 	try {
 		deepReflection = await reflectDeep(result, extraction, { registry: modelRegistry, settings });
 		if (deepReflection) {

@@ -125,7 +125,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#sessionManager!: SwarmSessionManager;
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
-	#stageController: ReturnType<typeof createStageController> | null = null;
+	#stageController: StageController | null = null;
 	#runtime!: AgentRuntime;
 	/** Stigmergic MarkEnvironment from orchestrator runtime. */
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
@@ -435,15 +435,15 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		} else {
 			this.#listener({ phase: "curtain", subStatus: "awaiting applaud" });
 			const CURTAIN_TIMEOUT_MS = 300_000; // 5 minutes
-			await new Promise<void>(resolve => {
-				this.#applaudResolve = resolve;
-				setTimeout(() => {
-					if (this.#applaudResolve) {
-						this.#applaudResolve();
-						this.#applaudResolve = null;
-					}
-				}, CURTAIN_TIMEOUT_MS);
-			});
+			const { promise: applaudPromise, resolve: applaudResolve } = Promise.withResolvers<void>();
+			this.#applaudResolve = applaudResolve;
+			setTimeout(() => {
+				if (this.#applaudResolve) {
+					this.#applaudResolve();
+					this.#applaudResolve = null;
+				}
+			}, CURTAIN_TIMEOUT_MS);
+			await applaudPromise;
 		}
 
 		await this.#fsm.transition("idle", { reason: "curtain complete" });

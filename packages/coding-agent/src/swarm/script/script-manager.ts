@@ -315,7 +315,7 @@ export class ScriptManager {
 
 	async #runPlannerAgent(): Promise<void> {
 		this.#busy = true;
-		let planPoll: ReturnType<typeof setInterval> | undefined;
+		let planPoll: Timer | undefined;
 
 		try {
 			const taskText = this.#buildTaskFromHistory();

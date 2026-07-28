@@ -43,6 +43,9 @@ import type { ISwarmOrchestrator } from "./embedded-swarm-bridge";
 // SwarmRunner
 // ============================================================================
 
+/**
+ * @deprecated Use {@link GraphRunner} instead.
+ */
 export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 	#abortController: AbortController | null = null;
 	#modelRegistry: ModelRegistry;

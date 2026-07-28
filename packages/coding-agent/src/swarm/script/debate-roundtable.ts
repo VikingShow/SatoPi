@@ -13,10 +13,11 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentToolRestriction } from "../core/schema";
+import debateSystemPrompt from "../prompts/debate-system.md" with { type: "text" };
 
 // ============================================================================
 // Types
@@ -212,19 +213,7 @@ export class DebateRoundtable {
 	// ============================================================================
 
 	#debateAgentSystemPrompt(): string {
-		return [
-			`You are a Agent in the Loop Engineering system — a peer discussant`,
-			`who participates in plan debates to refine task plans before execution.`,
-			``,
-			`Your role in this debate:`,
-			`- Read the plan critically. Your interpretation may differ from others — state it clearly.`,
-			`- Challenge assumptions, flag gaps, identify unclear acceptance criteria.`,
-			`- When peers raise valid points, acknowledge them and refine your position.`,
-			`- The goal is to produce the strongest possible plan, not to "win".`,
-			``,
-			`Output your refined plan as markdown. End with a brief summary of`,
-			`key changes you made and why.`,
-		].join("\n");
+		return prompt.render(debateSystemPrompt);
 	}
 
 	#buildRound1Prompt(plan: string): string {

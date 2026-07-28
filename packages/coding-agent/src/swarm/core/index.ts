@@ -1,7 +1,6 @@
 // Core swarm infrastructure
 
-export { evaluateBlockage } from "./blockage";
-export { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./dag";
+export { buildExecutionWaves, detectCycles } from "./dag";
 export {
 	invokeHook,
 	type LoopPipelineHooks,
@@ -35,9 +34,6 @@ export type {
 	RunManager,
 	ScriptManager,
 	SteeringSink,
-	SwarmAgentRunner,
-	SwarmMessageBus,
-	SwarmServices,
 } from "./services";
 export {
 	type AgentState,

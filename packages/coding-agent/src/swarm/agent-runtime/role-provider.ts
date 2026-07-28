@@ -8,8 +8,9 @@
  * Part of the AgentRuntime system (Phase 3A).
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
 import type { RoleAsset, RoleAssetManager } from "../../agent/role-asset";
+import roleFallbackPrompt from "../prompts/role-fallback.md" with { type: "text" };
 import type { AgentSpec } from "./agent-spec";
 
 // ============================================================================
@@ -44,7 +45,11 @@ export interface ResolvedRole {
  * 3. Default: Generate a minimal role from the role name.
  */
 export class RoleProvider {
-	constructor(private roleAssetManager: RoleAssetManager) {}
+	#roleAssetManager: RoleAssetManager;
+
+	constructor(roleAssetManager: RoleAssetManager) {
+		this.#roleAssetManager = roleAssetManager;
+	}
 
 	/**
 	 * Resolve an AgentSpec to a concrete ResolvedRole.
@@ -52,7 +57,7 @@ export class RoleProvider {
 	async resolve(spec: AgentSpec): Promise<ResolvedRole> {
 		// 1. Try the role library
 		if (spec.roleSource === "library") {
-			const role = await this.resolveFromLibrary(spec.role);
+			const role = await this.#resolveFromLibrary(spec.role);
 			if (role) return role;
 			logger.warn("[RoleProvider] Library role not found or not approved, falling back", {
 				role: spec.role,
@@ -77,7 +82,7 @@ export class RoleProvider {
 
 		// 4. Default fallback
 		return {
-			systemPrompt: `You are a ${spec.role} agent in the SatoPi swarm system. Complete your assigned task thoroughly and report your results.`,
+			systemPrompt: prompt.render(roleFallbackPrompt, { role: spec.role }),
 			guidelines: [],
 			tools: ["read", "grep", "glob"],
 		};
@@ -91,9 +96,9 @@ export class RoleProvider {
 	 * Try to resolve a role from the library.
 	 * Returns null if the role is not found or not approved.
 	 */
-	private async resolveFromLibrary(roleName: string): Promise<ResolvedRole | null> {
+	async #resolveFromLibrary(roleName: string): Promise<ResolvedRole | null> {
 		try {
-			const role: RoleAsset | null = await this.roleAssetManager.get(roleName);
+			const role: RoleAsset | null = await this.#roleAssetManager.get(roleName);
 
 			if (!role) return null;
 			if (role.status !== "approved") return null;

@@ -11,6 +11,7 @@
 
 import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { logger } from "@oh-my-pi/pi-utils";
+import { jaccardSimilarity } from "../core/convergence.js";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";
 
@@ -60,40 +61,6 @@ const DEFAULT_CONFIG: RoundtableConfig = {
 
 function resolveConfig(partial?: Partial<RoundtableConfig>): RoundtableConfig {
 	return { ...DEFAULT_CONFIG, ...partial };
-}
-
-// ============================================================================
-// Jaccard similarity
-// ============================================================================
-
-/**
- * Tokenize a string by splitting on non-alphanumeric boundaries,
- * lowercasing, and filtering out tokens of length <= 2.
- */
-export function tokenize(text: string): Set<string> {
-	const tokens = text
-		.toLowerCase()
-		.split(/[^a-z0-9]+/i)
-		.filter(t => t.length > 2);
-	return new Set(tokens);
-}
-
-/**
- * Compute Jaccard similarity between two strings:
- *   |intersection| / |union|
- *
- * Returns 0 when both strings are effectively empty.
- */
-export function jaccardSimilarity(a: string, b: string): number {
-	const setA = tokenize(a);
-	const setB = tokenize(b);
-
-	if (setA.size === 0 && setB.size === 0) return 1; // both empty → identical
-
-	const intersection = new Set([...setA].filter(t => setB.has(t)));
-	const union = new Set([...setA, ...setB]);
-
-	return intersection.size / union.size;
 }
 
 // ============================================================================
