@@ -70,7 +70,7 @@ async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
-	engine: "graph" | "legacy" = "legacy",
+	engine: "graph" | "legacy" = "graph",
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -223,7 +223,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const cwd = getProjectDir();
 
 	// Determine engine before parsing — graph engine skips swarm YAML parsing
-	const engine = (cmd.engine ?? "legacy") as "graph" | "legacy";
+	const engine = (cmd.engine ?? "graph") as "graph" | "legacy";
 
 	let def: SwarmDefinition;
 	if (engine === "graph") {
