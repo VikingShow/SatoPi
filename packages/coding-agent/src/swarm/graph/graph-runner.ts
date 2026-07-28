@@ -20,28 +20,50 @@ import type { ContextPipeline } from "../context-manager/context-pipeline";
 import { IrcBus } from "../../irc/bus";
 import { RoleAssetManager } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
-import { assembleAgentRuntime, type AssemblerOptions } from "../core/assembler";
+import { createOrchestratorRuntime } from "../core/assembler";
 import type { Chapter, SwarmState } from "../core/state";
 import { StateTracker } from "../core/state";
 import type { LoopSwarmConfig } from "../core/schema";
 import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
 import { ExperienceStore } from "../curtain/experience";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import { buildExecutionWaves } from "../core/dag";
-import { loadGraphDefinition, type GraphDefinition, type NodeContext, type NodeResult } from "./schema";
+import { loadGraphDefinition, type GraphDefinition, type NodeContext, type NodeExecutionOutput, type NodeResult } from "./schema";
 import { WaveScheduler, type SchedulingStrategy, type SchedulerNodeInfo } from "./graph-executor";
 import { selectNodeBehavior, type NodeBehaviorFactoryConfig } from "./node-behavior";
 import type { SingleResult } from "../../task";
 import { GateController } from "./gate-controller";
 import { writeCheckpoint, recoverState, type GraphRunState, type NodeRunState } from "./checkpoint";
-import { MarkEnvironment } from "../../coordination/mark-environment";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+import type { MarkEnvironment } from "../../coordination/mark-environment";
 
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildUpstreamOutputs(
+	dependsOn: string[] | undefined,
+	resultsMap: Map<string, SingleResult[]>,
+): Record<string, NodeExecutionOutput> {
+	if (!dependsOn || dependsOn.length === 0) return {};
+	const outputs: Record<string, NodeExecutionOutput> = {};
+	for (const depId of dependsOn) {
+		const results = resultsMap.get(depId);
+		if (!results || results.length === 0) continue;
+		const summary = results.map(r => r.output).filter(Boolean).join("\n");
+		outputs[depId] = {
+			nodeId: depId,
+			artifacts: [],
+			summary,
+			result: summary,
+		};
+	}
+	return outputs;
+}
 export interface GraphRunnerConfig {
 	workspace: string;
 	graphPath: string;
@@ -104,8 +126,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 		this.#fsm = new WorkflowFsm(this.#stateTracker, this.#activityLogger, startPhase);
 		for (const def of PHASES) this.#fsm.registerPhase(def);
 
-		this.#hookPipeline = new HookPipeline();
-		registerBuiltinHooks(this.#hookPipeline, { experienceStore: this.#experienceStore, profileRegistry });
 		this.#ircBus = IrcBus.global();
 
 
@@ -123,23 +143,21 @@ export class GraphRunner implements ISwarmOrchestrator {
 		};
 		this.#roleAssetManager = new RoleAssetManager(workspace);
 		await this.#roleAssetManager.init();
-		this.#runtime = assembleAgentRuntime({
-			modelRegistry, settings,
+		// Create orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
+		const orch = createOrchestratorRuntime({
+			modelRegistry,
+			settings,
 			activityLogger: this.#activityLogger,
 			roleAssetManager: this.#roleAssetManager,
-			hookPipeline: this.#hookPipeline,
-			ircBus: this.#ircBus,
 			experienceStore: this.#experienceStore,
+			profileRegistry,
+			ircBus: this.#ircBus,
 			activeMmd,
 		});
+		this.#hookPipeline = orch.hookPipeline;
+		this.#markEnv = orch.markEnvironment;
+		this.#runtime = orch.runtime;
 
-		// Create MarkEnvironment for stigmergic coordination
-		this.#markEnv = new MarkEnvironment();
-
-		// Register StigmergySource so agents get environmental awareness
-		this.#runtime.contextPipeline.register(
-			new StigmergySource(this.#markEnv),
-		);
 
 		this.#gateController = new GateController({ workspace });
 
@@ -291,11 +309,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 							dependsOn: node.depends_on ?? [],
 						},
 						workspace,
-						modelRegistry,
-						settings,
-						upstreamOutputs: {},
 						experience: "",
-						signal: abortSignal,
+						upstreamOutputs: buildUpstreamOutputs(node.depends_on, agentResultsMap),
 						runtime,
 						agentRegistry: AgentRegistry.global(),
 						roleAssetManager,

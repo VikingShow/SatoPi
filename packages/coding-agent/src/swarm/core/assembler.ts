@@ -19,6 +19,9 @@
  * ```
  */
 
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import { registerBuiltinHooks, type BuiltinHookDeps } from "../hook-system/register-builtins";
+import type { IOffloadManager } from "../../offload/manager";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
@@ -34,7 +37,10 @@ import { HindsightSource } from "../context-manager/sources/hindsight-source";
 import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
 import { MmdSource } from "../context-manager/sources/mmd-source";
 import type { ExperienceStore } from "../curtain/experience";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
+import { HookPipeline } from "../hook-system/hook-pipeline";
+import { MarkEnvironment } from "../../coordination";
+import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
@@ -64,8 +70,69 @@ export interface AssemblerOptions {
 	hindsightClient?: SwarmHindsightClient | null;
 	/** Semantic memory handle — enables MnemopiSource. Null when unavailable. */
 	mnemopiClient?: MnemopiClient | null;
+	/** MarkEnvironment for stigmergic coordination — enables StigmergySource. */
+	markEnvironment?: MarkEnvironment;
 	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
+}
+
+// ============================================================================
+// Orchestrator Runtime Factory
+// ============================================================================
+
+/** Options for createOrchestratorRuntime — the shared orchestrator bootstrap. */
+export interface CreateOrchestratorRuntimeOptions {
+	modelRegistry: ModelRegistry;
+	settings: Settings;
+	activityLogger: ActivityLogger;
+	roleAssetManager: RoleAssetManager;
+	experienceStore: ExperienceStore;
+	profileRegistry?: ProfileRegistry;
+	offloadManager?: IOffloadManager;
+	ircBus?: IrcBus;
+	toolRegistry?: Map<string, Tool>;
+	activeMmd?: string;
+}
+
+/**
+ * Create the shared orchestration runtime — MarkEnvironment, HookPipeline
+ * with builtins, and a fully-wired AgentRuntime — in one call.
+ *
+ * Both EmbeddedSwarmBridge and GraphRunner use this to eliminate duplicated
+ * bootstrap code.
+ */
+export function createOrchestratorRuntime(
+	opts: CreateOrchestratorRuntimeOptions,
+): {
+	runtime: AgentRuntime;
+	hookPipeline: HookPipeline;
+	markEnvironment: MarkEnvironment;
+} {
+	const markEnvironment = new MarkEnvironment();
+	const hookPipeline = new HookPipeline();
+
+	const hookDeps: BuiltinHookDeps = {
+		profileRegistry: opts.profileRegistry,
+		markEnvironment,
+		offloadManager: opts.offloadManager,
+		experienceStore: opts.experienceStore,
+	};
+	registerBuiltinHooks(hookPipeline, hookDeps);
+
+	const runtime = assembleAgentRuntime({
+		modelRegistry: opts.modelRegistry,
+		settings: opts.settings,
+		activityLogger: opts.activityLogger,
+		roleAssetManager: opts.roleAssetManager,
+		hookPipeline,
+		ircBus: opts.ircBus,
+		toolRegistry: opts.toolRegistry,
+		experienceStore: opts.experienceStore,
+		activeMmd: opts.activeMmd,
+		markEnvironment,
+	});
+
+	return { runtime, hookPipeline, markEnvironment };
 }
 
 // ============================================================================
@@ -107,6 +174,9 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 	}
 	if (opts.activeMmd) {
 		contextPipeline.register(new MmdSource(opts.activeMmd));
+	}
+	if (opts.markEnvironment) {
+		contextPipeline.register(new StigmergySource(opts.markEnvironment));
 	}
 
 	// 3. AgentLauncher — creates Agent instances with full hook wiring

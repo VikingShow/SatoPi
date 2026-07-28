@@ -138,6 +138,7 @@ async function createSwarmServices(
 			experienceStore: s.experienceStore,
 			hindsightClient: s.hindsightClient,
 			mnemopiClient: s.mnemopiClient,
+			markEnvironment: s.markEnvironment,
 		});
 		let runManager: RunManager;
 		if (engine === "graph") {

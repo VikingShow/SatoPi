@@ -195,6 +195,7 @@ import {
 } from "./tools";
 import { normalizeToolName, normalizeToolNames } from "./tools/builtin-names";
 import { ToolContextStore } from "./tools/context";
+import { setAgentInvokeContextStore } from "./tools/agent-invoke";
 import { getImageGenTools } from "./tools/image-gen";
 import { isIrcEnabled } from "./tools/irc";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
@@ -2248,6 +2249,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
 
+		// Wire the ToolContextStore into agent_invoke's dynamic hidden getter so the
+		// tool is hidden in non-swarm sessions. Set the runtime early (before the
+		// initial tool list is built) so the hidden getter evaluates correctly.
+		setAgentInvokeContextStore(toolContextStore);
+		if (options.agentRuntime) {
+			toolContextStore.setAgentRuntime(options.agentRuntime);
+		}
+
 		const registeredTools = extensionRunner.getAllRegisteredTools();
 		const sdkCustomTools = options.customTools?.filter(tool => !isLegacyBuiltinToolDefinition(tool)) ?? [];
 		const allCustomTools = [
@@ -2548,7 +2557,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const requestedActiveToolNames = normalizedRequested.filter(name => name !== "goal");
 		const initialRequestedActiveToolNames = options.toolNames
 			? requestedActiveToolNames
-			: requestedActiveToolNames.filter(name => !defaultInactiveToolNames.has(name));
+			: requestedActiveToolNames.filter(name => {
+					if (defaultInactiveToolNames.has(name)) return false;
+					const tool = toolRegistry.get(name);
+					if (tool?.hidden) return false;
+					return true;
+				});
 		const explicitlyRequestedMCPToolNames = options.toolNames
 			? requestedActiveToolNames.filter(name => name.startsWith("mcp__"))
 			: [];

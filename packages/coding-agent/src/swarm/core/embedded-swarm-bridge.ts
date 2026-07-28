@@ -25,19 +25,18 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
-import { assembleAgentRuntime, type AssemblerOptions } from "./assembler";
+import { createOrchestratorRuntime } from "./assembler";
 import type { LoopSwarmConfig } from "./schema";
 import { StateTracker, type Chapter, type SwarmState } from "./state";
 import { WorkflowFsm, PHASES } from "./workflow-fsm";
 import { runCurtainPipeline, type CurtainResultData } from "../curtain/curtain-runner";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
 import { ExperienceStore } from "../curtain/experience";
 import { getSessionPlanPath } from "../script/plan-paths";
+import type { MarkEnvironment } from "../../coordination/mark-environment";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
-import { MarkEnvironment } from "../../coordination/mark-environment";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+
 import { createStageController, type StageResult } from "../stage/stage-controller";
 import { DebateRoundtable } from "../script/debate-roundtable";
 import { OffloadManager } from "../../offload/manager";
@@ -208,39 +207,27 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#experienceStore = new ExperienceStore(workspace);
 		await this.#experienceStore.init();
 
-		// 7. Create HookPipeline
-		this.#hookPipeline = new HookPipeline();
-		registerBuiltinHooks(this.#hookPipeline, {
-			offloadManager: this.#offloadManager,
-			experienceStore: this.#experienceStore,
-			profileRegistry,
-		});
 
 		// 8. Auto-create RoleAssetManager if not provided
 		if (!roleAssetManager) {
 			roleAssetManager = new RoleAssetManager(workspace);
 			await roleAssetManager.init();
 		}
-
-		// 9. Assemble AgentRuntime
-		const assemblerOpts: AssemblerOptions = {
+		// 7. Create orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
+		const orch = createOrchestratorRuntime({
 			modelRegistry,
 			settings,
 			activityLogger: this.#activityLogger,
 			roleAssetManager,
-			hookPipeline: this.#hookPipeline,
 			experienceStore: this.#experienceStore,
+			profileRegistry,
+			offloadManager: this.#offloadManager,
 			activeMmd: this.#config.activeMmd,
-		};
-		this.#runtime = assembleAgentRuntime(assemblerOpts);
+		});
+		this.#hookPipeline = orch.hookPipeline;
+		this.#markEnv = orch.markEnvironment;
+		this.#runtime = orch.runtime;
 
-		// Create MarkEnvironment for stigmergic coordination
-		this.#markEnv = new MarkEnvironment();
-
-		// Register StigmergySource for environmental awareness in agent prompts
-		this.#runtime.contextPipeline.register(
-			new StigmergySource(this.#markEnv),
-		);
 
 		// Register OffloadSource for Mermaid-based context in agent prompts
 		this.#runtime.contextPipeline.register(

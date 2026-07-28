@@ -6677,6 +6677,7 @@ export class AgentSession {
 		const result: DiscoverableTool[] = [];
 		for (const tool of this.#toolRegistry.values()) {
 			if (tool.loadMode !== "discoverable") continue;
+			if (tool.hidden) continue;
 			if (activeNames.has(tool.name)) continue;
 			const collected = collectDiscoverableTools([tool], { source: "builtin" });
 			result.push(...collected);

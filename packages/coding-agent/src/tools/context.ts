@@ -40,6 +40,10 @@ export class ToolContextStore {
 	setAgentRuntime(runtime: AgentRuntime | undefined): void {
 		this.#agentRuntime = runtime;
 	}
+	hasAgentRuntime(): boolean {
+		return this.#agentRuntime !== undefined;
+	}
+
 	setToolNames(names: string[]): void {
 		this.#toolNames = names;
 	}

@@ -11,6 +11,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { ToolContextStore } from "./context";
 
 // ============================================================================
 // Context extension: expose AgentRuntime via tool context
@@ -35,6 +36,18 @@ const agentInvokeSchema = type({
 type AgentInvokeParams = typeof agentInvokeSchema.infer;
 
 // ============================================================================
+// Runtime-awareness: allow the tool to be hidden when AgentRuntime is unavailable
+// ============================================================================
+
+let _contextStore: ToolContextStore | undefined;
+
+/** Called by createAgentSession to wire the session's ToolContextStore so the
+ *  hidden getter can check whether AgentRuntime is available. */
+export function setAgentInvokeContextStore(store: ToolContextStore | undefined): void {
+	_contextStore = store;
+}
+
+// ============================================================================
 // agentInvokeTool
 // ============================================================================
 
@@ -56,6 +69,11 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 	concurrency: "exclusive" as const,
 	loadMode: "discoverable" as const,
 	lenientArgValidation: false,
+
+	/** Dynamically hidden when no AgentRuntime is available (non-swarm sessions). */
+	get hidden(): boolean {
+		return !_contextStore?.hasAgentRuntime();
+	},
 
 	async execute(
 		_toolCallId: string,

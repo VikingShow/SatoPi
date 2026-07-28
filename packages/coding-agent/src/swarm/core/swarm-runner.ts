@@ -23,7 +23,7 @@ import type { AgentRuntime } from "../agent-runtime";
 import type { LoopSwarmConfig } from "../core/schema";
 import { parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
 import type { RunManager } from "../core/services";
-import type { StateTracker } from "../core/state";
+import type { Chapter, StateTracker, SwarmState } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
 import type { ExperienceStore } from "../curtain/experience";
@@ -37,12 +37,13 @@ import { stampAndArchivePlanMd } from "../script";
 import { getSessionPlanPath } from "../script/plan-paths";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createStageController, type StageResult } from "../stage/stage-controller";
+import type { ISwarmOrchestrator } from "./embedded-swarm-bridge";
 
 // ============================================================================
 // SwarmRunner
 // ============================================================================
 
-export class SwarmRunner implements RunManager {
+export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 	#abortController: AbortController | null = null;
 	#modelRegistry: ModelRegistry;
 	#settings: Settings;
@@ -250,5 +251,92 @@ export class SwarmRunner implements RunManager {
 			mnemopiClient: this.#mnemopiClient,
 		});
 		if (result_) this.#lastCurtainResult = { ...result_, iterations: result_.totalTasks };
+	}
+
+	// =====================================================================
+	// ISwarmOrchestrator implementation
+	// =====================================================================
+
+	/** Initialize the orchestrator. Lightweight — heavy setup is in {@link start}. */
+	async init(): Promise<void> {
+		// SwarmRunner in CLI mode does its setup lazily in start().
+		// This is a no-op for interface compatibility with EmbeddedSwarmBridge.
+	}
+
+	/** Tear down all services. Stops any in-progress run. */
+	async dispose(): Promise<void> {
+		if (this.#running) {
+			this.#abortController?.abort();
+		}
+		this.#completionPromise.resolve();
+	}
+
+	/** Called when plan.md is written/updated by the agent. */
+	onPlanUpdated(_content: string): void {
+		// SwarmRunner in CLI mode reads plan.md from disk in start().
+		// No-op for interface compatibility.
+	}
+
+	/**
+	 * Validate the plan and prepare for Stage execution.
+	 * In CLI mode this returns any issues found with the plan.
+	 */
+	async confirmScript(): Promise<string[]> {
+		const issues: string[] = [];
+		try {
+			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);
+			const content = await fs.readFile(planPath, "utf-8");
+			if (content.trim().length < 50) {
+				issues.push("Plan is too short — needs at least 50 characters.");
+			}
+		} catch {
+			issues.push("No plan.md found. Create one before confirming the script.");
+		}
+		return issues;
+	}
+
+	/** Route a human steering message to Stage workers. */
+	async steer(message: string): Promise<void> {
+		if (this.#runtime?.commBus) {
+			await this.#runtime.commBus.receiveFromHuman(message);
+		}
+	}
+
+	/** Complete the Curtain phase with human applaud. No-op in CLI mode. */
+	applaud(): void {
+		// CLI mode doesn't use human-decision flow for Curtain.
+	}
+
+	/** Pause the current stage by aborting via the abort controller. */
+	async pauseStage(): Promise<void> {
+		this.#abortController?.abort();
+	}
+
+	// ── Readonly accessors ──────────────────────────────────────────
+
+	get fsm(): WorkflowFsm {
+		if (!this.#fsm) throw new Error("WorkflowFsm not configured for this SwarmRunner");
+		return this.#fsm;
+	}
+
+	get stateTracker(): StateTracker {
+		return this.#stateTracker;
+	}
+
+	get activityLogger(): ActivityLogger {
+		return this.#activityLogger;
+	}
+
+	get swarmState(): Readonly<SwarmState> {
+		return this.#stateTracker.state;
+	}
+
+	get currentPhase(): Chapter | null {
+		return this.#fsm?.phase ?? this.#stateTracker.state.phase ?? null;
+	}
+
+	get runtime(): AgentRuntime {
+		if (!this.#runtime) throw new Error("AgentRuntime not configured for this SwarmRunner");
+		return this.#runtime;
 	}
 }

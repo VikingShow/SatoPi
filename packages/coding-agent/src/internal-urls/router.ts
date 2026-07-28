@@ -27,6 +27,7 @@ export class InternalUrlRouter {
 
 	constructor() {
 		this.register(new StpProtocolHandler());
+		this.register(new AgentProtocolHandler());
 		this.register(new ArtifactProtocolHandler());
 		this.register(new MemoryProtocolHandler());
 		this.register(new LocalProtocolHandler());
