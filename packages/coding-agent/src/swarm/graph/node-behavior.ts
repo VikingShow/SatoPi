@@ -12,9 +12,10 @@
  *   - stage: parallel worker agents via task queue
  *   - curtain: reflective — reporter + reflector, lesson extraction
  *
- * For v1, only CustomNodeBehavior is a real implementation. Script, Stage,
- * and Curtain are stubs that delegate to CustomNodeBehavior pending their
- * full wiring through PhaseBehaviorNodeAdapter in a follow-up task.
+ * All node types are wired through selectNodeBehavior():
+ *   - custom: CustomNodeBehavior (direct agent spawn)
+ *   - script/stage/curtain: PhaseBehaviorNodeAdapter wrapping the real
+ *     ScriptBehavior/StageBehavior/CurtainBehavior implementations
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
@@ -35,6 +36,15 @@ import type { ActivityLogger } from "../infra/activity-logger";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import { createStageController, type StageOptions, type StageResult } from "../stage/stage-controller";
+import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
+import { ScriptBehavior } from "../behaviors/script-behavior";
+import { CurtainBehavior } from "../behaviors/curtain-behavior";
+import { StageBehavior } from "../behaviors/stage-behavior";
+
+import type { AgentRuntime } from "../agent-runtime";
+import type { WorkflowFsm } from "../core/workflow-fsm";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
 
 // ============================================================================
 // CustomNodeBehavior (default)
@@ -224,41 +234,6 @@ export class CustomNodeBehavior implements NodeBehavior {
 	}
 }
 
-// ============================================================================
-// ScriptNodeBehavior (stub — delegates to CustomNodeBehavior for v1)
-// ============================================================================
-
-/**
- * Stub behavior for the Script (planning) phase.
- *
- * In the full implementation, this will spawn a Planner agent via AgentRuntime,
- * present the plan for human review through a dedicated channel, and support
- * multi-turn plan refinement before confirmation.
- *
- * For v1, it delegates to CustomNodeBehavior. The real implementation will be
- * wired through PhaseBehaviorNodeAdapter in a follow-up task.
- */
-export class ScriptNodeBehavior implements NodeBehavior {
-	readonly name = "script";
-
-	#delegate = new CustomNodeBehavior();
-
-	async prepare(ctx: NodeContext): Promise<AgentSpec[]> {
-		return this.#delegate.prepare(ctx);
-	}
-
-	async execute(ctx: NodeContext, prepared: AgentSpec[]): Promise<NodeResult> {
-		return this.#delegate.execute(ctx, prepared);
-	}
-
-	async validate(result: NodeResult, gate?: GateSpec): Promise<GateResult> {
-		return this.#delegate.validate(result, gate);
-	}
-
-	async cleanup(ctx: NodeContext): Promise<void> {
-		return this.#delegate.cleanup(ctx);
-	}
-}
 
 // ============================================================================
 // StageNodeBehavior — Drives real parallel worker agents via StageController
@@ -409,63 +384,52 @@ export class StageNodeBehavior implements NodeBehavior {
 	}
 }
 
-// ============================================================================
-// CurtainNodeBehavior (stub — delegates to CustomNodeBehavior for v1)
-// ============================================================================
-
-/**
- * Stub behavior for the Curtain (reporting) phase.
- *
- * In the full implementation, this will elect a Reporter via CommBus vote,
- * spawn Reporter + Reflector agents, extract lessons into ExperienceStore,
- * and optionally refine the graph definition.
- *
- * For v1, it delegates to CustomNodeBehavior. The real implementation will be
- * wired through PhaseBehaviorNodeAdapter in a follow-up task.
- */
-export class CurtainNodeBehavior implements NodeBehavior {
-	readonly name = "curtain";
-
-	#delegate = new CustomNodeBehavior();
-
-	async prepare(ctx: NodeContext): Promise<AgentSpec[]> {
-		return this.#delegate.prepare(ctx);
-	}
-
-	async execute(ctx: NodeContext, prepared: AgentSpec[]): Promise<NodeResult> {
-		return this.#delegate.execute(ctx, prepared);
-	}
-
-	async validate(result: NodeResult, gate?: GateSpec): Promise<GateResult> {
-		return this.#delegate.validate(result, gate);
-	}
-
-	async cleanup(ctx: NodeContext): Promise<void> {
-		return this.#delegate.cleanup(ctx);
-	}
-}
 
 // ============================================================================
 // Factory
 // ============================================================================
 
+// ============================================================================
+// NodeBehaviorFactoryConfig — shared config for behavior construction
+// ============================================================================
+
+/**
+ * Configuration bag passed to NodeBehavior factories so Script, Stage, and
+ * Curtain behaviors can wrap real PhaseBehavior implementations through
+ * PhaseBehaviorNodeAdapter instead of using stubs.
+ */
+export interface NodeBehaviorFactoryConfig {
+	runtime: AgentRuntime;
+	fsm: WorkflowFsm;
+	hookPipeline: HookPipeline;
+	contextPipeline: ContextPipeline;
+	workspace: string;
+	swarmDir: string;
+	loopConfig: LoopSwarmConfig;
+}
+
 /**
  * Select the appropriate NodeBehavior for a node's type.
  *
- * Maps node.type (or lack thereof) to the correct behavior class.
- * Callers should hold the returned instance for the duration of
- * the node's lifecycle (prepare → cleanup).
+ * All node types are wired through selectNodeBehavior():
+ *   - custom: CustomNodeBehavior (direct agent spawn)
+ *   - script/stage/curtain: PhaseBehaviorNodeAdapter wrapping the real
+ *     ScriptBehavior/StageBehavior/CurtainBehavior implementations
  *
  * @param type — node type from GraphNode.type (undefined = "custom")
+ * @param config — service configuration for PhaseBehaviorNodeAdapter construction
  */
-export function selectNodeBehavior(type?: string): NodeBehavior {
+export function selectNodeBehavior(
+	type: string | undefined,
+	config: NodeBehaviorFactoryConfig,
+): NodeBehavior {
 	switch (type) {
 		case "script":
-			return new ScriptNodeBehavior();
+			return new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config);
 		case "stage":
-			return new StageNodeBehavior();
+			return new PhaseBehaviorNodeAdapter(new StageBehavior(), config);
 		case "curtain":
-			return new CurtainNodeBehavior();
+			return new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config);
 		default:
 			return new CustomNodeBehavior();
 	}

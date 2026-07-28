@@ -197,6 +197,8 @@ export interface GraphDefinition {
 	hooks?: GraphHook[];
 	/** Default values applied to nodes missing their own. */
 	defaults?: GraphDefaults;
+	/** Whether this is a built-in graph (e.g. theatre.graph.yaml). */
+	builtin?: boolean;
 }
 
 // ============================================================================

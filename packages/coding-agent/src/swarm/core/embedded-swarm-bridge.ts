@@ -36,8 +36,12 @@ import { ActivityLogger } from "../infra/activity-logger";
 import { ExperienceStore } from "../curtain/experience";
 import { getSessionPlanPath } from "../script/plan-paths";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
+import { MarkEnvironment } from "../../coordination/mark-environment";
+import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { createStageController, type StageResult } from "../stage/stage-controller";
 import { DebateRoundtable } from "../script/debate-roundtable";
+import { OffloadManager } from "../../offload/manager";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 
 // ============================================================================
 // Types
@@ -129,6 +133,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#abortController: AbortController | null = null;
 	#loopConfig: LoopSwarmConfig;
 	#disposed = false;
+	#markEnv?: MarkEnvironment;
+	#offloadManager?: OffloadManager;
 	/** Human-decision resolver for applaud flow. */
 	#applaudResolve: (() => void) | null = null;
 
@@ -171,6 +177,9 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 		// 3. Create StateTracker
 		const swarmName = path.basename(swarmDir);
+
+		// Create OffloadManager for context compaction in embedded swarm path
+		this.#offloadManager = new OffloadManager(workspace, swarmName, swarmName, this.#sessionManager.storage);
 		this.#stateTracker = new StateTracker(workspace, swarmName);
 		this.#stateTracker.setSessionManager(this.#sessionManager);
 
@@ -199,6 +208,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		// 7. Create HookPipeline
 		this.#hookPipeline = new HookPipeline();
 		registerBuiltinHooks(this.#hookPipeline, {
+			offloadManager: this.#offloadManager,
 			experienceStore: this.#experienceStore,
 			profileRegistry,
 		});
@@ -219,6 +229,19 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			experienceStore: this.#experienceStore,
 		};
 		this.#runtime = assembleAgentRuntime(assemblerOpts);
+
+		// Create MarkEnvironment for stigmergic coordination
+		this.#markEnv = new MarkEnvironment();
+
+		// Register StigmergySource for environmental awareness in agent prompts
+		this.#runtime.contextPipeline.register(
+			new StigmergySource(this.#markEnv),
+		);
+
+		// Register OffloadSource for Mermaid-based context in agent prompts
+		this.#runtime.contextPipeline.register(
+			new OffloadSource(this.#offloadManager),
+		);
 
 		// 10. Notify: script phase started
 		this.#listener({ phase: "script", subStatus: "planning" });

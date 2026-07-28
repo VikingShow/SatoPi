@@ -15,12 +15,14 @@ import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
 import { IrcBus } from "../../irc/bus";
 import { RoleAssetManager } from "../../agent/role-asset";
 import type { AgentRuntime } from "../agent-runtime";
 import { assembleAgentRuntime, type AssemblerOptions } from "../core/assembler";
 import type { Chapter, SwarmState } from "../core/state";
 import { StateTracker } from "../core/state";
+import type { LoopSwarmConfig } from "../core/schema";
 import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
 import { ExperienceStore } from "../curtain/experience";
@@ -32,10 +34,12 @@ import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import { buildExecutionWaves } from "../core/dag";
 import { loadGraphDefinition, type GraphDefinition, type NodeContext, type NodeResult } from "./schema";
 import { WaveScheduler, type SchedulingStrategy, type SchedulerNodeInfo } from "./graph-executor";
-import { selectNodeBehavior } from "./node-behavior";
+import { selectNodeBehavior, type NodeBehaviorFactoryConfig } from "./node-behavior";
 import type { SingleResult } from "../../task";
 import { GateController } from "./gate-controller";
 import { writeCheckpoint, recoverState, type GraphRunState, type NodeRunState } from "./checkpoint";
+import { MarkEnvironment } from "../../coordination/mark-environment";
+import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 
 export interface GraphRunnerConfig {
 	workspace: string;
@@ -65,8 +69,11 @@ export class GraphRunner implements ISwarmOrchestrator {
 	#roleAssetManager!: RoleAssetManager;
 	#gateController!: GateController;
 	#graphRunState!: GraphRunState;
+	#markEnv!: MarkEnvironment;
 	#graphName!: string;
 	#ircBus!: IrcBus;
+	#swarmDir!: string;
+	#loopConfig!: LoopSwarmConfig;
 
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
@@ -75,17 +82,17 @@ export class GraphRunner implements ISwarmOrchestrator {
 	async init(): Promise<void> {
 		const { workspace, modelRegistry, settings, profileRegistry } = this.#config;
 		this.#graphName = path.basename(this.#config.graphPath, ".graph.yaml");
-		const swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
+		this.#swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
 
 		this.#graph = await loadGraphDefinition(this.#config.graphPath);
 
-		await fs.mkdir(swarmDir, { recursive: true });
-		await fs.mkdir(path.join(swarmDir, ".stp"), { recursive: true });
+		await fs.mkdir(this.#swarmDir, { recursive: true });
+		await fs.mkdir(path.join(this.#swarmDir, ".stp"), { recursive: true });
 
-		this.#sessionManager = await SwarmSessionManager.create(swarmDir);
+		this.#sessionManager = await SwarmSessionManager.create(this.#swarmDir);
 		this.#stateTracker = new StateTracker(workspace, this.#graphName);
 		this.#stateTracker.setSessionManager(this.#sessionManager);
-		this.#activityLogger = new ActivityLogger(swarmDir, this.#graphName);
+		this.#activityLogger = new ActivityLogger(this.#swarmDir, this.#graphName);
 		this.#activityLogger.setSessionManager(this.#sessionManager);
 		this.#experienceStore = new ExperienceStore(workspace);
 		await this.#experienceStore.init();
@@ -97,6 +104,19 @@ export class GraphRunner implements ISwarmOrchestrator {
 		registerBuiltinHooks(this.#hookPipeline, { experienceStore: this.#experienceStore, profileRegistry });
 		this.#ircBus = IrcBus.global();
 
+
+		// Default loop config for PhaseBehavior-backed nodes
+		this.#loopConfig = {
+			maxIterations: 5,
+			autoRetry: true,
+			humanEscalation: true,
+			agents: { initial: 4, min: 1, max: 12, auto: true, maxRounds: 5, roundsConvergenceThreshold: 3 },
+			debate: { enabled: true, maxRounds: 2 },
+			planDebate: { enabled: true, agentCount: 2, maxRounds: 3, convergenceThreshold: 2 },
+			convergenceThreshold: 2,
+			iterationTimeoutMs: 300_000,
+			enableDeliberation: true,
+		};
 		this.#roleAssetManager = new RoleAssetManager(workspace);
 		await this.#roleAssetManager.init();
 		this.#runtime = assembleAgentRuntime({
@@ -107,6 +127,14 @@ export class GraphRunner implements ISwarmOrchestrator {
 			ircBus: this.#ircBus,
 			experienceStore: this.#experienceStore,
 		});
+
+		// Create MarkEnvironment for stigmergic coordination
+		this.#markEnv = new MarkEnvironment();
+
+		// Register StigmergySource so agents get environmental awareness
+		this.#runtime.contextPipeline.register(
+			new StigmergySource(this.#markEnv),
+		);
 
 		this.#gateController = new GateController({ workspace });
 
@@ -195,6 +223,10 @@ export class GraphRunner implements ISwarmOrchestrator {
 		const profileRegistry = this.#config.profileRegistry;
 		const roleAssetManager = this.#roleAssetManager;
 		const activityLogger = this.#activityLogger;
+		const hookPipeline = this.#hookPipeline;
+		const fsm = this.#fsm;
+		const swarmDir = this.#swarmDir;
+		const loopConfig = this.#loopConfig;
 
 		// Build SchedulerNodeInfo from graph nodes for continueOnFailure
 		const nodeInfos: Record<string, SchedulerNodeInfo> = {};
@@ -218,7 +250,16 @@ export class GraphRunner implements ISwarmOrchestrator {
 					await stateTracker.updateAgent(nodeId, { status: "running" });
 					updateCheckpoint(nodeId, "running");
 
-					const behavior = selectNodeBehavior(node.type);
+					const behaviorFactoryConfig: NodeBehaviorFactoryConfig = {
+						runtime,
+						fsm,
+						hookPipeline,
+						contextPipeline: runtime.contextPipeline,
+						workspace,
+						swarmDir,
+						loopConfig,
+					};
+					const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
 					const ctx: NodeContext = {
 						node: {
 							id: nodeId,

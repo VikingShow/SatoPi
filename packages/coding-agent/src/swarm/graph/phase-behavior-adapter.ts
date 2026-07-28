@@ -6,9 +6,10 @@
  * (prepare → execute → validate → cleanup).
  *
  * PhaseBehavior has no prepare step, so prepare() is a no-op. The
- * execute() method calls enter() and returns the spawned agents and
- * channels. validate() delegates to checkCompletion(). cleanup()
- * delegates to exit().
+ * execute() method builds a PhaseContext from NodeContext + factory
+ * config, calls enter(), and returns results as a NodeResult.
+ * validate() delegates to checkCompletion(). cleanup() delegates
+ * to exit().
  *
  * Additional handleAgentEvent() and handleHumanMessage() methods are
  * exposed for the GraphRunner to call when events arrive — these are
@@ -16,76 +17,27 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { NodeBehaviorFactoryConfig } from "./node-behavior";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";
+import type { StateTracker } from "../core/state";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type {
 	PhaseBehavior,
 	PhaseCompletion,
 	PhaseContext,
 	PhaseEnterResult,
 } from "../behaviors/index";
-import type { GateSpec, NodeType } from "./schema";
-
-// ============================================================================
-// Adapter-specific types (bridge PhaseBehavior ↔ NodeBehavior)
-// ============================================================================
-
-/** Context passed to the adapter by the graph engine. */
-export interface AdapterNodeContext {
-	/** Stable identifier for this node in the graph. */
-	nodeId: string;
-	/** PhaseContext bridging to the existing swarm infrastructure. */
-	phaseContext: PhaseContext;
-	/** AbortSignal for cooperative cancellation. */
-	signal: AbortSignal;
-}
-
-/** Result of prepare() — carries prepared state forwarded to execute(). */
-export interface PreparedNode {
-	nodeId: string;
-}
-
-/** Result returned by execute(). */
-export interface AdapterNodeResult {
-	nodeId: string;
-	/** Agent handles spawned during execute(). */
-	agents: AgentHandle[];
-	/** Communication channels created during execute(). */
-	channels: CommChannel[];
-	/** Optional structured output from the execution. */
-	output?: unknown;
-}
-
-/** Result returned by validate(). */
-export interface AdapterGateResult {
-	/** Whether the gate condition was satisfied. */
-	passed: boolean;
-	/** Human-readable status or transition message. */
-	message?: string;
-}
-
-/**
- * AdapterNodeBehavior — contract for phase-behavior adapters.
- *
- * Lifecycle: prepare → execute → validate → cleanup.
- */
-export interface AdapterNodeBehavior {
-	/** The theatre phase this node corresponds to. */
-	readonly nodeType: NodeType;
-
-	/** Validate inputs and allocate resources before execution. */
-	prepare(ctx: AdapterNodeContext): Promise<PreparedNode>;
-
-	/** Run the node: spawn agents, poll events, drive to completion. */
-	execute(ctx: AdapterNodeContext, prepared: PreparedNode): Promise<AdapterNodeResult>;
-
-	/** Check whether the gate condition is satisfied. */
-	validate(result: AdapterNodeResult, gate: GateSpec): Promise<AdapterGateResult>;
-
-	/** Release resources after the node completes or is aborted. */
-	cleanup(ctx: AdapterNodeContext): Promise<void>;
-}
+import type {
+	GateResult,
+	GateSpec,
+	NodeBehavior,
+	NodeContext,
+	NodeResult,
+	NodeType,
+} from "./schema";
 
 // ============================================================================
 // PhaseBehaviorNodeAdapter
@@ -102,16 +54,18 @@ const CHAPTER_TO_NODE_TYPE: Record<string, NodeType> = {
  * Wraps a PhaseBehavior instance as a NodeBehavior for the theatre graph engine.
  *
  * Usage:
- *   const scriptNode = new PhaseBehaviorNodeAdapter(new ScriptBehavior());
+ *   const scriptNode = new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config);
  *   const prepared = await scriptNode.prepare(ctx);
  *   const result = await scriptNode.execute(ctx, prepared);
  *   const gate = await scriptNode.validate(result, { type: "script" });
  *   await scriptNode.cleanup(ctx);
  */
-export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
+export class PhaseBehaviorNodeAdapter implements NodeBehavior {
+	readonly name: string;
 	readonly nodeType: NodeType;
 
 	#behavior: PhaseBehavior;
+	#config: NodeBehaviorFactoryConfig;
 	/** PhaseContext stored from execute() for use in validate() and event delegation. */
 	#phaseContext?: PhaseContext;
 	/** Agent handles from the last enter() call. */
@@ -119,8 +73,10 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	/** Channels from the last enter() call. */
 	#channels: CommChannel[] = [];
 
-	constructor(behavior: PhaseBehavior) {
+	constructor(behavior: PhaseBehavior, config: NodeBehaviorFactoryConfig) {
 		this.#behavior = behavior;
+		this.#config = config;
+		this.name = behavior.phase;
 		this.nodeType = CHAPTER_TO_NODE_TYPE[behavior.phase] ?? "custom";
 	}
 
@@ -129,11 +85,11 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	// ==========================================================================
 
 	/**
-	 * No-op — PhaseBehavior has no prepare step.
-	 * Returns a minimal PreparedNode carrying only the nodeId.
+	 * No-op — PhaseBehavior has no prepare step. Returns an empty array
+	 * since agents are spawned internally by the behavior's enter() method.
 	 */
-	async prepare(ctx: AdapterNodeContext): Promise<PreparedNode> {
-		return { nodeId: ctx.nodeId };
+	async prepare(_ctx: NodeContext): Promise<AgentSpec[]> {
+		return [];
 	}
 
 	// ==========================================================================
@@ -141,13 +97,29 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	// ==========================================================================
 
 	/**
-	 * Calls PhaseBehavior.enter() to spawn agents and create channels.
-	 * Stores the PhaseContext for later use by validate() and event delegates.
+	 * Builds a PhaseContext from NodeContext + constructor config, then
+	 * calls PhaseBehavior.enter() to spawn agents and create channels.
 	 */
-	async execute(ctx: AdapterNodeContext, _prepared: PreparedNode): Promise<AdapterNodeResult> {
-		this.#phaseContext = ctx.phaseContext;
+	async execute(ctx: NodeContext, _prepared: AgentSpec[]): Promise<NodeResult> {
+		// Build PhaseContext from NodeContext + constructor config
+		const phaseCtx: PhaseContext = {
+			fsm: this.#config.fsm,
+			commBus: this.#config.runtime.commBus,
+			runtime: this.#config.runtime,
+			contextPipeline: this.#config.contextPipeline,
+			hookPipeline: this.#config.hookPipeline,
+			stateTracker: ctx.stateTracker!,
+			activityLogger: ctx.activityLogger!,
+			workspace: ctx.workspace,
+			swarmDir: this.#config.swarmDir,
+			planContent: "",
+			loopConfig: this.#config.loopConfig,
+			signal: ctx.signal,
+		};
 
-		const result: PhaseEnterResult = await this.#behavior.enter(ctx.phaseContext);
+		this.#phaseContext = phaseCtx;
+
+		const result: PhaseEnterResult = await this.#behavior.enter(phaseCtx);
 		this.#agents = result.agents;
 		this.#channels = result.channels;
 
@@ -159,9 +131,9 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 		});
 
 		return {
-			nodeId: ctx.nodeId,
-			agents: result.agents,
-			channels: result.channels,
+			nodeId: ctx.node.id,
+			success: true,
+			output: `Phase ${this.#behavior.phase} entered — ${result.agents.length} agents, ${result.channels.length} channels`,
 		};
 	}
 
@@ -171,27 +143,32 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 
 	/**
 	 * Delegates to PhaseBehavior.checkCompletion().
-	 *
-	 * Returns { passed: true } when the phase signals completion via a
-	 * non-null PhaseCompletion. Returns { passed: false } while the phase
-	 * is still running (checkCompletion returns null).
 	 */
-	async validate(result: AdapterNodeResult, gate: GateSpec): Promise<AdapterGateResult> {
+	async validate(_result: NodeResult, _gate?: GateSpec): Promise<GateResult> {
 		const phaseCtx = this.#phaseContext;
 		if (!phaseCtx) {
-			return { passed: false, message: "No phase context available for validation" };
+			return {
+				passed: false,
+				failures: ["No phase context available for validation"],
+				humanReviewRequired: false,
+			};
 		}
 
 		const completion: PhaseCompletion | null =
 			await this.#behavior.checkCompletion(phaseCtx);
 
 		if (completion === null) {
-			return { passed: false, message: "Phase still running" };
+			return {
+				passed: false,
+				failures: ["Phase still running"],
+				humanReviewRequired: false,
+			};
 		}
 
 		return {
 			passed: true,
-			message: completion.message ?? `Phase complete, next: ${completion.nextPhase}`,
+			failures: [],
+			humanReviewRequired: false,
 		};
 	}
 
@@ -199,11 +176,7 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	// NodeBehavior: cleanup
 	// ==========================================================================
 
-	/**
-	 * Calls PhaseBehavior.exit() to release agent handles, channels, and
-	 * internal state. Resets all adapter state.
-	 */
-	async cleanup(_ctx: AdapterNodeContext): Promise<void> {
+	async cleanup(_ctx: NodeContext): Promise<void> {
 		await this.#behavior.exit();
 		this.#phaseContext = undefined;
 		this.#agents = [];
@@ -218,14 +191,6 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 	// Event delegation (called by GraphRunner, not part of NodeBehavior)
 	// ==========================================================================
 
-	/**
-	 * Delegate agent lifecycle events to the wrapped PhaseBehavior.
-	 *
-	 * Called by the GraphRunner when an agent status changes. The
-	 * PhaseBehavior's handleAgentEvent implementation handles
-	 * coordination logic: conflict detection, task re-assignment,
-	 * completion tracking.
-	 */
 	async handleAgentEvent(
 		event: { agentId: string; status: string; result?: unknown },
 	): Promise<void> {
@@ -234,13 +199,6 @@ export class PhaseBehaviorNodeAdapter implements AdapterNodeBehavior {
 		await this.#behavior.handleAgentEvent(event, phaseCtx);
 	}
 
-	/**
-	 * Delegate human messages to the wrapped PhaseBehavior.
-	 *
-	 * Called by the GraphRunner when a human message arrives through
-	 * the CommBus. The PhaseBehavior routes the message to the
-	 * appropriate agent(s).
-	 */
 	async handleHumanMessage(msg: { from: string; body: string }): Promise<void> {
 		const phaseCtx = this.#phaseContext;
 		if (!phaseCtx) return;

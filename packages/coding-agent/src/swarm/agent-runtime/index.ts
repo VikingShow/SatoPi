@@ -288,6 +288,11 @@ export class AgentRuntime {
 		return this.#commBus;
 	}
 
+	/** The context pipeline for registering additional context sources. */
+	get contextPipeline(): ContextPipeline {
+		return this.#contextPipeline;
+	}
+
 	// -----------------------------------------------------------------------
 	// Internal
 	// -----------------------------------------------------------------------

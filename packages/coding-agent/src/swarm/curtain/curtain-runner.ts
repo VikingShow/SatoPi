@@ -183,6 +183,15 @@ export async function runCurtainPipeline(
 	const fanOutMetadata = opts.graphName ? { graphName: opts.graphName } : undefined;
 	await lessonSink.fanOut(extraction.lessons, extraction.stats, runId, fanOutMetadata);
 
+	// Trigger memory consolidation so experience DB → memory_summary.md sync
+	// happens inline rather than only on next startup.
+	try {
+		const { enqueueMemoryConsolidation } = await import("../../memories");
+		enqueueMemoryConsolidation?.();
+	} catch {
+		// Non-critical — consolidation runs on startup independently
+	}
+
 	// Write summary
 	await experienceStore.writeSummary(runId, summaryMarkdown);
 	experienceStore.decayUnreferenced(referencedRunIds);

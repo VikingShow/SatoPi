@@ -41,22 +41,34 @@ export interface DiscoveryResult {
  * Load agents from a directory.
  */
 async function loadAgentsFromDir(dir: string, source: AgentSource): Promise<AgentDefinition[]> {
+	const results: AgentDefinition[] = [];
 	const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-	const files = entries
-		.filter(entry => (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md"))
-		.sort((a, b) => a.name.localeCompare(b.name))
-		.map(file => {
-			const filePath = path.join(dir, file.name);
-			return fs
-				.readFile(filePath, "utf-8")
-				.then(content => parseAgent(filePath, content, source, "warn"))
-				.catch(error => {
-					logger.warn("Failed to read agent file", { filePath, error });
-					return null;
-				});
-		});
 
-	return (await Promise.all(files)).filter(Boolean) as AgentDefinition[];
+	const mdEntries = entries
+		.filter(entry => (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md"))
+		.sort((a, b) => a.name.localeCompare(b.name));
+
+	const reads = mdEntries.map(async file => {
+		const filePath = path.join(dir, file.name);
+		try {
+			const agent = await parseAgent(filePath, await fs.readFile(filePath, "utf-8"), source, "warn");
+			if (agent) results.push(agent);
+		} catch (error) {
+			logger.warn("Failed to read agent file", { filePath, error });
+		}
+	});
+
+	await Promise.all(reads);
+
+	for (const entry of entries) {
+		if (entry.isDirectory()) {
+			const fullPath = path.join(dir, entry.name);
+			const subResults = await loadAgentsFromDir(fullPath, source);
+			results.push(...subResults);
+		}
+	}
+
+	return results;
 }
 
 /**

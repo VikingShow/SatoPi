@@ -25,7 +25,7 @@ export class ExperienceSource implements ContextSource {
 	}
 
 	appliesTo(phase: Chapter, _agentRole: string): boolean {
-		return phase === "script" || phase === "script-debate";
+		return phase === "script" || phase === "script-debate" || phase === "stage";
 	}
 
 	async build(spec: AgentSpecLike, base: BuildContext): Promise<ContextFragment> {
