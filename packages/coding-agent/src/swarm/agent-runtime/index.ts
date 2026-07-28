@@ -398,11 +398,17 @@ export class AgentRuntime {
 			settings: this.#settings,
 			activityLogger: this.#activityLogger,
 			toolRegistry: this.#toolRegistry,
+			agentRuntime: this,
 		};
 
 		let handle: AgentHandle;
 		try {
 			handle = await this.#launcher.launch(launchContext);
+
+		// 5.5 Store handle for persistent agent steering/reuse
+		if (spec.profileId) {
+			AgentRegistry.global().setHandle(spec.id, handle);
+		}
 		} catch (err) {
 			logger.error("[AgentRuntime] Agent launch failed", {
 				agentId,

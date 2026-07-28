@@ -33,14 +33,14 @@ export class UserMessageComponent extends Container {
 		const baseText = synthetic
 			? (value: string) => theme.fg("dim", value)
 			: (value: string) => theme.fg("userMessageText", highlightMagicKeywords(value, keywordReset));
-		const imageLabel = (value: string) => theme.fg("accent", `\x1b[1m\x1b[4m${value}\x1b[24m\x1b[22m`);
+		const imageLabel = (value: string) => theme.fg("accent", theme.bold(theme.underline(value)));
 		const color = (value: string) =>
 			renderPlaceholders(value, {
 				renderText: baseText,
 				renderReference: (label, kind, index) =>
 					kind === "image"
 						? imageReferenceHyperlink(label, index, imageLinks, imageLabel)
-						: theme.fg("accent", `\x1b[1m${label}\x1b[22m`),
+						: theme.fg("accent", theme.bold(label)),
 			});
 		const md = new Markdown(text, 1, 1, getMarkdownTheme(), {
 			bgColor,

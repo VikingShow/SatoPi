@@ -82,31 +82,15 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 		);
 
 		if (existing && existing.session && existing.status === "idle") {
-			// Reuse — steer the idle agent with a new task
-			try {
-				logger.info("[agent_invoke] Steering idle persistent agent", {
-					id: existing.id,
-					profileId,
-				});
-
-				// Steer: send task as a new user message
-				// The AgentHandle.send() API routes through the comm bus
-				// Since we don't have a direct AgentHandle reference here,
-				// we spawn a follow-up turn via the runtime's aside queue.
-				//
-				// For now, fall back to spawning a new agent since we can't
-				// directly steer an existing agent session without its handle.
-				// The existing agent's session is accessible but steering
-				// requires the Agent instance.
-				//
-				// In practice, persistent agents are typically spawned fresh
-				// per invocation unless explicitly managed by the runtime.
-			} catch (err) {
-				logger.warn("[agent_invoke] Failed to steer existing agent, falling back to spawn", {
-					id: existing.id,
-					error: String(err),
-				});
-			}
+			// Identity-level reuse: the existing persistent agent's identity
+			// (profileId, credit, dashboard entry) is preserved. We spawn a
+			// new agent session with the same profileId, which AgentRegistry
+			// merges by disposing the old session. Process-level steer/reuse
+			// of the live agent handle is a future optimization (P3).
+			logger.info("[agent_invoke] Reusing persistent agent identity", {
+				id: existing.id,
+				profileId,
+			});
 		}
 
 		// Spawn new persistent agent

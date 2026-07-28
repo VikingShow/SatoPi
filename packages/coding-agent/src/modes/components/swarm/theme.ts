@@ -43,6 +43,38 @@ export const sato = {
 };
 
 // ============================================================================
+// Theme-bridge factory
+// ============================================================================
+
+import type { Theme } from "../../theme/theme";
+
+/**
+ * Create SatoPi swarm dashboard colour helpers from the main TUI Theme.
+ *
+ * Prefer this over the static `sato` object when a Theme instance is available
+ * (e.g. in SwarmDashboardOverlay).  Brand colours without a ThemeColor key
+ * (info, purple, orange) fall back to the static chalk.hex helpers below.
+ */
+export function createSatoFromTheme(theme: Theme) {
+	return {
+		success: (text: string) => theme.fg("success", text),
+		error:   (text: string) => theme.fg("error",   text),
+		danger:  (text: string) => theme.fg("error",   text),
+		warning: (text: string) => theme.fg("warning", text),
+		muted:   (text: string) => theme.fg("muted",   text),
+		dim:     (text: string) => theme.fg("dim",     text),
+		text:    (text: string) => theme.fg("text",    text),
+		border:  (text: string) => theme.fg("border",  text),
+		bold:    (text: string) => theme.bold(text),
+		amber:   (text: string) => theme.fg("accent",  text),
+		// Brand colours — no ThemeColor equivalents; fall back to chalk.hex
+		info:   sato.info,
+		purple: sato.purple,
+		orange: sato.orange,
+	};
+}
+
+// ============================================================================
 // Phase lifecycle visualisation
 // ============================================================================
 

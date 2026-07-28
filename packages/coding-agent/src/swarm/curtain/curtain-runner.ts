@@ -29,7 +29,6 @@ import {
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
-import { streamAgentOutput } from "../render/streaming";
 import type { StageResult } from "../stage/stage-controller";
 import { MultiLessonSink } from "./lesson-sink";
 import type { ContributionData } from "./types";
@@ -52,6 +51,8 @@ export interface CurtainRunnerOpts {
 	ircBus?: IrcBus;
 	/** Optional CommBus (injected from AgentRuntime; falls back to global singleton). */
 	commBus?: CommBus;
+	/** AgentRuntime for v3 agent spawning. */
+	runtime?: AgentRuntime;
 	/** Optional remote Hindsight handle — pushes lessons cross-session. Null/absent → local only. */
 	hindsightClient?: SwarmHindsightClient | null;
 	/** Optional semantic memory handle — pushes lessons to Mnemopi. Null/absent → skipped. */
@@ -147,8 +148,6 @@ export async function runCurtainPipeline(
 			logger.warn("[Curtain] Reporter election failed, falling back to default reporter", { error: String(err) });
 		}
 	}
-
-	// ── Run reporter + reflection in parallel ──
 	const [reporterSummary, extraction] = await Promise.all([
 		// Thread A: Reporter agent (elected or default)
 		runReporterAgent(workspace, result, {
@@ -157,7 +156,7 @@ export async function runCurtainPipeline(
 			activityLogger,
 			roleAssetManager,
 			reporterOverride: electedReporter,
-		}),
+		}, opts.runtime),
 		// Thread B: Reflection pipeline
 		runReflectionPipeline(result, {
 			agentCount,
@@ -288,43 +287,20 @@ async function runReporterAgent(
 
 		let reportOutput: string | null;
 
-		if (runtime) {
-			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
-			const [handle] = await runtime.spawn([
-				{
-					id: reporterName,
-					role: reporterName,
-					roleSource: roleAssetManager ? "library" : "inline",
-					inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
-					task: reportTask,
-				},
-			]);
+		// v3 path — AgentRuntime.spawn() is the only execution path.
+		// Legacy streamAgentOutput() fallback removed (SP-2 convergence).
+		const [handle] = await runtime!.spawn([
+			{
+				id: reporterName,
+				role: reporterName,
+				roleSource: roleAssetManager ? "library" : "inline",
+				inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
+				task: reportTask,
+			},
+		]);
 
-			const output = await handle.wait();
-			reportOutput = output?.output ?? output ?? null;
-		} else {
-			// FALLBACK: existing code path (keep exactly as-is)
-			const report = await streamAgentOutput(
-				{ activityLogger, msgId, from: reporterName },
-				{
-					cwd: workspace,
-					agent: {
-						name: reporterName,
-						description: "Curtain phase reporter agent",
-						systemPrompt,
-						source: "project" as const,
-						tools: ["read", "grep", "glob"],
-					},
-					task: reportTask,
-					index: 0,
-					id: msgId,
-					modelRegistry,
-					settings,
-				},
-			);
-
-			reportOutput = report.output || null;
-		}
+		const output = await handle.wait();
+		reportOutput = output?.output ?? output ?? null;
 
 		return reportOutput;
 	} catch (err) {

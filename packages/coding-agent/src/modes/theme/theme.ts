@@ -1621,6 +1621,10 @@ export class Theme {
 		return chalk.bold(text);
 	}
 
+	dim(text: string): string {
+		return chalk.dim(text);
+	}
+
 	italic(text: string): string {
 		return chalk.italic(text);
 	}

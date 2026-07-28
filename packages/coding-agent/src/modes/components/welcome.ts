@@ -65,11 +65,9 @@ type ColorEncoding = "ansi-16m" | "ansi-256";
  *  rotates the hue offset cyclically; successive renders with increasing phase
  *  shimmer, while a fixed phase yields a still rainbow. */
 function renderNewTag(phase: number, encoding: ColorEncoding): string {
-	const bold = "\x1b[1m";
-	const reset = "\x1b[0m";
 	const wrapped = ((phase % 1) + 1) % 1;
 	const chars = [...NEW_TAG_TEXT];
-	let out = bold;
+	let out = "";
 	let prev = "";
 	for (let i = 0; i < chars.length; i++) {
 		const hue = Math.round(((i / chars.length + wrapped) % 1) * 360);
@@ -80,7 +78,7 @@ function renderNewTag(phase: number, encoding: ColorEncoding): string {
 		}
 		out += chars[i];
 	}
-	return out + reset;
+	return theme.bold(out) + "\x1b[0m";
 }
 export function renderWelcomeTip(tip: string, boxWidth: number, phase = 0): string[] {
 	const label = "Tip: ";

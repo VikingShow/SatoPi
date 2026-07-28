@@ -1,4 +1,4 @@
-// Agent execution — subprocess spawning, task queues, and todo tracking
-export { type AgentExecutor, executeSwarmAgent, SubprocessAgentExecutor, type SwarmExecutorOptions } from "./executor";
+// Agent execution — task queues and todo tracking
+// (SubprocessAgentExecutor / executeSwarmAgent are internal; import from executor.ts directly)
 export { type Task, TaskQueue } from "./task-queue";
 export { TodoTracker } from "./todo-tracker";

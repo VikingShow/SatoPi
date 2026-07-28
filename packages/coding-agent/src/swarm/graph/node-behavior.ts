@@ -184,22 +184,26 @@ export class CustomNodeBehavior implements NodeBehavior {
 
 	/**
 	 * Route execution to a persistent agent identified by ctx.node.profileId.
-	 * If an idle persistent agent with matching profile already exists, it is
-	 * reused; otherwise a new persistent agent is spawned.
+	 * Identity-level reuse: if an idle persistent agent with the same profileId
+	 * already exists, a new agent is spawned with the same identity, which the
+	 * AgentRegistry merges (disposing the old session). This preserves profile
+	 * credit tracking, lifecycle status, and dashboard identity across tasks.
+	 *
+	 * Process-level reuse (steering an existing agent via its handle) is a
+	 * future optimization tracked under P3.
 	 */
 	async #executePersistent(ctx: NodeContext, spec: AgentSpec): Promise<NodeResult> {
 		const registry = ctx.agentRegistry!;
 		const existing = registry.list().find(ref => ref.profileId === ctx.node.profileId);
 
-		if (existing && existing.status === "idle" && existing.session) {
-			// Reuse: steer the existing agent
-			logger.info("[CustomNodeBehavior] Routing to persistent agent", {
+		if (existing && existing.status === "idle") {
+			logger.info("[CustomNodeBehavior] Reusing persistent agent identity", {
 				nodeId: ctx.node.id,
 				profileId: ctx.node.profileId,
 				existingAgentId: existing.id,
 			});
-			// TODO: steer existing agent via IRC with the spec's task, then
-			// wait for and return its result. For now, falls through to spawn.
+			// Identity-level reuse: spawn a new agent with the same profileId.
+			// AgentRegistry.register() disposes the old session on duplicate id.
 		}
 
 		// Spawn new persistent agent

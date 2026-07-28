@@ -13,8 +13,6 @@
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
@@ -44,8 +42,8 @@ export interface DebateRoundtableConfig {
 	 */
 	convergenceThreshold: number;
 	toolRestriction?: AgentToolRestriction;
-	/** Optional: AgentRuntime for v3 agent spawning. When provided, skip runSubprocess. */
-	runtime?: AgentRuntime;
+	/** AgentRuntime for v3 agent spawning (required). */
+	runtime: AgentRuntime;
 }
 
 export interface DebateRoundtableResult {
@@ -87,8 +85,8 @@ function textSimilarity(a: string, b: string): number {
 export class DebateRoundtable {
 	readonly #config: Required<Omit<DebateRoundtableConfig, "toolRestriction">>;
 	readonly #toolRestriction?: AgentToolRestriction;
-	/** Optional AgentRuntime injected for v3 agent spawning. */
-	#runtime: AgentRuntime | undefined = undefined;
+	/** AgentRuntime for v3 agent spawning. */
+	#runtime: AgentRuntime;
 
 	constructor(config: DebateRoundtableConfig) {
 		this.#config = {
@@ -130,93 +128,41 @@ export class DebateRoundtable {
 			// Spawn agents in parallel for this round
 			let results: SingleResult[];
 
-			if (this.#runtime) {
-				// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
-				const debatePrompt = this.#debateAgentSystemPrompt();
-				const restrictedTools = this.#toolRestriction?.allowed ?? [];
+			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
+			const debatePrompt = this.#debateAgentSystemPrompt();
+			const restrictedTools = this.#toolRestriction?.allowed ?? [];
 
-				const handles: AgentHandle[] = await this.#runtime.spawn(
-					Array.from({ length: agentCount }, (_, i) => ({
-						id: `debate-agent-${i + 1}`,
-						role: "debater",
-						roleSource: "inline" as const,
-						inline: { systemPrompt: debatePrompt, tools: restrictedTools },
-						task: roundPrompt,
-					})),
-				);
+			const handles: AgentHandle[] = await this.#runtime.spawn(
+				Array.from({ length: agentCount }, (_, i) => ({
+					id: `debate-agent-${i + 1}`,
+					role: "debater",
+					roleSource: "inline" as const,
+					inline: { systemPrompt: debatePrompt, tools: restrictedTools },
+					task: roundPrompt,
+				})),
+			);
 
-				// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
-				const settled = await Promise.allSettled(handles.map(h => h.wait()));
-				results = settled.map((s, i) => {
-					if (s.status === "fulfilled") return s.value;
-					const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
-					return {
-						index: i,
-						id: `plan-debate-r${round}-c${i + 1}`,
-						agent: `debate-agent-${i + 1}`,
-						agentSource: "project" as const,
-						task: roundPrompt,
-						exitCode: 1,
-						output: `[CRASHED] ${errMsg}`,
-						stderr: errMsg,
-						truncated: false,
-						durationMs: 0,
-						tokens: 0,
-						requests: 0,
-						error: errMsg,
-					};
-				});
-			} else {
-				// FALLBACK: existing code path (keep exactly as-is)
-				const settled = await Promise.allSettled(
-					Array.from({ length: agentCount }, (_, i) =>
-						runSubprocess({
-							cwd: workspace,
-							agent: (() => {
-								const def: AgentDefinition = {
-									name: `debate-agent-${i + 1}`,
-									description: `Plan debate agent ${i + 1}`,
-									systemPrompt: this.#debateAgentSystemPrompt(),
-									source: "project" as const,
-								};
-								if (this.#toolRestriction) {
-									if (this.#toolRestriction.allowed && this.#toolRestriction.allowed.length > 0) {
-										def.tools = this.#toolRestriction.allowed;
-									}
-									if (this.#toolRestriction.blocked && this.#toolRestriction.blocked.length > 0) {
-										def.blockedTools = this.#toolRestriction.blocked;
-									}
-								}
-								return def;
-							})(),
-							task: roundPrompt,
-							index: i,
-							id: `plan-debate-r${round}-c${i + 1}`,
-							modelRegistry,
-							settings,
-							signal,
-						}),
-					),
-				);
-				results = settled.map((s, i) => {
-					if (s.status === "fulfilled") return s.value;
-					const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
-					return {
-						index: i,
-						id: `plan-debate-r${round}-c${i + 1}`,
-						agent: `debate-agent-${i + 1}`,
-						agentSource: "project" as const,
-						task: "",
-						exitCode: 1,
-						output: `[CRASHED] ${errMsg}`,
-						stderr: "",
-						truncated: false,
-						durationMs: 0,
-						tokens: 0,
-						requests: 0,
-					};
-				});
-			}
+			// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
+			const settled = await Promise.allSettled(handles.map(h => h.wait()));
+			results = settled.map((s, i) => {
+				if (s.status === "fulfilled") return s.value;
+				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
+				return {
+					index: i,
+					id: `plan-debate-r${round}-c${i + 1}`,
+					agent: `debate-agent-${i + 1}`,
+					agentSource: "project" as const,
+					task: roundPrompt,
+					exitCode: 1,
+					output: `[CRASHED] ${errMsg}`,
+					stderr: errMsg,
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+					error: errMsg,
+				};
+			});
 
 			const outputs = results.map(r => this.#extractPlanContent(r));
 			const similarity =

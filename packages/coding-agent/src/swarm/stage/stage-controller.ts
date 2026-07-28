@@ -432,6 +432,7 @@ export class StageController {
 						id: agent.id,
 						role: agent.role,
 						roleSource: "library",
+						profileId: agent.id,
 						task: taskText,
 					},
 				]);

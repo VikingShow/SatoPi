@@ -3,9 +3,6 @@ import * as Diff from "diff";
 import { getLanguageFromPath, highlightCode, theme } from "../../modes/theme/theme";
 import { type CodeFrameMarker, formatCodeFrameLine, replaceTabs } from "../../tools/render-utils";
 
-/** SGR dim on / normal intensity — additive, preserves fg/bg colors. */
-const DIM = "\x1b[2m";
-const DIM_OFF = "\x1b[22m";
 
 /**
  * Visualize leading whitespace (indentation) with dim glyphs.
@@ -21,13 +18,13 @@ function visualizeIndent(text: string): string {
 	const tabWidth = DEFAULT_TAB_WIDTH;
 	const leftPadding = Math.floor(tabWidth / 2);
 	const rightPadding = Math.max(0, tabWidth - leftPadding - 1);
-	const tabMarker = `${DIM}${" ".repeat(leftPadding)}→${" ".repeat(rightPadding)}${DIM_OFF}`;
+	const tabMarker = theme.dim(`${" ".repeat(leftPadding)}→${" ".repeat(rightPadding)}`);
 	let visible = "";
 	for (const ch of indent) {
 		if (ch === "\t") {
 			visible += tabMarker;
 		} else {
-			visible += `${DIM}·${DIM_OFF}`;
+			visible += theme.dim("·");
 		}
 	}
 	return `${visible}${replaceTabs(rest)}`;

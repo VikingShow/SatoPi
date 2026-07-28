@@ -6,8 +6,7 @@
  * eliminates the 5 duplicate copies of that boilerplate.
  */
 
-import type { AgentProgress, SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent";
+import type { AgentProgress } from "@oh-my-pi/pi-coding-agent";
 import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
@@ -103,55 +102,5 @@ function tailOverlap(full: string, ring: string): number {
 	return 0; // no overlap found — append entire ringText
 }
 
-// ============================================================================
-// streamAgentOutput
-// ============================================================================
 
-/**
- * Run a swarm agent subprocess with SSE streaming baked in.
- *
- * Replaces the 10-line manual pattern:
- *
- *   activityLogger.logStreamStart(msgId, from);
- *   const result = await runSubprocess({
- *     ...,
- *     onProgress: (progress) => { … manual diff … }
- *   });
- *   activityLogger.logStreamEnd(msgId, from, result.output, result.thinking);
- *
- * with a single call:
- *
- *   const result = await streamAgentOutput(opts, runOptions);
- *
- * The function always emits a stream_start before execution and a
- * stream_end after (on both success and failure).  Callers that need
- * the raw result (e.g. for verdict extraction) can use the returned
- * Promise<SingleResult> directly.
- *
- * @param opts       Streaming metadata (logger, msgId, from, optional transform).
- * @param runOptions Options forwarded to runSubprocess.  The caller MUST NOT
- *                   set onProgress — we inject our own handler (pass a
- *                   userOnProgress to createStreamProgressHandler if needed).
- */
-export function streamAgentOutput(
-	opts: StreamAgentOptions,
-	runOptions: Parameters<typeof runSubprocess>[0] & { userOnProgress?: (p: AgentProgress) => void },
-): Promise<SingleResult> {
-	opts.activityLogger.logStreamStart(opts.msgId, opts.from);
-
-	return runSubprocess({
-		...runOptions,
-		onProgress: createStreamProgressHandler(opts.activityLogger, opts.msgId, opts.from, runOptions.userOnProgress),
-	})
-		.then((result: SingleResult) => {
-			const raw = result.output ?? "";
-			const finalBody = opts.transformOutput ? opts.transformOutput(raw) : raw || "(no output)";
-			opts.activityLogger.logStreamEnd(opts.msgId, opts.from, finalBody, result.thinking);
-			return result;
-		})
-		.catch((err: unknown) => {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			opts.activityLogger.logStreamEnd(opts.msgId, opts.from, `[Error] ${errMsg}`, undefined);
-			throw err;
-		});
-}
+// streamAgentOutput removed — use AgentRuntime.spawn() instead (SP-2 convergence).

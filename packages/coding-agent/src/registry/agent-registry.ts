@@ -18,6 +18,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentHandle } from "../swarm/agent-runtime/agent-handle";
 import type { AgentSession } from "../session/agent-session";
 import { oneLineLabel } from "../task/types";
 
@@ -185,12 +186,6 @@ export class AgentRegistry {
 		ref.session = null;
 	}
 
-	unregister(id: string): void {
-		const ref = this.#refs.get(id);
-		if (!ref) return;
-		this.#refs.delete(id);
-		this.#emit({ type: "removed", ref });
-	}
 
 	get(id: string): AgentRef | undefined {
 		return this.#refs.get(id);
@@ -205,6 +200,34 @@ export class AgentRegistry {
 			if (ref.profileId === profileId) return ref;
 		}
 		return undefined;
+	}
+
+	/**
+	 * Store a live AgentHandle for a persistent agent, keyed by the agent's
+	 * registry id. The handle enables steer/reuse of idle persistent agents
+	 * without re-spawning.
+	 */
+	readonly #handles = new Map<string, AgentHandle>();
+
+	setHandle(id: string, handle: AgentHandle): void {
+		this.#handles.set(id, handle);
+	}
+
+	/**
+	 * Retrieve the live AgentHandle for an agent, if one was stored.
+	 * Returns undefined for transient agents or agents whose handle has
+	 * not been wired (e.g. pre-v3 paths).
+	 */
+	getHandle(id: string): AgentHandle | undefined {
+		return this.#handles.get(id);
+	}
+
+	unregister(id: string): void {
+		const ref = this.#refs.get(id);
+		if (!ref) return;
+		this.#refs.delete(id);
+		this.#handles.delete(id);
+		this.#emit({ type: "removed", ref });
 	}
 
 	list(): AgentRef[] {
