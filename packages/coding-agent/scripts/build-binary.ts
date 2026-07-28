@@ -13,6 +13,8 @@ export interface CrossBuild {
 	readonly platform: string;
 	readonly arch: string;
 	readonly target: Bun.Build.CompileTarget;
+	/** Rust target triple for native addon cross-compilation (undefined = native). */
+	readonly rustTarget?: string;
 }
 
 /** Resolves a CROSS_TARGET value to the Bun compile target used by local binary builds. */
@@ -22,16 +24,16 @@ export function resolveCrossBuild(value: string | undefined): CrossBuild | null 
 		case "":
 			return null;
 		case "darwin-arm64":
-			return { id: value, platform: "darwin", arch: "arm64", target: "bun-darwin-arm64" };
+			return { id: value, platform: "darwin", arch: "arm64", target: "bun-darwin-arm64", rustTarget: "aarch64-apple-darwin" };
 		case "darwin-x64":
-			return { id: value, platform: "darwin", arch: "x64", target: "bun-darwin-x64" };
+			return { id: value, platform: "darwin", arch: "x64", target: "bun-darwin-x64", rustTarget: "x86_64-apple-darwin" };
 		case "linux-arm64":
-			return { id: value, platform: "linux", arch: "arm64", target: "bun-linux-arm64" };
+			return { id: value, platform: "linux", arch: "arm64", target: "bun-linux-arm64", rustTarget: "aarch64-unknown-linux-gnu.2.17" };
 		case "linux-x64":
 			return { id: value, platform: "linux", arch: "x64", target: "bun-linux-x64-baseline" };
 		case "win32-x64":
 		case "windows-x64":
-			return { id: value, platform: "win32", arch: "x64", target: "bun-windows-x64-baseline" };
+			return { id: value, platform: "win32", arch: "x64", target: "bun-windows-x64-baseline", rustTarget: "x86_64-pc-windows-msvc" };
 		default:
 			throw new Error(`Unsupported CROSS_TARGET: ${value}`);
 	}
@@ -86,7 +88,16 @@ async function main(): Promise<void> {
 		// `export/html` subpath, whose source imports `tool-views.generated.js`.
 		// Rebuild it before compilation so clean checkouts that skipped install
 		// hooks still contain that generated bundle.
-		await runCommand(["bun", "--cwd=../collab-web", "run", "gen:tool-views"]);
+		// Build the native Rust addon before embedding it. For cross-compilation
+		// targets, pipe the Rust target triple through CROSS_TARGET so the napi
+		// build routes through cargo-zigbuild / cargo-xwin.
+		await runCommand(
+			["bun", "run", "ci:build:native"],
+			crossBuild
+				? { ...Bun.env, CROSS_TARGET: crossBuild.rustTarget ?? "", TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch }
+				: Bun.env,
+			repoRoot,
+		);
 		await runCommand(
 			["bun", "--cwd=../natives", "run", "gen:native"],
 			crossBuild ? { ...Bun.env, TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch } : Bun.env,
