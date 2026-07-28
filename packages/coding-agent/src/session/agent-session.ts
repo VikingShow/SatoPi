@@ -250,9 +250,6 @@ import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
 import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
-import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import type { SwarmEventCallback } from "../swarm/core/embedded-swarm-bridge";
 import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
 import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
@@ -300,6 +297,8 @@ import {
 	type SecretObfuscator,
 } from "../secrets/obfuscator";
 import { invalidateHostMetadata } from "../ssh/connection-manager";
+import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
+import { GraphRunner } from "../swarm/graph/graph-runner";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import {
 	AUTO_THINKING,
@@ -324,6 +323,7 @@ import {
 	isMCPToolName,
 	selectDiscoverableToolNamesByServer,
 } from "../tool-discovery/tool-index";
+import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../tools/approval";
 import { assertEditableFile } from "../tools/auto-generated-guard";
 import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
 import { normalizeToolNames } from "../tools/builtin-names";
@@ -343,7 +343,6 @@ import { normalizeModelContextImages } from "../utils/image-loading";
 import { describeAttachedImagesForTextModel } from "../utils/image-vision-fallback";
 import { formatLocalCalendarDate } from "../utils/local-date";
 import { generateSessionTitle } from "../utils/title-generator";
-import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../tools/approval";
 import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
 import type { VibeModeState } from "../vibe/state";
 import type { AuthStorage } from "./auth-storage";
@@ -6152,7 +6151,9 @@ export class AgentSession {
 		this.agent.hasIrcInterrupts = undefined;
 		this.#stopAdvisorRuntime();
 		this.#evalExecutionDisposing = true;
-		this.#embeddedSwarm?.dispose().catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
+		this.#embeddedSwarm
+			?.dispose()
+			.catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
 	}
 
 	/**
@@ -6885,20 +6886,19 @@ export class AgentSession {
 					// per-tool-call overrides), falling back to session-level settings.
 					const cSettings = context?.settings;
 					const cliAutoApprove = context?.autoApprove === true || this.#autoApprove === true;
-					const configuredMode = (
-						cSettings?.get("tools.approvalMode") ?? this.settings.get("tools.approvalMode") ?? "yolo"
-					) as ApprovalMode;
+					const configuredMode = (cSettings?.get("tools.approvalMode") ??
+						this.settings.get("tools.approvalMode") ??
+						"yolo") as ApprovalMode;
 					const approvalMode: ApprovalMode = cliAutoApprove ? "yolo" : configuredMode;
-					const userPolicies = (
-						cSettings?.get("tools.approval") ?? this.settings.get("tools.approval") ?? {}
-					) as Record<string, unknown>;
+					const userPolicies = (cSettings?.get("tools.approval") ??
+						this.settings.get("tools.approval") ??
+						{}) as Record<string, unknown>;
 					const approvalCheck = requiresApproval(target, params, approvalMode, userPolicies);
 
 					if (approvalCheck.required) {
 						const runner = this.#extensionRunner;
 						const hasApprovalHandlers =
-							runner?.hasHandlers("tool_approval_requested") ||
-							runner?.hasHandlers("tool_approval_resolved");
+							runner?.hasHandlers("tool_approval_requested") || runner?.hasHandlers("tool_approval_resolved");
 						const sessionId = context?.sessionManager?.getSessionId() ?? this.sessionId;
 						if (hasApprovalHandlers && runner) {
 							await runner.emit({
@@ -8157,11 +8157,11 @@ export class AgentSession {
 				modelRegistry: this.#modelRegistry,
 				settings: this.settings,
 				profileRegistry,
-				maxWorkers: this.settings.get("magicKeywords.swarm.maxWorkers") as number ?? 4,
-				maxRounds: this.settings.get("magicKeywords.swarm.maxRounds") as number ?? 3,
-				autoApplaud: this.settings.get("magicKeywords.swarm.autoApplaud") as boolean ?? false,
+				maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
+				maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
+				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
 			},
-			(_event) => {
+			_event => {
 				// Events forwarded to interactive-mode via the public embeddedSwarm getter
 			},
 		);

@@ -13,7 +13,7 @@
 
 import type { AgentLoopConfig, AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
-import { type CompactContextConfig, compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
+import { compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
 import type { Chapter } from "../core/state";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";

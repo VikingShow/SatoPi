@@ -10,8 +10,8 @@
  * Design follows the TencentDB L3 compact context pattern.
  */
 
-import { estimateTokens } from "@oh-my-pi/pi-agent-core/compaction";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import { estimateTokens } from "@oh-my-pi/pi-agent-core/compaction";
 
 // ============================================================================
 // Types
@@ -84,7 +84,13 @@ function collectToolCallIds(msg: AgentMessage): string[] {
 	const content = msg.content;
 	if (!Array.isArray(content)) return [];
 	for (const block of content) {
-		if (typeof block === "object" && block !== null && "type" in block && block.type === "toolCall" && "id" in block) {
+		if (
+			typeof block === "object" &&
+			block !== null &&
+			"type" in block &&
+			block.type === "toolCall" &&
+			"id" in block
+		) {
 			const id = block.id;
 			if (typeof id === "string") ids.push(id);
 		}
@@ -104,7 +110,7 @@ function collectToolCallIds(msg: AgentMessage): string[] {
 function applyMild(
 	messages: AgentMessage[],
 	offloadSummaries: Map<string, string>,
-	config: CompactContextConfig,
+	_config: CompactContextConfig,
 ): { messages: AgentMessage[]; applied: boolean } {
 	const startIndex = Math.floor(messages.length * 0.3);
 
@@ -273,7 +279,7 @@ function applyAggressive(
 	}
 
 	// Rebuild: protected messages + tail of non-protected
-	const kept = new Set<number>(keptEntries.map((e) => e.index));
+	const kept = new Set<number>(keptEntries.map(e => e.index));
 	for (let i = discardIdx; i < discardEntries.length; i++) {
 		kept.add(discardEntries[i].index);
 	}
@@ -335,7 +341,7 @@ function applyEmergency(
 	}
 
 	// Rebuild: protected messages + remaining tail of non-protected
-	const kept = new Set<number>(keptEntries.map((e) => e.index));
+	const kept = new Set<number>(keptEntries.map(e => e.index));
 	for (let i = discardIdx; i < discardEntries.length; i++) {
 		kept.add(discardEntries[i].index);
 	}

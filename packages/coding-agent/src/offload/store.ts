@@ -11,25 +11,25 @@
 
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { SessionStorage } from "../session/session-storage"
-import { getOffloadPath, getAgentDataDir } from "./paths"
+import type { SessionStorage } from "../session/session-storage";
+import { getAgentDataDir, getOffloadPath } from "./paths";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface OffloadEntry {
-	timestamp: string;           // ISO 8601
-	agent_id: string;            // "worker-a1", "cloner-guardian"
+	timestamp: string; // ISO 8601
+	agent_id: string; // "worker-a1", "cloner-guardian"
 	iteration: number;
-	phase_id?: string;           // L2 填充
-	node_id?: string;            // L2 填充，如 "001-N1"
-	task_call: string;           // 任务描述
-	summary: string;             // LLM 生成，≤200 字
-	score: number;               // 0-10
-	result_ref?: string;         // artifact:// 引用
-	dependencies?: string[];     // 依赖的其他 node_id
-	source_offset?: number;      // byte offset in JSONL for O(1) original retrieval
+	phase_id?: string; // L2 填充
+	node_id?: string; // L2 填充，如 "001-N1"
+	task_call: string; // 任务描述
+	summary: string; // LLM 生成，≤200 字
+	score: number; // 0-10
+	result_ref?: string; // artifact:// 引用
+	dependencies?: string[]; // 依赖的其他 node_id
+	source_offset?: number; // byte offset in JSONL for O(1) original retrieval
 }
 
 // ============================================================================
@@ -77,7 +77,7 @@ export class OffloadStore {
 
 		const writer = this.#storage.openWriter(filePath, { flags: "a" });
 		try {
-			await writer.append(JSON.stringify(entry) + "\n");
+			await writer.append(`${JSON.stringify(entry)}\n`);
 			await writer.flush();
 		} catch (err) {
 			logger.warn("[OffloadStore] Failed to append offload entry", {
@@ -103,7 +103,7 @@ export class OffloadStore {
 	async readEntries(agentId: string, sessionId: string): Promise<OffloadEntry[]> {
 		const filePath = getOffloadPath(this.#workspace, this.#agentName, sessionId);
 		const allEntries = await this.#readJsonlFile(filePath);
-		return allEntries.filter((e) => e.agent_id === agentId);
+		return allEntries.filter(e => e.agent_id === agentId);
 	}
 
 	/**
@@ -179,7 +179,7 @@ export class OffloadStore {
 		}
 
 		const files = this.#storage.listFilesSync(dir, "*.jsonl");
-		return files.map((f) => path.basename(f, ".jsonl"));
+		return files.map(f => path.basename(f, ".jsonl"));
 	}
 
 	// -- Clear ----------------------------------------------------------------

@@ -13,15 +13,13 @@
  *   < 60 cols   → compact mode (abbreviated labels)
  */
 
-import { visibleWidth } from "@oh-my-pi/pi-tui";
 import type { SwarmState } from "../../../swarm/core/state";
 import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
 import { type ContextPanelState, renderContextPanel } from "./context-panel";
-import { makeFooter, makeHeader, padLine } from "./panel-utils";
+import { type GraphViewInput, renderGraphView } from "./graph-view";
 import { renderPhaseView } from "./phase-view";
 import { sato } from "./theme";
-import { type GraphViewInput, renderGraphView } from "./graph-view";
 // ============================================================================
 // Types
 // ============================================================================
@@ -35,7 +33,7 @@ export interface DashboardInput {
 	context: ContextPanelState;
 	/** Optional graph view — shown when mode is "graph" */
 	graphView?: GraphViewInput;
- }
+}
 
 // ============================================================================
 // Layout
@@ -118,7 +116,7 @@ function renderTwoColumn(input: DashboardInput, width: number): string[] {
 
 // ── Compact (< 60 cols) ───────────────────────────────────────────────────
 
-function renderCompact(input: DashboardInput, width: number): string[] {
+function renderCompact(input: DashboardInput, _width: number): string[] {
 	const lines: string[] = [];
 
 	const phase = input.swarm.phase ?? "idle";

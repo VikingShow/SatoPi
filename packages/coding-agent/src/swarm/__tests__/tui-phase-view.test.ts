@@ -9,9 +9,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { Chapter, SwarmState } from "../core/state";
 import { renderPhaseView } from "../../modes/components/swarm/phase-view";
 import { PHASE_DISPLAY } from "../../modes/components/swarm/theme";
+import type { Chapter, SwarmState } from "../core/state";
 
 /** Minimal SwarmState factory */
 function makeState(overrides: Partial<SwarmState> = {}): SwarmState {
@@ -22,8 +22,24 @@ function makeState(overrides: Partial<SwarmState> = {}): SwarmState {
 		iteration: 0,
 		targetCount: 3,
 		agents: {
-			"worker-1": { name: "worker-1", status: "running", iteration: 1, wave: 1, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
-			"worker-2": { name: "worker-2", status: "pending", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
+			"worker-1": {
+				name: "worker-1",
+				status: "running",
+				iteration: 1,
+				wave: 1,
+				praiseCount: 0,
+				criticismCount: 0,
+				conflictCount: 0,
+			},
+			"worker-2": {
+				name: "worker-2",
+				status: "pending",
+				iteration: 0,
+				wave: 0,
+				praiseCount: 0,
+				criticismCount: 0,
+				conflictCount: 0,
+			},
 		},
 		startedAt: Date.now() - 300_000,
 		phase: "idle",
@@ -41,8 +57,14 @@ function stripAnsi(s: string): string {
 
 describe("renderPhaseView", () => {
 	const ALL_PHASES: Chapter[] = [
-		"idle", "script", "script-debate", "script-confirm",
-		"stage", "paused", "blocked", "curtain",
+		"idle",
+		"script",
+		"script-debate",
+		"script-confirm",
+		"stage",
+		"paused",
+		"blocked",
+		"curtain",
 	];
 
 	it("returns 2 lines for every phase", () => {
@@ -82,7 +104,6 @@ describe("current phase highlighting", () => {
 	it("bold-highlights the current phase", () => {
 		const state = makeState({ phase: "stage" });
 		const lines = renderPhaseView(state);
-		const iconRow = lines[0];
 
 		// Current phase gets amber color styling
 		const plain = stripAnsi(lines[0]);
@@ -101,12 +122,20 @@ describe("current phase highlighting", () => {
 // ============================================================================
 
 describe("future phases dimmed", () => {
-
 	it("all 8 phase icons render when curtain is current", () => {
 		const state = makeState({ phase: "curtain" });
 		const lines = renderPhaseView(state);
 		const plain = stripAnsi(lines[0]);
-		for (const phase of ["idle", "script", "script-debate", "script-confirm", "stage", "paused", "blocked", "curtain"] as const) {
+		for (const phase of [
+			"idle",
+			"script",
+			"script-debate",
+			"script-confirm",
+			"stage",
+			"paused",
+			"blocked",
+			"curtain",
+		] as const) {
 			expect(plain).toContain(PHASE_DISPLAY[phase].icon);
 		}
 	});

@@ -26,8 +26,7 @@
 
 import { EventEmitter } from "node:events";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { GateSpec, GraphNode, RetrySpec } from "./schema";
-import type { GateType, GateMode, RetryStrategy, RetryOnFailure } from "./schema";
+import type { GateMode, GateSpec, GraphNode, RetrySpec, RetryStrategy } from "./schema";
 
 // ============================================================================
 // GateController-specific types
@@ -51,10 +50,7 @@ export interface GateResult {
  * Action produced by {@link GateController.handleGateFailure} that tells the
  * orchestrator what to do next.
  */
-export type GateAction =
-	| { type: "retry"; delayMs: number }
-	| { type: "block"; reason: string }
-	| { type: "continue" };
+export type GateAction = { type: "retry"; delayMs: number } | { type: "block"; reason: string } | { type: "continue" };
 
 // ============================================================================
 // Human-review event payload
@@ -86,9 +82,9 @@ const MAX_DELAY_MS = 120_000;
 
 /** Patterns that indicate a compiler / linter error (fixable). */
 const FIXABLE_PATTERNS: RegExp[] = [
-	/\berror\b.*TS\d{4}/i,       // TypeScript compiler errors
-	/^error/i,                    // Generic "error" prefixed
-	/lint_error/i,                // Linter violations
+	/\berror\b.*TS\d{4}/i, // TypeScript compiler errors
+	/^error/i, // Generic "error" prefixed
+	/lint_error/i, // Linter violations
 	/\btype .* is not assignable/i,
 	/\bproperty .* does not exist/i,
 	/\bcannot find (name|module)/i,
@@ -139,10 +135,13 @@ export class GateController extends EventEmitter {
 	 * Pending human-review resolvers keyed by review id.
 	 * Each entry waits for {@link resolveHumanGate} to be called.
 	 */
-	#pendingReviews = new Map<string, {
-		resolve: (action: GateAction) => void;
-		reject: (err: Error) => void;
-	}>();
+	#pendingReviews = new Map<
+		string,
+		{
+			resolve: (action: GateAction) => void;
+			reject: (err: Error) => void;
+		}
+	>();
 
 	/** Monotonic counter for unique review ids. */
 	#reviewCounter = 0;
@@ -215,11 +214,7 @@ export class GateController extends EventEmitter {
 	 * @param result  The failing GateResult.
 	 * @param attempt The 0-based attempt number (0 = first failure → first retry).
 	 */
-	async handleGateFailure(
-		node: GraphNode,
-		result: GateResult,
-		attempt: number,
-	): Promise<GateAction> {
+	async handleGateFailure(node: GraphNode, result: GateResult, attempt: number): Promise<GateAction> {
 		const retry = node.retry;
 		if (!retry) {
 			return {
@@ -300,7 +295,7 @@ export class GateController extends EventEmitter {
 		// Keys are `${nodeLabel}:${counter}` — pick the first lexicographically.
 		let foundKey: string | undefined;
 		for (const key of this.#pendingReviews.keys()) {
-			if (key.startsWith(nodeLabel + ":")) {
+			if (key.startsWith(`${nodeLabel}:`)) {
 				foundKey = key;
 				break;
 			}
@@ -331,7 +326,7 @@ export class GateController extends EventEmitter {
 	rejectHumanGate(nodeLabel: string, reason: string): boolean {
 		let foundKey: string | undefined;
 		for (const key of this.#pendingReviews.keys()) {
-			if (key.startsWith(nodeLabel + ":")) {
+			if (key.startsWith(`${nodeLabel}:`)) {
 				foundKey = key;
 				break;
 			}
@@ -452,11 +447,7 @@ export class GateController extends EventEmitter {
 	 *
 	 * Returns a {@link GateAction} that the orchestrator should carry out.
 	 */
-	async #awaitHumanDecision(opts: {
-		nodeLabel: string;
-		prompt: string;
-		options: string[];
-	}): Promise<GateAction> {
+	async #awaitHumanDecision(opts: { nodeLabel: string; prompt: string; options: string[] }): Promise<GateAction> {
 		const reviewId = `${opts.nodeLabel}:${++this.#reviewCounter}`;
 		const request: HumanReviewRequest = {
 			nodeLabel: opts.nodeLabel,
@@ -496,7 +487,7 @@ export class GateController extends EventEmitter {
 		let raw: number;
 		switch (strategy) {
 			case "exponential":
-				raw = baseDelayMs * Math.pow(2, attempt);
+				raw = baseDelayMs * 2 ** attempt;
 				break;
 			case "constant":
 				raw = baseDelayMs;
@@ -519,9 +510,7 @@ export class GateController extends EventEmitter {
 	/**
 	 * Execute a shell command via Bun.spawn and capture output + exit code.
 	 */
-	async #runCommand(
-		command: string,
-	): Promise<{ exitCode: number; output: string }> {
+	async #runCommand(command: string): Promise<{ exitCode: number; output: string }> {
 		try {
 			const proc = Bun.spawn(["bash", "-c", command], {
 				cwd: this.#workspace,
@@ -536,13 +525,9 @@ export class GateController extends EventEmitter {
 
 			let exitCode: number;
 			if (this.#defaultTimeout) {
-				const { promise: timeoutPromise, resolve: timeoutResolve } =
-					Promise.withResolvers<"timeout">();
+				const { promise: timeoutPromise, resolve: timeoutResolve } = Promise.withResolvers<"timeout">();
 				const timer = setTimeout(() => timeoutResolve("timeout"), this.#defaultTimeout);
-				const deadlineResult = await Promise.race([
-					proc.exited.then(() => "exited" as const),
-					timeoutPromise,
-				]);
+				const deadlineResult = await Promise.race([proc.exited.then(() => "exited" as const), timeoutPromise]);
 				clearTimeout(timer);
 				if (deadlineResult === "timeout") {
 					proc.kill();
@@ -587,7 +572,10 @@ export class GateController extends EventEmitter {
 
 		// If nothing matched, include the last 10 lines as context.
 		if (errors.length === 0) {
-			const tail = lines.slice(-10).map(l => l.trim()).filter(Boolean);
+			const tail = lines
+				.slice(-10)
+				.map(l => l.trim())
+				.filter(Boolean);
 			for (const line of tail) errors.push(line);
 		}
 

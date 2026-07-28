@@ -11,10 +11,10 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import { OffloadStore, type OffloadEntry } from "./store"
-import type { SessionStorage } from "../session/session-storage"
+import type { SessionStorage } from "../session/session-storage";
 import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import type { HookContext } from "../swarm/hook-system/types";
+import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------
 // Unified interface
@@ -41,7 +41,13 @@ export class OffloadManager implements IOffloadManager {
 	readonly #hookPipeline: HookPipeline | undefined;
 	#iteration = 0;
 
-	constructor(workspace: string, agentName: string, sessionId: string, storage: SessionStorage, hookPipeline?: HookPipeline) {
+	constructor(
+		workspace: string,
+		agentName: string,
+		sessionId: string,
+		storage: SessionStorage,
+		hookPipeline?: HookPipeline,
+	) {
 		this.#store = new OffloadStore(workspace, agentName, storage);
 		this.#sessionId = sessionId;
 		this.#hookPipeline = hookPipeline;
@@ -110,9 +116,7 @@ export class OffloadManager implements IOffloadManager {
 			`  Agent ${agentId} has completed ${entries.length} tasks so far.`,
 			`  Recent work for task "${taskDescription}":`,
 			"",
-			...recent.map(e =>
-				`  - [${e.timestamp}] ${e.task_call}: ${e.summary.slice(0, 150)}`,
-			),
+			...recent.map(e => `  - [${e.timestamp}] ${e.task_call}: ${e.summary.slice(0, 150)}`),
 			"</offload_context>",
 		];
 
@@ -140,7 +144,9 @@ export class OffloadManager implements IOffloadManager {
 
 		for (const [aid, entries] of byAgent) {
 			const latest = entries[entries.length - 1];
-			lines.push(`  ${aid === agentId ? "* (you)" : `  - ${aid}`}: ${latest.summary.slice(0, 120)} (${entries.length} total entries)`);
+			lines.push(
+				`  ${aid === agentId ? "* (you)" : `  - ${aid}`}: ${latest.summary.slice(0, 120)} (${entries.length} total entries)`,
+			);
 		}
 
 		lines.push("</swarm_experience>");

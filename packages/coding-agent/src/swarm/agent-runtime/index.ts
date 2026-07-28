@@ -130,7 +130,6 @@ export class AgentRuntime {
 	readonly #activityLogger?: ActivityLogger;
 	readonly #toolRegistry?: Map<string, Tool>;
 
-
 	/** Per-agent queues for system notification (aside) messages. */
 	readonly #asideQueues = new Map<string, AsideMessage[]>();
 	/** Per-agent queues for human steering messages (drained by hookProviders). */
@@ -433,10 +432,10 @@ export class AgentRuntime {
 		try {
 			handle = await this.#launcher.launch(launchContext);
 
-		// 5.5 Store handle for persistent agent steering/reuse
-		if (spec.profileId) {
-			AgentRegistry.global().setHandle(spec.id, handle);
-		}
+			// 5.5 Store handle for persistent agent steering/reuse
+			if (spec.profileId) {
+				AgentRegistry.global().setHandle(spec.id, handle);
+			}
 		} catch (err) {
 			logger.error("[AgentRuntime] Agent launch failed", {
 				agentId,

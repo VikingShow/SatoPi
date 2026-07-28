@@ -8,15 +8,15 @@
 import { AgentProtocolHandler } from "./agent-protocol";
 import { ArtifactProtocolHandler } from "./artifact-protocol";
 import { HistoryProtocolHandler } from "./history-protocol";
-import { LocalProtocolHandler } from "./local-protocol";
-import { MemoryProtocolHandler } from "./memory-protocol";
 import { IssueProtocolHandler, PrProtocolHandler } from "./issue-pr-protocol";
+import { LocalProtocolHandler } from "./local-protocol";
 import { McpProtocolHandler } from "./mcp-protocol";
-import { StpProtocolHandler } from "./stp-protocol";
+import { MemoryProtocolHandler } from "./memory-protocol";
 import { parseInternalUrl } from "./parse";
 import { RuleProtocolHandler } from "./rule-protocol";
 import { SkillProtocolHandler } from "./skill-protocol";
 import { SshProtocolHandler } from "./ssh-protocol";
+import { StpProtocolHandler } from "./stp-protocol";
 import type { InternalResource, InternalUrl, ProtocolHandler, ResolveContext, UrlCompletion } from "./types";
 import { VaultProtocolHandler } from "./vault-protocol";
 

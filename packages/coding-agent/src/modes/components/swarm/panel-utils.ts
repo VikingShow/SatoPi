@@ -5,7 +5,6 @@
  * SatoPi box-drawing chars for consistent rendering across all panels.
  */
 
-import chalk from "chalk";
 import { padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 
 // ============================================================================
@@ -70,5 +69,5 @@ export function padLine(content: string, width: number): string {
 
 	// Truncate preserving ANSI codes (pi-tui truncateToWidth handles this)
 	const truncated = truncateToWidth(content, Math.max(1, maxContent - 1));
-	return truncated + "…" + BOX.vertical;
+	return `${truncated}…${BOX.vertical}`;
 }

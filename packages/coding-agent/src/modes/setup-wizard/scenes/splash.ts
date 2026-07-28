@@ -1,7 +1,7 @@
 import { padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { gradientEscape, gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
-import { theme } from "../../theme/theme";
 import { renderSplash } from "../../components/swarm/splash";
+import { gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
+import { theme } from "../../theme/theme";
 
 export const SETUP_SPLASH_MS = 2600;
 export const SETUP_TICK_MS = 33;
@@ -14,13 +14,13 @@ const LARGE_LOGO = PI_LOGO.flatMap(line => {
 	}
 	return [wide, wide];
 });
-const LOGO_WIDTH = Math.max(...LARGE_LOGO.map(line => visibleWidth(line)));
-const LOGO_HEIGHT = LARGE_LOGO.length;
-const RESET = "\x1b[0m";
+const _LOGO_WIDTH = Math.max(...LARGE_LOGO.map(line => visibleWidth(line)));
+const _LOGO_HEIGHT = LARGE_LOGO.length;
+const _RESET = "\x1b[0m";
 
 /** Full scene needs comfortable room; below this we drop to a centered mark. */
-const MIN_SCENE_WIDTH = 56;
-const MIN_SCENE_HEIGHT = 22;
+const _MIN_SCENE_WIDTH = 56;
+const _MIN_SCENE_HEIGHT = 22;
 
 const SKIP_HINT = "press enter to skip";
 
@@ -53,7 +53,13 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 /** Centered fallback for windows too small to hold the full scene. */
 function renderCompactSplash(width: number, height: number, phase: number, shine: ShineConfig): string[] {
 	const art = height >= 14 ? LARGE_LOGO : PI_LOGO;
-	const content = [...gradientLogo(art, phase, shine), "", theme.bold("S a t o P i"), "", theme.fg("dim", "Satori a team of Pi · v0.0.1")];
+	const content = [
+		...gradientLogo(art, phase, shine),
+		"",
+		theme.bold("S a t o P i"),
+		"",
+		theme.fg("dim", "Satori a team of Pi · v0.0.1"),
+	];
 	const start = Math.max(0, Math.floor((height - content.length) / 2));
 	const lines: string[] = [];
 	for (let y = 0; y < height; y++) {

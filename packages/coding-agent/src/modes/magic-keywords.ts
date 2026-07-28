@@ -23,11 +23,7 @@ import { containsWorkflow, highlightWorkflow } from "./workflow";
  */
 export function highlightMagicKeywords(text: string, resetTo?: string, phase?: number): string {
 	return highlightWorkflow(
-		highlightSwarm(
-			highlightOrchestrate(highlightUltrathink(text, resetTo, phase), resetTo, phase),
-			resetTo,
-			phase,
-		),
+		highlightSwarm(highlightOrchestrate(highlightUltrathink(text, resetTo, phase), resetTo, phase), resetTo, phase),
 	);
 }
 
@@ -38,7 +34,12 @@ export function highlightMagicKeywords(text: string, resetTo?: string, phase?: n
  * `String#indexOf`s. Used by the live editor to gate the shimmer timer.
  */
 export function hasMagicKeyword(text: string): boolean {
-	if (!text.includes("ultrathink") && !text.includes("orchestrate") && !text.includes("workflowz") && !text.includes("swarm")) {
+	if (
+		!text.includes("ultrathink") &&
+		!text.includes("orchestrate") &&
+		!text.includes("workflowz") &&
+		!text.includes("swarm")
+	) {
 		return false;
 	}
 	return containsUltrathink(text) || containsOrchestrate(text) || containsWorkflow(text) || containsSwarm(text);

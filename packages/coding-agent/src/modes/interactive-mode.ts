@@ -108,6 +108,7 @@ import type { ShakeMode } from "../session/shake-types";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
+import { GraphRunner } from "../swarm/graph/graph-runner";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -138,9 +139,8 @@ import type { HookEditorComponent } from "./components/hook-editor";
 import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
-import { SwarmDashboardOverlay, type SwarmDashboardOverlayDeps } from "./components/swarm/swarm-dashboard-overlay";
-import { GraphRunner } from "../swarm/graph/graph-runner";
 import { StatusLineComponent } from "./components/status-line";
+import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -1430,13 +1430,17 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.addMessageToChat(message, options);
 	}
 
-
 	/**
 	 * Applaud keywords that trigger Curtain completion when the swarm bridge
 	 * is in "curtain" phase awaiting human confirmation.
 	 */
 	static readonly APPLAUD_KEYWORDS: Record<string, true> = {
-		applaud: true, "👏": true, "完成": true, approve: true, done: true, complete: true,
+		applaud: true,
+		"👏": true,
+		完成: true,
+		approve: true,
+		done: true,
+		complete: true,
 	};
 
 	static #isApplaudInput(text: string): boolean {
@@ -1615,7 +1619,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	/** Return a context-aware Zen placeholder for the empty input box. */
 	#getEnsoPlaceholder(): string {
-		if (this.isBashMode)   return "! run a shell command…";
+		if (this.isBashMode) return "! run a shell command…";
 		if (this.isPythonMode) return "$ evaluate python…";
 		if (this.session.isStreaming) return "↵ steer · type to redirect the agent";
 

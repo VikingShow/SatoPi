@@ -19,12 +19,11 @@ import type {
 	Settings,
 	SingleResult,
 } from "@oh-my-pi/pi-coding-agent";
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
-import type { AgentRuntime } from "../agent-runtime";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
-
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -98,8 +97,6 @@ export interface SwarmExecutorOptions {
 	afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 }
 
-
-
 /**
  * Execute a single swarm agent.
  *
@@ -125,8 +122,6 @@ export async function executeSwarmAgent(
 	return executeWithRuntime(agent, index, options, runtime);
 }
 
-
-
 /**
  * Execute a swarm agent via AgentRuntime.spawn() (v3 in-process path).
  */
@@ -136,9 +131,14 @@ async function executeWithRuntime(
 	options: SwarmExecutorOptions,
 	runtime: AgentRuntime,
 ): Promise<SingleResult> {
-	const { workspace, swarmName, iteration, signal, onProgress, modelRegistry, settings,
-		stateTracker, timeoutMs = DEFAULT_AGENT_TIMEOUT_MS, onStarted, toolHooks,
-		agentOverrides, activityLogger, executor, transformContext, afterToolCall,
+	const {
+		swarmName,
+		iteration,
+		onProgress,
+		stateTracker,
+		timeoutMs = DEFAULT_AGENT_TIMEOUT_MS,
+		onStarted,
+		activityLogger,
 	} = options;
 
 	const agentId = `swarm-${swarmName}-${agent.name}-${iteration}`;
@@ -227,12 +227,16 @@ async function executeWithRuntime(
 	} catch (err) {
 		const error = err instanceof Error ? err.message : String(err);
 		const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
-		stateTracker.updateAgent(agent.name, {
-			status: "failed",
-			completedAt: Date.now(),
-			error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
-		}).catch(() => {});
-		stateTracker.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`).catch(() => {});
+		stateTracker
+			.updateAgent(agent.name, {
+				status: "failed",
+				completedAt: Date.now(),
+				error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
+			})
+			.catch(() => {});
+		stateTracker
+			.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`)
+			.catch(() => {});
 		activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
 
 		const failResult: SingleResult = {

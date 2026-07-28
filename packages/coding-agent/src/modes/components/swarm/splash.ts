@@ -1,4 +1,4 @@
-import { padding, visibleWidth } from "@oh-my-pi/pi-tui";
+import { padding } from "@oh-my-pi/pi-tui";
 import { PI_LOGO_ASCII, sato } from "./theme";
 
 const LOGO_WIDTH = 41;

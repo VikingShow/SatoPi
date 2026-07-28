@@ -341,7 +341,6 @@ describe("runEvalAgent", () => {
 	});
 
 	it("unregisters eval subagents through the bridge cleanup path", async () => {
-
 		mockAgents();
 		let disposed = false;
 		const cleanupSession = {

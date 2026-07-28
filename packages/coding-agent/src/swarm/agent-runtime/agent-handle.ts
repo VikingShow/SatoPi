@@ -32,6 +32,7 @@ export class AgentHandle {
 	readonly #agent: Agent;
 	readonly #session: AgentSession | null;
 	#status: "running" | "completed" | "failed" | "aborted" = "running";
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set in wait() to mark completion
 	#completed = false;
 	#completionPromise: Promise<SingleResult>;
 	#resolveCompletion!: (result: SingleResult) => void;

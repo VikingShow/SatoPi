@@ -1,63 +1,61 @@
-import type { GraphDefinition, GraphNode, GraphEdge } from "./schema";
+import type { GraphDefinition, GraphEdge, GraphNode } from "./schema";
 
 // ── Error types ──────────────────────────────────────────────
 
 export interface MermaidValidationError {
-  path: string;
-  message: string;
-  severity: "error" | "warning";
-  line?: number;
+	path: string;
+	message: string;
+	severity: "error" | "warning";
+	line?: number;
 }
 
 export class MermaidCompileError extends Error {
-  readonly errors: MermaidValidationError[];
+	readonly errors: MermaidValidationError[];
 
-  constructor(errors: MermaidValidationError[]) {
-    const messages = errors.map((e) => `${e.severity}: ${e.message}`).join("; ");
-    super(`Mermaid compilation failed: ${messages}`);
-    this.name = "MermaidCompileError";
-    this.errors = errors;
-  }
+	constructor(errors: MermaidValidationError[]) {
+		const messages = errors.map(e => `${e.severity}: ${e.message}`).join("; ");
+		super(`Mermaid compilation failed: ${messages}`);
+		this.name = "MermaidCompileError";
+		this.errors = errors;
+	}
 }
 
 // ── Types ────────────────────────────────────────────────────
 
 interface MermaidNode {
-  id: string;
-  label: string;
-  shape: "rect" | "diamond" | "circle" | "rounded" | "asymmetric";
-  line: number;
+	id: string;
+	label: string;
+	shape: "rect" | "diamond" | "circle" | "rounded" | "asymmetric";
+	line: number;
 }
 
 interface MermaidEdge {
-  from: string;
-  to: string;
-  label: string | null;
-  line: number;
+	from: string;
+	to: string;
+	label: string | null;
+	line: number;
 }
 
 interface MermaidSubgraph {
-  name: string;
-  nodeIds: string[];
+	name: string;
+	nodeIds: string[];
 }
 
 interface ParseResult {
-  direction: "TD" | "LR" | "TB" | "BT" | "RL";
-  nodes: MermaidNode[];
-  edges: MermaidEdge[];
-  subgraphs: MermaidSubgraph[];
-  errors: MermaidValidationError[];
+	direction: "TD" | "LR" | "TB" | "BT" | "RL";
+	nodes: MermaidNode[];
+	edges: MermaidEdge[];
+	subgraphs: MermaidSubgraph[];
+	errors: MermaidValidationError[];
 }
 
 // ── Regex patterns ───────────────────────────────────────────
 
 // Node shapes: A[rect], B{decision}, C((circle)), D(rounded), E>asymmetric]
-const NODE_RE =
-  /^([A-Za-z_]\w*)\s*(\[(.*?)\]|\{(.*?)\}|\(\((.*?)\)\)|\((.*?)\)|>(.*?)\])/;
+const NODE_RE = /^([A-Za-z_]\w*)\s*(\[(.*?)\]|\{(.*?)\}|\(\((.*?)\)\)|\((.*?)\)|>(.*?)\])/;
 
 // Edge: A --> B, A -->|"label"| B, A --- B, A -.-> B, A ==> B
-const EDGE_RE =
-  /^([A-Za-z_]\w*)\s*(-->|---|==>|-\.->|-\.-)\s*(\|"(.*?)"\|\s*)?([A-Za-z_]\w*)$/;
+const EDGE_RE = /^([A-Za-z_]\w*)\s*(-->|---|==>|-\.->|-\.-)\s*(\|"(.*?)"\|\s*)?([A-Za-z_]\w*)$/;
 
 // Subgraph boundaries
 const SUBGRAPH_START_RE = /^subgraph\s+(.+)$/i;
@@ -72,197 +70,191 @@ const COMMENT_RE = /^%%/;
 // ── Parser ───────────────────────────────────────────────────
 
 function parseMermaid(mermaid: string, name: string): ParseResult {
-  const errors: MermaidValidationError[] = [];
-  const nodes: MermaidNode[] = [];
-  const edges: MermaidEdge[] = [];
-  const subgraphs: MermaidSubgraph[] = [];
+	const errors: MermaidValidationError[] = [];
+	const nodes: MermaidNode[] = [];
+	const edges: MermaidEdge[] = [];
+	const subgraphs: MermaidSubgraph[] = [];
 
-  const lines = mermaid.split("\n");
-  let direction: "TD" | "LR" | "TB" | "BT" | "RL" = "TD";
+	const lines = mermaid.split("\n");
+	let direction: "TD" | "LR" | "TB" | "BT" | "RL" = "TD";
 
-  // Find the direction line
-  let firstNonComment = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line === "" || COMMENT_RE.test(line)) continue;
-    firstNonComment = i;
-    break;
-  }
+	// Find the direction line
+	let firstNonComment = -1;
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (line === "" || COMMENT_RE.test(line)) continue;
+		firstNonComment = i;
+		break;
+	}
 
-  if (firstNonComment === -1) {
-    errors.push({
-      path: name,
-      message: "Empty Mermaid input — no direction line found",
-      severity: "error",
-    });
-    return { direction, nodes, edges, subgraphs, errors };
-  }
+	if (firstNonComment === -1) {
+		errors.push({
+			path: name,
+			message: "Empty Mermaid input — no direction line found",
+			severity: "error",
+		});
+		return { direction, nodes, edges, subgraphs, errors };
+	}
 
-  const dirMatch = DIRECTION_RE.exec(lines[firstNonComment].trim());
-  if (!dirMatch) {
-    errors.push({
-      path: name,
-      message: `Expected "graph TD|LR|TB|BT|RL" on first non-comment line, got "${lines[firstNonComment].trim()}"`,
-      severity: "error",
-      line: firstNonComment + 1,
-    });
-  } else {
-    direction = dirMatch[1].toUpperCase() as "TD" | "LR" | "TB" | "BT" | "RL";
-  }
+	const dirMatch = DIRECTION_RE.exec(lines[firstNonComment].trim());
+	if (!dirMatch) {
+		errors.push({
+			path: name,
+			message: `Expected "graph TD|LR|TB|BT|RL" on first non-comment line, got "${lines[firstNonComment].trim()}"`,
+			severity: "error",
+			line: firstNonComment + 1,
+		});
+	} else {
+		direction = dirMatch[1].toUpperCase() as "TD" | "LR" | "TB" | "BT" | "RL";
+	}
 
-  // Parse remaining lines
-  let currentSubgraph: MermaidSubgraph | null = null;
+	// Parse remaining lines
+	let currentSubgraph: MermaidSubgraph | null = null;
 
-  for (let i = firstNonComment + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line === "" || COMMENT_RE.test(line)) continue;
+	for (let i = firstNonComment + 1; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (line === "" || COMMENT_RE.test(line)) continue;
 
-    // Subgraph start
-    const subStart = SUBGRAPH_START_RE.exec(line);
-    if (subStart) {
-      if (currentSubgraph) {
-        errors.push({
-          path: name,
-          message: `Nested subgraph "${subStart[1].trim()}" inside "${currentSubgraph.name}" — subgraphs are flattened in v1`,
-          severity: "warning",
-          line: i + 1,
-        });
-      }
-      currentSubgraph = {
-        name: subStart[1].trim(),
-        nodeIds: [],
-      };
-      continue;
-    }
+		// Subgraph start
+		const subStart = SUBGRAPH_START_RE.exec(line);
+		if (subStart) {
+			if (currentSubgraph) {
+				errors.push({
+					path: name,
+					message: `Nested subgraph "${subStart[1].trim()}" inside "${currentSubgraph.name}" — subgraphs are flattened in v1`,
+					severity: "warning",
+					line: i + 1,
+				});
+			}
+			currentSubgraph = {
+				name: subStart[1].trim(),
+				nodeIds: [],
+			};
+			continue;
+		}
 
-    // Subgraph end
-    if (SUBGRAPH_END_RE.test(line)) {
-      if (currentSubgraph) {
-        subgraphs.push(currentSubgraph);
-        currentSubgraph = null;
-      } else {
-        errors.push({
-          path: name,
-          message: "Unexpected `end` without matching `subgraph`",
-          severity: "error",
-          line: i + 1,
-        });
-      }
-      continue;
-    }
+		// Subgraph end
+		if (SUBGRAPH_END_RE.test(line)) {
+			if (currentSubgraph) {
+				subgraphs.push(currentSubgraph);
+				currentSubgraph = null;
+			} else {
+				errors.push({
+					path: name,
+					message: "Unexpected `end` without matching `subgraph`",
+					severity: "error",
+					line: i + 1,
+				});
+			}
+			continue;
+		}
 
-    // Try node match first (more specific: it requires shape brackets)
-    const nodeMatch = NODE_RE.exec(line);
-    if (nodeMatch) {
-      const id = nodeMatch[1];
-      let label: string;
-      let shape: MermaidNode["shape"];
+		// Try node match first (more specific: it requires shape brackets)
+		const nodeMatch = NODE_RE.exec(line);
+		if (nodeMatch) {
+			const id = nodeMatch[1];
+			let label: string;
+			let shape: MermaidNode["shape"];
 
-      if (nodeMatch[2]?.startsWith("[")) {
-        label = nodeMatch[3] ?? id;
-        shape = "rect";
-      } else if (nodeMatch[2]?.startsWith("{")) {
-        label = nodeMatch[4] ?? id;
-        shape = "diamond";
-      } else if (nodeMatch[2]?.startsWith("((")) {
-        label = nodeMatch[5] ?? id;
-        shape = "circle";
-      } else if (nodeMatch[2]?.startsWith("(")) {
-        label = nodeMatch[6] ?? id;
-        shape = "rounded";
-      } else {
-        label = nodeMatch[7] ?? id;
-        shape = "asymmetric";
-      }
+			if (nodeMatch[2]?.startsWith("[")) {
+				label = nodeMatch[3] ?? id;
+				shape = "rect";
+			} else if (nodeMatch[2]?.startsWith("{")) {
+				label = nodeMatch[4] ?? id;
+				shape = "diamond";
+			} else if (nodeMatch[2]?.startsWith("((")) {
+				label = nodeMatch[5] ?? id;
+				shape = "circle";
+			} else if (nodeMatch[2]?.startsWith("(")) {
+				label = nodeMatch[6] ?? id;
+				shape = "rounded";
+			} else {
+				label = nodeMatch[7] ?? id;
+				shape = "asymmetric";
+			}
 
-      // Check for duplicate node ID
-      if (nodes.some((n) => n.id === id)) {
-        errors.push({
-          path: `${name}.nodes.${id}`,
-          message: `Duplicate node ID "${id}"`,
-          severity: "error",
-          line: i + 1,
-        });
-      }
+			// Check for duplicate node ID
+			if (nodes.some(n => n.id === id)) {
+				errors.push({
+					path: `${name}.nodes.${id}`,
+					message: `Duplicate node ID "${id}"`,
+					severity: "error",
+					line: i + 1,
+				});
+			}
 
-      nodes.push({ id, label, shape, line: i + 1 });
-      if (currentSubgraph) {
-        currentSubgraph.nodeIds.push(id);
-      }
-      continue;
-    }
+			nodes.push({ id, label, shape, line: i + 1 });
+			if (currentSubgraph) {
+				currentSubgraph.nodeIds.push(id);
+			}
+			continue;
+		}
 
-    // Try edge match
-    const edgeMatch = EDGE_RE.exec(line);
-    if (edgeMatch) {
-      const from = edgeMatch[1];
-      const to = edgeMatch[5];
-      const label = edgeMatch[4] ?? null;
-      edges.push({ from, to, label, line: i + 1 });
-      continue;
-    }
+		// Try edge match
+		const edgeMatch = EDGE_RE.exec(line);
+		if (edgeMatch) {
+			const from = edgeMatch[1];
+			const to = edgeMatch[5];
+			const label = edgeMatch[4] ?? null;
+			edges.push({ from, to, label, line: i + 1 });
+			continue;
+		}
 
-    // Unrecognized line
-    errors.push({
-      path: name,
-      message: `Unrecognized Mermaid syntax: "${line}"`,
-      severity: "error",
-      line: i + 1,
-    });
-  }
+		// Unrecognized line
+		errors.push({
+			path: name,
+			message: `Unrecognized Mermaid syntax: "${line}"`,
+			severity: "error",
+			line: i + 1,
+		});
+	}
 
-  // Unclosed subgraph
-  if (currentSubgraph) {
-    errors.push({
-      path: name,
-      message: `Unclosed subgraph "${currentSubgraph.name}" — missing "end"`,
-      severity: "error",
-    });
-  }
+	// Unclosed subgraph
+	if (currentSubgraph) {
+		errors.push({
+			path: name,
+			message: `Unclosed subgraph "${currentSubgraph.name}" — missing "end"`,
+			severity: "error",
+		});
+	}
 
-  // Validate edge endpoints reference known nodes
-  const nodeIds = new Set(nodes.map((n) => n.id));
-  for (const edge of edges) {
-    if (!nodeIds.has(edge.from)) {
-      errors.push({
-        path: `${name}.edges`,
-        message: `Edge references unknown source node "${edge.from}"`,
-        severity: "error",
-        line: edge.line,
-      });
-    }
-    if (!nodeIds.has(edge.to)) {
-      errors.push({
-        path: `${name}.edges`,
-        message: `Edge references unknown target node "${edge.to}"`,
-        severity: "error",
-        line: edge.line,
-      });
-    }
-  }
+	// Validate edge endpoints reference known nodes
+	const nodeIds = new Set(nodes.map(n => n.id));
+	for (const edge of edges) {
+		if (!nodeIds.has(edge.from)) {
+			errors.push({
+				path: `${name}.edges`,
+				message: `Edge references unknown source node "${edge.from}"`,
+				severity: "error",
+				line: edge.line,
+			});
+		}
+		if (!nodeIds.has(edge.to)) {
+			errors.push({
+				path: `${name}.edges`,
+				message: `Edge references unknown target node "${edge.to}"`,
+				severity: "error",
+				line: edge.line,
+			});
+		}
+	}
 
-  return { direction, nodes, edges, subgraphs, errors };
+	return { direction, nodes, edges, subgraphs, errors };
 }
 
 // ── Compiler ─────────────────────────────────────────────────
 
-const DEFAULT_TOOLS: GraphNode["tools"] = [
-  "read",
-  "write",
-  "edit",
-  "grep",
-  "bash",
-];
+const DEFAULT_TOOLS: GraphNode["tools"] = ["read", "write", "edit", "grep", "bash"];
 
 function buildGraphNode(node: MermaidNode): GraphNode {
-  return {
-    label: node.label,
-    description: `Node "${node.id}" from Mermaid flowchart`,
-    type: "custom",
-    role: "developer",
-    tools: [...DEFAULT_TOOLS],
-    depends_on: [],
-  };
+	return {
+		label: node.label,
+		description: `Node "${node.id}" from Mermaid flowchart`,
+		type: "custom",
+		role: "developer",
+		tools: [...DEFAULT_TOOLS],
+		depends_on: [],
+	};
 }
 
 /**
@@ -271,61 +263,58 @@ function buildGraphNode(node: MermaidNode): GraphNode {
  * Throws `MermaidCompileError` for malformed input (fatal errors).
  * Non-fatal warnings are included as returned `MermaidValidationError[]`.
  */
-export function compileMermaidToGraph(
-  mermaid: string,
-  name: string,
-): GraphDefinition {
-  const result = parseMermaid(mermaid, name);
+export function compileMermaidToGraph(mermaid: string, name: string): GraphDefinition {
+	const result = parseMermaid(mermaid, name);
 
-  const fatalErrors = result.errors.filter((e) => e.severity === "error");
-  if (fatalErrors.length > 0) {
-    throw new MermaidCompileError(result.errors);
-  }
+	const fatalErrors = result.errors.filter(e => e.severity === "error");
+	if (fatalErrors.length > 0) {
+		throw new MermaidCompileError(result.errors);
+	}
 
-  // Build nodes map
-  const nodes: Record<string, GraphNode> = {};
-  for (const node of result.nodes) {
-    nodes[node.id] = buildGraphNode(node);
-  }
+	// Build nodes map
+	const nodes: Record<string, GraphNode> = {};
+	for (const node of result.nodes) {
+		nodes[node.id] = buildGraphNode(node);
+	}
 
-  // Derive depends_on from edges
-  for (const edge of result.edges) {
-    const target = nodes[edge.to];
-    if (target && !target.depends_on.includes(edge.from)) {
-      target.depends_on.push(edge.from);
-    }
-  }
+	// Derive depends_on from edges
+	for (const edge of result.edges) {
+		const target = nodes[edge.to];
+		if (target && !target.depends_on.includes(edge.from)) {
+			target.depends_on.push(edge.from);
+		}
+	}
 
-  // Build edges array with artifacts from edge labels
-  const graphEdges: GraphEdge[] = result.edges.map((e) => ({
-    from: e.from,
-    to: e.to,
-    artifacts: e.label ? [e.label] : undefined,
-    label: e.label ?? undefined,
-  }));
+	// Build edges array with artifacts from edge labels
+	const graphEdges: GraphEdge[] = result.edges.map(e => ({
+		from: e.from,
+		to: e.to,
+		artifacts: e.label ? [e.label] : undefined,
+		label: e.label ?? undefined,
+	}));
 
-  return {
-    name,
-    description: `Mermaid flowchart: ${name}`,
-    version: 1,
-    revision: 0,
-    nodes,
-    edges: graphEdges.length > 0 ? graphEdges : undefined,
-  };
+	return {
+		name,
+		description: `Mermaid flowchart: ${name}`,
+		version: 1,
+		revision: 0,
+		nodes,
+		edges: graphEdges.length > 0 ? graphEdges : undefined,
+	};
 }
 
 // ── Reverse compiler ─────────────────────────────────────────
 
 const SHAPE_MAP: Record<string, string> = {
-  custom: "[]",
-  stage: "()",
-  curtain: "{}",
-  script: "(())",
+	custom: "[]",
+	stage: "()",
+	curtain: "{}",
+	script: "(())",
 };
 
 function escapeLabel(label: string): string {
-  // Escape double quotes in labels
-  return label.replace(/"/g, '\\"');
+	// Escape double quotes in labels
+	return label.replace(/"/g, '\\"');
 }
 
 /**
@@ -338,34 +327,34 @@ function escapeLabel(label: string): string {
  *   - "script"  → `((label))` (circle)
  */
 export function graphToMermaid(graph: GraphDefinition): string {
-  const lines: string[] = [];
+	const lines: string[] = [];
 
-  // Direction line — always TD
-  lines.push("graph TD");
+	// Direction line — always TD
+	lines.push("graph TD");
 
-  // Node declarations
-  for (const [id, node] of Object.entries(graph.nodes)) {
-    const shape = SHAPE_MAP[node.type ?? "custom"] ?? SHAPE_MAP.custom;
-    const open = shape[0];
-    const close = shape[2] ?? shape[1];
-    const label = escapeLabel(node.label ?? id);
-    lines.push(`    ${id}${open}${label}${close}`);
-  }
+	// Node declarations
+	for (const [id, node] of Object.entries(graph.nodes)) {
+		const shape = SHAPE_MAP[node.type ?? "custom"] ?? SHAPE_MAP.custom;
+		const open = shape[0];
+		const close = shape[2] ?? shape[1];
+		const label = escapeLabel(node.label ?? id);
+		lines.push(`    ${id}${open}${label}${close}`);
+	}
 
-  // Edge declarations
-  if (graph.edges && graph.edges.length > 0) {
-    lines.push("");
+	// Edge declarations
+	if (graph.edges && graph.edges.length > 0) {
+		lines.push("");
 
-    for (const edge of graph.edges) {
-      const label =
-        edge.artifacts && edge.artifacts.length > 0
-          ? `|"${escapeLabel(edge.artifacts[0])}"| `
-          : edge.label
-            ? `|"${escapeLabel(edge.label)}"| `
-            : "";
-      lines.push(`    ${edge.from} --> ${label}${edge.to}`);
-    }
-  }
+		for (const edge of graph.edges) {
+			const label =
+				edge.artifacts && edge.artifacts.length > 0
+					? `|"${escapeLabel(edge.artifacts[0])}"| `
+					: edge.label
+						? `|"${escapeLabel(edge.label)}"| `
+						: "";
+			lines.push(`    ${edge.from} --> ${label}${edge.to}`);
+		}
+	}
 
-  return lines.join("\n") + "\n";
+	return `${lines.join("\n")}\n`;
 }

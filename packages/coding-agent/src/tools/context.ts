@@ -1,7 +1,7 @@
 import type { AgentToolContext, ToolCallContext } from "@oh-my-pi/pi-agent-core";
-import type { AgentRuntime } from "../swarm/agent-runtime";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
+import type { AgentRuntime } from "../swarm/agent-runtime";
 
 declare module "@oh-my-pi/pi-agent-core" {
 	interface AgentToolContext extends CustomToolContext {

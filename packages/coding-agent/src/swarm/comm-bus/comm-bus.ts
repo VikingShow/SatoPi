@@ -15,9 +15,9 @@
  */
 
 import type { IrcBus } from "../../irc/bus";
-import type { ActivityLogger } from "../infra/activity-logger";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { CommChannel } from "./comm-channel";
 
 // ============================================================================

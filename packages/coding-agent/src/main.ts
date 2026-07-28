@@ -41,13 +41,13 @@ import {
 import { ModelsConfigFile } from "./config/models-config";
 import { getDefault, type SettingPath, Settings, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
+import { injectOmpExtensionCliRoots } from "./discovery/extension-roots";
 import {
 	clearPluginRootsAndCaches,
 	injectPluginDirRoots,
 	preloadPluginRoots,
 	resolveActiveProjectRegistryPath,
 } from "./discovery/helpers";
-import { injectOmpExtensionCliRoots } from "./discovery/extension-roots";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/marketplace-auto-update";
@@ -108,10 +108,9 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 	try {
 		// Use GitHub Releases API so SatoPi releases drive the update notification,
 		// not the upstream oh-my-pi npm package.
-		const response = await fetch(
-			"https://api.github.com/repos/VikingShow/SatoPi/releases/latest",
-			{ signal: withTimeoutSignal(5_000) },
-		);
+		const response = await fetch("https://api.github.com/repos/VikingShow/SatoPi/releases/latest", {
+			signal: withTimeoutSignal(5_000),
+		});
 		if (!response.ok) return undefined;
 
 		const data = (await response.json()) as { tag_name?: string };

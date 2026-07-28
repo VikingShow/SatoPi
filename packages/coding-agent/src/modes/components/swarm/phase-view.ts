@@ -14,8 +14,14 @@ import { sato } from "./theme";
 // ============================================================================
 
 const PHASE_ORDER: Chapter[] = [
-	"idle", "script", "script-debate", "script-confirm",
-	"stage", "paused", "blocked", "curtain",
+	"idle",
+	"script",
+	"script-debate",
+	"script-confirm",
+	"stage",
+	"paused",
+	"blocked",
+	"curtain",
 ];
 
 const PHASE_ICON: Record<Chapter, string> = {
@@ -73,11 +79,10 @@ export function renderPhaseView(state: SwarmState): string[] {
 	const progress = computeTaskProgress(state.todos ?? []);
 	const taskPart = progress.total > 0 ? sato.dim(`[tasks ${progress.done}/${progress.total}]`) : "";
 
-	const duration =
-		state.startedAt != null ? sato.dim(`[${formatDuration(Date.now() - state.startedAt)}]`) : "";
+	const duration = state.startedAt != null ? sato.dim(`[${formatDuration(Date.now() - state.startedAt)}]`) : "";
 
 	const parts = [sato.dim("status:"), statusLabel, taskPart, duration].filter(Boolean);
-	const subLine = "─ " + parts.join("  ") + " " + "─".repeat(4);
+	const subLine = `─ ${parts.join("  ")} ${"─".repeat(4)}`;
 
 	return [phaseLine, sato.dim(subLine)];
 }

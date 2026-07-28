@@ -1780,7 +1780,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "magic",
 			group: "Swarm",
 			label: "Swarm Engine",
-			description: "Graph engine for swarm execution (graph = new Theatre Graph, legacy = current). Defaults to graph.",
+			description:
+				"Graph engine for swarm execution (graph = new Theatre Graph, legacy = current). Defaults to graph.",
 		},
 	},
 

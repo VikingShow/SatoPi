@@ -11,17 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { AgentRegistry } from "../../registry/agent-registry";
-import { ToolContextStore } from "../../tools/context";
+import type { Tool } from "../../tools";
 import { agentInvokeTool } from "../../tools/agent-invoke";
+import { ToolContextStore } from "../../tools/context";
+import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import { AgentLauncher } from "../agent-runtime/agent-launcher";
-import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
 import { AgentRuntime } from "../agent-runtime/index";
 import { RoleProvider } from "../agent-runtime/role-provider";
 import { CommBus } from "../comm-bus/comm-bus";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { Tool } from "../../tools";
 
 // ============================================================================
 // Mock session factory for AgentLauncher (avoids pulling in full SDK)
@@ -197,9 +197,7 @@ describe("agent_invoke E2E", () => {
 				id: "persist-testProfile",
 				wait: vi.fn().mockResolvedValue({ output: "Task completed", exitCode: 0 }),
 			};
-			const spawnSpy = vi
-				.spyOn(runtime, "spawn")
-				.mockResolvedValue([mockHandle as unknown as AgentHandle]);
+			const spawnSpy = vi.spyOn(runtime, "spawn").mockResolvedValue([mockHandle as unknown as AgentHandle]);
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
@@ -242,9 +240,7 @@ describe("agent_invoke E2E", () => {
 			);
 
 			expect(result.isError).toBe(true);
-			expect(result.content).toEqual([
-				{ type: "text", text: "agent_invoke: Spawn returned no handles." },
-			]);
+			expect(result.content).toEqual([{ type: "text", text: "agent_invoke: Spawn returned no handles." }]);
 		});
 
 		it("returns error when spawn throws", async () => {

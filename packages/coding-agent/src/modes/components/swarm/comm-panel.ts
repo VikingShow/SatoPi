@@ -91,7 +91,7 @@ function formatMessageLine(msg: CommMessage, innerWidth: number, maxWidth: numbe
 		body = sato.dim("…");
 	} else {
 		const raw = msg.body.replace(/\n/g, " ");
-		body = raw.length > bodyBudget ? raw.slice(0, bodyBudget - 1) + "…" : raw; // …
+		body = raw.length > bodyBudget ? `${raw.slice(0, bodyBudget - 1)}…` : raw; // …
 	}
 
 	return padLine(`${prefix}"${body}"`, maxWidth);

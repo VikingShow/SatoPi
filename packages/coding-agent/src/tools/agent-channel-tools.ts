@@ -91,7 +91,10 @@ export class AgentBroadcastTool implements AgentTool<typeof broadcastSchema, Age
 		"- `body`: The message text to broadcast.",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ caption: "Announce completion of a task phase", call: { body: "Phase backend-complete. All API endpoints implemented and tested." } },
+		{
+			caption: "Announce completion of a task phase",
+			call: { body: "Phase backend-complete. All API endpoints implemented and tested." },
+		},
 	];
 
 	readonly concurrency = "exclusive" as const;
@@ -100,10 +103,10 @@ export class AgentBroadcastTool implements AgentTool<typeof broadcastSchema, Age
 	readonly lenientArgValidation = false;
 
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: BroadcastParams,
-		signal?: AbortSignal,
-		onUpdate?: (partial: AgentToolResult<AgentMessage[]>) => void,
+		_signal?: AbortSignal,
+		_onUpdate?: (partial: AgentToolResult<AgentMessage[]>) => void,
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<AgentMessage[]>> {
 		const channel = resolveChannel(context);
@@ -157,7 +160,10 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 		"- `timeout` (optional): Max wait time in ms (default 30 seconds).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ caption: "Ask all agents which file is most critical", call: { question: "Which file in the workspace do you think needs the most refactoring and why?" } },
+		{
+			caption: "Ask all agents which file is most critical",
+			call: { question: "Which file in the workspace do you think needs the most refactoring and why?" },
+		},
 	];
 
 	readonly concurrency = "shared" as const;
@@ -165,10 +171,10 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 	readonly lenientArgValidation = false;
 
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: QueryAllParams,
-		signal?: AbortSignal,
-		onUpdate?: (partial: AgentToolResult<Record<string, string>>) => void,
+		_signal?: AbortSignal,
+		_onUpdate?: (partial: AgentToolResult<Record<string, string>>) => void,
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<Record<string, string>>> {
 		const channel = resolveChannel(context);
@@ -186,10 +192,10 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 			// Use IrcBus.collectResponses — broadcast the question then collect answers
 			const agentList = [...channel.members];
 			const responses = await bus.collectResponses(
-				"agent",           // callerId
-				agentList,         // all peer agents
+				"agent", // callerId
+				agentList, // all peer agents
 				{ from: "agent", body: params.question },
-				{},                // accept from anyone
+				{}, // accept from anyone
 				timeout,
 			);
 
@@ -242,7 +248,13 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 		"- `timeout` (optional): Max wait time in ms (default 30 seconds).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ caption: "Vote on approach", call: { question: "Should we use Approach A (incremental) or Approach B (complete rewrite)? Answer with 'A' or 'B'." } },
+		{
+			caption: "Vote on approach",
+			call: {
+				question:
+					"Should we use Approach A (incremental) or Approach B (complete rewrite)? Answer with 'A' or 'B'.",
+			},
+		},
 	];
 
 	readonly concurrency = "shared" as const;
@@ -250,10 +262,10 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 	readonly lenientArgValidation = false;
 
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: QueryMajorityParams,
-		signal?: AbortSignal,
-		onUpdate?: (partial: AgentToolResult<string>) => void,
+		_signal?: AbortSignal,
+		_onUpdate?: (partial: AgentToolResult<string>) => void,
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<string>> {
 		const channel = resolveChannel(context);
@@ -270,9 +282,11 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 		try {
 			const agentList = [...channel.members];
 			const responses = await bus.collectResponses(
-				"agent", agentList,
+				"agent",
+				agentList,
 				{ from: "agent", body: params.question },
-				{}, timeout,
+				{},
+				timeout,
 			);
 
 			if (responses.size === 0) {
@@ -290,7 +304,10 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 			let majority = "";
 			let maxCount = 0;
 			for (const [vote, count] of tally) {
-				if (count > maxCount) { majority = vote; maxCount = count; }
+				if (count > maxCount) {
+					majority = vote;
+					maxCount = count;
+				}
 			}
 
 			return {
@@ -333,7 +350,12 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 		"- `rounds` (optional): Number of discussion rounds (default 2, max 5).",
 	].join("\n");
 	readonly examples: ToolExample[] = [
-		{ caption: "Role negotiation roundtable", call: { topic: "Let's assign roles for this project. Each agent, state which role you believe you are best suited for and why." } },
+		{
+			caption: "Role negotiation roundtable",
+			call: {
+				topic: "Let's assign roles for this project. Each agent, state which role you believe you are best suited for and why.",
+			},
+		},
 	];
 
 	readonly concurrency = "exclusive" as const;
@@ -341,10 +363,10 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 	readonly lenientArgValidation = false;
 
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: RoundtableParams,
 		signal?: AbortSignal,
-		onUpdate?: (partial: AgentToolResult<string[]>) => void,
+		_onUpdate?: (partial: AgentToolResult<string[]>) => void,
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<string[]>> {
 		const channel = resolveChannel(context);
@@ -364,16 +386,19 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 
 			for (let r = 0; r < rounds; r++) {
 				// Each round: broadcast the topic/continuation, collect responses
-				const prompt = r === 0
-					? `[ROUNDTABLE R1/${rounds}] Topic: ${params.topic}\nState your position.`
-					: `[ROUNDTABLE R${r + 1}/${rounds}] Respond to the previous round's discussion. Topic: ${params.topic}`;
+				const prompt =
+					r === 0
+						? `[ROUNDTABLE R1/${rounds}] Topic: ${params.topic}\nState your position.`
+						: `[ROUNDTABLE R${r + 1}/${rounds}] Respond to the previous round's discussion. Topic: ${params.topic}`;
 
 				await channel.send("agent", prompt);
 
 				const responses = await bus.collectResponses(
-					"agent", agentList,
+					"agent",
+					agentList,
 					{ from: "agent", body: prompt },
-					{}, 30_000,
+					{},
+					30_000,
 				);
 
 				for (const [, msg] of responses) {
@@ -384,7 +409,12 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 			}
 
 			return {
-				content: [{ type: "text", text: `Roundtable complete. ${rounds} rounds, ${agentList.length} agents, ${positions.length} positions collected.` }],
+				content: [
+					{
+						type: "text",
+						text: `Roundtable complete. ${rounds} rounds, ${agentList.length} agents, ${positions.length} positions collected.`,
+					},
+				],
 				details: positions,
 			};
 		} catch (err) {
@@ -399,7 +429,6 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 // ============================================================================
 
 const peersSchema = type({});
-type PeersParams = typeof peersSchema.infer;
 
 export class AgentPeersTool implements AgentTool<typeof peersSchema, Array<{ id: string; role?: string }>> {
 	readonly name = "agent_peers";
@@ -413,9 +442,7 @@ export class AgentPeersTool implements AgentTool<typeof peersSchema, Array<{ id:
 		"Use this to discover who is available before broadcasting or querying.",
 		"Returns an array of { id, role? } for each peer.",
 	].join("\n");
-	readonly examples: ToolExample[] = [
-		{ caption: "List peers before deciding who to DM", call: {} },
-	];
+	readonly examples: ToolExample[] = [{ caption: "List peers before deciding who to DM", call: {} }];
 
 	readonly concurrency = "shared" as const;
 	readonly loadMode = "essential" as const;
@@ -423,10 +450,10 @@ export class AgentPeersTool implements AgentTool<typeof peersSchema, Array<{ id:
 
 	// @ts-expect-error TS2416: parameter variance between AgentTool<typeof peersSchema> and AgentPeersTool.execute
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		_params: Record<string, never>,
-		signal?: AbortSignal,
-		onUpdate?: (partial: AgentToolResult<Array<{ id: string; role?: string }>>) => void,
+		_signal?: AbortSignal,
+		_onUpdate?: (partial: AgentToolResult<Array<{ id: string; role?: string }>>) => void,
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<Array<{ id: string; role?: string }>>> {
 		const channel = resolveChannel(context);
@@ -467,12 +494,11 @@ export function createAgentChannelTools(opts: AgentChannelToolsOptions): AgentTo
 	} as unknown as AgentToolContext;
 
 	// Bind context by wrapping execute
-	function withContext<T>(tool: AgentTool<any, any>): AgentTool<any, any> {
+	function withContext(tool: AgentTool<any, any>): AgentTool<any, any> {
 		const origExecute = tool.execute.bind(tool);
 		return {
 			...tool,
-			execute: (toolCallId, params, signal, onUpdate) =>
-				origExecute(toolCallId, params, signal, onUpdate, context),
+			execute: (toolCallId, params, signal, onUpdate) => origExecute(toolCallId, params, signal, onUpdate, context),
 		};
 	}
 

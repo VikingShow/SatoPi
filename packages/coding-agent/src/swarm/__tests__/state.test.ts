@@ -285,10 +285,10 @@ describe("writeChain integrity (SP-6)", () => {
 		await st.updateAgent("beta", { status: "completed", iteration: 3 });
 
 		// Both agents' in-memory state MUST be correct.
-		expect(st.state.agents["alpha"]!.status).toBe("running");
-		expect(st.state.agents["alpha"]!.iteration).toBe(1);
-		expect(st.state.agents["beta"]!.status).toBe("completed");
-		expect(st.state.agents["beta"]!.iteration).toBe(3);
+		expect(st.state.agents.alpha!.status).toBe("running");
+		expect(st.state.agents.alpha!.iteration).toBe(1);
+		expect(st.state.agents.beta!.status).toBe("completed");
+		expect(st.state.agents.beta!.iteration).toBe(3);
 
 		// logSwarmState was called for both persists (first threw, second succeeded).
 		expect(logSpy).toHaveBeenCalledTimes(2);

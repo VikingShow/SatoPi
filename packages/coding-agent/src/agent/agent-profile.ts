@@ -14,7 +14,7 @@
  */
 
 import * as fs from "node:fs/promises";
-import { getProfilesDir } from "../offload/paths"
+import { getProfilesDir } from "../offload/paths";
 
 // ============================================================================
 // Validation
@@ -26,7 +26,7 @@ const SAFE_PROFILE_ID = /^[a-zA-Z0-9_-]+$/;
 function requireSafeProfileId(profileId: string): void {
 	if (!profileId || !SAFE_PROFILE_ID.test(profileId)) {
 		throw new Error(
-			`Invalid profileId "${profileId}": must contain only alphanumeric characters, hyphens, and underscores`
+			`Invalid profileId "${profileId}": must contain only alphanumeric characters, hyphens, and underscores`,
 		);
 	}
 }
@@ -142,8 +142,8 @@ export interface AgentProfile {
 
 /** 违规严重度 → 信用分扣减映射 */
 const VIOLATION_SCORE_DEDUCTION: Record<ViolationSeverity, number> = {
-	minor: 5,     // 警告阈值
-	major: 20,    // 显著惩罚
+	minor: 5, // 警告阈值
+	major: 20, // 显著惩罚
 	critical: 50, // 灾难性 — 信用分立即腰斩
 };
 
@@ -322,9 +322,10 @@ export class ProfileRegistry {
 		// 更新 stats
 		const s = profile.stats;
 		if (opts?.durationMs !== undefined && opts.durationMs > 0) {
-			s.avgTaskCompletionTime = s.avgTaskCompletionTime > 0
-				? (s.avgTaskCompletionTime * (total - 1) + opts.durationMs) / total
-				: opts.durationMs;
+			s.avgTaskCompletionTime =
+				s.avgTaskCompletionTime > 0
+					? (s.avgTaskCompletionTime * (total - 1) + opts.durationMs) / total
+					: opts.durationMs;
 		}
 		if (opts?.domain) {
 			s.tasksCompletedByDomain[opts.domain] = (s.tasksCompletedByDomain[opts.domain] ?? 0) + 1;
@@ -366,11 +367,7 @@ export class ProfileRegistry {
 			}
 			if (criticizedSet.has(id)) {
 				profile.credit.criticismCount++;
-				profile.credit.score = clamp(
-					profile.credit.score - CRITICISM_SCORE_DEDUCTION,
-					MIN_SCORE,
-					MAX_SCORE,
-				);
+				profile.credit.score = clamp(profile.credit.score - CRITICISM_SCORE_DEDUCTION, MIN_SCORE, MAX_SCORE);
 			}
 
 			profile.credit.lastActiveAt = Date.now();
@@ -409,8 +406,7 @@ export class ProfileRegistry {
 		for (const profile of profiles) {
 			profile.social.collaborationCount++;
 			for (const other of profiles) {
-				if (other.profileId !== profile.profileId &&
-					!profile.social.collaborators.includes(other.profileId)) {
+				if (other.profileId !== profile.profileId && !profile.social.collaborators.includes(other.profileId)) {
 					profile.social.collaborators.push(other.profileId);
 				}
 			}
@@ -465,9 +461,10 @@ export class ProfileRegistry {
 		const e = p.expertise;
 		const v = c.violationHistory.slice(-3); // 最近 3 条违规
 
-		const violationLines = v.length > 0
-			? v.map(vr => `  - [${vr.severity}] ${vr.type}: ${vr.description} (#${vr.iteration})`).join("\n")
-			: "  (none)";
+		const violationLines =
+			v.length > 0
+				? v.map(vr => `  - [${vr.severity}] ${vr.type}: ${vr.description} (#${vr.iteration})`).join("\n")
+				: "  (none)";
 
 		return [
 			`<agent_profile id="${p.profileId}" score="${c.score}" archetype="${p.identity.archetype}">`,
@@ -491,13 +488,13 @@ export class ProfileRegistry {
 	 */
 	getSwarmCreditSummary(profileIds: string[]): string {
 		// 缓存 key = sorted profileIds + per-profile version (版本感知)
-		const cacheKey = profileIds.slice().sort().join(",") + "|" +
+		const cacheKey =
+			profileIds.slice().sort().join(",") +
+			"|" +
 			profileIds.map(id => `${id}:${this.#versions.get(id) ?? 0}`).join(",");
 
 		const now = Date.now();
-		if (this.#creditRankCache &&
-			this.#creditRankCache.key === cacheKey &&
-			this.#creditRankCache.ttl > now) {
+		if (this.#creditRankCache && this.#creditRankCache.key === cacheKey && this.#creditRankCache.ttl > now) {
 			return this.#creditRankCache.text;
 		}
 
@@ -528,16 +525,12 @@ export class ProfileRegistry {
 		this.#creditRankCache = null;
 	}
 
-
 	// ── Offload Refs ──────────────────────────────────────────────────
 
 	/**
 	 * Append an L1 history reference to a profile's offloadRefs.
 	 */
-	appendL1Ref(
-		profileId: string,
-		ref: AgentProfile["offloadRefs"]["l1History"][number],
-	): void {
+	appendL1Ref(profileId: string, ref: AgentProfile["offloadRefs"]["l1History"][number]): void {
 		const profile = this.#profiles.get(profileId);
 		if (!profile) return;
 		profile.offloadRefs.l1History.push(ref);
@@ -585,7 +578,8 @@ export class ProfileRegistry {
 			// New format: read _index.json, then each {profileId}.json
 			const indexPath = `${profilesDir}/_index.json`;
 			const indexRaw = await fs.readFile(indexPath, "utf-8");
-			const index: { profileId: string; archetype: string; score: number; lastActive: number }[] = JSON.parse(indexRaw);
+			const index: { profileId: string; archetype: string; score: number; lastActive: number }[] =
+				JSON.parse(indexRaw);
 			if (!Array.isArray(index) || index.length === 0) {
 				// Empty index — fall through to old format
 				throw new Error("Empty index");
@@ -615,7 +609,9 @@ export class ProfileRegistry {
 				const data = await file.json();
 				if (Array.isArray(data)) registry.deserialize(data);
 			}
-		} catch { /* first run — no profiles yet */ }
+		} catch {
+			/* first run — no profiles yet */
+		}
 		return registry;
 	}
 
@@ -643,7 +639,7 @@ export class ProfileRegistry {
 			const indexTmp = `${profilesDir}/_index.json.tmp`;
 			await fs.writeFile(indexTmp, JSON.stringify(index, null, 2), "utf-8");
 			await fs.rename(indexTmp, `${profilesDir}/_index.json`);
-		} catch (err) {
+		} catch (_err) {
 			// Best-effort — never crash on persistence failure
 		}
 		// Legacy fallback: also write old profiles.json for one migration cycle
@@ -652,7 +648,9 @@ export class ProfileRegistry {
 			const tmp = `${path}.tmp`;
 			await Bun.write(tmp, JSON.stringify(this.serialize(), null, 2));
 			await fs.rename(tmp, path);
-		} catch { /* best-effort */ }
+		} catch {
+			/* best-effort */
+		}
 	}
 
 	#bumpVersion(profileId: string): void {

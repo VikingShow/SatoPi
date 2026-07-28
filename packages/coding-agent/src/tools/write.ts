@@ -976,9 +976,10 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 			if (allowList && allowList.length > 0) {
 				const relativeTarget = nodePath.relative(this.session.cwd, absolutePath);
 				const allowed = allowList.some(
-					pattern => relativeTarget === pattern ||
-						relativeTarget.endsWith("/" + pattern) ||
-						relativeTarget.endsWith("\\" + pattern)
+					pattern =>
+						relativeTarget === pattern ||
+						relativeTarget.endsWith(`/${pattern}`) ||
+						relativeTarget.endsWith(`\\${pattern}`),
 				);
 				if (!allowed) {
 					throw new ToolError(

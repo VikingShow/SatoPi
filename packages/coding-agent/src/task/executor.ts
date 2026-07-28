@@ -876,8 +876,8 @@ interface SubagentRunMonitor {
 	lastAssistantSalvageText(): string | undefined;
 	/** Final raw output: end-of-run assistant text when available, else accumulated chunks. */
 	rawOutput(): string;
-		/** Final raw thinking: accumulated thinking/reasoning chunks. */
-		rawThinking(): string;
+	/** Final raw thinking: accumulated thinking/reasoning chunks. */
+	rawThinking(): string;
 	scheduleProgress(flush?: boolean): void;
 	/** Stop processing events and clear listeners/timers. Call once the run settled. */
 	finish(): void;
@@ -920,8 +920,8 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 
 	const outputChunks: string[] = [];
 	const finalOutputChunks: string[] = [];
-		const thinkingChunks: string[] = [];
-		const finalThinkingChunks: string[] = [];
+	const thinkingChunks: string[] = [];
+	const finalThinkingChunks: string[] = [];
 	const RECENT_OUTPUT_TAIL_BYTES = 8 * 1024;
 	let recentOutputTail = "";
 	let tailLastLineRepresentable = false;
@@ -1602,7 +1602,7 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 		captureSalvage,
 		lastAssistantSalvageText: () => lastAssistantSalvageText,
 		rawOutput: () => (finalOutputChunks.length > 0 ? finalOutputChunks.join("") : outputChunks.join("")),
-			rawThinking: () => (finalThinkingChunks.length > 0 ? finalThinkingChunks.join("") : thinkingChunks.join("")),
+		rawThinking: () => (finalThinkingChunks.length > 0 ? finalThinkingChunks.join("") : thinkingChunks.join("")),
 		scheduleProgress,
 		finish: () => {
 			resolved = true;
@@ -1827,7 +1827,7 @@ async function finalizeRunResult(args: FinalizeRunArgs): Promise<SingleResult> {
 
 	// Use final output if available, otherwise accumulated output
 	let rawOutput = monitor.rawOutput();
-		const thinking = monitor.rawThinking();
+	const thinking = monitor.rawThinking();
 	const yieldItems = progress.extractedToolData?.yield as YieldItem[] | undefined;
 	const reportFindingDetails = progress.extractedToolData?.report_finding as ReportFindingDetails[] | undefined;
 	const reportFindings: ReviewFinding[] | undefined = reportFindingDetails?.map(toReviewFinding);

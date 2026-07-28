@@ -10,10 +10,10 @@
  * Fallback: if LLM fails → safe defaults (no task boundary detected).
  */
 
-import { completeSimple, type AssistantMessage, type Model } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, completeSimple, type Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
-import { resolveRoleSelection } from "../../config/model-resolver";
 import type { ModelRegistry } from "../../config/model-registry";
+import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 
 // ============================================================================
@@ -26,8 +26,8 @@ const L15_SYSTEM_PROMPT = [
 	"the user is starting a new task or continuing an old one.\n\n",
 	"Analyze the three inputs provided:\n",
 	"1. **recentMessages** — the last few conversation turns. Extract the user's ",
-	"latest core intent. Is it \"continue debugging\", \"declared complete\", ",
-	"\"casual Q&A\", or \"new request\"?\n",
+	'latest core intent. Is it "continue debugging", "declared complete", ',
+	'"casual Q&A", or "new request"?\n',
 	"2. **currentMmd** — the active Mermaid task graph. Compare the user's intent ",
 	"against this graph. If the intent exceeds the graph's scope (new unrelated work) ",
 	"or all nodes within scope are marked done, set taskCompleted=true.\n",
@@ -198,10 +198,8 @@ export class TaskBoundaryJudge {
 					taskCompleted: parsed.taskCompleted,
 					isLongTask: parsed.isLongTask,
 					isContinuation: parsed.isContinuation,
-					continuationMmdFile:
-						typeof parsed.continuationMmdFile === "string" ? parsed.continuationMmdFile : null,
-					newTaskLabel:
-						typeof parsed.newTaskLabel === "string" ? parsed.newTaskLabel.slice(0, 60) : null,
+					continuationMmdFile: typeof parsed.continuationMmdFile === "string" ? parsed.continuationMmdFile : null,
+					newTaskLabel: typeof parsed.newTaskLabel === "string" ? parsed.newTaskLabel.slice(0, 60) : null,
 				};
 			}
 		} catch {

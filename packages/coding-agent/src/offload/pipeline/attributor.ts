@@ -14,10 +14,10 @@ import { logger } from "@oh-my-pi/pi-utils";
 // ============================================================================
 
 export interface PlanPhase {
-	id: string;            // "phase-1"
-	title: string;         // "API Layer"
-	number: number;        // 1
-	taskIds: string[];     // ["1.1", "1.2"]
+	id: string; // "phase-1"
+	title: string; // "API Layer"
+	number: number; // 1
+	taskIds: string[]; // ["1.1", "1.2"]
 	status: "todo" | "doing" | "done";
 }
 
@@ -41,16 +41,16 @@ export interface AttributionInput {
 }
 
 export interface MmdNode {
-	id: string;                      // "001-N1"
-	label: string;                   // 节点标签
+	id: string; // "001-N1"
+	label: string; // 节点标签
 	status: "done" | "doing" | "todo" | "blocked";
-	phaseId?: string;                // 关联的 phase
+	phaseId?: string; // 关联的 phase
 }
 
 export interface MmdEdge {
-	from: string;                    // 源 node_id
-	to: string;                      // 目标 node_id
-	type: "-->" | "-.->";           // 实线(顺序依赖) / 虚线(审查关系)
+	from: string; // 源 node_id
+	to: string; // 目标 node_id
+	type: "-->" | "-.->"; // 实线(顺序依赖) / 虚线(审查关系)
 	label?: string;
 }
 

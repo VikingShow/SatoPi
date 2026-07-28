@@ -422,33 +422,43 @@ describe("Hook event trigger coverage (15 untriggered types)", () => {
 // E2E: Hook events fire through real integration points (SP-7 verification)
 // ============================================================================
 
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { IrcBus } from "../../irc/bus";
+import { OffloadManager } from "../../offload/manager";
+import { MemorySessionStorage } from "../../session/session-storage";
 import { CommBus } from "../comm-bus/comm-bus";
 import { CommChannel } from "../comm-bus/comm-channel";
-import { runVote } from "../comm-bus/vote";
 import { runRoundtable } from "../comm-bus/roundtable";
+import { runVote } from "../comm-bus/vote";
 import type { AssembledContext } from "../context-manager/context-pipeline";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { StateTracker } from "../core/state";
 import type { PhaseDefinition } from "../core/workflow-fsm";
 import { WorkflowFsm } from "../core/workflow-fsm";
 import { ActivityLogger } from "../infra/activity-logger";
-import { OffloadManager } from "../../offload/manager";
-import { MemorySessionStorage } from "../../session/session-storage";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 
 describe("Hook event trigger E2E (real integration points)", () => {
 	let hookPipeline: HookPipeline;
 	let fired: string[];
 
 	const ALL_EVENTS: HookEvent[] = [
-		"comm:beforeMessage", "comm:afterMessage",
-		"comm:beforeBroadcast", "comm:afterBroadcast",
-		"vote:start", "vote:tally", "vote:result",
-		"roundtable:beforeRound", "roundtable:afterRound", "roundtable:converged",
-		"context:beforeInjection", "context:afterInjection",
-		"context:beforeCompaction", "context:afterCompaction",
-		"offload:afterL1", "offload:beforeFlush", "offload:afterFlush",
+		"comm:beforeMessage",
+		"comm:afterMessage",
+		"comm:beforeBroadcast",
+		"comm:afterBroadcast",
+		"vote:start",
+		"vote:tally",
+		"vote:result",
+		"roundtable:beforeRound",
+		"roundtable:afterRound",
+		"roundtable:converged",
+		"context:beforeInjection",
+		"context:afterInjection",
+		"context:beforeCompaction",
+		"context:afterCompaction",
+		"offload:afterL1",
+		"offload:beforeFlush",
+		"offload:afterFlush",
 		"workflow:phaseTimeout",
 	];
 
@@ -460,7 +470,9 @@ describe("Hook event trigger E2E (real integration points)", () => {
 			name: "e2e-spy",
 			priority: 0,
 			events: ALL_EVENTS,
-			handler: async (event) => { fired.push(event); },
+			handler: async event => {
+				fired.push(event);
+			},
 		});
 	});
 
@@ -511,11 +523,17 @@ describe("Hook event trigger E2E (real integration points)", () => {
 
 		// Ghost agents produce empty responses → Jaccard=1 →
 		// convergenceStreak=1 makes round 2 converge immediately.
-		await runRoundtable(bus, ["ghost-1", "ghost-2"], "design discussion", {
-			rounds: 3,
-			timeoutMs: 50,
-			convergenceStreak: 1,
-		}, hookPipeline);
+		await runRoundtable(
+			bus,
+			["ghost-1", "ghost-2"],
+			"design discussion",
+			{
+				rounds: 3,
+				timeoutMs: 50,
+				convergenceStreak: 1,
+			},
+			hookPipeline,
+		);
 
 		expect(fired).toContain("roundtable:beforeRound");
 		expect(fired).toContain("roundtable:afterRound");

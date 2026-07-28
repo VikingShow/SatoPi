@@ -45,7 +45,7 @@ export interface ExperienceEntry {
 	nodeId?: string;
 	/** Content hash of the task the agent was working on. */
 	taskHash?: string;
- }
+}
 export interface SearchResult {
 	runId: string;
 	timestamp: string;
@@ -297,9 +297,21 @@ export class ExperienceStore {
 		}
 
 		if (this.#schemaVersion < 2) {
-			try { db.run("ALTER TABLE lessons ADD COLUMN graph_name TEXT"); } catch { /* exists */ }
-			try { db.run("ALTER TABLE lessons ADD COLUMN node_id TEXT"); } catch { /* exists */ }
-			try { db.run("ALTER TABLE lessons ADD COLUMN task_hash TEXT"); } catch { /* exists */ }
+			try {
+				db.run("ALTER TABLE lessons ADD COLUMN graph_name TEXT");
+			} catch {
+				/* exists */
+			}
+			try {
+				db.run("ALTER TABLE lessons ADD COLUMN node_id TEXT");
+			} catch {
+				/* exists */
+			}
+			try {
+				db.run("ALTER TABLE lessons ADD COLUMN task_hash TEXT");
+			} catch {
+				/* exists */
+			}
 			db.run("INSERT OR REPLACE INTO schema_version (version) VALUES (2)");
 			this.#schemaVersion = 2;
 		}
@@ -822,7 +834,8 @@ export class ExperienceStore {
 		};
 		// Principles get a weight boost upfront
 		const db = this.#db!;
-		db.run(`
+		db.run(
+			`
 			INSERT OR REPLACE INTO lessons (run_id, timestamp, lesson_json, stats_json, tags, weight, graph_name, node_id, task_hash)
 			VALUES (?1, ?2, ?3, ?4, ?5, 3.0, NULL, NULL, NULL)
 		`,

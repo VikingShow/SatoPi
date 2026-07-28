@@ -30,15 +30,15 @@ export class ScriptBehavior implements PhaseBehavior {
 
 	/** The Planner agent handle — the single agent for this phase. */
 	#planner?: AgentHandle;
+	/** The human↔planner direct communication channel. */
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set during script dialogue
+	#channel?: CommChannel;
 
 	/** Full conversation history (human + assistant turns). */
 	#conversation: Array<{ role: "user" | "assistant"; content: string }> = [];
 
 	/** Set to true when the human confirms the plan. */
 	#planConfirmed = false;
-
-	/** The human↔planner direct communication channel. */
-	#channel?: CommChannel;
 
 	/** Planner output accumulator for completion detection. */
 	#plannerOutput = "";

@@ -20,8 +20,8 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { IOffloadManager } from "../../offload/manager";
 import type { MmdInjector } from "../../offload/mermaid/injector";
-import type { AgentSession } from "../../session/agent-session";
 import { createAgentSession } from "../../sdk";
+import type { AgentSession } from "../../session/agent-session";
 import type { Tool, ToolSession } from "../../tools";
 import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
@@ -119,7 +119,7 @@ export interface LaunchContext {
 	 * merges with the SDK's extension-emit / steering-wrap pipeline.
 	 */
 	pipeline?: ContextPipeline;
- }
+}
 
 /**
  * Minimal ToolSession for SatoPi swarm agents (Phase B1).
@@ -155,11 +155,7 @@ export class AgentLauncher {
 	/** Override for testing — defaults to createAgentSession. */
 	#sessionFactory: typeof createAgentSession;
 
-	constructor(
-		modelRegistry: ModelRegistry,
-		settings: Settings,
-		sessionFactory?: typeof createAgentSession,
-	) {
+	constructor(modelRegistry: ModelRegistry, settings: Settings, sessionFactory?: typeof createAgentSession) {
 		this.#modelRegistry = modelRegistry;
 		this.#settings = settings;
 		this.#sessionFactory = sessionFactory ?? createAgentSession;
@@ -196,7 +192,7 @@ export class AgentLauncher {
 		});
 
 		const { session } = await this.#sessionFactory({
-		// 4. Create AgentSession (replaces new Agent — gets yield/skills/MCP/IRC/streaming for free)
+			// 4. Create AgentSession (replaces new Agent — gets yield/skills/MCP/IRC/streaming for free)
 			model,
 			systemPrompt: [systemPrompt],
 			toolNames,

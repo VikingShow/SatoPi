@@ -60,7 +60,7 @@ describe("ProfileRegistry", () => {
 	// ── Credit — success / praise / criticism ─────────────────────────
 
 	test("recordTaskCompleted — success increases credit score", () => {
-		const p = registry.createProfile({ profileId: "w1", name: "W1", archetype: "worker" });
+		const _p = registry.createProfile({ profileId: "w1", name: "W1", archetype: "worker" });
 		const updated = registry.recordTaskCompleted("w1", true);
 		expect(updated!.credit.score).toBe(53); // 50 + 3
 		expect(updated!.credit.successRate).toBe(1);
@@ -68,7 +68,7 @@ describe("ProfileRegistry", () => {
 	});
 
 	test("recordTaskCompleted — failure keeps score unchanged", () => {
-		const p = registry.createProfile({ profileId: "w1", name: "W1", archetype: "worker" });
+		const _p = registry.createProfile({ profileId: "w1", name: "W1", archetype: "worker" });
 		const updated = registry.recordTaskCompleted("w1", false);
 		expect(updated!.credit.score).toBe(50); // unchanged
 		expect(updated!.credit.successRate).toBe(0);
@@ -244,7 +244,7 @@ describe("ProfileRegistry", () => {
 		registry.createProfile({ profileId: "w1", name: "W1", archetype: "worker" });
 		registry.updateProficiency("w1", "rust", 0.75);
 		const p = registry.get("w1")!;
-		expect(p.expertise.proficiency["rust"]).toBe(0.75);
+		expect(p.expertise.proficiency.rust).toBe(0.75);
 		expect(p.expertise.domains).toContain("rust");
 	});
 

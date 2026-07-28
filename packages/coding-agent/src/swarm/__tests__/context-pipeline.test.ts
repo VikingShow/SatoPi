@@ -433,9 +433,7 @@ describe("ContextPipeline", () => {
 				name: "experience",
 				priority: 0,
 				build: async () => ({
-					injectedMessages: [
-						{ role: "user", content: "EXP: prior session summary", timestamp: 0 },
-					],
+					injectedMessages: [{ role: "user", content: "EXP: prior session summary", timestamp: 0 }],
 				}),
 			}),
 		);
@@ -444,9 +442,7 @@ describe("ContextPipeline", () => {
 				name: "mmd",
 				priority: 1,
 				build: async () => ({
-					injectedMessages: [
-						{ role: "user", content: "MMD: current plan state", timestamp: 0 },
-					],
+					injectedMessages: [{ role: "user", content: "MMD: current plan state", timestamp: 0 }],
 				}),
 			}),
 		);
@@ -483,9 +479,7 @@ describe("ContextPipeline", () => {
 				name: "stigmergy",
 				priority: 1,
 				build: async () => ({
-					injectedMessages: [
-						{ role: "user", content: "STIG: workspace state summary", timestamp: 0 },
-					],
+					injectedMessages: [{ role: "user", content: "STIG: workspace state summary", timestamp: 0 }],
 				}),
 			}),
 		);
@@ -530,9 +524,7 @@ describe("ContextPipeline", () => {
 				name: "core",
 				priority: 0,
 				build: async () => ({
-					injectedMessages: [
-						{ role: "user", content: "CORE: system instructions", timestamp: 0 },
-					],
+					injectedMessages: [{ role: "user", content: "CORE: system instructions", timestamp: 0 }],
 				}),
 			}),
 		);
@@ -551,9 +543,7 @@ describe("ContextPipeline", () => {
 			return pipelineTransform(withSdkCtx, signal);
 		};
 
-		const conversation: AgentMessage[] = [
-			{ role: "user", content: "proceed", timestamp: 0 },
-		] as AgentMessage[];
+		const conversation: AgentMessage[] = [{ role: "user", content: "proceed", timestamp: 0 }] as AgentMessage[];
 
 		const result = await sdkMerged(conversation);
 
@@ -588,9 +578,7 @@ describe("ContextPipeline", () => {
 		};
 		const pipelineTransform = pipeline.toTransformContext(assembled);
 
-		const messages: AgentMessage[] = [
-			{ role: "user", content: "hello", timestamp: 0 },
-		] as AgentMessage[];
+		const messages: AgentMessage[] = [{ role: "user", content: "hello", timestamp: 0 }] as AgentMessage[];
 
 		const result = await pipelineTransform(messages);
 
@@ -746,7 +734,7 @@ describe("ContextPipeline", () => {
 		expect(result.systemPrompt).toBe("");
 		expect(result.tools).toEqual([]);
 		expect(result.injectedMessages).toEqual([]);
-		expect(result.metadata["empty"]).toBe("(no additions)");
+		expect(result.metadata.empty).toBe("(no additions)");
 	});
 
 	test("null/undefined fragment fields are handled gracefully", async () => {
@@ -767,6 +755,6 @@ describe("ContextPipeline", () => {
 
 		// Should not crash
 		expect(result.systemPrompt).toBe("");
-		expect(result.metadata["sparse"]).toBe("(no additions)");
+		expect(result.metadata.sparse).toBe("(no additions)");
 	});
 });

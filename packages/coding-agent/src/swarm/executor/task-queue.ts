@@ -53,18 +53,16 @@ export interface TaskSnapshot {
 	completed: string[];
 }
 
-export declare interface TaskQueue {
-	on(event: "task:ready", listener: (taskId: string) => void): this;
-	on(event: "task:completed", listener: (taskId: string, agentId: string) => void): this;
-	on(event: "task:blocked", listener: (taskId: string, reason: string) => void): this;
-	on(event: "all-complete", listener: () => void): this;
-}
-
 // ============================================================================
 // TaskQueue
 // ============================================================================
 
 export class TaskQueue extends EventEmitter {
+	// Type-safe event overloads (merged from interface to avoid unsafe declaration merging)
+	on(event: "task:ready", listener: (taskId: string) => void): this;
+	on(event: "task:completed", listener: (taskId: string, agentId: string) => void): this;
+	on(event: "task:blocked", listener: (taskId: string, reason: string) => void): this;
+	on(event: "all-complete", listener: () => void): this;
 	readonly #tasks = new Map<string, Task>();
 	readonly #readyQueue: string[] = [];
 	readonly #inProgress = new Map<string, string>(); // taskId → agentId

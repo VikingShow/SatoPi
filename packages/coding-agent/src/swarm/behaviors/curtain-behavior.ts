@@ -36,18 +36,18 @@ export class CurtainBehavior implements PhaseBehavior {
 
 	/** Both spawned agent handles. */
 	#agents: AgentHandle[] = [];
-
-	/** Election/vote channel for reporter selection. */
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set during reporter election
 	#electionChannel?: CommChannel;
+
+	/** Raw dissatisfaction feedback text (forwarded to ScriptBehavior on re-entry). */
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set on human dissatisfaction
+	#dissatisfactionFeedback = "";
 
 	/** Whether the human has applauded / acknowledged the report. */
 	#humanApplauded = false;
 
 	/** Whether the human expressed dissatisfaction (triggers re-plan path). */
 	#humanDissatisfied = false;
-
-	/** Raw dissatisfaction feedback text (forwarded to ScriptBehavior on re-entry). */
-	#dissatisfactionFeedback = "";
 
 	/** Whether the reporter has finished. */
 	#reporterCompleted = false;

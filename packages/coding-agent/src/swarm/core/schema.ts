@@ -568,9 +568,24 @@ export async function resolveSwarmYamlPath(workspaceDir: string): Promise<string
 	const legacy = path.join(workspaceDir, "loop.yaml");
 	const legacyWorkspace = path.join(workspaceDir, ".swarm-workspace", "loop.yaml");
 
-	try { await fs.access(preferred); return preferred; } catch { /* fall through */ }
-	try { await fs.access(legacy); return legacy; } catch { /* fall through */ }
-	try { await fs.access(legacyWorkspace); return legacyWorkspace; } catch { /* fall through */ }
+	try {
+		await fs.access(preferred);
+		return preferred;
+	} catch {
+		/* fall through */
+	}
+	try {
+		await fs.access(legacy);
+		return legacy;
+	} catch {
+		/* fall through */
+	}
+	try {
+		await fs.access(legacyWorkspace);
+		return legacyWorkspace;
+	} catch {
+		/* fall through */
+	}
 
 	return preferred;
 }

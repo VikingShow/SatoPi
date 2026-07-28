@@ -5,6 +5,7 @@
  */
 import { Effort } from "@oh-my-pi/pi-ai";
 import { parseFrontmatter, prompt } from "@oh-my-pi/pi-utils";
+import type { RoleAsset } from "../agent/role-asset";
 import { parseAgentFields } from "../discovery/helpers";
 import designerMd from "../prompts/agents/designer.md" with { type: "text" };
 // Embed agent markdown files at build time
@@ -15,7 +16,6 @@ import scoutMd from "../prompts/agents/scout.md" with { type: "text" };
 import swarmMd from "../prompts/agents/swarm.md" with { type: "text" };
 import taskMd from "../prompts/agents/task.md" with { type: "text" };
 import { AUTO_THINKING, parseConfiguredThinkingLevel } from "../thinking";
-import type { RoleAsset } from "../agent/role-asset";
 
 import type { AgentDefinition, AgentSource } from "./types";
 
@@ -68,7 +68,7 @@ const EMBEDDED_AGENT_DEFS: EmbeddedAgentDef[] = [
 		template: taskMd,
 	},
 	{ fileName: "swarm.md", template: swarmMd },
-]
+];
 
 // Computed lazily on first loadBundledAgents() call to avoid eager prompt.render at module load.
 
@@ -170,9 +170,7 @@ export function roleToAgentDefinition(role: RoleAsset): AgentDefinition {
 
 	// Append guidelines block if present
 	if (role.prompts.guidelines && role.prompts.guidelines.length > 0) {
-		const guidelinesBlock = role.prompts.guidelines
-			.map((g) => `- ${g}`)
-			.join("\n");
+		const guidelinesBlock = role.prompts.guidelines.map(g => `- ${g}`).join("\n");
 		systemPrompt = `${systemPrompt}\n\n## Guidelines\n${guidelinesBlock}`;
 	}
 
@@ -182,14 +180,15 @@ export function roleToAgentDefinition(role: RoleAsset): AgentDefinition {
 		systemPrompt,
 		tools: role.tools.length > 0 ? role.tools : undefined,
 		model: role.model ? [role.model] : undefined,
-		thinkingLevel: role.thinkingLevel
-			? parseConfiguredThinkingLevel(role.thinkingLevel)
-			: undefined,
+		thinkingLevel: role.thinkingLevel ? parseConfiguredThinkingLevel(role.thinkingLevel) : undefined,
 		output: role.output,
 		spawns: role.spawns
 			? role.spawns === "*"
 				? "*"
-				: role.spawns.split(",").map((s) => s.trim()).filter(Boolean)
+				: role.spawns
+						.split(",")
+						.map(s => s.trim())
+						.filter(Boolean)
 			: undefined,
 		blocking: role.blocking,
 		source: "project",

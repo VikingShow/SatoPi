@@ -11,17 +11,17 @@
  * + MmdInjector 全部不变，仅替换输入端为 AgentMessage[]。
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { SessionStorage } from "../session/session-storage"
-import type { PlanPhase } from "./pipeline/attributor"
-import type { ExperienceStore } from "../swarm/curtain/experience"
-import type { ExtractedLesson } from "../swarm/curtain/extractor"
-import { OffloadStore } from "./store"
-import { OffloadPipeline, type OffloadPipelineConfig } from "./pipeline/pipeline"
-import { MermaidSynthesizer } from "./mermaid/synthesizer"
-import { MmdInjector } from "./mermaid/injector"
-import { AgentOffloadSummarizer, type AgentOffloadEntry } from "./pipeline/agent-summarizer"
+import { logger } from "@oh-my-pi/pi-utils";
+import type { SessionStorage } from "../session/session-storage";
+import type { ExperienceStore } from "../swarm/curtain/experience";
+import type { ExtractedLesson } from "../swarm/curtain/extractor";
+import { MmdInjector } from "./mermaid/injector";
+import { MermaidSynthesizer } from "./mermaid/synthesizer";
+import { type AgentOffloadEntry, AgentOffloadSummarizer } from "./pipeline/agent-summarizer";
+import type { PlanPhase } from "./pipeline/attributor";
+import { OffloadPipeline, type OffloadPipelineConfig } from "./pipeline/pipeline";
+import { OffloadStore } from "./store";
 
 // ============================================================================
 // Types
@@ -119,7 +119,9 @@ export function createOffloadAgentHooks(
 
 		turnIndex++;
 		logger.debug("[OffloadAgentHooks] Turn end processed", {
-			agentId, turnIndex, summaryLen: entry.summary.length,
+			agentId,
+			turnIndex,
+			summaryLen: entry.summary.length,
 		});
 	}
 
@@ -134,9 +136,10 @@ export function createOffloadAgentHooks(
 		// MMD 注入
 		if (config.injectMermaid && currentMmd) {
 			const phaseHints = [phaseMap.get(agentId)].filter((p): p is string => !!p);
-			const view = phaseHints.length > 0
-				? injector.buildWorkerView(currentMmd, phaseHints)
-				: injector.buildFullView(currentMmd);
+			const view =
+				phaseHints.length > 0
+					? injector.buildWorkerView(currentMmd, phaseHints)
+					: injector.buildFullView(currentMmd);
 
 			latestMmdInjection = view.injectBlock;
 		}
@@ -153,7 +156,8 @@ export function createOffloadAgentHooks(
 				}
 			} catch (err) {
 				logger.warn("[OffloadAgentHooks] Experience search failed", {
-					agentId, error: String(err),
+					agentId,
+					error: String(err),
 				});
 			}
 		}
@@ -199,8 +203,10 @@ export function createOffloadAgentHooks(
 			});
 
 			logger.info("[OffloadAgentHooks] Flush complete", {
-				iteration, nodes: l2Result.nodes.length,
-				edges: l2Result.edges.length, boundary: l2Result.boundary.type,
+				iteration,
+				nodes: l2Result.nodes.length,
+				edges: l2Result.edges.length,
+				boundary: l2Result.boundary.type,
 			});
 		}
 	}

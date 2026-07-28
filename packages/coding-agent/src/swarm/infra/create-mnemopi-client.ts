@@ -24,10 +24,7 @@ import type { MnemopiClient } from "./mnemopi-adapter";
  * @param workspace   Agent directory (used as fallback when settings have no dbPath).
  * @returns MnemopiClient or null if Mnemopi is unavailable.
  */
-export async function createSwarmMnemopiClient(
-	settings: Settings,
-	workspace: string,
-): Promise<MnemopiClient | null> {
+export async function createSwarmMnemopiClient(settings: Settings, workspace: string): Promise<MnemopiClient | null> {
 	try {
 		const [{ loadMnemopiConfig }, { loadMnemopi, loadMnemopiCore }] = await Promise.all([
 			import("../../mnemopi/config"),

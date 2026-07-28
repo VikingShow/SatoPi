@@ -21,21 +21,21 @@ import type { Chapter } from "../../../swarm/core/state";
 
 export const sato = {
 	// ── Semantic (matches satopi.json theme) ──────────────────────────────
-	success: (text: string) => chalk.hex("#6D9E6B")(text),    // bodhiGreen
-	error:   (text: string) => chalk.hex("#CC7A72")(text),    // softRed
+	success: (text: string) => chalk.hex("#6D9E6B")(text), // bodhiGreen
+	error: (text: string) => chalk.hex("#CC7A72")(text), // softRed
 	/** Alias for error — panels use both names. */
-	danger:  (text: string) => chalk.hex("#CC7A72")(text),    // softRed
-	warning: (text: string) => chalk.hex("#D8B860")(text),    // warmGold
-	muted:   (text: string) => chalk.hex("#8B9098")(text),    // inkMuted
-	dim:     (text: string) => chalk.hex("#555B64")(text),    // inkDim
-	text:    (text: string) => chalk.hex("#E2E4EA")(text),    // inkText
-	border:  (text: string) => chalk.hex("#2A3038")(text),    // inkBorder
-	bold:    (text: string) => chalk.bold(text),
-	amber:   (text: string) => chalk.hex("#C8A24E")(text),    // bodhiGold / accent
+	danger: (text: string) => chalk.hex("#CC7A72")(text), // softRed
+	warning: (text: string) => chalk.hex("#D8B860")(text), // warmGold
+	muted: (text: string) => chalk.hex("#8B9098")(text), // inkMuted
+	dim: (text: string) => chalk.hex("#555B64")(text), // inkDim
+	text: (text: string) => chalk.hex("#E2E4EA")(text), // inkText
+	border: (text: string) => chalk.hex("#2A3038")(text), // inkBorder
+	bold: (text: string) => chalk.bold(text),
+	amber: (text: string) => chalk.hex("#C8A24E")(text), // bodhiGold / accent
 
 	// ── Brand-invariant (no ThemeColor equivalent) ───────────────────────
 	/** Blue — script phase, agent info lines. */
-	info:   (text: string) => chalk.hex("#3B82F6")(text),
+	info: (text: string) => chalk.hex("#3B82F6")(text),
 	/** Purple — debate/curtain phases. */
 	purple: (text: string) => chalk.hex("#8B5CF6")(text),
 	/** Logo orange — "SatoPi" name. */
@@ -58,17 +58,17 @@ import type { Theme } from "../../theme/theme";
 export function createSatoFromTheme(theme: Theme) {
 	return {
 		success: (text: string) => theme.fg("success", text),
-		error:   (text: string) => theme.fg("error",   text),
-		danger:  (text: string) => theme.fg("error",   text),
+		error: (text: string) => theme.fg("error", text),
+		danger: (text: string) => theme.fg("error", text),
 		warning: (text: string) => theme.fg("warning", text),
-		muted:   (text: string) => theme.fg("muted",   text),
-		dim:     (text: string) => theme.fg("dim",     text),
-		text:    (text: string) => theme.fg("text",    text),
-		border:  (text: string) => theme.fg("border",  text),
-		bold:    (text: string) => theme.bold(text),
-		amber:   (text: string) => theme.fg("accent",  text),
+		muted: (text: string) => theme.fg("muted", text),
+		dim: (text: string) => theme.fg("dim", text),
+		text: (text: string) => theme.fg("text", text),
+		border: (text: string) => theme.fg("border", text),
+		bold: (text: string) => theme.bold(text),
+		amber: (text: string) => theme.fg("accent", text),
 		// Brand colours — no ThemeColor equivalents; fall back to chalk.hex
-		info:   sato.info,
+		info: sato.info,
 		purple: sato.purple,
 		orange: sato.orange,
 	};
@@ -79,14 +79,14 @@ export function createSatoFromTheme(theme: Theme) {
 // ============================================================================
 
 export const PHASE_DISPLAY: Record<Chapter, { icon: string; label: string }> = {
-	idle:            { icon: "○", label: "Idle" },
-	script:          { icon: "◇", label: "Script" },
+	idle: { icon: "○", label: "Idle" },
+	script: { icon: "◇", label: "Script" },
 	"script-debate": { icon: "◆", label: "Debate" },
-	"script-confirm":{ icon: "◇", label: "Confirm" },
-	stage:           { icon: "●", label: "Stage" },
-	paused:          { icon: "⏸", label: "Paused" },
-	blocked:         { icon: "⛔", label: "Blocked" },
-	curtain:         { icon: "◈", label: "Curtain" },
+	"script-confirm": { icon: "◇", label: "Confirm" },
+	stage: { icon: "●", label: "Stage" },
+	paused: { icon: "⏸", label: "Paused" },
+	blocked: { icon: "⛔", label: "Blocked" },
+	curtain: { icon: "◈", label: "Curtain" },
 };
 
 /** Phase → colour function. */

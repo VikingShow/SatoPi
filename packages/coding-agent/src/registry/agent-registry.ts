@@ -18,8 +18,8 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentHandle } from "../swarm/agent-runtime/agent-handle";
 import type { AgentSession } from "../session/agent-session";
+import type { AgentHandle } from "../swarm/agent-runtime/agent-handle";
 import { oneLineLabel } from "../task/types";
 
 export const MAIN_AGENT_ID = "Main";
@@ -102,7 +102,10 @@ export class AgentRegistry {
 			logger.warn("AgentRegistry.register: duplicate id — disposing old session", { id: input.id });
 			if (existing.session) {
 				existing.session.dispose().catch(err =>
-					logger.warn("AgentRegistry.register: failed to dispose old session", { id: input.id, error: String(err) }),
+					logger.warn("AgentRegistry.register: failed to dispose old session", {
+						id: input.id,
+						error: String(err),
+					}),
 				);
 			}
 			this.unregister(input.id);
@@ -185,7 +188,6 @@ export class AgentRegistry {
 		if (!ref) return;
 		ref.session = null;
 	}
-
 
 	get(id: string): AgentRef | undefined {
 		return this.#refs.get(id);

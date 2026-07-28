@@ -15,11 +15,11 @@
  *   默认启用 LLM 模式生成语义化摘要，失败时自动降级到文本截取。
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { L1LlmSummarizer } from "./llm-summarizer"
-import type { ModelRegistry } from "../../config/model-registry"
-import type { Settings } from "../../config/settings"
+import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { Settings } from "../../config/settings";
+import { L1LlmSummarizer } from "./llm-summarizer";
 
 // ============================================================================
 // Types
@@ -113,12 +113,14 @@ export class AgentOffloadSummarizer {
 					score: computedScore,
 				});
 			} catch (err) {
-				logger.warn("[AgentOffloadSummarizer] LLM summarization failed, falling back to truncation", { error: String(err) });
-				summary = trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed;
+				logger.warn("[AgentOffloadSummarizer] LLM summarization failed, falling back to truncation", {
+					error: String(err),
+				});
+				summary = trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
 				computedScore = score ?? 5;
 			}
 		} else {
-			summary = trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed;
+			summary = trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
 			computedScore = score ?? 5;
 		}
 

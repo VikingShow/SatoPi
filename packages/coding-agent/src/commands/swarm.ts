@@ -3,7 +3,7 @@
  */
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
-import { type SwarmAction, type SwarmCommandArgs, runSwarmCommand } from "../cli/swarm-cli";
+import { runSwarmCommand, type SwarmAction, type SwarmCommandArgs } from "../cli/swarm-cli";
 import { initTheme } from "../modes/theme/theme";
 
 const ACTIONS: SwarmAction[] = ["run", "plan", "resume"];

@@ -45,12 +45,12 @@ import {
 	resolveConfiguredModelPatterns,
 	resolveModelRoleValue,
 } from "./config/model-resolver";
-import { MarkEnvironment } from "./coordination";
-import { compactContext, DEFAULT_COMPACT_CONFIG, type IOffloadManager, MmdInjector } from "./offload";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
 import { buildServiceTierByFamily } from "./config/service-tier";
 import { Settings, type SkillsSettings } from "./config/settings";
+import { MarkEnvironment } from "./coordination";
 import { CursorExecHandlers } from "./cursor";
+import { compactContext, DEFAULT_COMPACT_CONFIG, type IOffloadManager, type MmdInjector } from "./offload";
 import "./discovery";
 import { initializeWithSettings } from "./discovery";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
@@ -113,7 +113,6 @@ import {
 	SecretObfuscator,
 } from "./secrets";
 import { AgentSession, type PlanYolo, type Prewalk } from "./session/agent-session";
-import type { AgentRuntime } from "./swarm/agent-runtime";
 import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
 import type { AuthStorage } from "./session/auth-storage";
 import {
@@ -131,6 +130,7 @@ import { SnapcompactInlineTransformer } from "./session/snapcompact-inline";
 import { createSnapcompactSavingsRecorder } from "./session/snapcompact-savings-journal";
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
+import type { AgentRuntime } from "./swarm/agent-runtime";
 import {
 	type BuildSystemPromptResult,
 	buildSystemPrompt as buildSystemPromptInternal,
@@ -193,9 +193,9 @@ import {
 	WriteTool,
 	warmupLspServers,
 } from "./tools";
+import { setAgentInvokeContextStore } from "./tools/agent-invoke";
 import { normalizeToolName, normalizeToolNames } from "./tools/builtin-names";
 import { ToolContextStore } from "./tools/context";
-import { setAgentInvokeContextStore } from "./tools/agent-invoke";
 import { getImageGenTools } from "./tools/image-gen";
 import { isIrcEnabled } from "./tools/irc";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
@@ -1736,7 +1736,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		);
 
 		// Create built-in tools (already wrapped with meta notice formatting)
-		const builtinTools = await logger.time("createAllTools", createTools, toolSession, options.toolNames, options.blockedTools);
+		const builtinTools = await logger.time(
+			"createAllTools",
+			createTools,
+			toolSession,
+			options.toolNames,
+			options.blockedTools,
+		);
 
 		// Discover MCP tools from .mcp.json files
 		let mcpManager: MCPManager | undefined = options.mcpManager;
@@ -2716,51 +2722,59 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const pipelineTransform = options.transformContext;
 		const transformContext = pipelineTransform
 			? async (messages: AgentMessage[], signal?: AbortSignal) => {
-				// SDK-only transforms: extension emit, steering wrap, mark env
-				const withContext = await extensionRunner.emitContext(messages);
-				let result = wrapSteeringForModel(withContext);
-				// Inject stigmergy environment context for all agents
-				const markEnv = MarkEnvironment.global();
-				const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
-				if (markCtx) {
-					result = [
-						{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
-						...result,
-					];
-				}
-				// Pipeline handles injectedMessages + L3 compact
-				return pipelineTransform(result, signal);
-			}
-			: async (messages: AgentMessage[], _signal?: AbortSignal) => {
-				const withContext = await extensionRunner.emitContext(messages);
-				let result = wrapSteeringForModel(withContext);
-				// Inject stigmergy environment context for all agents
-				const markEnv = MarkEnvironment.global();
-				const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
-				if (markCtx) {
-					result = [
-						{ role: "user", content: [{ type: "text", text: markCtx }], timestamp: Date.now() } as AgentMessage,
-						...result,
-					];
-				}
-				// Inject ContextPipeline pre-computed messages (MMD, experience, etc.)
-				if (options.injectedMessages && options.injectedMessages.length > 0) {
-					result = [...options.injectedMessages, ...result];
-				}
-				// Apply L3 compact context (fusion with SatoPi compaction)
-				if (options.offloadManager && options.contextWindow) {
-					try {
-						const compacted = compactContext(result, new Map(), {
-							...DEFAULT_COMPACT_CONFIG,
-							contextWindow: options.contextWindow,
-						});
-						result = compacted.messages;
-					} catch (err) {
-						logger.debug("[createAgentSession] Compact context skipped", { error: String(err) });
+					// SDK-only transforms: extension emit, steering wrap, mark env
+					const withContext = await extensionRunner.emitContext(messages);
+					let result = wrapSteeringForModel(withContext);
+					// Inject stigmergy environment context for all agents
+					const markEnv = MarkEnvironment.global();
+					const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
+					if (markCtx) {
+						result = [
+							{
+								role: "user",
+								content: [{ type: "text", text: markCtx }],
+								timestamp: Date.now(),
+							} as AgentMessage,
+							...result,
+						];
 					}
+					// Pipeline handles injectedMessages + L3 compact
+					return pipelineTransform(result, signal);
 				}
-				return result;
-			};
+			: async (messages: AgentMessage[], _signal?: AbortSignal) => {
+					const withContext = await extensionRunner.emitContext(messages);
+					let result = wrapSteeringForModel(withContext);
+					// Inject stigmergy environment context for all agents
+					const markEnv = MarkEnvironment.global();
+					const markCtx = markEnv.getContextForAgent(options.agentId ?? "main");
+					if (markCtx) {
+						result = [
+							{
+								role: "user",
+								content: [{ type: "text", text: markCtx }],
+								timestamp: Date.now(),
+							} as AgentMessage,
+							...result,
+						];
+					}
+					// Inject ContextPipeline pre-computed messages (MMD, experience, etc.)
+					if (options.injectedMessages && options.injectedMessages.length > 0) {
+						result = [...options.injectedMessages, ...result];
+					}
+					// Apply L3 compact context (fusion with SatoPi compaction)
+					if (options.offloadManager && options.contextWindow) {
+						try {
+							const compacted = compactContext(result, new Map(), {
+								...DEFAULT_COMPACT_CONFIG,
+								contextWindow: options.contextWindow,
+							});
+							result = compacted.messages;
+						} catch (err) {
+							logger.debug("[createAgentSession] Compact context skipped", { error: String(err) });
+						}
+					}
+					return result;
+				};
 		// Per-request provider-context transforms. Obfuscate FIRST so secrets are
 		// redacted from text before snapcompact rasterizes it into PNG frames, then
 		// clamp images to the active provider budget before the request is sent.
@@ -2907,14 +2921,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				// Gate: always active for subagents OR context > 50% for main agent
 				const isSubagent = (options.taskDepth ?? 0) > 0;
 				if (!isSubagent) {
-					const msgChars = agent.state.messages.reduce((sum: number, m: {}) => sum + JSON.stringify(m).length, 0);
+					const msgChars = agent.state.messages.reduce(
+						(sum: number, m: Record<string, unknown>) => sum + JSON.stringify(m).length,
+						0,
+					);
 					const estTokens = Math.ceil(msgChars / 4);
 					const cw = agent.state.model?.contextWindow ?? 128_000;
 					if (cw > 0 && estTokens / cw < 0.5) return;
 				}
 
 				// Only place marks for production operations
-				const fileOp = ctx.toolCall.name === "write" || ctx.toolCall.name === "edit" || ctx.toolCall.name === "bash";
+				const fileOp =
+					ctx.toolCall.name === "write" || ctx.toolCall.name === "edit" || ctx.toolCall.name === "bash";
 				if (!fileOp) return;
 
 				const argsPath = ctx.args?.path;

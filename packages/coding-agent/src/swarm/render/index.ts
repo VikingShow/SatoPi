@@ -6,8 +6,8 @@
 
 export { renderSplash } from "../../modes/components/swarm/splash";
 export {
-	PI_LOGO_ASCII,
 	PHASE_DISPLAY,
-	sato,
+	PI_LOGO_ASCII,
 	phaseColor,
+	sato,
 } from "../../modes/components/swarm/theme";

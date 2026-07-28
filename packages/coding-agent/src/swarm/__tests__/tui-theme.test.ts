@@ -10,9 +10,9 @@
 
 import { describe, expect, it } from "bun:test";
 import chalk from "chalk";
-import type { Chapter } from "../core/state";
 import { renderSplash } from "../../modes/components/swarm/splash";
 import { PHASE_DISPLAY, PI_LOGO_ASCII, sato } from "../../modes/components/swarm/theme";
+import type { Chapter } from "../core/state";
 
 // Force chalk level for deterministic ANSI output in test environments.
 chalk.level = 1;
@@ -101,8 +101,14 @@ describe("sato colour helpers", () => {
 
 describe("PHASE_DISPLAY", () => {
 	const ALL_CHAPTERS: Chapter[] = [
-		"idle", "script", "script-debate", "script-confirm",
-		"stage", "paused", "blocked", "curtain",
+		"idle",
+		"script",
+		"script-debate",
+		"script-confirm",
+		"stage",
+		"paused",
+		"blocked",
+		"curtain",
 	];
 
 	it("has an entry for every Chapter value", () => {

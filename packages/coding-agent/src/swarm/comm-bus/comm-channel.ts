@@ -13,11 +13,11 @@
  */
 
 import type { IrcBus } from "../../irc/bus";
+import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookContext } from "../hook-system/types";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { type RoundtableConfig, runRoundtable } from "./roundtable";
 import { runVote } from "./vote";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext } from "../hook-system/types";
 
 // ============================================================================
 // Types
@@ -84,7 +84,13 @@ export class CommChannel {
 
 	readonly #hookPipeline: HookPipeline | undefined;
 
-	constructor(ircBus: IrcBus, members: string[], observers: string[], activityLogger?: ActivityLogger, hookPipeline?: HookPipeline) {
+	constructor(
+		ircBus: IrcBus,
+		members: string[],
+		observers: string[],
+		activityLogger?: ActivityLogger,
+		hookPipeline?: HookPipeline,
+	) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
 		this.#hookPipeline = hookPipeline;

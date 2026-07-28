@@ -19,7 +19,6 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";
-import type { Task } from "../executor/task-queue";
 import { TaskQueue } from "../executor/task-queue";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
 
@@ -83,7 +82,7 @@ export class StageBehavior implements PhaseBehavior {
 		const roles = roleSet.size > 0 ? [...roleSet] : ["worker"];
 
 		// Generate agent IDs from roles
-		const agentIds = roles.map((role, i) => `agent-${i + 1}`);
+		const agentIds = roles.map((_role, i) => `agent-${i + 1}`);
 
 		// 3. Create swarm group channel (Human as observer)
 		const channel = ctx.commBus.groupChannel("swarm", ["human", ...agentIds], ctx.activityLogger);

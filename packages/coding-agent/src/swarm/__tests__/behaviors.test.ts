@@ -14,7 +14,7 @@
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { CurtainBehavior } from "../behaviors/curtain-behavior";
-import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "../behaviors/index";
+import type { PhaseBehavior, PhaseContext } from "../behaviors/index";
 // Import behaviors
 import { ScriptBehavior } from "../behaviors/script-behavior";
 import { StageBehavior } from "../behaviors/stage-behavior";
@@ -339,7 +339,7 @@ describe("ScriptBehavior", () => {
 			await behavior.enter(ctx);
 
 			// Get the spawned planner mock
-			const plannerHandle = (ctx.runtime.spawn as any).mock.results[0]?.value?.[0];
+			const _plannerHandle = (ctx.runtime.spawn as any).mock.results[0]?.value?.[0];
 			// For mocked spawn, we need to check the send was called
 			// Since we use mockAgentHandle, send is a mock function
 			// The behavior sends via handle.send(), so we verify no errors
@@ -800,7 +800,7 @@ describe("CurtainBehavior", () => {
 
 			// Reporter failed — still marks as completed
 			// Reflector not complete yet → null
-			const result = await behavior.checkCompletion(ctx);
+			await behavior.checkCompletion(ctx);
 			// May be null if reflector is not done, or may return completion if
 			// both are done (reporter failed → treated as complete)
 		});

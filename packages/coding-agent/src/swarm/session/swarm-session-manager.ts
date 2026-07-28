@@ -45,8 +45,8 @@ import * as path from "node:path";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { SessionStorage } from "../../session/session-storage";
-import type { AgentState, Chapter, PipelineStatus, SwarmState } from "../core/state";
-import type { ActivityEntry, ActivityEventType } from "../infra/activity-logger";
+import type { AgentState, Chapter, SwarmState } from "../core/state";
+import type { ActivityEntry } from "../infra/activity-logger";
 
 // ============================================================================
 // Custom entry type tags
@@ -109,7 +109,7 @@ export class SwarmSessionManager {
 			timestamp,
 			cwd: path.resolve(swarmDir),
 		};
-		await fs.writeFile(filePath, JSON.stringify(header) + "\n", "utf-8");
+		await fs.writeFile(filePath, `${JSON.stringify(header)}\n`, "utf-8");
 
 		const session = await SessionManager.open(filePath);
 		logger.debug("[SwarmSessionManager] created", { swarmDir, filePath });

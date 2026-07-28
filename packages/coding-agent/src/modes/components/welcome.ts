@@ -7,7 +7,6 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@oh-my-pi/pi-tui";
-import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import tipsText from "./tips.txt" with { type: "text" };
 
@@ -78,7 +77,7 @@ function renderNewTag(phase: number, encoding: ColorEncoding): string {
 		}
 		out += chars[i];
 	}
-	return theme.bold(out) + "\x1b[0m";
+	return `${theme.bold(out)}\x1b[0m`;
 }
 export function renderWelcomeTip(tip: string, boxWidth: number, phase = 0): string[] {
 	const label = "Tip: ";
@@ -462,25 +461,25 @@ export class WelcomeComponent implements Component {
  * the "golden ring of emergent wisdom" shining through the Bodhi leaf.
  */
 export const PI_LOGO = [
-	"     πππππππππ     ",  //  row 0 — top arc       9π (indent 5)
-	"   πππ·······πππ   ",  //  row 1 — shoulder 3π + 7· fill
-	"  ππ·πππππππππ·ππ  ",  //  row 2 — 2π side + 9π bar (extends past legs)
-	"  ππ··πππ·πππ··ππ  ",  //  row 3 — 2π side + 3π legs + · fill
-	"  ππ··πππ·πππ··ππ  ",  //  row 4
-	"  ππ··πππ·πππ··ππ  ",  //  row 5
-	"   πππ·······πππ   ",  //  row 6 — shoulder 3π + 7· fill
-	"     πππππππππ     ",  //  row 7 — bottom arc    9π (indent 5)
+	"     πππππππππ     ", //  row 0 — top arc       9π (indent 5)
+	"   πππ·······πππ   ", //  row 1 — shoulder 3π + 7· fill
+	"  ππ·πππππππππ·ππ  ", //  row 2 — 2π side + 9π bar (extends past legs)
+	"  ππ··πππ·πππ··ππ  ", //  row 3 — 2π side + 3π legs + · fill
+	"  ππ··πππ·πππ··ππ  ", //  row 4
+	"  ππ··πππ·πππ··ππ  ", //  row 5
+	"   πππ·······πππ   ", //  row 6 — shoulder 3π + 7· fill
+	"     πππππππππ     ", //  row 7 — bottom arc    9π (indent 5)
 ];
 
 /** Multi-stop palette — forest green → leaf green → GOLD PEAK → fresh green → teal.
  *  The gold stop at position 2 creates a diagonal golden-glow band that cuts
  *  through the green on every render — the "golden ring" layer from the brand. */
 const GRADIENT_STOPS: ReadonlyArray<readonly [number, number, number]> = [
-	[ 22, 101,  52], // #166534 forest-800   — deep shadow
-	[ 34, 197,  94], // #22C55E green-500    — leaf green
-	[252, 211,  77], // #FCD34D amber-300    — GOLDEN GLOW peak
-	[ 74, 222, 128], // #4ADE80 green-400    — fresh green
-	[ 20, 184, 166], // #14B8A6 teal-500     — sunlit canopy
+	[22, 101, 52], // #166534 forest-800   — deep shadow
+	[34, 197, 94], // #22C55E green-500    — leaf green
+	[252, 211, 77], // #FCD34D amber-300    — GOLDEN GLOW peak
+	[74, 222, 128], // #4ADE80 green-400    — fresh green
+	[20, 184, 166], // #14B8A6 teal-500     — sunlit canopy
 ];
 
 /** 256-color ramp fallback — dark-green → gold → bright-green → teal */

@@ -137,11 +137,11 @@ export interface PipelineHooks {
 	/** Called before the first iteration starts. */
 	beforePipeline?: (ctx: PipelineContext) => Promise<void>;
 	/** Called before each iteration. Return false to skip the iteration. */
-	beforeIteration?: (iteration: number, ctx: PipelineContext) => Promise<boolean | void>;
+	beforeIteration?: (iteration: number, ctx: PipelineContext) => Promise<boolean | undefined>;
 	/** Called after each iteration completes. */
 	afterIteration?: (iteration: number, ctx: PipelineContext) => Promise<void>;
 	/** Called before each wave executes. Return false to skip the wave. */
-	beforeWave?: (waveIdx: number, agents: string[], ctx: PipelineContext) => Promise<boolean | void>;
+	beforeWave?: (waveIdx: number, agents: string[], ctx: PipelineContext) => Promise<boolean | undefined>;
 	/** Called after each wave completes. */
 	afterWave?: (waveIdx: number, waveResult: WaveResult, ctx: PipelineContext) => Promise<void>;
 	/** Called on pipeline completion (all iterations done). */
@@ -158,7 +158,7 @@ export interface PipelineHooks {
  */
 export interface LoopPipelineHooks extends PipelineHooks {
 	/** Called before each agent round within an iteration. Return false to skip. */
-	beforeAgentRound?: (round: number, agentIds: string[], ctx: PipelineContext) => Promise<boolean | void>;
+	beforeAgentRound?: (round: number, agentIds: string[], ctx: PipelineContext) => Promise<boolean | undefined>;
 	/** Called after each agent round completes. */
 	afterAgentRound?: (round: number, results: SingleResult[], ctx: PipelineContext) => Promise<void>;
 	/** Called before deliberation phase starts. */
@@ -207,7 +207,7 @@ export class PipelineController {
 	 * Called on pipeline abort / fatal error / shutdown.
 	 */
 	abortAll(reason: string): void {
-		for (const [name, controller] of this.#activeControllers) {
+		for (const [_name, controller] of this.#activeControllers) {
 			try {
 				controller.abort(new DOMException(reason, "AbortError"));
 			} catch {
@@ -216,7 +216,7 @@ export class PipelineController {
 		}
 		this.#activeControllers.clear();
 		// Phase A2: Abort v3 runtime-spawned agents.
-		for (const [name, handle] of this.#activeHandles) {
+		for (const [_name, handle] of this.#activeHandles) {
 			try {
 				handle.abort(reason);
 			} catch {
@@ -363,7 +363,7 @@ export class PipelineController {
 			afterToolCall?: (ctx: unknown, signal?: AbortSignal) => void;
 		},
 	): Promise<Map<string, SingleResult>> {
-		const { hooks, pipelineCtx, executor, runtime } = options;
+		const { hooks, pipelineCtx, runtime, executor: _executor } = options;
 		const results = new Map<string, SingleResult>();
 		let agentIndex = 0;
 

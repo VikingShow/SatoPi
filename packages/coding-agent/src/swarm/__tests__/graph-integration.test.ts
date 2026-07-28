@@ -44,7 +44,10 @@ describe("Theatre Graph", () => {
 	describe("graph validation", () => {
 		it("rejects graph with circular dependency", () => {
 			const errors = validateGraphDefinition({
-				name: "cyclic", description: "test", version: 1, revision: 1,
+				name: "cyclic",
+				description: "test",
+				version: 1,
+				revision: 1,
 				nodes: {
 					a: { label: "A", description: "", role: "dev", tools: [], depends_on: ["b"] },
 					b: { label: "B", description: "", role: "dev", tools: [], depends_on: ["a"] },

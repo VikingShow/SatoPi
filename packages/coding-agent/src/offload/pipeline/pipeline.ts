@@ -6,33 +6,16 @@
  *
  * L3 (MermaidSynthesizer) 由独立模块 `mermaid-synthesizer.ts` 处理。
  */
-import { logger } from "@oh-my-pi/pi-utils";
+
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import type { ReviewVerdict } from "../../swarm/core/pipeline"
-import { AgentSummarizer, type SummarizeOutput } from "./summarizer"
-import type { AgentOffloadEntry } from "./agent-summarizer"
-import {
-	Deduplicator,
-	type DedupEntry,
-	type DedupOutput,
-	type TaskBoundary,
-} from "./deduplicator";
-import {
-	PlanNodeAttributor,
-	type PlanPhase,
-	type MmdNode,
-	type MmdEdge,
-} from "./attributor"
-import {
-	TaskBoundaryJudge,
-	type L15MmdEntry,
-	type L15Judgment,
-} from "./l15-judge";
-import {
-	LlmMermaidSynthesizer,
-	type L2NewEntry,
-	type L2MermaidOutput,
-} from "../mermaid/llm-synthesizer";
+import { logger } from "@oh-my-pi/pi-utils";
+import type { ReviewVerdict } from "../../swarm/core/pipeline";
+import type { L2MermaidOutput, L2NewEntry, LlmMermaidSynthesizer } from "../mermaid/llm-synthesizer";
+import type { AgentOffloadEntry } from "./agent-summarizer";
+import { type MmdEdge, type MmdNode, PlanNodeAttributor, type PlanPhase } from "./attributor";
+import { type DedupEntry, Deduplicator, type TaskBoundary } from "./deduplicator";
+import type { L15Judgment, L15MmdEntry, TaskBoundaryJudge } from "./l15-judge";
+import { AgentSummarizer } from "./summarizer";
 
 // ============================================================================
 // Types
@@ -87,10 +70,13 @@ export class OffloadPipeline {
 	/** 上次 L2 执行时间 */
 	#lastL2Time = 0;
 
-	constructor(config: OffloadPipelineConfig, opts?: {
-		taskJudge?: TaskBoundaryJudge;
-		llmMermaid?: LlmMermaidSynthesizer;
-	}) {
+	constructor(
+		config: OffloadPipelineConfig,
+		opts?: {
+			taskJudge?: TaskBoundaryJudge;
+			llmMermaid?: LlmMermaidSynthesizer;
+		},
+	) {
 		this.#config = config;
 		this.#taskJudge = opts?.taskJudge;
 		this.#llmMermaid = opts?.llmMermaid;
@@ -188,15 +174,11 @@ export class OffloadPipeline {
 	 * @param iteration 当前迭代编号
 	 * @param verdict   Cloner 审查结果（用于边界检测）
 	 */
-	runL2(
-		phases: PlanPhase[],
-		iteration: number,
-		verdict?: ReviewVerdict,
-	): OffloadPipeline.L2Output | null {
+	runL2(phases: PlanPhase[], iteration: number, verdict?: ReviewVerdict): OffloadPipeline.L2Output | null {
 		if (this.#pendingL1.length === 0) return null;
 
 		// L1.5: 去重 + 边界检测
-		const dedupInput: DedupEntry[] = this.#pendingL1.map((e) => ({
+		const dedupInput: DedupEntry[] = this.#pendingL1.map(e => ({
 			agentId: e.agentId,
 			summary: e.summary,
 			score: e.score,
@@ -214,7 +196,7 @@ export class OffloadPipeline {
 
 		// L2: 归因
 		const keptEntries: OffloadPipeline.L1Output[] = [];
-		const keptAgentIds = new Set(dedupResult.kept.map((k) => k.agentId));
+		const keptAgentIds = new Set(dedupResult.kept.map(k => k.agentId));
 		for (const e of this.#pendingL1) {
 			if (keptAgentIds.has(e.agentId)) {
 				keptEntries.push(e);
@@ -222,7 +204,7 @@ export class OffloadPipeline {
 		}
 
 		const attrResult = this.#attributor.attribute({
-			entries: keptEntries.map((e) => ({
+			entries: keptEntries.map(e => ({
 				agentId: e.agentId,
 				summary: e.summary,
 				score: e.score,
@@ -258,11 +240,7 @@ export class OffloadPipeline {
 	/**
 	 * 强制 flush 所有 pending 条目（迭代结束时调用）。
 	 */
-	forceFlush(
-		phases: PlanPhase[],
-		iteration: number,
-		verdict?: ReviewVerdict,
-	): OffloadPipeline.L2Output | null {
+	forceFlush(phases: PlanPhase[], iteration: number, verdict?: ReviewVerdict): OffloadPipeline.L2Output | null {
 		return this.runL2(phases, iteration, verdict);
 	}
 

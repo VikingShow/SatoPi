@@ -411,7 +411,11 @@ ${cmdRows}
 
 	// Per-subcommand argument functions.
 	for (const c of spec.commands) {
-		const specs = ["'(-h --help)'{-h,--help}'[Show help]'", ...c.flags.map(f => zshFlagSpec(f, fn)), ...c.args.map(zshArgSpec)];
+		const specs = [
+			"'(-h --help)'{-h,--help}'[Show help]'",
+			...c.flags.map(f => zshFlagSpec(f, fn)),
+			...c.args.map(zshArgSpec),
+		];
 		parts.push(`${fn}_cmd_${bashFn(c.name)}() {
 	_arguments -s \\
 		${specs.join(" \\\n\t\t")}
@@ -427,7 +431,7 @@ ${cmdRows}
 		"'(-h --help)'{-h,--help}'[Show help]'",
 		"'(-v --version)'{-v,--version}'[Show version]'",
 		...spec.root.flags.map(f => zshFlagSpec(f, fn)),
-		"'1: :${fn}_commands'",
+		`'1: :\${fn}_commands'`,
 		"'*::arg:->args'",
 	];
 	parts.push(`${fn}() {

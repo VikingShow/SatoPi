@@ -6,7 +6,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ReviewVerdict } from "../../swarm/core/pipeline"
+import type { ReviewVerdict } from "../../swarm/core/pipeline";
 
 // ============================================================================
 // Types
@@ -99,11 +99,7 @@ export class Deduplicator {
 
 	// -- Internal -------------------------------------------------------------
 
-	#detectBoundary(
-		verdict: ReviewVerdict | undefined,
-		kept: DedupEntry[],
-		removed: string[],
-	): TaskBoundary {
+	#detectBoundary(verdict: ReviewVerdict | undefined, kept: DedupEntry[], removed: string[]): TaskBoundary {
 		// 优先使用 Cloner 审查结果
 		if (verdict) {
 			if (verdict.passed) {

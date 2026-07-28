@@ -16,10 +16,9 @@
 import type { Component } from "@oh-my-pi/pi-tui";
 import type { SwarmState } from "../../../swarm/core/state";
 import type { WorkflowFsm } from "../../../swarm/core/workflow-fsm";
-import type { ActivityLogger } from "../../../swarm/infra/activity-logger";
 import type { CommMessage } from "./comm-panel";
 import type { ContextPanelState } from "./context-panel";
-import { renderDashboard, type DashboardInput } from "./swarm-dashboard";
+import type { DashboardInput } from "./swarm-dashboard";
 import { SwarmDashboardComponent } from "./swarm-dashboard-component";
 import { SwarmTuiBinding } from "./swarm-tui-binding";
 import { sato } from "./theme";
@@ -129,7 +128,7 @@ export class SwarmDashboardOverlay implements Component {
 			return;
 		}
 
-		if (!isNaN(num) && num >= 1 && num <= prompt.options.length) {
+		if (!Number.isNaN(num) && num >= 1 && num <= prompt.options.length) {
 			const choice = prompt.options[num - 1];
 			if (choice === "Continue" || choice === "Approve" || choice === "Launch Stage") {
 				this.#resolveGate(prompt, { type: "continue" });
@@ -158,10 +157,12 @@ export class SwarmDashboardOverlay implements Component {
 
 		lines.push("");
 		lines.push(pad + sato.bold("╔══════════════════════════════════════════════════╗"));
-		lines.push(pad + sato.bold("║") + sato.bold("  Human Review Required                           ") + sato.bold("║"));
+		lines.push(
+			pad + sato.bold("║") + sato.bold("  Human Review Required                           ") + sato.bold("║"),
+		);
 		lines.push(pad + sato.bold("╠══════════════════════════════════════════════════╣"));
-		lines.push(pad + sato.bold("║") + `  Node: ${sato.amber(p.nodeLabel.padEnd(42))}` + sato.bold("║"));
-		lines.push(pad + sato.bold("║") + `  ${"".padEnd(48)}` + sato.bold("║"));
+		lines.push(`${pad + sato.bold("║")}  Node: ${sato.amber(p.nodeLabel.padEnd(42))}${sato.bold("║")}`);
+		lines.push(`${pad + sato.bold("║")}  ${"".padEnd(48)}${sato.bold("║")}`);
 
 		// Prompt text — word wrap within 46 chars
 		const promptWords = p.prompt.split(" ");
@@ -169,29 +170,29 @@ export class SwarmDashboardOverlay implements Component {
 		for (const word of promptWords) {
 			const candidate = promptLine ? `${promptLine} ${word}` : word;
 			if (candidate.length > 46) {
-				lines.push(pad + sato.bold("║") + `  ${promptLine.padEnd(46)}` + sato.bold("║"));
+				lines.push(`${pad + sato.bold("║")}  ${promptLine.padEnd(46)}${sato.bold("║")}`);
 				promptLine = word;
 			} else {
 				promptLine = candidate;
 			}
 		}
 		if (promptLine) {
-			lines.push(pad + sato.bold("║") + `  ${promptLine.padEnd(46)}` + sato.bold("║"));
+			lines.push(`${pad + sato.bold("║")}  ${promptLine.padEnd(46)}${sato.bold("║")}`);
 		}
 
-		lines.push(pad + sato.bold("║") + `  ${"".padEnd(48)}` + sato.bold("║"));
+		lines.push(`${pad + sato.bold("║")}  ${"".padEnd(48)}${sato.bold("║")}`);
 		lines.push(pad + sato.bold("╠══════════════════════════════════════════════════╣"));
 
 		// Options
 		for (let i = 0; i < p.options.length; i++) {
 			const num = `${i + 1}`;
 			const opt = p.options[i];
-			lines.push(pad + sato.bold("║") + `  [${sato.amber(num)}] ${opt.padEnd(43 - num.length)}` + sato.bold("║"));
+			lines.push(`${pad + sato.bold("║")}  [${sato.amber(num)}] ${opt.padEnd(43 - num.length)}${sato.bold("║")}`);
 		}
 
 		lines.push(pad + sato.bold("╚══════════════════════════════════════════════════╝"));
 		lines.push("");
-		lines.push(pad + sato.dim("  Press 1-" + p.options.length + " to select, Esc to dismiss"));
+		lines.push(pad + sato.dim(`  Press 1-${p.options.length} to select, Esc to dismiss`));
 
 		return lines;
 	}
@@ -201,16 +202,18 @@ export class SwarmDashboardOverlay implements Component {
 	#buildSnapshot(): DashboardInput {
 		const tracker = this.#stateTracker;
 
-		const swarm: SwarmState = tracker?.state ?? {
-			name: "",
-			status: "idle",
-			mode: "loop",
-			iteration: 0,
-			targetCount: 0,
-			agents: {},
-			startedAt: 0 as unknown as number,
-			phase: "idle",
-		} as SwarmState;
+		const swarm: SwarmState =
+			tracker?.state ??
+			({
+				name: "",
+				status: "idle",
+				mode: "loop",
+				iteration: 0,
+				targetCount: 0,
+				agents: {},
+				startedAt: 0 as unknown as number,
+				phase: "idle",
+			} as SwarmState);
 
 		// CommMessages — reconstructed from ActivityLogger when a query API
 		// is available.  For now the overlay shows agent + phase data only.

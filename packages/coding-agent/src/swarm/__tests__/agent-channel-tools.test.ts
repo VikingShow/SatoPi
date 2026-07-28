@@ -10,7 +10,7 @@
  * 6. Tool metadata verification (name, approval, concurrency, summary)
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import type { TextContent } from "@oh-my-pi/pi-ai";
 import { IrcBus } from "../../irc/bus";
@@ -186,11 +186,9 @@ describe("AgentQueryMajorityTool", () => {
 });
 
 describe("AgentRoundtableTool", () => {
-	let bus: IrcBus;
-
 	beforeEach(() => {
 		IrcBus.resetGlobalForTests();
-		bus = IrcBus.global();
+		IrcBus.global();
 	});
 
 	afterEach(() => {

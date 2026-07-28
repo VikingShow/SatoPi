@@ -9,12 +9,11 @@
  *   LLM 失败时自动降级到文本截取
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { L1LlmSummarizer } from "./llm-summarizer"
-import type { ModelRegistry } from "../../config/model-registry"
-import type { Settings } from "../../config/settings"
-
+import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { Settings } from "../../config/settings";
+import { L1LlmSummarizer } from "./llm-summarizer";
 
 // ============================================================================
 // Types
@@ -84,7 +83,7 @@ export class AgentSummarizer {
 			summary = "[no output]";
 			computedScore = 0;
 		} else {
-			summary = trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed;
+			summary = trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
 			computedScore = score ?? 5;
 		}
 

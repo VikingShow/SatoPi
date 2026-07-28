@@ -34,11 +34,13 @@ export class MmdSource implements ContextSource {
 		}
 
 		return {
-			injectedMessages: [{
-				role: "user" as const,
-				timestamp: Date.now(),
-				content: this.#activeMmd,
-			}],
+			injectedMessages: [
+				{
+					role: "user" as const,
+					timestamp: Date.now(),
+					content: this.#activeMmd,
+				},
+			],
 		};
 	}
 }

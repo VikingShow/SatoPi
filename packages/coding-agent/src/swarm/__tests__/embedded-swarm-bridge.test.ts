@@ -9,15 +9,11 @@
  *   5. dispose() cleans up without errors
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-	EmbeddedSwarmBridge,
-	type EmbeddedSwarmConfig,
-	type SwarmEventCallback,
-} from "../core/embedded-swarm-bridge";
+import { EmbeddedSwarmBridge, type EmbeddedSwarmConfig, type SwarmEventCallback } from "../core/embedded-swarm-bridge";
 import { getSessionPlanPath } from "../script/plan-paths";
 
 // We don't test full Stage/Curtain execution (requires live model + API keys).
@@ -141,7 +137,12 @@ describe("EmbeddedSwarmBridge", () => {
 
 	describe("plan detection", () => {
 		it("isPlanReady returns false before any plan is provided", () => {
-			config = { workspace: "/tmp/test", swarmDir: "/tmp/test/.swarm_test", modelRegistry: stubModelRegistry(), settings: stubSettings() };
+			config = {
+				workspace: "/tmp/test",
+				swarmDir: "/tmp/test/.swarm_test",
+				modelRegistry: stubModelRegistry(),
+				settings: stubSettings(),
+			};
 			const { callback } = captureEvents();
 			bridge = new EmbeddedSwarmBridge(config, callback);
 
@@ -150,7 +151,12 @@ describe("EmbeddedSwarmBridge", () => {
 		});
 
 		it("onPlanUpdated detects a valid plan with headings and sufficient content", () => {
-			config = { workspace: "/tmp/test", swarmDir: "/tmp/test/.swarm_test", modelRegistry: stubModelRegistry(), settings: stubSettings() };
+			config = {
+				workspace: "/tmp/test",
+				swarmDir: "/tmp/test/.swarm_test",
+				modelRegistry: stubModelRegistry(),
+				settings: stubSettings(),
+			};
 			const { events, callback } = captureEvents();
 			bridge = new EmbeddedSwarmBridge(config, callback);
 
@@ -181,11 +187,19 @@ describe("EmbeddedSwarmBridge", () => {
 		});
 
 		it("onPlanUpdated rejects plan without headings", () => {
-			config = { workspace: "/tmp/test", swarmDir: "/tmp/test/.swarm_test", modelRegistry: stubModelRegistry(), settings: stubSettings() };
+			config = {
+				workspace: "/tmp/test",
+				swarmDir: "/tmp/test/.swarm_test",
+				modelRegistry: stubModelRegistry(),
+				settings: stubSettings(),
+			};
 			const { callback } = captureEvents();
 			bridge = new EmbeddedSwarmBridge(config, callback);
 
-			const noHeadings = "This is just some text without any markdown headings. It goes on for a bit to reach the minimum length requirement of 200 characters. ".repeat(3);
+			const noHeadings =
+				"This is just some text without any markdown headings. It goes on for a bit to reach the minimum length requirement of 200 characters. ".repeat(
+					3,
+				);
 
 			bridge.onPlanUpdated(noHeadings);
 
@@ -193,7 +207,12 @@ describe("EmbeddedSwarmBridge", () => {
 		});
 
 		it("onPlanUpdated rejects too-short plan", () => {
-			config = { workspace: "/tmp/test", swarmDir: "/tmp/test/.swarm_test", modelRegistry: stubModelRegistry(), settings: stubSettings() };
+			config = {
+				workspace: "/tmp/test",
+				swarmDir: "/tmp/test/.swarm_test",
+				modelRegistry: stubModelRegistry(),
+				settings: stubSettings(),
+			};
 			const { callback } = captureEvents();
 			bridge = new EmbeddedSwarmBridge(config, callback);
 

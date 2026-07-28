@@ -64,7 +64,7 @@ export interface ScriptResult {
  * @param experienceStore Optional store to query past loop experience.
  */
 export async function generatePlanningPrompt(config: ScriptConfig, experienceStore?: ExperienceStore): Promise<string> {
-	const { swarmDir, workspace, loopConfig, taskDescription } = config;
+	const { swarmDir, loopConfig, taskDescription } = config;
 
 	const defaultAgents = loopConfig.agents.initial;
 	const planPath = getSessionPlanPath(swarmDir);

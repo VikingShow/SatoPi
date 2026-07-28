@@ -16,8 +16,8 @@
  *       → 合并结果，steer 回父 Agent
  */
 
+import type { AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { AgentState, AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 
@@ -61,9 +61,9 @@ export interface ForkableState {
  * (prevent infinite fork recursion and parent-level operations)
  */
 const NON_FORKABLE_TOOLS = new Set([
-	"agent_fork",       // prevent fork recursion
-	"task",             // prevent spawning from child
-	"agent_broadcast",  // children use parent channel
+	"agent_fork", // prevent fork recursion
+	"task", // prevent spawning from child
+	"agent_broadcast", // children use parent channel
 	"agent_roundtable",
 ]);
 
@@ -73,10 +73,7 @@ const NON_FORKABLE_TOOLS = new Set([
  * Since Agent uses #private fields, we read from public getters (agent.state)
  * and recreate via the AgentOptions constructor.
  */
-export function extractForkableState(
-	agent: Agent,
-	options?: { maxMessages?: number },
-): ForkableState {
+export function extractForkableState(agent: Agent, options?: { maxMessages?: number }): ForkableState {
 	const state = agent.state;
 
 	// Compress messages: keep system preamble (first 2) + last N messages
@@ -142,14 +139,9 @@ export interface SubtaskDecomposition {
  * In the future this could use a cheap model (e.g., gemini-flash) for the split.
  * Current implementation uses simple text-based heuristics.
  */
-export async function decomposeSubtasks(
-	taskDescription: string,
-	count: number,
-): Promise<string[]> {
+export async function decomposeSubtasks(taskDescription: string, count: number): Promise<string[]> {
 	// Simple heuristic: split by numbered items or paragraphs
-	const parts = taskDescription
-		.split(/\n{2,}|(?<=\d)\. /)
-		.filter(p => p.trim().length > 0);
+	const parts = taskDescription.split(/\n{2,}|(?<=\d)\. /).filter(p => p.trim().length > 0);
 
 	if (parts.length >= count) {
 		// Distribute parts across subtasks
@@ -185,19 +177,19 @@ export class AgentForkManager {
 		this.#maxDepth = maxDepth;
 	}
 
-	get depth(): number { return this.#depth; }
-	get children(): ReadonlyMap<string, Agent> { return this.#children; }
+	get depth(): number {
+		return this.#depth;
+	}
+	get children(): ReadonlyMap<string, Agent> {
+		return this.#children;
+	}
 
 	/**
 	 * Fork parent agent into N child agents.
 	 *
 	 * @returns ForkResult with child IDs and subtasks
 	 */
-	async fork(
-		parentAgent: Agent,
-		taskDescription: string,
-		options: ForkOptions = {},
-	): Promise<ForkResult> {
+	async fork(parentAgent: Agent, taskDescription: string, options: ForkOptions = {}): Promise<ForkResult> {
 		const count = options.count ?? 2;
 		const reason = options.reason ?? "Task is too complex";
 		const depth = options.depth ?? this.#depth;
@@ -207,7 +199,10 @@ export class AgentForkManager {
 		}
 
 		logger.info("[AgentForkManager] Forking agent", {
-			count, reason, depth, maxDepth: this.#maxDepth,
+			count,
+			reason,
+			depth,
+			maxDepth: this.#maxDepth,
 		});
 
 		// 1. Extract forkable state
@@ -227,10 +222,7 @@ export class AgentForkManager {
 
 			const child = createForkedAgent(forkable, {
 				childId,
-				extraSystemPrompt: [
-					`[Fork Reason: ${reason}]`,
-					`[Your subtask]: ${subtask}`,
-				],
+				extraSystemPrompt: [`[Fork Reason: ${reason}]`, `[Your subtask]: ${subtask}`],
 				forkDepth: depth + 1,
 			});
 
@@ -244,7 +236,9 @@ export class AgentForkManager {
 		// 4. Start all children in parallel
 		const prompts = children.map((child, i) => {
 			const subtask = subtaskDescriptions[i];
-			return child.prompt(`[FORKED TASK] You have been assigned the following subtask:\n\n${subtask}\n\nComplete this subtask thoroughly. When done, report your results.`);
+			return child.prompt(
+				`[FORKED TASK] You have been assigned the following subtask:\n\n${subtask}\n\nComplete this subtask thoroughly. When done, report your results.`,
+			);
 		});
 
 		await Promise.all(prompts);
@@ -259,11 +253,9 @@ export class AgentForkManager {
 	/**
 	 * Wait for all child agents to complete and collect their results.
 	 */
-	async collectResults(parentAgent: Agent): Promise<ForkResult> {
+	async collectResults(_parentAgent: Agent): Promise<ForkResult> {
 		// Wait for all children to finish
-		const childPromises = [...this.#children.values()].map(child =>
-			child.waitForIdle().then(() => child),
-		);
+		const childPromises = [...this.#children.values()].map(child => child.waitForIdle().then(() => child));
 		const completedChildren = await Promise.all(childPromises);
 
 		// Collect results: extract last assistant message from each child
@@ -272,9 +264,7 @@ export class AgentForkManager {
 
 		for (const child of completedChildren) {
 			const state = child.state;
-			const lastAssistant = [...state.messages]
-				.reverse()
-				.find(m => m.role === "assistant");
+			const lastAssistant = [...state.messages].reverse().find(m => m.role === "assistant");
 
 			if (lastAssistant) {
 				let text = "";
@@ -290,9 +280,7 @@ export class AgentForkManager {
 			}
 		}
 
-		const mergedOutput = results
-			.map((r, i) => `[Forked Agent Result ${i + 1}]\n${r}`)
-			.join("\n\n---\n\n");
+		const mergedOutput = results.map((r, i) => `[Forked Agent Result ${i + 1}]\n${r}`).join("\n\n---\n\n");
 
 		logger.info("[AgentForkManager] All children completed", {
 			total: this.#children.size,

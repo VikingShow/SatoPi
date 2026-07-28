@@ -121,7 +121,7 @@ export class ActivityLogger {
 	#sessionManager: SwarmSessionManager | null = null;
 	#overflowSilenced = false;
 
-	constructor(swarmDir: string, sessionName: string) {
+	constructor(_swarmDir: string, sessionName: string) {
 		this.#sessionName = sessionName;
 	}
 

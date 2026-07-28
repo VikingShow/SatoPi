@@ -3,7 +3,6 @@ import * as Diff from "diff";
 import { getLanguageFromPath, highlightCode, theme } from "../../modes/theme/theme";
 import { type CodeFrameMarker, formatCodeFrameLine, replaceTabs } from "../../tools/render-utils";
 
-
 /**
  * Visualize leading whitespace (indentation) with dim glyphs.
  * Tabs become ` → ` and spaces become `·`. Only affects whitespace

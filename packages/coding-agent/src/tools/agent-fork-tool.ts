@@ -5,11 +5,10 @@
  *   agent_fork({ reason: "Task too complex", count: 3 })
  */
 
-import type { AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
+import type { Agent, AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { ToolExample } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
-import { Agent } from "@oh-my-pi/pi-agent-core";
 import { AgentForkManager, type ForkResult } from "../agent/agent-fork-manager";
 
 // ============================================================================
@@ -21,7 +20,10 @@ declare module "@oh-my-pi/pi-agent-core" {
 		/** Parent agent instance (for fork context) */
 		parentAgent?: Agent;
 		/** Create a new Agent instance from forkable state */
-		createChildAgent?: (childId: string, initialState: { systemPrompt: string[]; model: any; tools: any[]; messages: any[] }) => Agent;
+		createChildAgent?: (
+			childId: string,
+			initialState: { systemPrompt: string[]; model: any; tools: any[]; messages: any[] },
+		) => Agent;
 	}
 }
 
@@ -81,7 +83,7 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 	readonly lenientArgValidation = false;
 
 	async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: ForkParams,
 		signal?: AbortSignal,
 		onUpdate?: (partial: AgentToolResult<ForkResult>) => void,
@@ -90,7 +92,9 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 		const parentAgent = context?.parentAgent;
 		if (!parentAgent) {
 			return {
-				content: [{ type: "text", text: "ERROR: No parent agent available. Fork requires a parent agent context." }],
+				content: [
+					{ type: "text", text: "ERROR: No parent agent available. Fork requires a parent agent context." },
+				],
 				isError: true,
 			};
 		}
@@ -101,7 +105,7 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 		try {
 			const forkManager = new AgentForkManager(1);
 
-			const forkResult = await forkManager.fork(parentAgent, task, {
+			const _forkResult = await forkManager.fork(parentAgent, task, {
 				count,
 				reason: params.reason,
 			});
@@ -117,7 +121,8 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 			});
 
 			logger.info("[AgentForkTool] Fork complete", {
-				count, childIds: finalResult.childIds,
+				count,
+				childIds: finalResult.childIds,
 				mergedLen: finalResult.mergedOutput.length,
 			});
 

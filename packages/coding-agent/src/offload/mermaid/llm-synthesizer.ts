@@ -17,10 +17,10 @@
  * Fallback: if LLM fails, generate a simple template-based MMD.
  */
 
-import { completeSimple, type AssistantMessage, type Model } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, completeSimple, type Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
-import { resolveRoleSelection } from "../../config/model-resolver";
 import type { ModelRegistry } from "../../config/model-registry";
+import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 
 // ============================================================================
@@ -36,7 +36,7 @@ const L2_SYSTEM_PROMPT = [
 	"phase node when they serve the same goal.\n",
 	"2. Cognitive tombstones: when a tool call leads to a dead end (error, ",
 	"abandoned approach, blocked path), mark it as `status:blocked` with a ",
-	"warning summary like \"[BLOCKED] reason\".\n",
+	'warning summary like "[BLOCKED] reason".\n',
 	"3. Node format — use this exact Mermaid node shape:\n",
 	'   NodeID["phase: <label><br/>status: done|doing|blocked<br/>summary: <core conclusion ≤150 chars><br/>Timestamp: <ISO8601>"]\n',
 	"4. Edges: `N1 --> N2` for sequential flow; `N1 -.-> N2` for planned / ",
@@ -44,12 +44,12 @@ const L2_SYSTEM_PROMPT = [
 	"5. The graph must start with a `Start` node and end with the latest ",
 	"or current state node.\n\n",
 	"Output ONLY valid JSON, no explanation or markdown fences around the JSON:\n",
-	'{\n',
+	"{\n",
 	'  "file_action": "replace" | "write",\n',
 	'  "mmd_content": "full MMD wrapped in ```mermaid...``` (when write) or null (when replace)",\n',
 	'  "replace_blocks": [{ "start_line": N, "end_line": M, "content": "mermaid lines (no fences, no backticks)" }],\n',
 	'  "node_mapping": { "tool_call_id": "N1", ... }\n',
-	'}',
+	"}",
 ].join("");
 
 // ============================================================================
@@ -152,10 +152,7 @@ export class LlmMermaidSynthesizer {
 			}
 			throw new Error("Failed to parse LLM response");
 		} catch (err) {
-			logger.warn(
-				"[LlmMermaidSynthesizer] LLM synthesis failed, falling back to template",
-				{ error: String(err) },
-			);
+			logger.warn("[LlmMermaidSynthesizer] LLM synthesis failed, falling back to template", { error: String(err) });
 			return this.#fallbackTemplate(existingMmd, entries, taskLabel);
 		}
 	}
@@ -182,11 +179,7 @@ export class LlmMermaidSynthesizer {
 		return { model: resolved.model, apiKey };
 	}
 
-	#buildUserPrompt(
-		existingMmd: string | null,
-		entries: L2NewEntry[],
-		taskLabel: string,
-	): string {
+	#buildUserPrompt(existingMmd: string | null, entries: L2NewEntry[], taskLabel: string): string {
 		const lines: string[] = [];
 
 		lines.push(`Task Label: ${taskLabel}`);
@@ -221,7 +214,7 @@ export class LlmMermaidSynthesizer {
 	#parseResponse(response: AssistantMessage): L2MermaidOutput | null {
 		const text = response.content
 			.filter((block): block is { type: "text"; text: string } => block.type === "text")
-			.map((block) => block.text)
+			.map(block => block.text)
 			.join("")
 			.trim();
 
@@ -241,9 +234,10 @@ export class LlmMermaidSynthesizer {
 			return {
 				fileAction,
 				mmdContent: fileAction === "write" ? (raw.mmd_content ?? raw.mmdContent ?? null) : null,
-				replaceBlocks: fileAction === "replace"
-					? this.#normalizeReplaceBlocks(raw.replace_blocks ?? raw.replaceBlocks ?? [])
-					: [],
+				replaceBlocks:
+					fileAction === "replace"
+						? this.#normalizeReplaceBlocks(raw.replace_blocks ?? raw.replaceBlocks ?? [])
+						: [],
 				nodeMapping: raw.node_mapping ?? raw.nodeMapping ?? {},
 			};
 		} catch {
@@ -256,16 +250,13 @@ export class LlmMermaidSynthesizer {
 	#normalizeReplaceBlocks(raw: unknown[]): L2ReplaceBlock[] {
 		if (!Array.isArray(raw)) return [];
 		return raw
-			.filter(
-				(b): b is Record<string, unknown> =>
-					typeof b === "object" && b !== null,
-			)
-			.map((b) => ({
+			.filter((b): b is Record<string, unknown> => typeof b === "object" && b !== null)
+			.map(b => ({
 				startLine: Number(b.start_line ?? b.startLine) || 0,
 				endLine: Number(b.end_line ?? b.endLine) || 0,
 				content: String(b.content ?? ""),
 			}))
-			.filter((b) => b.startLine > 0 && b.endLine >= b.startLine);
+			.filter(b => b.startLine > 0 && b.endLine >= b.startLine);
 	}
 
 	#emptyOutput(existingMmd: string | null): L2MermaidOutput {
@@ -281,11 +272,7 @@ export class LlmMermaidSynthesizer {
 	 * Fallback: template-based MMD generation when LLM is unavailable.
 	 * Produces a simple linear flowchart with one node per entry.
 	 */
-	#fallbackTemplate(
-		existingMmd: string | null,
-		entries: L2NewEntry[],
-		taskLabel: string,
-	): L2MermaidOutput {
+	#fallbackTemplate(existingMmd: string | null, entries: L2NewEntry[], taskLabel: string): L2MermaidOutput {
 		const nodeMapping: Record<string, string> = {};
 		const nodeLines: string[] = [];
 		const edgeLines: string[] = [];
@@ -318,10 +305,10 @@ export class LlmMermaidSynthesizer {
 			"  End[End]",
 			`  Start --> N1`,
 			...edgeLines,
-			...entries.length > 0 ? [`  N${entries.length} --> End`] : ["  Start --> End"],
+			...(entries.length > 0 ? [`  N${entries.length} --> End`] : ["  Start --> End"]),
 		].join("\n");
 
-		const mmdContent = "```mermaid\n" + mmdBody + "\n```";
+		const mmdContent = `\`\`\`mermaid\n${mmdBody}\n\`\`\``;
 
 		if (!existingMmd) {
 			return {

@@ -777,7 +777,7 @@ async function expandVirtualInternalResource(
 	ranges: readonly LineRange[] | undefined,
 ): Promise<VirtualSearchResource[]> {
 	if (STP_ROOT_URL_RE.test(rawPath)) {
-		const completions = await internalRouter.complete("stp", "") ?? [];
+		const completions = (await internalRouter.complete("stp", "")) ?? [];
 		const resources: VirtualSearchResource[] = [];
 		const seen = new Set<string>();
 		for (const completion of completions) {

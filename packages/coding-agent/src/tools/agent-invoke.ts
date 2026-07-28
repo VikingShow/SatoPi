@@ -87,7 +87,12 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 
 		if (!runtime) {
 			return {
-				content: [{ type: "text", text: "agent_invoke requires a swarm session with AgentRuntime. Use this tool within a swarm-managed session." }],
+				content: [
+					{
+						type: "text",
+						text: "agent_invoke requires a swarm session with AgentRuntime. Use this tool within a swarm-managed session.",
+					},
+				],
 				isError: true,
 			};
 		}
@@ -95,11 +100,9 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 		const { profileId, task } = params;
 
 		// Find existing persistent agent by profileId
-		const existing = registry.list().find(
-			ref => ref.profileId === profileId && ref.kind === "persistent",
-		);
+		const existing = registry.list().find(ref => ref.profileId === profileId && ref.kind === "persistent");
 
-		if (existing && existing.session && existing.status === "idle") {
+		if (existing?.session && existing.status === "idle") {
 			// Identity-level reuse: the existing persistent agent's identity
 			// (profileId, credit, dashboard entry) is preserved. We spawn a
 			// new agent session with the same profileId, which AgentRegistry

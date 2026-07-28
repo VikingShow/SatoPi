@@ -20,12 +20,12 @@
  */
 
 import type { ProfileRegistry } from "../../agent/agent-profile";
-import { registerBuiltinHooks, type BuiltinHookDeps } from "../hook-system/register-builtins";
-import type { IOffloadManager } from "../../offload/manager";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
+import { MarkEnvironment } from "../../coordination";
 import type { IrcBus } from "../../irc/bus";
+import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import { AgentRuntime } from "../agent-runtime";
 import { AgentLauncher } from "../agent-runtime/agent-launcher";
@@ -34,15 +34,14 @@ import { CommBus } from "../comm-bus/comm-bus";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
 import { HindsightSource } from "../context-manager/sources/hindsight-source";
-import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
 import { MmdSource } from "../context-manager/sources/mmd-source";
+import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
+import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import type { ExperienceStore } from "../curtain/experience";
 import { HookPipeline } from "../hook-system/hook-pipeline";
-import { MarkEnvironment } from "../../coordination";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
-
-import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
+import { type BuiltinHookDeps, registerBuiltinHooks } from "../hook-system/register-builtins";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 
 // ============================================================================
@@ -101,9 +100,7 @@ export interface CreateOrchestratorRuntimeOptions {
  * Both EmbeddedSwarmBridge and GraphRunner use this to eliminate duplicated
  * bootstrap code.
  */
-export function createOrchestratorRuntime(
-	opts: CreateOrchestratorRuntimeOptions,
-): {
+export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
 	runtime: AgentRuntime;
 	hookPipeline: HookPipeline;
 	markEnvironment: MarkEnvironment;

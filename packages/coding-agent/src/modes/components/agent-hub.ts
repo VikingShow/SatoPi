@@ -19,6 +19,7 @@ import { type AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { Container, Ellipsis, matchesKey, type OverlayHandle, padding, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
 import { formatAge, getProjectDir, logger } from "@oh-my-pi/pi-utils";
 import { ADVISOR_TRANSCRIPT_FILENAME, isAdvisorTranscriptName } from "../../advisor";
+import { ProfileRegistry } from "../../agent/agent-profile";
 import type { KeyId } from "../../config/keybindings";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
 import { IrcBus } from "../../irc/bus";
@@ -32,7 +33,6 @@ import { theme } from "../theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import { AgentTranscriptViewer } from "./agent-transcript-viewer";
 import { DynamicBorder } from "./dynamic-border";
-import { ProfileRegistry } from "../../agent/agent-profile";
 
 /** Refresh cadence for the relative-time column */
 const AGE_TICK_MS = 5_000;

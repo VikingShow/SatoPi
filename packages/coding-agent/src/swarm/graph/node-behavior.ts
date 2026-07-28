@@ -19,33 +19,19 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentRuntime } from "../agent-runtime";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
-import type {
-	GateSpec,
-	NodeDefinition,
-	NodeExecutionOutput,
-	NodeContext,
-	NodeResult,
-	GateResult,
-	NodeBehavior,
-} from "./schema";
-import type { LoopSwarmConfig } from "../core/schema";
-import type { StateTracker } from "../core/state";
-import type { ActivityLogger } from "../infra/activity-logger";
-import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { RoleAssetManager } from "../../agent/role-asset";
-import type { AgentRegistry } from "../../registry/agent-registry";
-import { createStageController, type StageOptions, type StageResult } from "../stage/stage-controller";
-import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
-import { ScriptBehavior } from "../behaviors/script-behavior";
 import { CurtainBehavior } from "../behaviors/curtain-behavior";
+import { ScriptBehavior } from "../behaviors/script-behavior";
 import { StageBehavior } from "../behaviors/stage-behavior";
-
-import type { AgentRuntime } from "../agent-runtime";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
+import type { LoopSwarmConfig } from "../core/schema";
 import type { WorkflowFsm } from "../core/workflow-fsm";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ContextPipeline } from "../context-manager/context-pipeline";
+import { createStageController, type StageResult } from "../stage/stage-controller";
+import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
+import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
 
 // ============================================================================
 // CustomNodeBehavior (default)
@@ -266,8 +252,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 		}
 
 		const passed = failures.length === 0;
-		const humanReviewRequired =
-			gate.mode === "always" || (gate.mode !== "never" && !passed);
+		const humanReviewRequired = gate.mode === "always" || (gate.mode !== "never" && !passed);
 
 		return { passed, failures, humanReviewRequired };
 	}
@@ -287,7 +272,6 @@ export class CustomNodeBehavior implements NodeBehavior {
 		this.#handles = [];
 	}
 }
-
 
 // ============================================================================
 // StageNodeBehavior — Drives real parallel worker agents via StageController
@@ -373,7 +357,6 @@ export class StageNodeBehavior implements NodeBehavior {
 
 	// ── private helpers ───────────────────────────────────────────────────
 
-
 	#extractPlanContent(ctx: NodeContext): string {
 		for (const [, output] of Object.entries(ctx.upstreamOutputs)) {
 			if (output.result && typeof output.result === "string") {
@@ -438,7 +421,6 @@ export class StageNodeBehavior implements NodeBehavior {
 	}
 }
 
-
 // ============================================================================
 // Factory
 // ============================================================================
@@ -473,10 +455,7 @@ export interface NodeBehaviorFactoryConfig {
  * @param type — node type from GraphNode.type (undefined = "custom")
  * @param config — service configuration for PhaseBehaviorNodeAdapter construction
  */
-export function selectNodeBehavior(
-	type: string | undefined,
-	config: NodeBehaviorFactoryConfig,
-): NodeBehavior {
+export function selectNodeBehavior(type: string | undefined, config: NodeBehaviorFactoryConfig): NodeBehavior {
 	switch (type) {
 		case "script":
 			return new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config);

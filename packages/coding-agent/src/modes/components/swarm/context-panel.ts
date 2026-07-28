@@ -7,7 +7,6 @@
  *  - Per-agent context window usage
  */
 
-import { visibleWidth } from "@oh-my-pi/pi-tui";
 import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { sato } from "./theme";
 
@@ -72,7 +71,7 @@ export function renderContextPanel(state: ContextPanelState | null | undefined, 
 // Internal
 // ============================================================================
 
-function renderSources(sources: ContextSourceStatus[], innerWidth: number, maxWidth: number): string[] {
+function renderSources(sources: ContextSourceStatus[], _innerWidth: number, maxWidth: number): string[] {
 	const lines: string[] = [];
 	lines.push(padLine(` ${sato.bold("Sources:")}`, maxWidth));
 
@@ -85,14 +84,12 @@ function renderSources(sources: ContextSourceStatus[], innerWidth: number, maxWi
 	return lines;
 }
 
-function renderOffloadPipeline(state: ContextPanelState, innerWidth: number, maxWidth: number): string[] {
+function renderOffloadPipeline(state: ContextPanelState, _innerWidth: number, maxWidth: number): string[] {
 	const lines: string[] = [];
 	lines.push(padLine(` ${sato.bold("Offload:")}`, maxWidth));
 
 	// L1
-	const l1Text = state.l1PendingCount > 0
-		? sato.warning(`${state.l1PendingCount} pending`)
-		: sato.success("drained");
+	const l1Text = state.l1PendingCount > 0 ? sato.warning(`${state.l1PendingCount} pending`) : sato.success("drained");
 	lines.push(padLine(`   L1 (summarisation): ${l1Text}`, maxWidth));
 
 	// L2
@@ -100,12 +97,17 @@ function renderOffloadPipeline(state: ContextPanelState, innerWidth: number, max
 	lines.push(padLine(`   L2 (MMD injection): last flush ${l2Text}`, maxWidth));
 
 	// L3
-	lines.push(padLine(`   L3 (knowledge graph): ${sato.info(String(state.l3Nodes))} nodes, ${sato.info(String(state.l3Edges))} edges`, maxWidth));
+	lines.push(
+		padLine(
+			`   L3 (knowledge graph): ${sato.info(String(state.l3Nodes))} nodes, ${sato.info(String(state.l3Edges))} edges`,
+			maxWidth,
+		),
+	);
 
 	return lines;
 }
 
-function renderAgentWindows(agents: AgentContextInfo[], innerWidth: number, maxWidth: number): string[] {
+function renderAgentWindows(agents: AgentContextInfo[], _innerWidth: number, maxWidth: number): string[] {
 	const lines: string[] = [];
 	lines.push(padLine(` ${sato.bold("Agent Windows:")}`, maxWidth));
 
@@ -115,7 +117,7 @@ function renderAgentWindows(agents: AgentContextInfo[], innerWidth: number, maxW
 		const bar = colorFn(`${pct}%`);
 		const tokens = formatNumber(agent.tokensUsed);
 		const budget = formatNumber(agent.tokenBudget);
-		const name = agent.agentId.length > 20 ? agent.agentId.slice(0, 17) + "..." : agent.agentId.padEnd(20);
+		const name = agent.agentId.length > 20 ? `${agent.agentId.slice(0, 17)}...` : agent.agentId.padEnd(20);
 
 		// Budget for the per-agent line
 		const line = `   ${name} ${bar}  (${tokens} / ${budget} tokens)`;
@@ -139,9 +141,5 @@ function formatNumber(n: number): string {
 function emptyPanel(maxWidth: number, message: string): string[] {
 	const innerWidth = maxWidth - 4;
 	if (innerWidth < 5) return [];
-	return [
-		makeHeader("Context", maxWidth),
-		padLine(` ${sato.dim(message)}`, maxWidth),
-		makeFooter(maxWidth),
-	];
+	return [makeHeader("Context", maxWidth), padLine(` ${sato.dim(message)}`, maxWidth), makeFooter(maxWidth)];
 }

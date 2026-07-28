@@ -29,13 +29,16 @@ const mockSession = {
 	prompt: async () => {},
 	setToolContextAgentRuntime: () => {},
 };
- const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
+const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
 
 // Variant B: fires agent_end synchronously — for tests needing handle.wait() to resolve
 const mockCompletingSession = {
 	agent: {
 		setAsideMessageProvider: () => {},
-		subscribe: (cb: (event: { type: string }) => void) => { cb({ type: "agent_end" }); return () => {}; },
+		subscribe: (cb: (event: { type: string }) => void) => {
+			cb({ type: "agent_end" });
+			return () => {};
+		},
 		prompt: async () => {},
 		steer: () => {},
 		followUp: () => {},
@@ -43,15 +46,15 @@ const mockCompletingSession = {
 	prompt: async () => {},
 	setToolContextAgentRuntime: () => {},
 };
- const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
-import type { AgentEvent, AgentMessage, AgentTool, AsideMessage } from "@oh-my-pi/pi-agent-core";
+const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
+
+import type { AgentEvent, AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
 import type { CreateAgentSessionOptions } from "../../sdk";
+import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
 // Dependencies
 import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
@@ -62,15 +65,8 @@ import type { AgentSpec } from "../agent-runtime/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
 import { type ResolvedRole, RoleProvider } from "../agent-runtime/role-provider";
 import { CommBus } from "../comm-bus/comm-bus";
-import {
-	type AgentSpecLike,
-	type AssembledContext,
-	type BuildContext,
-	ContextPipeline,
-	type PhaseInfo,
-} from "../context-manager/context-pipeline";
+import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Helpers
@@ -128,11 +124,6 @@ function makeRoleAsset(overrides?: Partial<RoleAsset>): RoleAsset {
 		success_rate: 1.0,
 		...overrides,
 	};
-}
-
-/** Create a fresh CommBus instance. */
-function makeCommBus(): CommBus {
-	return new CommBus();
 }
 
 // ============================================================================
@@ -363,13 +354,11 @@ describe("AgentHandle", () => {
 			// reach the private #pushMessage path without spinning up a full
 			// Agent loop.
 			const listeners = new Set<(e: AgentEvent) => void>();
-			let unsubscribeCalled = false;
 			const mockAgent = {
 				subscribe: (fn: (e: AgentEvent) => void) => {
 					listeners.add(fn);
 					return () => {
 						listeners.delete(fn);
-						unsubscribeCalled = true;
 					};
 				},
 				steer: () => {},
@@ -931,16 +920,16 @@ describe("AgentRuntime", () => {
 
 			const firstText = steering[0]?.content?.find((c: { type: string }) => c.type === "text");
 			expect(firstText).toBeDefined();
-			expect("text" in (firstText as Record<string, unknown>)
-				? (firstText as Record<string, unknown>).text
-				: undefined
+			expect(
+				"text" in (firstText as Record<string, unknown>) ? (firstText as Record<string, unknown>).text : undefined,
 			).toBe("First steering message");
 
 			const secondText = steering[1]?.content?.find((c: { type: string }) => c.type === "text");
 			expect(secondText).toBeDefined();
-			expect("text" in (secondText as Record<string, unknown>)
-				? (secondText as Record<string, unknown>).text
-				: undefined
+			expect(
+				"text" in (secondText as Record<string, unknown>)
+					? (secondText as Record<string, unknown>).text
+					: undefined,
 			).toBe("Second steering message");
 
 			// Queue is drained — second call should return empty

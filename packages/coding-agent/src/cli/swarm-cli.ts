@@ -17,17 +17,17 @@ import { NoopOffloadManager } from "../offload/manager";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
 import { assembleAgentRuntime } from "../swarm/core/assembler";
+import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
 import type { RunManager, SteeringSink } from "../swarm/core/services";
 import { StateTracker } from "../swarm/core/state";
 import { SwarmRunner } from "../swarm/core/swarm-runner";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
 import { ExperienceStore } from "../swarm/curtain/experience";
+import { GraphRunner } from "../swarm/graph/graph-runner";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
 import { ActivityLogger } from "../swarm/infra/activity-logger";
-import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
+import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
 import { ScriptManager } from "../swarm/script/script-manager";
 import { SessionRegistry } from "../swarm/session";
@@ -117,12 +117,14 @@ async function createSwarmServices(
 			offloadManager: new NoopOffloadManager(),
 			profileRegistry: s.profileRegistry,
 			experienceStore: s.experienceStore,
-			mnemopiAdapter: s.mnemopiClient ? new SwarmMnemopiAdapter(s.mnemopiClient, {
-				enabled: true,
-				topK: 5,
-				deduplicate: true,
-				autoStoreThreshold: 5,
-			}) : undefined,
+			mnemopiAdapter: s.mnemopiClient
+				? new SwarmMnemopiAdapter(s.mnemopiClient, {
+						enabled: true,
+						topK: 5,
+						deduplicate: true,
+						autoStoreThreshold: 5,
+					})
+				: undefined,
 		});
 
 		// Assemble AgentRuntime with full DI (no global singletons).
@@ -229,7 +231,15 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	let def: SwarmDefinition;
 	if (engine === "graph") {
 		// GraphRunner handles its own YAML parsing (graph.yaml format)
-		def = { name: path.basename(yamlPath, path.extname(yamlPath)), description: "", version: 1, mode: "loop", targetCount: 0, agents: new Map(), loopConfig: null };
+		def = {
+			name: path.basename(yamlPath, path.extname(yamlPath)),
+			description: "",
+			version: 1,
+			mode: "loop",
+			targetCount: 0,
+			agents: new Map(),
+			loopConfig: null,
+		};
 	} else {
 		try {
 			def = await parseSwarmYamlFile(yamlPath);
@@ -241,7 +251,7 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	}
 
 	const swarmName = def.name;
-		
+
 	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
 
 	try {

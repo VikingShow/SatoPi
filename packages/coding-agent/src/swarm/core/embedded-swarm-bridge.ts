@@ -22,25 +22,24 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import { ProfileRegistry } from "../../agent/agent-profile";
+import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
+import type { MarkEnvironment } from "../../coordination/mark-environment";
+import { OffloadManager } from "../../offload/manager";
 import type { AgentRuntime } from "../agent-runtime";
-import { createOrchestratorRuntime } from "./assembler";
-import type { LoopSwarmConfig } from "./schema";
-import { StateTracker, type Chapter, type SwarmState } from "./state";
-import { WorkflowFsm, PHASES } from "./workflow-fsm";
-import { runCurtainPipeline, type CurtainResultData } from "../curtain/curtain-runner";
+import { OffloadSource } from "../context-manager/sources/offload-source";
+import { type CurtainResultData, runCurtainPipeline } from "../curtain/curtain-runner";
+import { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
-import { ExperienceStore } from "../curtain/experience";
-import { getSessionPlanPath } from "../script/plan-paths";
-import type { MarkEnvironment } from "../../coordination/mark-environment";
-import { SwarmSessionManager } from "../session/swarm-session-manager";
-
-import { createStageController, type StageResult } from "../stage/stage-controller";
 import { DebateRoundtable } from "../script/debate-roundtable";
-import { OffloadManager } from "../../offload/manager";
-import { OffloadSource } from "../context-manager/sources/offload-source";
+import { getSessionPlanPath } from "../script/plan-paths";
+import { SwarmSessionManager } from "../session/swarm-session-manager";
+import { createStageController, type StageResult } from "../stage/stage-controller";
+import { createOrchestratorRuntime } from "./assembler";
+import type { LoopSwarmConfig } from "./schema";
+import { type Chapter, StateTracker, type SwarmState } from "./state";
+import { PHASES, WorkflowFsm } from "./workflow-fsm";
 
 // ============================================================================
 // Types
@@ -87,7 +86,6 @@ export interface SwarmAgentEvent {
 	error?: string;
 }
 
-
 // ============================================================================
 // ISwarmOrchestrator — shared interface for SwarmRunner and GraphRunner
 // ============================================================================
@@ -127,15 +125,17 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#sessionManager!: SwarmSessionManager;
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
-	#runtime!: AgentRuntime;
 	#stageController: ReturnType<typeof createStageController> | null = null;
+	#runtime!: AgentRuntime;
+	/** Stigmergic MarkEnvironment from orchestrator runtime. */
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
+	#markEnv?: MarkEnvironment;
 	#planContent = "";
 	#planReady = false;
 	#listener: SwarmEventCallback;
 	#abortController: AbortController | null = null;
 	#loopConfig: LoopSwarmConfig;
 	#disposed = false;
-	#markEnv?: MarkEnvironment;
 	#offloadManager?: OffloadManager;
 	/** Human-decision resolver for applaud flow. */
 	#applaudResolve: (() => void) | null = null;
@@ -207,7 +207,6 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#experienceStore = new ExperienceStore(workspace);
 		await this.#experienceStore.init();
 
-
 		// 8. Auto-create RoleAssetManager if not provided
 		if (!roleAssetManager) {
 			roleAssetManager = new RoleAssetManager(workspace);
@@ -228,11 +227,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#markEnv = orch.markEnvironment;
 		this.#runtime = orch.runtime;
 
-
 		// Register OffloadSource for Mermaid-based context in agent prompts
-		this.#runtime.contextPipeline.register(
-			new OffloadSource(this.#offloadManager),
-		);
+		this.#runtime.contextPipeline.register(new OffloadSource(this.#offloadManager));
 
 		// 10. Notify: script phase started
 		this.#listener({ phase: "script", subStatus: "planning" });
@@ -247,7 +243,11 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#disposed = true;
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
-		try { this.#experienceStore.close(); } catch { /* best-effort */ }
+		try {
+			this.#experienceStore.close();
+		} catch {
+			/* best-effort */
+		}
 		this.#stageController = null;
 		this.#planContent = "";
 		this.#planReady = false;
@@ -312,7 +312,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		if (!confirmResult.ok) return [confirmResult.reason ?? "FSM rejected script-confirm transition"];
 
 		// Optional: run plan debate if enabled via settings
-		const enableDebate = this.#config.settings.get("magicKeywords.swarm.enableDebate") as boolean ?? false;
+		const enableDebate = (this.#config.settings.get("magicKeywords.swarm.enableDebate") as boolean) ?? false;
 		if (enableDebate) {
 			const debateResult = await this.#fsm.transition("script-debate", {
 				reason: "starting plan debate",
@@ -437,7 +437,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			const CURTAIN_TIMEOUT_MS = 300_000; // 5 minutes
 			await new Promise<void>(resolve => {
 				this.#applaudResolve = resolve;
-				const timer = setTimeout(() => {
+				setTimeout(() => {
 					if (this.#applaudResolve) {
 						this.#applaudResolve();
 						this.#applaudResolve = null;

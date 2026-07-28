@@ -3,7 +3,7 @@
  * used by swarm workers for tier-2 file conflict prevention.
  */
 
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { RegionLockManager } from "../../coordination/region-lock";
 
 describe("RegionLockManager", () => {

@@ -9,16 +9,16 @@
 
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { SessionStorage } from "../../session/session-storage"
-import { getMmdPath, getArchivedMmdPath, getMmdsDir } from "../paths"
+import type { SessionStorage } from "../../session/session-storage";
+import { getArchivedMmdPath, getMmdPath, getMmdsDir } from "../paths";
 
 // ============================================================================
 // Forward type references (from plan-node-attributor in pipeline module)
 // ============================================================================
 
 export interface MmdNode {
-	id: string;                      // "001-N1"
-	label: string;                   // 节点标签
+	id: string; // "001-N1"
+	label: string; // 节点标签
 	status: "done" | "doing" | "todo" | "blocked";
 	phaseId?: string;
 }
@@ -134,9 +134,7 @@ export class MermaidSynthesizer {
 
 		// 节点定义
 		for (const node of nodes) {
-			const escapedLabel = node.label
-				.replace(/"/g, "#quot;")
-				.replace(/\n/g, "<br/>");
+			const escapedLabel = node.label.replace(/"/g, "#quot;").replace(/\n/g, "<br/>");
 			lines.push(`    ${node.id}["${escapedLabel}"]`);
 		}
 
@@ -177,6 +175,6 @@ export class MermaidSynthesizer {
 			}
 		}
 
-		return lines.join("\n") + "\n";
+		return `${lines.join("\n")}\n`;
 	}
 }

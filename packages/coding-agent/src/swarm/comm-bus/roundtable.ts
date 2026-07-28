@@ -250,7 +250,7 @@ export async function runRoundtable(
 // ============================================================================
 
 function formatPreviousRound(text: string, round: number): string {
-	const truncated = text.length > 2000 ? text.slice(0, 2000) + "\n\n[...truncated]" : text;
+	const truncated = text.length > 2000 ? `${text.slice(0, 2000)}\n\n[...truncated]` : text;
 	return `Round ${round - 1} positions:\n\n${truncated}`;
 }
 

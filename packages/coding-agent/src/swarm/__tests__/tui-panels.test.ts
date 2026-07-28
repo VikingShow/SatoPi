@@ -7,10 +7,10 @@
  *   - renderContextPanel: sources, offload pipeline, token windows, empty, maxWidth
  */
 import { describe, expect, it } from "bun:test";
-import type { AgentState, SwarmState } from "../core/state";
 import { renderAgentPanel } from "../../modes/components/swarm/agent-panel";
 import { type CommMessage, renderCommPanel } from "../../modes/components/swarm/comm-panel";
 import { type ContextPanelState, renderContextPanel } from "../../modes/components/swarm/context-panel";
+import type { AgentState, SwarmState } from "../core/state";
 
 // ============================================================================
 // Helpers
@@ -27,11 +27,29 @@ function assertMaxWidth(lines: string[], maxWidth: number): void {
 }
 
 function makeSwarmState(overrides: Partial<SwarmState> = {}): SwarmState {
-	return { name: "test-swarm", status: "running", mode: "loop", iteration: 0, targetCount: 4, agents: {}, startedAt: Date.now(), ...overrides };
+	return {
+		name: "test-swarm",
+		status: "running",
+		mode: "loop",
+		iteration: 0,
+		targetCount: 4,
+		agents: {},
+		startedAt: Date.now(),
+		...overrides,
+	};
 }
 
 function makeAgent(overrides: Partial<AgentState> = {}): AgentState {
-	return { name: "agent-1", status: "pending", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0, ...overrides };
+	return {
+		name: "agent-1",
+		status: "pending",
+		iteration: 0,
+		wave: 0,
+		praiseCount: 0,
+		criticismCount: 0,
+		conflictCount: 0,
+		...overrides,
+	};
 }
 
 function makeMsg(overrides: Partial<CommMessage> = {}): CommMessage {
@@ -130,7 +148,17 @@ describe("renderAgentPanel", () => {
 
 	it("handles agents with missing optional fields", () => {
 		const state = makeSwarmState({
-			agents: { minimal: { name: "minimal", status: "running", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 } },
+			agents: {
+				minimal: {
+					name: "minimal",
+					status: "running",
+					iteration: 0,
+					wave: 0,
+					praiseCount: 0,
+					criticismCount: 0,
+					conflictCount: 0,
+				},
+			},
 		});
 		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
 		expect(visible).toContain("minimal");
@@ -139,7 +167,9 @@ describe("renderAgentPanel", () => {
 
 	it("shows duration for completed agents", () => {
 		const state = makeSwarmState({
-			agents: { "agent-1": makeAgent({ name: "agent-1", status: "completed", startedAt: 100000, completedAt: 232000 }) },
+			agents: {
+				"agent-1": makeAgent({ name: "agent-1", status: "completed", startedAt: 100000, completedAt: 232000 }),
+			},
 		});
 		expect(stripAnsi(renderAgentPanel(state, W).join("\n"))).toMatch(/2m\s+12s/);
 	});
@@ -226,11 +256,24 @@ describe("renderContextPanel", () => {
 	const W = 72;
 
 	function makeCtx(overrides: Partial<ContextPanelState> = {}): ContextPanelState {
-		return { sources: [], l1PendingCount: 0, l2LastFlushSeconds: 0, l3Nodes: 0, l3Edges: 0, agents: [], ...overrides };
+		return {
+			sources: [],
+			l1PendingCount: 0,
+			l2LastFlushSeconds: 0,
+			l3Nodes: 0,
+			l3Edges: 0,
+			agents: [],
+			...overrides,
+		};
 	}
 
 	it("shows active sources with checkmark", () => {
-		const state = makeCtx({ sources: [{ name: "RoleSource", active: true }, { name: "ExperienceSource", active: false }] });
+		const state = makeCtx({
+			sources: [
+				{ name: "RoleSource", active: true },
+				{ name: "ExperienceSource", active: false },
+			],
+		});
 		const visible = stripAnsi(renderContextPanel(state, W).join("\n"));
 		expect(visible).toContain("RoleSource");
 		expect(visible).toContain("ExperienceSource");
@@ -307,7 +350,13 @@ describe("maxWidth compliance", () => {
 			it(`all lines ≤ ${w} chars`, () => {
 				const state = makeSwarmState({
 					agents: {
-						"agent-1": makeAgent({ name: "agent-1", status: "completed", startedAt: 1000, completedAt: 5000, modelName: "claude-sonnet" }),
+						"agent-1": makeAgent({
+							name: "agent-1",
+							status: "completed",
+							startedAt: 1000,
+							completedAt: 5000,
+							modelName: "claude-sonnet",
+						}),
 						"agent-2": makeAgent({ name: "agent-2", status: "running", startedAt: 2000, role: "reviewer" }),
 						"agent-3": makeAgent({ name: "agent-3", status: "failed", error: "typecheck error in auth.ts" }),
 					},
@@ -343,9 +392,7 @@ describe("maxWidth compliance", () => {
 					l2LastFlushSeconds: 300,
 					l3Nodes: 45,
 					l3Edges: 67,
-					agents: [
-						{ agentId: "agent-1", tokensUsed: 8234, tokenBudget: 32768 },
-					],
+					agents: [{ agentId: "agent-1", tokensUsed: 8234, tokenBudget: 32768 }],
 				};
 				assertMaxWidth(renderContextPanel(state, w), w);
 			});

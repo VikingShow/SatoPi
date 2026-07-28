@@ -25,10 +25,10 @@
  * for phase capability introspection and human-decision waiting.
  */
 
-import type { ActivityLogger } from "../infra/activity-logger";
-import type { Chapter, StateTracker } from "./state";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";
+import type { ActivityLogger } from "../infra/activity-logger";
+import type { Chapter, StateTracker } from "./state";
 
 // ============================================================================
 // Interfaces

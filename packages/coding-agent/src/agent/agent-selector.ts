@@ -10,7 +10,7 @@
  *   5. Fallback: lower threshold if not enough agents
  */
 
-import type { ProfileRegistry, AgentProfile } from "./agent-profile";
+import type { AgentProfile, ProfileRegistry } from "./agent-profile";
 
 // ============================================================================
 // Types
@@ -97,7 +97,7 @@ export function selectAgents(input: AgentSelectionInput): ScoredAgent[] {
 	}
 
 	// Step 4: Take top N, ensure minimum diversity
-	let selected = scored.slice(0, required);
+	const selected = scored.slice(0, required);
 	const archetypes = new Set(selected.map(s => s.archetype));
 	if (archetypes.size < 2 && scored.length > required) {
 		// Try to swap in a different archetype
@@ -121,11 +121,7 @@ export function selectAgents(input: AgentSelectionInput): ScoredAgent[] {
  * - 1 violation   → 0.95 multiplier
  * - Recent violation (within 30 days) → additional 0.05 reduction
  */
-function computeAgentScore(
-	profile: AgentProfile,
-	domainMatch: number,
-	now: number,
-): number {
+function computeAgentScore(profile: AgentProfile, domainMatch: number, now: number): number {
 	const creditWeight = 0.4;
 	const domainWeight = 0.3;
 	const successWeight = 0.2;
@@ -138,7 +134,11 @@ function computeAgentScore(
 		computeRecency(profile.credit.lastActiveAt, now) * recencyWeight;
 
 	// Violation penalty factor
-	const violationPenalty = computeViolationPenalty(profile.credit.violationCount, profile.credit.violationHistory, now);
+	const violationPenalty = computeViolationPenalty(
+		profile.credit.violationCount,
+		profile.credit.violationHistory,
+		now,
+	);
 
 	return baseScore * violationPenalty;
 }
@@ -165,7 +165,7 @@ function computeViolationPenalty(
 
 	// Recent violation (within 30 days) adds extra penalty
 	const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-	const hasRecentViolation = violationHistory.some(v => (now - v.timestamp) < thirtyDaysMs);
+	const hasRecentViolation = violationHistory.some(v => now - v.timestamp < thirtyDaysMs);
 	if (hasRecentViolation) {
 		penalty = Math.max(0.5, penalty - 0.05);
 	}
@@ -188,9 +188,7 @@ function computeDomainMatch(profile: AgentProfile, taskDomains: string[]): numbe
 			totalMatch += prof;
 		} else {
 			// Fuzzy: check if any expertise domain contains the task domain
-			const fuzzy = profile.expertise.domains.filter(d =>
-				d.includes(domain) || domain.includes(d),
-			);
+			const fuzzy = profile.expertise.domains.filter(d => d.includes(domain) || domain.includes(d));
 			if (fuzzy.length > 0) {
 				totalMatch += 0.3;
 			}

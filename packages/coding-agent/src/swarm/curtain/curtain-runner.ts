@@ -100,11 +100,11 @@ export async function runCurtainPipeline(
 		stateTracker,
 		activityLogger,
 		experienceStore,
-		loopConfig,
+		loopConfig: _loopConfig,
 		modelRegistry,
 		settings,
 		roleAssetManager,
-		profileRegistry,
+		profileRegistry: _profileRegistry,
 		ircBus,
 		hindsightClient,
 		mnemopiClient,
@@ -150,13 +150,18 @@ export async function runCurtainPipeline(
 	}
 	const [reporterSummary, extraction] = await Promise.all([
 		// Thread A: Reporter agent (elected or default)
-		runReporterAgent(workspace, result, {
-			modelRegistry,
-			settings,
-			activityLogger,
-			roleAssetManager,
-			reporterOverride: electedReporter,
-		}, opts.runtime),
+		runReporterAgent(
+			workspace,
+			result,
+			{
+				modelRegistry,
+				settings,
+				activityLogger,
+				roleAssetManager,
+				reporterOverride: electedReporter,
+			},
+			opts.runtime,
+		),
 		// Thread B: Reflection pipeline
 		runReflectionPipeline(result, {
 			agentCount,
@@ -239,7 +244,7 @@ export async function runCurtainPipeline(
 // ============================================================================
 
 async function runReporterAgent(
-	workspace: string,
+	_workspace: string,
 	result: StageResult,
 	opts: {
 		modelRegistry: ModelRegistry;
@@ -252,7 +257,13 @@ async function runReporterAgent(
 	/** Optional AgentRuntime for v3 agent spawning. */
 	runtime?: AgentRuntime,
 ): Promise<string | null> {
-	const { modelRegistry, settings, activityLogger, roleAssetManager, reporterOverride } = opts;
+	const {
+		modelRegistry: _modelRegistry,
+		settings: _settings,
+		activityLogger: _activityLogger,
+		roleAssetManager,
+		reporterOverride,
+	} = opts;
 	const reporterName = reporterOverride ?? "reporter";
 
 	// Load reporter role
@@ -271,7 +282,7 @@ async function runReporterAgent(
 		`You are a ${reporterName} Reporter agent. Summarize the completed build for the user. Be clear, concise, and honest about issues.`;
 
 	try {
-		const msgId = `curtain-${reporterName}-${Date.now()}`;
+		const _msgId = `curtain-${reporterName}-${Date.now()}`;
 		const reportTask = [
 			"## Build Complete — Report to User",
 			"",
@@ -285,7 +296,7 @@ async function runReporterAgent(
 			"4. Structure for readability (sections, bullet points)",
 		].join("\n");
 
-		let reportOutput: string | null;
+		let reportOutput: string | null = null;
 
 		// v3 path — AgentRuntime.spawn() is the only execution path.
 		// Legacy streamAgentOutput() fallback removed (SP-2 convergence).
@@ -330,7 +341,7 @@ async function runReflectionPipeline(
 		runId: string;
 	},
 ): Promise<ReflectionResult> {
-	const { agentCount, experienceStore, modelRegistry, settings, runId } = opts;
+	const { agentCount, experienceStore: _experienceStore, modelRegistry, settings, runId } = opts;
 
 	// Extract lessons
 	const extraction = extractLessons(result, agentCount);

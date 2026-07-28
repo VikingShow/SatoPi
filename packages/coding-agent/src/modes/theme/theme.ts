@@ -18,8 +18,8 @@ import { LRUCache } from "lru-cache/raw";
 import darkThemeJson from "./dark.json" with { type: "json" };
 import { defaultThemes } from "./defaults";
 import lightThemeJson from "./light.json" with { type: "json" };
-import satopiThemeJson from "./satopi.json" with { type: "json" };
 import { resolveMermaidAscii } from "./mermaid-cache";
+import satopiThemeJson from "./satopi.json" with { type: "json" };
 
 export { getLanguageFromPath } from "../../utils/lang-from-path";
 

@@ -5,9 +5,8 @@
  * mapping swarm agents to graph nodes and loop config to node metadata.
  */
 
-import { parseSwarmYaml, type LoopSwarmConfig, type SwarmAgent, type SwarmDefinition } from "../core/schema";
+import { type LoopSwarmConfig, parseSwarmYaml, type SwarmAgent, type SwarmDefinition } from "../core/schema";
 import {
-	validateGraphDefinition,
 	type GateSpec,
 	type GraphDefinition,
 	type GraphEdge,
@@ -15,6 +14,7 @@ import {
 	type GraphNode,
 	type NodeOutput,
 	type NodeType,
+	validateGraphDefinition,
 } from "./schema";
 
 // ============================================================================
@@ -26,18 +26,22 @@ const RESERVED_NODES: ReadonlySet<string> = new Set(["script", "stage", "curtain
 
 /** Default stage tools — mirrors the built-in theatre graph. */
 const DEFAULT_STAGE_TOOLS: readonly string[] = [
-	"read", "write", "edit", "grep", "bash", "task", "irc", "todo", "agent_fork",
+	"read",
+	"write",
+	"edit",
+	"grep",
+	"bash",
+	"task",
+	"irc",
+	"todo",
+	"agent_fork",
 ];
 
 /** Default script tools. */
-const SCRIPT_TOOLS: readonly string[] = [
-	"read", "grep", "glob", "write", "edit", "bash", "web_search",
-];
+const SCRIPT_TOOLS: readonly string[] = ["read", "grep", "glob", "write", "edit", "bash", "web_search"];
 
 /** Default curtain tools. */
-const CURTAIN_TOOLS: readonly string[] = [
-	"read", "write", "bash",
-];
+const CURTAIN_TOOLS: readonly string[] = ["read", "write", "bash"];
 
 // ============================================================================
 // Public API
@@ -64,13 +68,13 @@ export function convertLoopToGraph(loopYaml: string, name: string): GraphDefinit
 	const nodes: Record<string, GraphNode> = {};
 
 	// ── Script node ──────────────────────────────────────────────────
-	nodes["script"] = buildScriptNode(swarmDef, loopConfig);
+	nodes.script = buildScriptNode(swarmDef, loopConfig);
 
 	// ── Stage node ───────────────────────────────────────────────────
-	nodes["stage"] = buildStageNode(swarmDef, loopConfig);
+	nodes.stage = buildStageNode(swarmDef, loopConfig);
 
 	// ── Curtain node ─────────────────────────────────────────────────
-	nodes["curtain"] = buildCurtainNode(loopConfig);
+	nodes.curtain = buildCurtainNode(loopConfig);
 
 	// ── Agent nodes (from swarm agent definitions) ───────────────────
 	for (const [agentName, agent] of swarmDef.agents) {
@@ -112,7 +116,11 @@ export async function convertLoopFileToGraph(loopPath: string): Promise<GraphDef
 	const content = await file.text();
 
 	// Derive graph name from the filename, stripping extensions.
-	const basename = loopPath.split("/").pop()?.replace(/\.(ya?ml)$/, "") ?? "loop-converted";
+	const basename =
+		loopPath
+			.split("/")
+			.pop()
+			?.replace(/\.(ya?ml)$/, "") ?? "loop-converted";
 
 	const def = convertLoopToGraph(content, basename);
 	const errors = validateGraphDefinition(def);
@@ -127,14 +135,9 @@ export async function convertLoopFileToGraph(loopPath: string): Promise<GraphDef
 // Node builders
 // ============================================================================
 
-function buildScriptNode(
-	swarmDef: SwarmDefinition,
-	loopConfig: LoopSwarmConfig | undefined,
-): GraphNode {
+function buildScriptNode(swarmDef: SwarmDefinition, loopConfig: LoopSwarmConfig | undefined): GraphNode {
 	const planDebate = loopConfig?.planDebate;
-	const outputs: NodeOutput[] = [
-		{ id: "plan", description: "Structured execution plan (plan.md)" },
-	];
+	const outputs: NodeOutput[] = [{ id: "plan", description: "Structured execution plan (plan.md)" }];
 
 	const gate: GateSpec | undefined = planDebate?.enabled
 		? {
@@ -163,26 +166,21 @@ function buildScriptNode(
 	};
 }
 
-function buildStageNode(
-	swarmDef: SwarmDefinition,
-	loopConfig: LoopSwarmConfig | undefined,
-): GraphNode {
+function buildStageNode(swarmDef: SwarmDefinition, loopConfig: LoopSwarmConfig | undefined): GraphNode {
 	const agentConfig = loopConfig?.agents;
-	const descriptionParts: string[] = [
-		`Parallel execution phase for swarm "${swarmDef.name}".`,
-	];
+	const descriptionParts: string[] = [`Parallel execution phase for swarm "${swarmDef.name}".`];
 
 	if (agentConfig) {
 		descriptionParts.push(
 			`Agents: ${agentConfig.initial} initial (min ${agentConfig.min}, max ${agentConfig.max}), ` +
-			`${agentConfig.maxRounds} max rounds per iteration, ` +
-			`auto-scaling: ${agentConfig.auto ? "enabled" : "disabled"}.`,
+				`${agentConfig.maxRounds} max rounds per iteration, ` +
+				`auto-scaling: ${agentConfig.auto ? "enabled" : "disabled"}.`,
 		);
 		descriptionParts.push(
 			`Debate: ${loopConfig?.debate?.enabled ? "enabled" : "disabled"}. ` +
-			`Deliberation: ${loopConfig?.enableDeliberation ? "enabled" : "disabled"}. ` +
-			`Max iterations: ${loopConfig?.maxIterations ?? 5}. ` +
-			`Convergence: ${loopConfig?.convergenceThreshold ?? 2} identical reviews.`,
+				`Deliberation: ${loopConfig?.enableDeliberation ? "enabled" : "disabled"}. ` +
+				`Max iterations: ${loopConfig?.maxIterations ?? 5}. ` +
+				`Convergence: ${loopConfig?.convergenceThreshold ?? 2} identical reviews.`,
 		);
 	}
 
@@ -222,9 +220,7 @@ function buildStageNode(
 	};
 }
 
-function buildCurtainNode(
-	_loopConfig: LoopSwarmConfig | undefined,
-): GraphNode {
+function buildCurtainNode(_loopConfig: LoopSwarmConfig | undefined): GraphNode {
 	return {
 		label: "Curtain · Reflection",
 		description:
@@ -265,7 +261,10 @@ function buildAgentNode(agent: SwarmAgent): GraphNode {
 		depends_on: ["stage"],
 		continue_on_failure: false,
 		...(contextSources.length > 0 && { context_sources: contextSources }),
-		...(agent.model && { /* model info noted in description */ }),
+		...(agent.model &&
+			{
+				/* model info noted in description */
+			}),
 	};
 }
 
@@ -288,9 +287,7 @@ function buildEdges(swarmDef: SwarmDefinition): GraphEdge[] {
 	return edges;
 }
 
-function buildHooks(
-	loopConfig: LoopSwarmConfig | undefined,
-): GraphHook[] | undefined {
+function buildHooks(loopConfig: LoopSwarmConfig | undefined): GraphHook[] | undefined {
 	if (!loopConfig?.hooks || loopConfig.hooks.length === 0) return undefined;
 
 	return loopConfig.hooks.map(h => ({
@@ -316,9 +313,7 @@ function mergeAgentTools(swarmDef: SwarmDefinition): string[] {
 }
 
 /** Derive context source identifiers from enabled loop-config features. */
-function resolveContextSources(
-	loopConfig: LoopSwarmConfig | undefined,
-): string[] {
+function resolveContextSources(loopConfig: LoopSwarmConfig | undefined): string[] {
 	if (!loopConfig) return [];
 
 	const sources: string[] = [];
@@ -328,10 +323,7 @@ function resolveContextSources(
 	return sources;
 }
 
-function buildGraphDescription(
-	swarmDef: SwarmDefinition,
-	loopConfig: LoopSwarmConfig | undefined,
-): string {
+function buildGraphDescription(swarmDef: SwarmDefinition, loopConfig: LoopSwarmConfig | undefined): string {
 	const agentCount = swarmDef.agents.size;
 	const iter = loopConfig?.maxIterations ?? 5;
 	return (

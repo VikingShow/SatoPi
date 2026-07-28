@@ -105,11 +105,7 @@ export class MmdInjector {
 	buildFullView(fullMmd: string, historicalRefs?: string[]): MmdView {
 		const summaryText = "LoopController 全景编排视图（完整 MMD 图）";
 
-		const parts = [
-			"<current_swarm_context>",
-			"  <!-- LoopController 全景视图 -->",
-			fullMmd,
-		];
+		const parts = ["<current_swarm_context>", "  <!-- LoopController 全景视图 -->", fullMmd];
 
 		// 附加历史迭代归档引用
 		if (historicalRefs && historicalRefs.length > 0) {
@@ -148,7 +144,7 @@ export class MmdInjector {
 		if (!fullMmd || phaseIds.length === 0) return fullMmd;
 
 		const lines = fullMmd.split("\n");
-		const phaseSet = new Set(phaseIds);
+		const _phaseSet = new Set(phaseIds);
 
 		// 第一遍：找到所有匹配 phase 的 node_id
 		const matchedNodeIds = new Set<string>();
@@ -184,7 +180,7 @@ export class MmdInjector {
 			// 保留匹配节点的行
 			let keep = false;
 			for (const nodeId of matchedNodeIds) {
-				if (line.startsWith(nodeId + " ") || line.startsWith(nodeId + "[") || line.startsWith(nodeId + "|")) {
+				if (line.startsWith(`${nodeId} `) || line.startsWith(`${nodeId}[`) || line.startsWith(`${nodeId}|`)) {
 					keep = true;
 					break;
 				}

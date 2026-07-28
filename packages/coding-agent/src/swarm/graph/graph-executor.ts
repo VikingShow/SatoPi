@@ -11,7 +11,6 @@
  * ADR-6: Wave-level pause gate integration point.
  */
 
-
 import type { NodeResult } from "./schema";
 
 // ============================================================================
@@ -73,38 +72,29 @@ export class WaveScheduler implements SchedulingStrategy {
 
 	async schedule(waves: string[][], runner: NodeRunner): Promise<void> {
 		for (const wave of waves) {
-			const results = await Promise.all(
-				wave.map((nodeId) => this.#runAndCatch(nodeId, runner)),
-			);
+			const results = await Promise.all(wave.map(nodeId => this.#runAndCatch(nodeId, runner)));
 
 			// Check for hard failures that should abort
 			for (const result of results) {
 				if (!result.success && !(this.#nodes[result.nodeId]?.continueOnFailure ?? false)) {
-					throw new Error(
-						`Wave aborted: node "${result.nodeId}" failed (continueOnFailure=false)`,
-					);
+					throw new Error(`Wave aborted: node "${result.nodeId}" failed (continueOnFailure=false)`);
 				}
 			}
 		}
 	}
 
 	/** Run a single node, catching errors into a NodeResult. */
-	async #runAndCatch(
-		nodeId: string,
-		runner: NodeRunner,
-	): Promise<NodeResult> {
+	async #runAndCatch(nodeId: string, runner: NodeRunner): Promise<NodeResult> {
 		let result: NodeResult;
 		try {
 			result = await runner.runNode(nodeId);
 		} catch (err: unknown) {
-			const message =
-				err instanceof Error ? err.message : String(err);
+			const message = err instanceof Error ? err.message : String(err);
 			result = { nodeId, success: false, error: message };
 		}
 		runner.onNodeComplete(nodeId, result);
 		return result;
 	}
-
 }
 
 // ============================================================================
@@ -133,11 +123,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 	 * @param nodes — per-node metadata keyed by nodeId
 	 * @param maxConcurrency — max nodes running simultaneously
 	 */
-	constructor(
-		deps: Map<string, Set<string>>,
-		nodes: Record<string, SchedulerNodeInfo>,
-		maxConcurrency: number,
-	) {
+	constructor(deps: Map<string, Set<string>>, nodes: Record<string, SchedulerNodeInfo>, maxConcurrency: number) {
 		this.#deps = deps;
 		this.#nodes = nodes;
 		this.#maxConcurrency = Math.max(1, maxConcurrency);
@@ -191,16 +177,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		// Kick off initial ready nodes
 		for (const nodeId of this.#deps.keys()) {
 			if (this.#isReady(nodeId, status)) {
-				this.#enqueue(
-					nodeId,
-					runner,
-					status,
-					completions,
-					promises,
-					() => aborted,
-					onAbort,
-					onSettle,
-				);
+				this.#enqueue(nodeId, runner, status, completions, promises, () => aborted, onAbort, onSettle);
 			}
 		}
 
@@ -220,7 +197,8 @@ export class DynamicScheduler implements SchedulingStrategy {
 		}
 		for (const [nodeId, nodeDeps] of deps) {
 			for (const dep of nodeDeps) {
-				(dependents[dep] ??= []).push(nodeId);
+				dependents[dep] ??= [];
+				dependents[dep].push(nodeId);
 			}
 		}
 		return dependents;
@@ -243,7 +221,6 @@ export class DynamicScheduler implements SchedulingStrategy {
 		}
 		return true;
 	}
-
 
 	/**
 	 * Enqueue a node for execution.  When in-flight slots are available the
@@ -284,10 +261,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 
 		if (this.#inFlight >= this.#maxConcurrency) {
 			queueMicrotask(() =>
-				this.#tryStart(
-					nodeId, runner, status, completions, promises,
-					isAborted, onAbort, onSettle,
-				),
+				this.#tryStart(nodeId, runner, status, completions, promises, isAborted, onAbort, onSettle),
 			);
 			return;
 		}
@@ -312,8 +286,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		try {
 			result = await runner.runNode(nodeId);
 		} catch (err: unknown) {
-			const message =
-				err instanceof Error ? err.message : String(err);
+			const message = err instanceof Error ? err.message : String(err);
 			result = { nodeId, success: false, error: message };
 		}
 
@@ -326,9 +299,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		} else {
 			status.set(nodeId, "failed");
 			if (!(this.#nodes[nodeId]?.continueOnFailure ?? false)) {
-				onAbort(new Error(
-					`Dynamic schedule aborted: node "${nodeId}" failed (continueOnFailure=false)`,
-				));
+				onAbort(new Error(`Dynamic schedule aborted: node "${nodeId}" failed (continueOnFailure=false)`));
 			}
 		}
 
@@ -336,10 +307,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		const dependents = this.#dependents[nodeId] ?? [];
 		for (const depId of dependents) {
 			if (status.get(depId) === "pending" && this.#isReady(depId, status)) {
-				this.#enqueue(
-					depId, runner, status, completions, promises,
-					isAborted, onAbort, onSettle,
-				);
+				this.#enqueue(depId, runner, status, completions, promises, isAborted, onAbort, onSettle);
 			}
 		}
 

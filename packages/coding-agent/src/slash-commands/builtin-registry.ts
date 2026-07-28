@@ -34,6 +34,9 @@ import type { AgentSession, FreshSessionResult } from "../session/agent-session"
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
+import { convertLoopFileToGraph } from "../swarm/graph/loop-converter";
+import { compileMermaidToGraph } from "../swarm/graph/mermaid-compiler";
+import type { GraphDefinition } from "../swarm/graph/schema";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
 import {
@@ -55,9 +58,6 @@ import { launchStatsDashboard, parseStatsDashboardArgs } from "./helpers/stats-d
 import { handleTodoAcp } from "./helpers/todo";
 import { buildUsageReportText } from "./helpers/usage-report";
 import { parseMarketplaceInstallArgs, parsePluginScopeArgs } from "./marketplace-install-parser";
-import { loadGraphDefinition } from "../swarm/graph/schema";
-import { compileMermaidToGraph } from "../swarm/graph/mermaid-compiler";
-import { convertLoopFileToGraph } from "../swarm/graph/loop-converter";
 import type {
 	BuiltinSlashCommand,
 	ParsedSlashCommand,
@@ -1252,7 +1252,12 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					];
 					const results: string[] = [];
 					for (const p of candidates) {
-						try { await fs.access(p); results.push(p); } catch { /* skip */ }
+						try {
+							await fs.access(p);
+							results.push(p);
+						} catch {
+							/* skip */
+						}
 					}
 					if (results.length === 0) {
 						await runtime.output("No graph definition files found in project.");
@@ -1269,14 +1274,16 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				try {
 					const filePath = path.resolve(runtime.cwd, rest);
 					const content = await fs.readFile(filePath, "utf-8");
-					let def;
+					let def: GraphDefinition;
 					if (content.includes("graph TD") || content.includes("flowchart") || content.includes("graph LR")) {
 						const name = path.basename(filePath, path.extname(filePath));
 						def = compileMermaidToGraph(content, name);
 					} else {
 						def = await convertLoopFileToGraph(filePath);
 					}
-					await runtime.output(`Compiled graph "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`);
+					await runtime.output(
+						`Compiled graph "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`,
+					);
 					return commandConsumed();
 				} catch (err) {
 					return usage(`Compile failed: ${errorMessage(err)}`, runtime);
@@ -1305,7 +1312,12 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					];
 					const results: string[] = [];
 					for (const p of candidates) {
-						try { await fs.access(p); results.push(p); } catch { /* skip */ }
+						try {
+							await fs.access(p);
+							results.push(p);
+						} catch {
+							/* skip */
+						}
 					}
 					if (results.length === 0) {
 						runtime.ctx.showStatus("No graph definition files found in project.");
@@ -1328,14 +1340,16 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					const cwd = process.cwd();
 					const filePath = path.resolve(cwd, rest);
 					const content = await fs.readFile(filePath, "utf-8");
-					let def;
+					let def: GraphDefinition;
 					if (content.includes("graph TD") || content.includes("flowchart") || content.includes("graph LR")) {
 						const name = path.basename(filePath, path.extname(filePath));
 						def = compileMermaidToGraph(content, name);
 					} else {
 						def = await convertLoopFileToGraph(filePath);
 					}
-					runtime.ctx.showStatus(`Compiled "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`);
+					runtime.ctx.showStatus(
+						`Compiled "${def.name}": ${Object.keys(def.nodes).length} nodes, ${def.edges?.length ?? 0} edges`,
+					);
 				} catch (err) {
 					runtime.ctx.showStatus(`Compile failed: ${errorMessage(err)}`);
 				}

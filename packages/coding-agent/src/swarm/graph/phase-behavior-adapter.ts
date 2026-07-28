@@ -17,27 +17,12 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
-import type { NodeBehaviorFactoryConfig } from "./node-behavior";
 import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "../behaviors/index";
 import type { CommChannel } from "../comm-bus/comm-channel";
-import type { Chapter } from "../core/state";
-import type { StateTracker } from "../core/state";
-import type { ActivityLogger } from "../infra/activity-logger";
-import type {
-	PhaseBehavior,
-	PhaseCompletion,
-	PhaseContext,
-	PhaseEnterResult,
-} from "../behaviors/index";
-import type {
-	GateResult,
-	GateSpec,
-	NodeBehavior,
-	NodeContext,
-	NodeResult,
-	NodeType,
-} from "./schema";
+import type { NodeBehaviorFactoryConfig } from "./node-behavior";
+import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult, NodeType } from "./schema";
 
 // ============================================================================
 // PhaseBehaviorNodeAdapter
@@ -154,8 +139,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 			};
 		}
 
-		const completion: PhaseCompletion | null =
-			await this.#behavior.checkCompletion(phaseCtx);
+		const completion: PhaseCompletion | null = await this.#behavior.checkCompletion(phaseCtx);
 
 		if (completion === null) {
 			return {
@@ -191,9 +175,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	// Event delegation (called by GraphRunner, not part of NodeBehavior)
 	// ==========================================================================
 
-	async handleAgentEvent(
-		event: { agentId: string; status: string; result?: unknown },
-	): Promise<void> {
+	async handleAgentEvent(event: { agentId: string; status: string; result?: unknown }): Promise<void> {
 		const phaseCtx = this.#phaseContext;
 		if (!phaseCtx) return;
 		await this.#behavior.handleAgentEvent(event, phaseCtx);

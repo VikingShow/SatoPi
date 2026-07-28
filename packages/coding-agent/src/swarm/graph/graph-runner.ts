@@ -15,31 +15,34 @@ import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
-import { AgentRegistry } from "../../registry/agent-registry";
-import type { ContextPipeline } from "../context-manager/context-pipeline";
-import { IrcBus } from "../../irc/bus";
 import { RoleAssetManager } from "../../agent/role-asset";
+import { IrcBus } from "../../irc/bus";
+import { AgentRegistry } from "../../registry/agent-registry";
+import type { SingleResult } from "../../task";
 import type { AgentRuntime } from "../agent-runtime";
 import { createOrchestratorRuntime } from "../core/assembler";
+import { buildExecutionWaves } from "../core/dag";
+import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
+import type { LoopSwarmConfig } from "../core/schema";
 import type { Chapter, SwarmState } from "../core/state";
 import { StateTracker } from "../core/state";
-import type { LoopSwarmConfig } from "../core/schema";
-import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
+import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
 import { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
-import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
-import { buildExecutionWaves } from "../core/dag";
-import { loadGraphDefinition, type GraphDefinition, type NodeContext, type NodeExecutionOutput, type NodeResult } from "./schema";
-import { WaveScheduler, type SchedulingStrategy, type SchedulerNodeInfo } from "./graph-executor";
-import { selectNodeBehavior, type NodeBehaviorFactoryConfig } from "./node-behavior";
-import type { SingleResult } from "../../task";
+import { type GraphRunState, type NodeRunState, recoverState, writeCheckpoint } from "./checkpoint";
 import { GateController } from "./gate-controller";
-import { writeCheckpoint, recoverState, type GraphRunState, type NodeRunState } from "./checkpoint";
-import type { MarkEnvironment } from "../../coordination/mark-environment";
-
+import { type SchedulerNodeInfo, type SchedulingStrategy, WaveScheduler } from "./graph-executor";
+import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
+import {
+	type GraphDefinition,
+	loadGraphDefinition,
+	type NodeContext,
+	type NodeExecutionOutput,
+	type NodeResult,
+} from "./schema";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,7 +57,10 @@ function buildUpstreamOutputs(
 	for (const depId of dependsOn) {
 		const results = resultsMap.get(depId);
 		if (!results || results.length === 0) continue;
-		const summary = results.map(r => r.output).filter(Boolean).join("\n");
+		const summary = results
+			.map(r => r.output)
+			.filter(Boolean)
+			.join("\n");
 		outputs[depId] = {
 			nodeId: depId,
 			artifacts: [],
@@ -86,6 +92,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
 	#runtime!: AgentRuntime;
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
+	#markEnv!: MarkEnvironment;
 	#graph!: GraphDefinition;
 	#waves!: string[][];
 	#abortController: AbortController | null = null;
@@ -94,7 +102,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 	#roleAssetManager!: RoleAssetManager;
 	#gateController!: GateController;
 	#graphRunState!: GraphRunState;
-	#markEnv!: MarkEnvironment;
 	#graphName!: string;
 	#ircBus!: IrcBus;
 	#swarmDir!: string;
@@ -128,7 +135,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 
 		this.#ircBus = IrcBus.global();
 
-
 		// Default loop config for PhaseBehavior-backed nodes
 		this.#loopConfig = {
 			maxIterations: 5,
@@ -157,7 +163,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 		this.#hookPipeline = orch.hookPipeline;
 		this.#markEnv = orch.markEnvironment;
 		this.#runtime = orch.runtime;
-
 
 		this.#gateController = new GateController({ workspace });
 
@@ -205,7 +210,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 		});
 	}
 
-
 	/** Update node status in GraphRunState and persist the checkpoint. */
 	#updateCheckpoint(nodeId: string, status: NodeRunState["status"], error?: string): void {
 		const prev = this.#graphRunState.nodes[nodeId];
@@ -213,7 +217,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 			nodeId,
 			status,
 			startedAt: status === "running" ? Date.now() : prev?.startedAt,
-			completedAt: (status === "completed" || status === "failed") ? Date.now() : undefined,
+			completedAt: status === "completed" || status === "failed" ? Date.now() : undefined,
 			...(error ? { error } : {}),
 		};
 		writeCheckpoint(this.#graphRunState, this.#sessionManager);
@@ -238,7 +242,11 @@ export class GraphRunner implements ISwarmOrchestrator {
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
 		this.#gateController.removeAllListeners();
-		try { this.#experienceStore.close(); } catch { /* best-effort */ }
+		try {
+			this.#experienceStore.close();
+		} catch {
+			/* best-effort */
+		}
 		logger.info("[GraphRunner] Disposed");
 	}
 
@@ -253,7 +261,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 		const workspace = this.#config.workspace;
 		const modelRegistry = this.#config.modelRegistry;
 		const settings = this.#config.settings;
-		const abortSignal = this.#abortController.signal;
+		const _abortSignal = this.#abortController.signal;
 		const runtime = this.#runtime;
 		const gateController = this.#gateController;
 		const updateCheckpoint = this.#updateCheckpoint.bind(this);
@@ -379,20 +387,22 @@ export class GraphRunner implements ISwarmOrchestrator {
 					const node = graph.nodes[nodeId];
 					if (node) agentsList.push({ id: nodeId, role: node.role });
 					if (result.error) executionErrors.push(`${nodeId}: ${result.error}`);
-					agentResultsMap.set(nodeId, [{
-						index: 0,
-						id: nodeId,
-						agent: nodeId,
-						agentSource: "project",
-						task: node?.description ?? "",
-						exitCode: result.success ? 0 : 1,
-						output: result.output ?? "",
-						stderr: result.error ?? "",
-						truncated: false,
-						durationMs: 0,
-						tokens: 0,
-						requests: 0,
-					}]);
+					agentResultsMap.set(nodeId, [
+						{
+							index: 0,
+							id: nodeId,
+							agent: nodeId,
+							agentSource: "project",
+							task: node?.description ?? "",
+							exitCode: result.success ? 0 : 1,
+							output: result.output ?? "",
+							stderr: result.error ?? "",
+							truncated: false,
+							durationMs: 0,
+							tokens: 0,
+							requests: 0,
+						},
+					]);
 				},
 			});
 
@@ -407,10 +417,13 @@ export class GraphRunner implements ISwarmOrchestrator {
 					taskProgress: { total: totalNodes, completed: completedCount },
 				},
 				{
-					workspace, stateTracker: this.#stateTracker,
+					workspace,
+					stateTracker: this.#stateTracker,
 					activityLogger: this.#activityLogger,
 					experienceStore: this.#experienceStore,
-					loopConfig: null, modelRegistry, settings,
+					loopConfig: null,
+					modelRegistry,
+					settings,
 					commBus: this.#runtime.commBus,
 					graphName: this.#graphName,
 				},
@@ -438,14 +451,32 @@ export class GraphRunner implements ISwarmOrchestrator {
 		await this.#fsm.transition("paused", { reason: "human paused" });
 	}
 
-	get fsm(): WorkflowFsm { return this.#fsm; }
-	get stateTracker(): StateTracker { return this.#stateTracker; }
-	get activityLogger(): ActivityLogger { return this.#activityLogger; }
-	get swarmState(): Readonly<SwarmState> { return this.#stateTracker.state; }
-	get currentPhase(): Chapter | null { return this.#fsm?.phase ?? null; }
-	get isRunning(): boolean { return !this.#disposed && (this.#fsm?.state.running ?? false); }
+	get fsm(): WorkflowFsm {
+		return this.#fsm;
+	}
+	get stateTracker(): StateTracker {
+		return this.#stateTracker;
+	}
+	get activityLogger(): ActivityLogger {
+		return this.#activityLogger;
+	}
+	get swarmState(): Readonly<SwarmState> {
+		return this.#stateTracker.state;
+	}
+	get currentPhase(): Chapter | null {
+		return this.#fsm?.phase ?? null;
+	}
+	get isRunning(): boolean {
+		return !this.#disposed && (this.#fsm?.state.running ?? false);
+	}
 
-	get runtime(): AgentRuntime { return this.#runtime; }
-	get graph(): GraphDefinition { return this.#graph; }
-	get gateController(): GateController { return this.#gateController; }
+	get runtime(): AgentRuntime {
+		return this.#runtime;
+	}
+	get graph(): GraphDefinition {
+		return this.#graph;
+	}
+	get gateController(): GateController {
+		return this.#gateController;
+	}
 }

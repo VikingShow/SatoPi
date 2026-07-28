@@ -313,13 +313,13 @@ export function reportUnrecognizedFlags(
 export function getExtraHelpText(): string {
 	return [
 		chalk.bold("Environment Variables:"),
-		"  " + chalk.dim("# Core Providers"),
+		`  ${chalk.dim("# Core Providers")}`,
 		"  ANTHROPIC_API_KEY          - Anthropic Claude models",
 		"  ANTHROPIC_OAUTH_TOKEN      - Anthropic OAuth (takes precedence over API key)",
 		"  CLAUDE_CODE_USE_FOUNDRY    - Enable Anthropic Foundry mode (uses Foundry endpoint + mTLS)",
 		"  FOUNDRY_BASE_URL           - Anthropic Foundry base URL (e.g., https://<foundry-host>)",
 		"  ANTHROPIC_FOUNDRY_API_KEY  - Anthropic token used as Authorization: Bearer <token> in Foundry mode",
-		"  ANTHROPIC_CUSTOM_HEADERS   - Extra headers for Foundry or any custom ANTHROPIC_BASE_URL gateway (e.g., \"user-id: USERNAME\")",
+		'  ANTHROPIC_CUSTOM_HEADERS   - Extra headers for Foundry or any custom ANTHROPIC_BASE_URL gateway (e.g., "user-id: USERNAME")',
 		"  CLAUDE_CODE_CLIENT_CERT    - Client certificate (PEM path or inline PEM) for mTLS",
 		"  CLAUDE_CODE_CLIENT_KEY     - Client private key (PEM path or inline PEM) for mTLS",
 		"  NODE_EXTRA_CA_CERTS        - CA bundle path (or inline PEM) for server certificate validation",
@@ -327,7 +327,7 @@ export function getExtraHelpText(): string {
 		"  GEMINI_API_KEY             - Google Gemini models",
 		"  COPILOT_GITHUB_TOKEN      - GitHub Copilot",
 		"",
-		"  " + chalk.dim("# Additional LLM Providers"),
+		`  ${chalk.dim("# Additional LLM Providers")}`,
 		"  AZURE_OPENAI_API_KEY       - Azure OpenAI models",
 		"  GROQ_API_KEY               - Groq models",
 		"  CEREBRAS_API_KEY           - Cerebras models",
@@ -344,12 +344,12 @@ export function getExtraHelpText(): string {
 		"  AI_GATEWAY_API_KEY         - Vercel AI Gateway",
 		"  WAFER_SERVERLESS_API_KEY   - Wafer Serverless (pay-as-you-go)",
 		"",
-		"  " + chalk.dim("# Cloud Providers"),
+		`  ${chalk.dim("# Cloud Providers")}`,
 		"  AWS_PROFILE                - AWS Bedrock (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)",
 		"  GOOGLE_CLOUD_PROJECT       - Google Vertex AI (requires GOOGLE_CLOUD_LOCATION)",
 		"  GOOGLE_APPLICATION_CREDENTIALS - Service account for Vertex AI",
 		"",
-		"  " + chalk.dim("# Search & Tools"),
+		`  ${chalk.dim("# Search & Tools")}`,
 		"  EXA_API_KEY                - Exa web search",
 		"  BRAVE_API_KEY              - Brave web search",
 		"  PERPLEXITY_API_KEY         - Perplexity web search API key (optional; anonymous fallback)",
@@ -360,17 +360,17 @@ export function getExtraHelpText(): string {
 		"  ANTHROPIC_SEARCH_API_KEY   - Anthropic web search (override; isolates search from main ANTHROPIC_API_KEY)",
 		"  ANTHROPIC_SEARCH_BASE_URL  - Anthropic web search base URL (override; pairs with ANTHROPIC_SEARCH_API_KEY)",
 		"",
-		"  " + chalk.dim("# Configuration"),
+		`  ${chalk.dim("# Configuration")}`,
 		"  STP_PROFILE                 - Named profile for isolated agent state (same as --profile)",
 		"  Use \\`stp --profile <name> --alias <command>\\` to create a shell shortcut for a profile",
-		"  PI_CODING_AGENT_DIR        - Session storage directory (default: ~/" + CONFIG_DIR_NAME + "/agent)",
+		`  PI_CODING_AGENT_DIR        - Session storage directory (default: ~/${CONFIG_DIR_NAME}/agent)`,
 		"  PI_PACKAGE_DIR             - Override package directory (for Nix/Guix store paths)",
 		"  PI_SMOL_MODEL              - Override smol/fast model (see --smol)",
 		"  PI_SLOW_MODEL              - Override slow/reasoning model (see --slow)",
 		"  PI_PLAN_MODEL              - Override planning model (see --plan)",
 		"  PI_NO_PTY                  - Disable PTY-based interactive bash execution",
 		"  For complete environment variable reference, see:",
-		"  " + chalk.dim("docs/environment-variables.md"),
+		`  ${chalk.dim("docs/environment-variables.md")}`,
 		chalk.bold("Available Tools (default-enabled unless noted):"),
 		"  read          - Read file contents",
 		"  bash          - Execute bash commands",
@@ -379,7 +379,7 @@ export function getExtraHelpText(): string {
 		"  grep          - Search file contents",
 		"  glob          - Find files by glob pattern",
 		"  lsp           - Language server protocol (code intelligence)",
-		"  python        - Execute Python code (requires: " + APP_NAME + " setup python)",
+		`  python        - Execute Python code (requires: ${APP_NAME} setup python)`,
 		"  notebook      - Edit Jupyter notebooks",
 		"  inspect_image - Analyze images with a vision model",
 		"  browser       - Browser automation (Puppeteer)",
@@ -400,9 +400,15 @@ export function getExtraHelpText(): string {
 export function printHelp(): void {
 	const app = chalk.bold(APP_NAME);
 	process.stdout.write(
-		app + " - AI coding assistant\n\n" +
-			"Run " + APP_NAME + " --help for full command and option details.\n" +
-			"Run " + APP_NAME + " <command> --help for command-specific help.\n\n" +
-			getExtraHelpText() + "\n",
+		app +
+			" - AI coding assistant\n\n" +
+			"Run " +
+			APP_NAME +
+			" --help for full command and option details.\n" +
+			"Run " +
+			APP_NAME +
+			" <command> --help for command-specific help.\n\n" +
+			getExtraHelpText() +
+			"\n",
 	);
 }

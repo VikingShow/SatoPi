@@ -26,9 +26,9 @@ import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
-import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a
 // type — the `import type` above is kept for documentation but the value import
 // is what makes persistence actually work.

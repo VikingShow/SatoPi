@@ -17,9 +17,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { IrcBus } from "../../irc/bus";
 import { CommBus } from "../comm-bus/comm-bus";
-import type { RoundtableOpts, VoteOpts } from "../comm-bus/comm-channel";
 import { CommChannel } from "../comm-bus/comm-channel";
-import type { CommEndpoint, EndpointCapability } from "../comm-bus/endpoint";
 import { createEndpoint } from "../comm-bus/endpoint";
 import { jaccardSimilarity, runRoundtable, tokenize } from "../comm-bus/roundtable";
 import { parseVote, runVote } from "../comm-bus/vote";

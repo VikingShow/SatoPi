@@ -14,11 +14,11 @@
  * Fallback: if LLM fails, degrade to text slicing (first 200 chars).
  */
 
-import { completeSimple, type AssistantMessage, type Model } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, completeSimple, type Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
-import { resolveRoleSelection } from "../../config/model-resolver"
-import type { ModelRegistry } from "../../config/model-registry"
-import type { Settings } from "../../config/settings"
+import type { ModelRegistry } from "../../config/model-registry";
+import { resolveRoleSelection } from "../../config/model-resolver";
+import type { Settings } from "../../config/settings";
 
 // ============================================================================
 // Prompt
@@ -169,7 +169,7 @@ export class L1LlmSummarizer {
 
 	#fallbackSlice(text: string): L1Summary {
 		return {
-			summary: text.length > 200 ? text.slice(0, 200) + "…" : text,
+			summary: text.length > 200 ? `${text.slice(0, 200)}…` : text,
 			score: 3,
 		};
 	}

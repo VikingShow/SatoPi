@@ -9,21 +9,21 @@
  */
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { loadGraphDefinition, type GraphDefinition } from "../graph/schema";
-import { selectNodeBehavior, type NodeBehaviorFactoryConfig } from "../graph/node-behavior";
+import { MarkEnvironment } from "../../coordination/mark-environment";
+import { AgentRegistry } from "../../registry/agent-registry";
+import { discoverAgents } from "../../task/discovery";
+import { ContextPipeline } from "../context-manager/context-pipeline";
+import { ExperienceSource } from "../context-manager/sources/experience-source";
+import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+import { StateTracker } from "../core/state";
+import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
+import { ExperienceStore } from "../curtain/experience";
+import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../graph/node-behavior";
 import { PhaseBehaviorNodeAdapter } from "../graph/phase-behavior-adapter";
 import type { NodeContext } from "../graph/schema";
-import { MarkEnvironment } from "../../coordination/mark-environment";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
-import { ExperienceSource } from "../context-manager/sources/experience-source";
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { ExperienceStore } from "../curtain/experience";
-import { AgentRegistry } from "../../registry/agent-registry";
-import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
-import { StateTracker } from "../core/state";
+import { type GraphDefinition, loadGraphDefinition } from "../graph/schema";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
-import { discoverAgents } from "../../task/discovery";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 
@@ -51,11 +51,15 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 		workspace: WORKSPACE,
 		swarmDir: "/tmp/test-swarm",
 		loopConfig: {
-			maxIterations: 3, autoRetry: false, humanEscalation: false,
+			maxIterations: 3,
+			autoRetry: false,
+			humanEscalation: false,
 			agents: { initial: 1, min: 1, max: 1, auto: false, maxRounds: 1, roundsConvergenceThreshold: 1 },
 			debate: { enabled: false, maxRounds: 1 },
 			planDebate: { enabled: false, agentCount: 1, maxRounds: 1, convergenceThreshold: 1 },
-			convergenceThreshold: 1, iterationTimeoutMs: 30000, enableDeliberation: false,
+			convergenceThreshold: 1,
+			iterationTimeoutMs: 30000,
+			enableDeliberation: false,
 		},
 		...overrides,
 	};
@@ -66,14 +70,11 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 // ============================================================================
 
 describe("Unified Abstraction Layer — End-to-End", () => {
-
 	// ── 1. Graph loading and validation ───────────────────────────────────
 
 	describe("Graph loading and validation", () => {
 		it("loads builtin theatre.graph.yaml", async () => {
-			const def = await loadGraphDefinition(
-				path.resolve(import.meta.dir, "../graph/builtin/theatre.graph.yaml"),
-			);
+			const def = await loadGraphDefinition(path.resolve(import.meta.dir, "../graph/builtin/theatre.graph.yaml"));
 			expect(def.name).toBe("theatre");
 			expect(def.nodes.script?.type).toBe("script");
 			expect(def.nodes.stage?.type).toBe("stage");
@@ -82,7 +83,10 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 		it("GraphDefinition has builtin field", () => {
 			const def: GraphDefinition = {
-				name: "test", description: "", version: 1, revision: 1,
+				name: "test",
+				description: "",
+				version: 1,
+				revision: 1,
 				builtin: true,
 				nodes: {},
 			};
@@ -142,7 +146,16 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 		it("prepare returns AgentSpec array for all types", async () => {
 			const config = makeConfig();
-			const ctx = { node: { id: "n1", label: "N", description: "D", role: "dev", tools: [], type: "custom", dependsOn: [] }, workspace: WORKSPACE, modelRegistry: {} as NodeContext["modelRegistry"], settings: {} as NodeContext["settings"], upstreamOutputs: {}, experience: "", signal: new AbortController().signal, runtime: config.runtime } as NodeContext;
+			const ctx = {
+				node: { id: "n1", label: "N", description: "D", role: "dev", tools: [], type: "custom", dependsOn: [] },
+				workspace: WORKSPACE,
+				modelRegistry: {} as NodeContext["modelRegistry"],
+				settings: {} as NodeContext["settings"],
+				upstreamOutputs: {},
+				experience: "",
+				signal: new AbortController().signal,
+				runtime: config.runtime,
+			} as NodeContext;
 
 			for (const type of ["script", "stage", "curtain", undefined] as const) {
 				const behavior = selectNodeBehavior(type, config);
@@ -215,7 +228,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 			expect(source.appliesTo("script", "dev")).toBe(true);
 			expect(source.appliesTo("script-debate", "dev")).toBe(true);
-			expect(source.appliesTo("stage", "dev")).toBe(true);  // Phase 2 fix
+			expect(source.appliesTo("stage", "dev")).toBe(true); // Phase 2 fix
 			expect(source.appliesTo("curtain", "dev")).toBe(false);
 
 			store.close();

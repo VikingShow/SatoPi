@@ -80,8 +80,8 @@ interface NodeLayout {
 	id: string;
 	label: string;
 	status: string;
-	col: number;  // left column of the box
-	boxW: number;  // outer box width
+	col: number; // left column of the box
+	boxW: number; // outer box width
 	contentW: number; // inner width
 }
 
@@ -181,18 +181,14 @@ function groupByDepth(depths: Map<string, number>): string[][] {
 	for (const [id, depth] of depths) {
 		waves[depth].push(id);
 	}
-	return waves.filter((w) => w.length > 0);
+	return waves.filter(w => w.length > 0);
 }
 
 // ============================================================================
 // Column assignment
 // ============================================================================
 
-function assignColumns(
-	waveGroups: string[][],
-	graph: GraphViewGraph,
-	maxWidth: number,
-): WaveLayout[] {
+function assignColumns(waveGroups: string[][], graph: GraphViewGraph, maxWidth: number): WaveLayout[] {
 	// Compute per-node box widths
 	const boxSizes = new Map<string, { boxW: number; contentW: number }>();
 	for (const [id, node] of Object.entries(graph.nodes)) {
@@ -202,7 +198,7 @@ function assignColumns(
 		boxSizes.set(id, { boxW: contentW + 2, contentW }); // +2 for borders
 	}
 
-	return waveGroups.map((waveIds) => {
+	return waveGroups.map(waveIds => {
 		const totalBoxW = waveIds.reduce((s, id) => s + (boxSizes.get(id)?.boxW ?? 14), 0);
 		const totalGap = INTER_NODE_GAP * (waveIds.length - 1);
 		const needed = totalBoxW + totalGap;
@@ -246,11 +242,7 @@ function renderWaveBoxes(wave: WaveLayout, maxWidth: number): string[] {
 	return [topLine, labelLine, statusLine, bottomLine];
 }
 
-function buildBoxLine(
-	wave: WaveLayout,
-	row: "top" | "label" | "status" | "bottom",
-	maxWidth: number,
-): string {
+function buildBoxLine(wave: WaveLayout, row: "top" | "label" | "status" | "bottom", maxWidth: number): string {
 	// Build a string of exact width, then pad with panel-utils
 	let result = "";
 	for (const node of wave.nodes) {
@@ -289,14 +281,9 @@ function renderBoxSegment(node: NodeLayout, row: "top" | "label" | "status" | "b
 // Edge line rendering
 // ============================================================================
 
-function renderEdgeLines(
-	srcWave: WaveLayout,
-	dstWave: WaveLayout,
-	edges: GraphViewEdge[],
-	maxWidth: number,
-): string[] {
-	const srcMap = new Map(srcWave.nodes.map((n) => [n.id, n]));
-	const dstMap = new Map(dstWave.nodes.map((n) => [n.id, n]));
+function renderEdgeLines(srcWave: WaveLayout, dstWave: WaveLayout, edges: GraphViewEdge[], maxWidth: number): string[] {
+	const srcMap = new Map(srcWave.nodes.map(n => [n.id, n]));
+	const dstMap = new Map(dstWave.nodes.map(n => [n.id, n]));
 
 	// Group edges by target node for merged rendering
 	const byTarget = new Map<string, { src: NodeLayout; edge: GraphViewEdge }[]>();
@@ -327,12 +314,7 @@ function renderEdgeLines(
 	return allLines;
 }
 
-function buildSingleEdgeLine(
-	srcCol: number,
-	dstCol: number,
-	edge: GraphViewEdge,
-	maxWidth: number,
-): string {
+function buildSingleEdgeLine(srcCol: number, dstCol: number, edge: GraphViewEdge, maxWidth: number): string {
 	const right = Math.max(srcCol, dstCol) + 1;
 	let line = " ".repeat(right);
 
@@ -376,7 +358,7 @@ function buildMergedEdgeLines(
 	// Compute max column extent
 	let maxCol = dstMid;
 	const srcMids: number[] = [];
-	for (const { src, edge } of group) {
+	for (const { src } of group) {
 		const sm = src.col + Math.floor(src.boxW / 2);
 		srcMids.push(sm);
 		maxCol = Math.max(maxCol, sm);
@@ -435,12 +417,7 @@ function replaceAt(s: string, index: number, replacement: string): string {
 // Wave progress bar
 // ============================================================================
 
-function renderWaveBar(
-	waves: WaveLayout[],
-	currentWave: number,
-	totalWaves: number,
-	maxWidth: number,
-): string[] {
+function renderWaveBar(waves: WaveLayout[], currentWave: number, totalWaves: number, maxWidth: number): string[] {
 	const displayWaves = Math.max(totalWaves, waves.length);
 	if (displayWaves === 0) return [];
 
@@ -468,7 +445,7 @@ function renderWaveBar(
 		segments.push(colorFn(`Wave ${i + 1} ${glyph}`));
 	}
 
-	const bar = "  " + segments.join("  ") + `  (${currentWave + 1}/${displayWaves})`;
+	const bar = `  ${segments.join("  ")}  (${currentWave + 1}/${displayWaves})`;
 	return [padLine(bar, maxWidth)];
 }
 
@@ -483,18 +460,18 @@ function statusLine(status: string): string {
 
 function truncateToFit(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
-	return text.slice(0, Math.max(1, maxLen - 1)) + "…";
+	return `${text.slice(0, Math.max(1, maxLen - 1))}…`;
 }
 
 function buildFooterStats(input: GraphViewInput): string {
 	const nodes = Object.values(input.graph.nodes ?? {});
 	const total = nodes.length;
-	const completed = nodes.filter((n) => n.status === "completed").length;
-	const failed = nodes.filter((n) => n.status === "failed").length;
+	const completed = nodes.filter(n => n.status === "completed").length;
+	const failed = nodes.filter(n => n.status === "failed").length;
 	return `${total} nodes · ${completed}/${total} done${failed > 0 ? ` · ${failed} failed` : ""}`;
 }
 
-function emptyPanel(input: GraphViewInput, maxWidth: number): string[] {
+function emptyPanel(_input: GraphViewInput, maxWidth: number): string[] {
 	return [
 		makeHeader("Theatre Graph", maxWidth),
 		padLine("", maxWidth),

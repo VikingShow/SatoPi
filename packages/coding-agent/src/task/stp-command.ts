@@ -1,7 +1,5 @@
 import process from "node:process";
-
-import { APP_NAME } from "@oh-my-pi/pi-utils";
-import { $env } from "@oh-my-pi/pi-utils";
+import { $env, APP_NAME } from "@oh-my-pi/pi-utils";
 
 interface StpCommand {
 	cmd: string;

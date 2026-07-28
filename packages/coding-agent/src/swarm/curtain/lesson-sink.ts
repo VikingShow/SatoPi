@@ -168,9 +168,7 @@ export class MultiLessonSink implements LessonSink {
 		metadata?: { graphName?: string; nodeId?: string; taskHash?: string },
 	): Promise<void> {
 		if (lessons.length === 0) return;
-		const results = await Promise.allSettled(
-			this.#sinks.map(s => s.fanOut(lessons, stats, runId, metadata)),
-		);
+		const results = await Promise.allSettled(this.#sinks.map(s => s.fanOut(lessons, stats, runId, metadata)));
 		results.forEach((r, i) => {
 			if (r.status === "rejected") {
 				logger.warn(`[LessonSink] sink "${this.#sinks[i]?.name}" failed`, { error: String(r.reason) });

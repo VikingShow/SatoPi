@@ -59,7 +59,7 @@ describe("parseRoundSummaryJson", () => {
 		expect(parseRoundSummaryJson("```json\n{not valid}\n```")).toBeNull();
 	});
 	it("returns null when required fields are missing", () => {
-		const out = "```json\n" + JSON.stringify({ reviewer: "x" }) + "\n```";
+		const out = `\`\`\`json\n${JSON.stringify({ reviewer: "x" })}\n\`\`\``;
 		expect(parseRoundSummaryJson(out)).toBeNull();
 	});
 });

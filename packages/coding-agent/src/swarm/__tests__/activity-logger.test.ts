@@ -5,8 +5,8 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type ActivityBroadcaster, type ActivityEntry, ActivityLogger } from "../infra/activity-logger";
 import { logger as piLogger } from "@oh-my-pi/pi-utils";
+import { type ActivityBroadcaster, type ActivityEntry, ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 
 describe("ActivityLogger", () => {
@@ -205,9 +205,7 @@ describe("ActivityLogger", () => {
 		}
 
 		expect(warnSpy).toHaveBeenCalled();
-		const overflowCall = warnSpy.mock.calls.find(
-			call => typeof call[0] === "string" && call[0].includes("overflow"),
-		);
+		const overflowCall = warnSpy.mock.calls.find(call => typeof call[0] === "string" && call[0].includes("overflow"));
 		expect(overflowCall).toBeDefined();
 
 		warnSpy.mockRestore();

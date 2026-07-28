@@ -281,15 +281,15 @@ export interface GateResult {
 	retryStrategy?: "immediate" | "fixup" | "human";
 }
 
+import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import type { AgentRuntime } from "../agent-runtime";
-import type { RoleAssetManager } from "../../agent/role-asset";
-import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { AgentRegistry } from "../../registry/agent-registry";
+import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../infra/activity-logger";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
 
 /**
  * Context assembled by GraphExecutor and injected into every NodeBehavior method.
@@ -441,7 +441,13 @@ interface RawGraphDefinition {
 
 const VALID_NODE_TYPES: Record<string, true> = { script: true, stage: true, curtain: true, custom: true };
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
-const VALID_GATE_TYPES: Record<string, true> = { "compile-check": true, test: true, lsp: true, "human-review": true, script: true };
+const VALID_GATE_TYPES: Record<string, true> = {
+	"compile-check": true,
+	test: true,
+	lsp: true,
+	"human-review": true,
+	script: true,
+};
 const VALID_GATE_MODES: Record<string, true> = { always: true, "on-failure": true, never: true };
 const VALID_RETRY_STRATEGIES: Record<string, true> = { exponential: true, constant: true, linear: true };
 const VALID_ON_FAILURE: Record<string, true> = { block: true, skip: true, "ask-human": true };
@@ -478,14 +484,10 @@ function normalizeRetrySpec(raw: RawRetrySpec): RetrySpec {
 
 function normalizeGateSpec(raw: RawGateSpec): GateSpec {
 	if (!VALID_GATE_TYPES[raw.type]) {
-		throw new Error(
-			`Invalid gate type '${raw.type}'. Must be one of: ${Object.keys(VALID_GATE_TYPES).join(", ")}`,
-		);
+		throw new Error(`Invalid gate type '${raw.type}'. Must be one of: ${Object.keys(VALID_GATE_TYPES).join(", ")}`);
 	}
 	if (raw.mode !== undefined && !VALID_GATE_MODES[raw.mode]) {
-		throw new Error(
-			`Invalid gate mode '${raw.mode}'. Must be one of: ${Object.keys(VALID_GATE_MODES).join(", ")}`,
-		);
+		throw new Error(`Invalid gate mode '${raw.mode}'. Must be one of: ${Object.keys(VALID_GATE_MODES).join(", ")}`);
 	}
 	return {
 		type: raw.type as GateType,
@@ -540,9 +542,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 
 	const strategy = g.strategy ?? "waves";
 	if (!VALID_STRATEGIES[strategy]) {
-		throw new Error(
-			`Invalid strategy '${strategy}'. Must be one of: ${Object.keys(VALID_STRATEGIES).join(", ")}`,
-		);
+		throw new Error(`Invalid strategy '${strategy}'. Must be one of: ${Object.keys(VALID_STRATEGIES).join(", ")}`);
 	}
 
 	if (g.max_concurrency !== undefined && (typeof g.max_concurrency !== "number" || g.max_concurrency < 0)) {

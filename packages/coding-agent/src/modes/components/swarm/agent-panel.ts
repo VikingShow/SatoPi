@@ -5,10 +5,10 @@
  * Includes reviewer tag line when a reviewer agent is elected.
  */
 
+import { ProfileRegistry } from "../../../agent/agent-profile";
 import type { AgentState, SwarmState } from "../../../swarm/core/state";
 import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { sato } from "./theme";
-import { ProfileRegistry } from "../../../agent/agent-profile";
 
 // ============================================================================
 // Status glyphs
@@ -16,11 +16,11 @@ import { ProfileRegistry } from "../../../agent/agent-profile";
 
 const STATUS_GLYPH: Record<string, string> = {
 	completed: "✓", // ✓
-	running: "◌",   // ◌
-	waiting: "○",   // ○
-	failed: "✗",    // ✗
-	pending: "·",   // ·
-	aborted: "⊘",   // ⊘
+	running: "◌", // ◌
+	waiting: "○", // ○
+	failed: "✗", // ✗
+	pending: "·", // ·
+	aborted: "⊘", // ⊘
 };
 
 const STATUS_COLOR: Record<string, (text: string) => string> = {
@@ -97,7 +97,7 @@ export function renderAgentPanel(state: SwarmState | null | undefined, maxWidth:
 		let footer = ` 👑 reviewer: ${reviewer.name}`; // 👑
 		if (verdict) {
 			const verdictMax = Math.max(5, innerWidth - (footer.length + 12));
-			const display = verdict.length > verdictMax ? verdict.slice(0, verdictMax - 3) + "..." : verdict;
+			const display = verdict.length > verdictMax ? `${verdict.slice(0, verdictMax - 3)}...` : verdict;
 			footer += `  ·  review: "${display}"`; // ·
 		}
 		lines.push(padLine("", maxWidth));
@@ -161,7 +161,7 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 	segments.push(statusText);
 	if (durationStr) segments.push(durationStr);
 
-	let line = " " + segments.join(" ");
+	let line = ` ${segments.join(" ")}`;
 
 	// If too long, truncate the status text
 	if (line.replace(/\x1b\[[0-9;]*m/g, "").length > innerWidth) {
@@ -175,14 +175,14 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 			const err = agent.error ?? "unknown error";
 			const errBudget = statusBudget - "failed: ".length;
 			if (errBudget >= 3) {
-				const truncated = err.length > errBudget ? err.slice(0, errBudget - 3) + "..." : err;
+				const truncated = err.length > errBudget ? `${err.slice(0, errBudget - 3)}...` : err;
 				line = `${minimal} ${sato.danger(`failed: ${truncated}`)}${suffix}`;
 			} else {
 				line = `${minimal}${suffix}`;
 			}
 		} else if (statusBudget >= 3) {
 			const label = STATUS_LABEL[agent.status] ?? agent.status;
-			const truncated = label.length > statusBudget ? label.slice(0, statusBudget - 3) + "..." : label;
+			const truncated = label.length > statusBudget ? `${label.slice(0, statusBudget - 3)}...` : label;
 			line = `${minimal} ${sato.dim(truncated)}${suffix}`;
 		} else {
 			line = `${minimal}${suffix}`;
@@ -211,9 +211,5 @@ function formatDuration(ms: number): string {
 function emptyPanel(maxWidth: number, message: string): string[] {
 	const innerWidth = maxWidth - 4;
 	if (innerWidth < 5) return [];
-	return [
-		makeHeader("Agents", maxWidth),
-		padLine(` ${sato.dim(message)}`, maxWidth),
-		makeFooter(maxWidth),
-	];
+	return [makeHeader("Agents", maxWidth), padLine(` ${sato.dim(message)}`, maxWidth), makeFooter(maxWidth)];
 }

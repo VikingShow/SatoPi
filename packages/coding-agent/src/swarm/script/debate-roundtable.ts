@@ -106,9 +106,9 @@ export class DebateRoundtable {
 	 */
 	async debate(
 		draftPlan: string,
-		workspace: string,
-		modelRegistry?: ModelRegistry,
-		settings?: Settings,
+		_workspace: string,
+		_modelRegistry?: ModelRegistry,
+		_settings?: Settings,
 		signal?: AbortSignal,
 	): Promise<DebateRoundtableResult> {
 		const { agentCount, maxRounds, convergenceThreshold } = this.#config;
@@ -126,7 +126,6 @@ export class DebateRoundtable {
 				: this.#buildRefinePrompt(draftPlan, previousOutputs);
 
 			// Spawn agents in parallel for this round
-			let results: SingleResult[];
 
 			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
 			const debatePrompt = this.#debateAgentSystemPrompt();
@@ -141,10 +140,9 @@ export class DebateRoundtable {
 					task: roundPrompt,
 				})),
 			);
-
 			// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
 			const settled = await Promise.allSettled(handles.map(h => h.wait()));
-			results = settled.map((s, i) => {
+			const results = settled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);
 				return {
