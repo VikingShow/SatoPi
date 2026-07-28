@@ -63,11 +63,11 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 		const { profileId, task } = params;
 
 		// Find existing persistent idle agent by profileId
-		const existing = registry.list().find(
-			ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle",
-		);
+		const existing = registry
+			.list()
+			.find(ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle");
 
-		let session;
+		let session: AgentSession | undefined;
 		if (existing?.session) {
 			// Steer the existing session with the new task
 			logger.info("[agent_invoke] Steering existing persistent agent", {

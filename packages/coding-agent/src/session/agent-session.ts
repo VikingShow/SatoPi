@@ -9436,7 +9436,7 @@ export class AgentSession {
 			this.abortEval();
 			this.agent.abort(options?.reason);
 			this.#status = "aborted";
-			await postPromptDrain;
+			await this.#cancelPostPromptTasks();
 			await this.agent.waitForIdle();
 			await this.#goalRuntime.onTaskAborted({ reason: options?.goalReason ?? "interrupted" });
 			// Clear prompt-in-flight state: waitForIdle resolves when the agent loop's finally

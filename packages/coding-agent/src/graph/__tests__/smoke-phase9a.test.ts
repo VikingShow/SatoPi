@@ -11,11 +11,11 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { TempDir } from "@oh-my-pi/pi-utils";
-import { AgentRegistry } from "../../registry/agent-registry";
+import { ProfileRegistry } from "../../agent/agent-profile";
 import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
+import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
-import { ProfileRegistry } from "../../agent/agent-profile";
 import { buildExecutionWaves } from "../../swarm/core/dag";
 import { GraphEngine } from "../graph-engine";
 import type {
@@ -75,10 +75,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			const session = makeSession("Smoke test task completed successfully");
 			mockCreateAgentSession.mockResolvedValue({ session });
 
-			const result = await agentInvokeTool.execute(
-				"call-1",
-				{ profileId: "smoke-worker", task: "Run smoke test" },
-			);
+			const result = await agentInvokeTool.execute("call-1", { profileId: "smoke-worker", task: "Run smoke test" });
 
 			expect(result.isError).toBe(false);
 			expect(result.content[0].text).toContain("Smoke test task completed successfully");
@@ -98,10 +95,7 @@ describe("Phase 9A: Smoke Tests", () => {
 				status: "idle",
 			});
 
-			const result = await agentInvokeTool.execute(
-				"call-2",
-				{ profileId: "steer-worker", task: "Steer me" },
-			);
+			const result = await agentInvokeTool.execute("call-2", { profileId: "steer-worker", task: "Steer me" });
 
 			expect(result.isError).toBe(false);
 			expect(result.content[0].text).toContain("Steered task done");
@@ -113,10 +107,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			createProfile("fail-worker");
 			mockCreateAgentSession.mockRejectedValue(new Error("Connection refused"));
 
-			const result = await agentInvokeTool.execute(
-				"call-3",
-				{ profileId: "fail-worker", task: "Will fail" },
-			);
+			const result = await agentInvokeTool.execute("call-3", { profileId: "fail-worker", task: "Will fail" });
 
 			expect(result.isError).toBe(true);
 			expect(result.content[0].text).toContain("Connection refused");
@@ -147,9 +138,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			await fs.mkdir(dir, { recursive: true });
 
 			const outputId = "SmokeReporter";
-			const content =
-				'{"status":"ok","summary":"Smoke test agent completed",' +
-				'"data":{"files":3,"lines":120}}';
+			const content = '{"status":"ok","summary":"Smoke test agent completed",' + '"data":{"files":3,"lines":120}}';
 			await fs.writeFile(path.join(dir, `${outputId}.md`), content);
 
 			AgentRegistry.global().register({
@@ -179,10 +168,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			const dir = tempDir.path();
 			await fs.mkdir(dir, { recursive: true });
 
-			await fs.writeFile(
-				path.join(dir, "SmokeJson.md"),
-				'{"status":"ok","summary":"All good","data":{"count":42}}',
-			);
+			await fs.writeFile(path.join(dir, "SmokeJson.md"), '{"status":"ok","summary":"All good","data":{"count":42}}');
 
 			AgentRegistry.global().register({
 				id: "Main2",
