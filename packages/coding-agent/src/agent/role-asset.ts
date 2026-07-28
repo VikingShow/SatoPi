@@ -7,6 +7,8 @@
  * Lifecycle: draft → proposed → approved → deprecated
  */
 
+import { getProjectAgentDir } from "@oh-my-pi/pi-utils";
+
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -114,7 +116,10 @@ export interface RoleCreateInput {
 // Constants
 // ============================================================================
 
-const DEFAULT_ROLES_DIR = ".stp/roles";
+function getRolesDir(workspaceDir: string): string {
+	return path.join(getProjectAgentDir(workspaceDir), "roles");
+}
+
 
 // ============================================================================
 // RoleAssetManager
@@ -125,7 +130,7 @@ export class RoleAssetManager {
 	readonly #legacyRolesDir: string;
 
 	constructor(workspaceDir: string) {
-		this.#rolesDir = path.join(workspaceDir, DEFAULT_ROLES_DIR);
+		this.#rolesDir = getRolesDir(workspaceDir);
 		this.#legacyRolesDir = path.join(workspaceDir, "roles");
 	}
 

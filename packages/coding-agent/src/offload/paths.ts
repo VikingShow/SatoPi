@@ -1,16 +1,18 @@
 /**
  * offload-paths — canonical path utilities for context offload storage.
  *
- * All offload-related paths live under {workspace}/.stp/:
+ * All offload-related paths live under {workspace}/.stp/ (resolved via
+ * getProjectAgentDir so PI_CONFIG_DIR overrides are honored):
  *
  *   {workspace}/.stp/offload/       — JSONL offload entries per agent
  *   {workspace}/.stp/offload/{agentName}/mmds/   — Mermaid context-graph diagrams
  *   {workspace}/.stp/profiles/      — Swarm profiles
  *
  * This module is the SINGLE source of truth for offload directory layout.
- * Every offload consumer MUST use these functions — never hardcode a
- * path.join(…, ".stp", "offload", …) anywhere else.
+ * Every offload consumer MUST use these functions.
  */
+
+import { getProjectAgentDir } from "@oh-my-pi/pi-utils";
 
 import * as path from "node:path";
 
@@ -24,7 +26,7 @@ import * as path from "node:path";
  * Path: {workspace}/.stp/offload
  */
 export function getOffloadDir(workspace: string): string {
-	return path.join(workspace, ".stp", "offload");
+	return path.join(getProjectAgentDir(workspace), "offload");
 }
 
 /**
@@ -51,7 +53,7 @@ export function getMmdsDir(workspace: string, agentName: string): string {
  * Path: {workspace}/.stp/profiles
  */
 export function getProfilesDir(workspace: string): string {
-	return path.join(workspace, ".stp", "profiles");
+	return path.join(getProjectAgentDir(workspace), "profiles");
 }
 
 // ============================================================================
