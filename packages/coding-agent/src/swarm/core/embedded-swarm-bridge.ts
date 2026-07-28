@@ -66,6 +66,8 @@ export interface EmbeddedSwarmConfig {
 	maxRounds?: number;
 	/** Whether to auto-applaud after Curtain (default: false). */
 	autoApplaud?: boolean;
+	/** Active MMD content for MmdSource context injection. */
+	activeMmd?: string;
 }
 
 export interface SwarmPhaseEvent {
@@ -227,6 +229,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			roleAssetManager,
 			hookPipeline: this.#hookPipeline,
 			experienceStore: this.#experienceStore,
+			activeMmd: this.#config.activeMmd,
 		};
 		this.#runtime = assembleAgentRuntime(assemblerOpts);
 

@@ -1,30 +1,28 @@
 /**
- * agent-launcher.ts — Creates SatoPi Agent instances with full AgentLoopConfig wiring.
+ * agent-launcher.ts — Creates SatoPi AgentSessions via createAgentSession().
  *
- * KEY DESIGN: Does NOT use runSubprocess(). Instead directly creates
- * Agent instances using the SatoPi public API (same approach as sdk.ts).
- * This enables access to ALL AgentLoopConfig hooks:
- *   - transformContext (ContextPipeline injection)
- *   - getSteeringMessages (Human steering from CommBus)
- *   - getAsideMessages (system notifications)
- *   - getFollowUpMessages (multi-turn dialogue)
+ * KEY DESIGN: Uses createAgentSession() (the same API as sdk.ts) instead of
+ * directly constructing Agent instances. This gives us yield/skills/MCP/IRC/
+ * streaming for free, with MMD and L3 compaction handled by the SDK's internal
+ * transformContext.
  *
- * When a `toolRegistry` is provided via LaunchContext, real tools are resolved
- * by name. Without one, an error is thrown (Phase A4 — mock stubs removed).
+ * The AgentLauncher resolves the model, builds the system prompt, resolves tool
+ * names from the role + ContextPipeline, and passes everything to
+ * createAgentSession(). Steering/follow-up messages from the CommBus are wired
+ * through the session before the agent loop starts.
  *
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
-import type { AgentMessage, AgentTool, AsideMessage } from "@oh-my-pi/pi-agent-core";
-import { Agent } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
-import { compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
 import type { IOffloadManager } from "../../offload/manager";
 import type { MmdInjector } from "../../offload/mermaid/injector";
+import type { AgentSession } from "../../session/agent-session";
+import { createAgentSession } from "../../sdk";
 import type { Tool, ToolSession } from "../../tools";
-import { createTools } from "../../tools";
 import type { AssembledContext } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { AgentHandle } from "./agent-handle";
@@ -127,32 +125,39 @@ export interface MinimalToolSession extends Partial<ToolSession> {
 // ============================================================================
 
 /**
- * Creates and starts SatoPi Agent instances with full hook wiring.
+ * Creates and starts SatoPi AgentSessions with full hook wiring.
  *
  * The launcher is responsible for:
  * 1. Model resolution (spec.modelPreference)
  * 2. System prompt assembly
- * 3. Agent creation with transformContext + getApiKey + all hooks
- * 4. Agent lifecycle start (prompt)
+ * 3. AgentSession creation via createAgentSession() with all hooks
+ * 4. Agent lifecycle start (session.prompt)
  * 5. Returning an AgentHandle
  */
 export class AgentLauncher {
 	#modelRegistry: ModelRegistry;
 	#settings: Settings;
+	/** Override for testing — defaults to createAgentSession. */
+	#sessionFactory: typeof createAgentSession;
 
-	constructor(modelRegistry: ModelRegistry, settings: Settings) {
+	constructor(
+		modelRegistry: ModelRegistry,
+		settings: Settings,
+		sessionFactory?: typeof createAgentSession,
+	) {
 		this.#modelRegistry = modelRegistry;
 		this.#settings = settings;
+		this.#sessionFactory = sessionFactory ?? createAgentSession;
 	}
 
 	/**
 	 * Create and launch a single agent, returning an AgentHandle.
 	 *
-	 * Does NOT use runSubprocess(). Instead:
+	 * Uses createAgentSession() instead of new Agent():
 	 *   1. Resolves the model
 	 *   2. Builds a system prompt from assembledContext + resolvedRole
-	 *   3. Creates an Agent instance via `new Agent({...})` with all hooks wired
-	 *   4. Starts the agent via `agent.prompt(spec.task)`
+	 *   3. Creates an AgentSession via createAgentSession() with all hooks wired
+	 *   4. Starts the agent via session.prompt(spec.task)
 	 *   5. Wraps in AgentHandle
 	 */
 	async launch(ctx: LaunchContext): Promise<AgentHandle> {
@@ -167,96 +172,43 @@ export class AgentLauncher {
 		// 2. Build system prompt
 		const systemPrompt = this.#buildSystemPrompt(spec, resolvedRole, assembledContext);
 
-		// 3. Resolve tools — prefer createTools (A1), then registry, then mock stubs
+		// 3. Resolve tool names for selection
 		const toolNames = this.#resolveTools(resolvedRole, assembledContext);
-		const tools = await this.#resolveToolInstances(
+		const { session } = await this.#sessionFactory({
+		// 4. Create AgentSession (replaces new Agent — gets yield/skills/MCP/IRC/streaming for free)
+			model,
+			systemPrompt: [systemPrompt],
 			toolNames,
-			ctx.builtinToolNames,
-			ctx.createToolSession,
-			ctx.toolRegistry,
-		);
-
-		// 4. Create Agent instance (SatoPi public API)
-		const agent = new Agent({
-			initialState: {
-				systemPrompt: [systemPrompt],
-				model,
-				tools,
-			},
-			// ContextPipeline injection via transformContext
-			transformContext: async (messages: AgentMessage[], _signal?: AbortSignal) => {
-				// Step 1: Inject external context (existing)
-				const injected = assembledContext.injectedMessages as AgentMessage[];
-				let result = injected.length > 0 ? [...injected, ...messages] : messages;
-
-				// Step 2: Inject MMD per-turn (Phase 5)
-				if (ctx.mmdInjector && ctx.activeMmd && result.length > 0) {
-					try {
-						const userIdx = result.findIndex(m => m.role === "user");
-						if (userIdx >= 0) {
-							const mmdMsg: AgentMessage = {
-								role: "user",
-								content: [{ type: "text", text: ctx.activeMmd }],
-								timestamp: Date.now(),
-							} as AgentMessage;
-							result.splice(userIdx + 1, 0, mmdMsg);
-						}
-					} catch (err) {
-						logger.debug("[AgentLauncher] MMD injection skipped", { error: String(err) });
-					}
-				}
-
-				// Step 3: Apply L3 compact context (fusion with SatoPi compaction)
-				if (ctx.offloadManager && ctx.contextWindow) {
-					try {
-						const compacted = compactContext(result, new Map(), {
-							...DEFAULT_COMPACT_CONFIG,
-							contextWindow: ctx.contextWindow,
-						});
-						result = compacted.messages;
-					} catch (err) {
-						logger.debug("[AgentLauncher] Compact context skipped", { error: String(err) });
-					}
-				}
-
-				return result;
-			},
-			// Human steering via CommBus
-			steeringMode: "one-at-a-time",
-			// Multi-turn follow-up via CommBus
-			followUpMode: "one-at-a-time",
-			// Interrupt mode for steering
-			interruptMode: "immediate",
-			// API key resolution via ModelRegistry
-			getApiKey: async (requestModel: Model) => {
-				try {
-					return await this.#modelRegistry.resolver(requestModel, spec.id);
-				} catch (err) {
-					logger.warn("[AgentLauncher] API key resolution failed", {
-						agentId: spec.id,
-						error: err instanceof Error ? err.message : String(err),
-					});
-					return undefined;
-				}
-			},
+			modelRegistry: this.#modelRegistry,
+			settings: this.#settings,
+			// MMD injection from ContextPipeline — SDK transformContext injects per-turn
+			injectedMessages: assembledContext.injectedMessages,
+			// L3 compact context — SDK transformContext applies if both are set
+			offloadManager: ctx.offloadManager,
+			contextWindow: ctx.contextWindow,
+			// Future: MMD per-turn injection
+			mmdInjector: ctx.mmdInjector,
+			activeMmd: ctx.activeMmd,
+			// Minimal discovery for swarm sub-agents
+			disableExtensionDiscovery: true,
+			enableMCP: false,
+			enableLsp: false,
+			hasUI: false,
+			autoApprove: true,
 		});
 
 		// 5. Wire aside message provider (system notifications from CommBus)
 		if (hookProviders.getAsideMessages) {
-			agent.setAsideMessageProvider(hookProviders.getAsideMessages);
+			session.agent.setAsideMessageProvider(hookProviders.getAsideMessages);
 		}
 
-		// 6. Start the agent with the task description
-		//    The agent won't start the loop until prompt() is called.
-		//    We start it immediately and return the handle.
-		// Session wiring: pass null — the caller (AgentRuntime.spawnOne) handles
-		// AgentRegistry registration separately once a real session is available.
-		const handle = new AgentHandle(spec.id, spec.role, agent, null);
+		// 6. Create AgentHandle with real session reference
+		const handle = new AgentHandle(spec.id, spec.role, session.agent, session);
 
 		// 7. Launch the agent asynchronously
 		//    Use fire-and-forget: the handle's wait() method lets callers
 		//    await completion when they need results.
-		this.#startAgent(agent, spec, hookProviders, ctx.signal).catch(err => {
+		this.#startAgent(session, spec, hookProviders, ctx.signal).catch(err => {
 			logger.warn("[AgentLauncher] Unhandled startAgent error", {
 				agentId: spec.id,
 				error: err instanceof Error ? err.message : String(err),
@@ -355,72 +307,6 @@ export class AgentLauncher {
 		return [...toolSet];
 	}
 
-	/**
-	 * Resolve tool instances using the most-capable available path.
-	 *
-	 * Resolution order (first match wins):
-	 * 1. **createTools()** (Phase A1) — when `builtinToolNames` is provided,
-	 *    real tools are created via the SatoPi BUILTIN_TOOLS factory pipeline
-	 *    with a minimal ToolSession assembled from the callback + launcher defaults.
-	 * 2. **ToolRegistry lookup** — when `toolRegistry` is provided, tools are
-	 *    looked up by name in the pre-built map.
-	 * 3. **No tools** — throws an error (Phase A4: mock stubs removed).
-	 */
-	async #resolveToolInstances(
-		toolNames: string[],
-		builtinToolNames?: string[],
-		createToolSession?: () => Partial<ToolSession>,
-		toolRegistry?: Map<string, Tool>,
-	): Promise<AgentTool<any, any, unknown>[]> {
-		// ── Path A: createTools()-based real tool creation (Phase A1) ──────────
-		if (builtinToolNames && builtinToolNames.length > 0) {
-			const partial = createToolSession?.() ?? {};
-			const session = {
-				...partial,
-				// Launcher-provided fields — always take precedence
-				settings: this.#settings,
-				modelRegistry: this.#modelRegistry,
-				// Required ToolSession fields filled from partial or defaults
-				cwd: partial.cwd ?? process.cwd(),
-				hasUI: partial.hasUI ?? false,
-				getSessionFile: partial.getSessionFile ?? (() => null),
-				getSessionSpawns: partial.getSessionSpawns ?? (() => null),
-			} satisfies MinimalToolSession;
-
-			const tools = await createTools(session, builtinToolNames);
-			logger.debug("[AgentLauncher] Resolved tools via createTools()", {
-				requested: builtinToolNames.length,
-				resolved: tools.length,
-				names: tools.map(t => t.name),
-			});
-			return tools as unknown as AgentTool<any, any, unknown>[];
-		}
-
-		// ── Path B: Real tool registry available — resolve by name ────────────
-		if (toolRegistry && toolRegistry.size > 0) {
-			const resolved: AgentTool<any, any, unknown>[] = [];
-			for (const name of toolNames) {
-				const tool = toolRegistry.get(name);
-				if (tool) {
-					resolved.push(tool as AgentTool<any, any, unknown>);
-				} else {
-					logger.warn("[AgentLauncher] Tool not found in registry, skipping", { tool: name });
-				}
-			}
-			logger.debug("[AgentLauncher] Resolved tools from registry", {
-				requested: toolNames.length,
-				resolved: resolved.length,
-			});
-			return resolved;
-		}
-
-		// ── Path C: No tool registry — throw (Phase A4: mock stubs removed) ─
-		throw new Error(
-			`[AgentLauncher] Cannot resolve tools for agent: no builtinToolNames or toolRegistry provided. ` +
-				`Callers must pass builtinToolNames + createToolSession (Phase A1) or a toolRegistry via LaunchContext. ` +
-				`Agent has ${toolNames.length} tool(s) that need real implementations.`,
-		);
-	}
 
 	/**
 	 * Start the SatoPi agent loop asynchronously.
@@ -432,7 +318,7 @@ export class AgentLauncher {
 	 * waiting for the current turn to complete (SatoPi P2-14).
 	 */
 	async #startAgent(
-		agent: Agent,
+		session: AgentSession,
 		spec: AgentSpec,
 		hookProviders: LaunchContext["hookProviders"],
 		signal?: AbortSignal,
@@ -442,7 +328,7 @@ export class AgentLauncher {
 			if (hookProviders.getSteeringMessages) {
 				const steeringMessages = await hookProviders.getSteeringMessages();
 				for (const msg of steeringMessages) {
-					agent.steer(msg);
+					session.agent.steer(msg);
 				}
 			}
 		} catch (err) {
@@ -462,7 +348,7 @@ export class AgentLauncher {
 				try {
 					const msgs = await hookProviders.getSteeringMessages();
 					for (const msg of msgs) {
-						agent.steer(msg);
+						session.agent.steer(msg);
 					}
 				} catch (err) {
 					logger.warn("[AgentLauncher] Steering feed poll failed", {
@@ -480,7 +366,7 @@ export class AgentLauncher {
 			if (hookProviders.getFollowUpMessages) {
 				const followUpMessages = await hookProviders.getFollowUpMessages();
 				for (const msg of followUpMessages) {
-					agent.followUp(msg);
+					session.agent.followUp(msg);
 				}
 			}
 		} catch (err) {
@@ -490,9 +376,9 @@ export class AgentLauncher {
 			});
 		}
 
-		// Start the agent loop
+		// Start the agent loop via session.prompt() — blocks until completion
 		try {
-			await agent.prompt(spec.task);
+			await session.prompt(spec.task);
 		} catch (err) {
 			logger.warn("[AgentLauncher] Agent prompt threw", {
 				agentId: spec.id,

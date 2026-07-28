@@ -32,6 +32,7 @@ import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
 import { HindsightSource } from "../context-manager/sources/hindsight-source";
 import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
+import { MmdSource } from "../context-manager/sources/mmd-source";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
@@ -63,6 +64,8 @@ export interface AssemblerOptions {
 	hindsightClient?: SwarmHindsightClient | null;
 	/** Semantic memory handle — enables MnemopiSource. Null when unavailable. */
 	mnemopiClient?: MnemopiClient | null;
+	/** Active MMD content for MmdSource context injection. */
+	activeMmd?: string;
 }
 
 // ============================================================================
@@ -101,6 +104,9 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 	}
 	if (opts.hindsightClient) {
 		contextPipeline.register(new HindsightSource(opts.hindsightClient));
+	}
+	if (opts.activeMmd) {
+		contextPipeline.register(new MmdSource(opts.activeMmd));
 	}
 
 	// 3. AgentLauncher — creates Agent instances with full hook wiring

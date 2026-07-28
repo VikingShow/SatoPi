@@ -10,6 +10,7 @@
 
 import type { Agent, AgentEvent, AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
+import type { AgentSession } from "../../session/agent-session";
 
 // ============================================================================
 // AgentHandle
@@ -26,7 +27,7 @@ export class AgentHandle {
 	readonly id: string;
 	readonly role: string;
 	readonly #agent: Agent;
-	readonly #session: unknown | null; // SatoPi AgentSession — null until wired (P0-4 fix)
+	readonly #session: AgentSession | null;
 	#status: "running" | "completed" | "failed" | "aborted" = "running";
 	#completionPromise: Promise<SingleResult>;
 	#resolveCompletion!: (result: SingleResult) => void;
@@ -35,7 +36,7 @@ export class AgentHandle {
 	/** Callback invoked on error/abort. */
 	onError?: (result: { agentId: string; error: string }) => void;
 
-	constructor(id: string, role: string, agent: Agent, session: unknown | null = null) {
+	constructor(id: string, role: string, agent: Agent, session: AgentSession | null = null) {
 		this.id = id;
 		this.role = role;
 		this.#agent = agent;
@@ -61,7 +62,7 @@ export class AgentHandle {
 	}
 
 	/** The underlying SatoPi AgentSession (for advanced use). May be null when not yet wired. */
-	get session(): unknown | null {
+	get session(): AgentSession | null {
 		return this.#session;
 	}
 

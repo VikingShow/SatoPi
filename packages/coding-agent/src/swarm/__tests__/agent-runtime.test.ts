@@ -15,6 +15,19 @@
  */
 
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+// Mock session factory for AgentLauncher tests — avoids pulling in full SDK
+const mockSession = {
+	agent: {
+		setAsideMessageProvider: () => {},
+		subscribe: () => () => {}, // returns unsubscribe fn
+		prompt: async () => {},
+		steer: () => {},
+		followUp: () => {},
+	},
+	prompt: async () => {},
+};
+const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
 import type { AgentEvent, AgentMessage, AgentTool, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
@@ -232,26 +245,26 @@ describe("AgentHandle", () => {
 	describe("status tracking", () => {
 		test("starts with status running", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
+			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
 			expect(handle.status).toBe("running");
 		});
 
 		test("has correct id and role", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("worker-1", "backend", agent, {});
+			const handle = new AgentHandle("worker-1", "backend", agent, {} as unknown as AgentSession);
 			expect(handle.id).toBe("worker-1");
 			expect(handle.role).toBe("backend");
 		});
 
 		test("exposes underlying Agent via getter", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
+			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
 			expect(handle.agent).toBe(agent);
 		});
 
 		test("exposes session via getter", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const session = { foo: "bar" };
+			const session = { foo: "bar" } as unknown as AgentSession;
 			const handle = new AgentHandle("a1", "test", agent, session);
 			expect(handle.session).toBe(session);
 		});
@@ -281,7 +294,7 @@ describe("AgentHandle", () => {
 	describe("send() and followUp()", () => {
 		test("send() calls agent.steer() with a user message", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
+			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
 
 			// Should not throw
 			handle.send("Hello agent");
@@ -290,7 +303,7 @@ describe("AgentHandle", () => {
 
 		test("followUp() calls agent.followUp() with a user message", () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
+			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
 
 			// Should not throw
 			handle.followUp("Follow up message");
@@ -300,7 +313,7 @@ describe("AgentHandle", () => {
 	describe("wait() timeout", () => {
 		test("times out after specified duration", async () => {
 			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
+			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
 
 			// The agent isn't running, so wait should either resolve immediately
 			// or time out. Since no agent loop is active, the completion promise
@@ -338,32 +351,34 @@ describe("AgentLauncher", () => {
 			guidelines: [],
 			tools: ["read"],
 		};
-		// Provide mock tools so #resolveToolInstances doesn't throw.
-		const mockTool = { name: "mock", execute: async () => ({ output: "ok" }) } as unknown as Tool;
-		const toolRegistry = new Map<string, Tool>([
-			["read", mockTool],
-			["grep", mockTool],
-		]);
+		const mockModel = { id: "test-model", provider: "test", supportsTools: true, contextWindow: 128000 };
+		const mockModelRegistry = {
+			getAvailable: () => [mockModel],
+			resolver: async () => undefined,
+			find: () => mockModel,
+			authStorage: { onCredentialDisabled: () => undefined },
+		} as unknown as ModelRegistry;
+
+		const mockSettings = { get: () => "one-at-a-time", getGroup: () => ({}) } as unknown as Settings;
+
 		return {
 			spec: makeSpec(),
 			resolvedRole,
 			assembledContext: assembled,
 			hookProviders: {},
-			modelRegistry: {
-				getAvailable: () => [{ id: "test-model", provider: "test", supportsTools: true }],
-				resolver: async () => undefined,
-				find: () => ({ id: "test-model", provider: "test" }),
-			} as unknown as ModelRegistry,
-			settings: {} as Settings,
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
 			activityLogger: undefined,
-			toolRegistry,
+			toolRegistry: new Map(),
+			cwd: "/tmp",
+			agentDir: "/tmp",
 			...overrides,
 		};
 	}
 
 	test("launches an agent and returns AgentHandle", async () => {
 		const ctx = makeLaunchContext();
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings);
+		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
 
 		const handle = await launcher.launch(ctx);
 		expect(handle).toBeInstanceOf(AgentHandle);
@@ -379,7 +394,7 @@ describe("AgentLauncher", () => {
 				resolver: async () => undefined,
 			} as unknown as ModelRegistry,
 		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings);
+		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
 
 		await expect(launcher.launch(ctx)).rejects.toThrow(/No available model/);
 	});
@@ -401,7 +416,7 @@ describe("AgentLauncher", () => {
 		const ctx = makeLaunchContext({
 			assembledContext: assembled,
 		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings);
+		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
 
 		// Launch should succeed — the transformContext from assembled
 		// is wired into the Agent constructor
@@ -422,7 +437,7 @@ describe("AgentLauncher", () => {
 				getAsideMessages: async () => asideMessages,
 			},
 		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings);
+		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
 
 		// Should not throw — aside provider is wired
 		const handle = await launcher.launch(ctx);
@@ -472,7 +487,7 @@ describe("AgentRuntime", () => {
 
 		settings = {} as Settings;
 
-		launcher = new AgentLauncher(modelRegistry, settings);
+		launcher = new AgentLauncher(modelRegistry, settings, mockSessionFactory);
 	});
 
 	describe("spawn()", () => {
@@ -683,7 +698,7 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings);
+		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockSessionFactory);
 
 		const runtime = new AgentRuntime({
 			roleProvider: brokenRoleProvider,
@@ -708,7 +723,7 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings);
+		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockSessionFactory);
 
 		// Create a ContextPipeline that throws on assemble
 		const brokenPipeline = {
@@ -743,7 +758,7 @@ describe("AgentHandle callbacks", () => {
 		const agent = new Agent({
 			initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
 		});
-		const handle = new AgentHandle("cb-test", "test", agent, {});
+		const handle = new AgentHandle("cb-test", "test", agent, {} as unknown as AgentSession);
 
 		let fired = false;
 		let agentId = "";
@@ -763,7 +778,7 @@ describe("AgentHandle callbacks", () => {
 		const agent = new Agent({
 			initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
 		});
-		const handle = new AgentHandle("no-cb", "test", agent, {});
+		const handle = new AgentHandle("no-cb", "test", agent, {} as unknown as AgentSession);
 
 		expect(() => {
 			agent.emitExternalEvent?.({ type: "agent_end" } as AgentEvent);
@@ -815,7 +830,7 @@ describe("AgentRegistry integration", () => {
 
 	test("setSession is no-op for unknown id", () => {
 		expect(() => {
-			registry.setSession("unknown", {} as AgentSession);
+			registry.setSession("unknown", {} as unknown as AgentSession);
 		}).not.toThrow();
 	});
 

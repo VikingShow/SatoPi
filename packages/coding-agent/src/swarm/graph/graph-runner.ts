@@ -51,6 +51,8 @@ export interface GraphRunnerConfig {
 	maxWorkers?: number;
 	maxRounds?: number;
 	autoApplaud?: boolean;
+	/** Active MMD content for MmdSource context injection. */
+	activeMmd?: string;
 }
 
 export class GraphRunner implements ISwarmOrchestrator {
@@ -81,7 +83,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 	}
 
 	async init(): Promise<void> {
-		const { workspace, modelRegistry, settings, profileRegistry } = this.#config;
+		const { workspace, modelRegistry, settings, profileRegistry, activeMmd } = this.#config;
 		this.#graphName = path.basename(this.#config.graphPath, ".graph.yaml");
 		this.#swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
 
@@ -128,6 +130,7 @@ export class GraphRunner implements ISwarmOrchestrator {
 			hookPipeline: this.#hookPipeline,
 			ircBus: this.#ircBus,
 			experienceStore: this.#experienceStore,
+			activeMmd,
 		});
 
 		// Create MarkEnvironment for stigmergic coordination
