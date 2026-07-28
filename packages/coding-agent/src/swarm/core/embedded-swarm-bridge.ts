@@ -502,11 +502,11 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		return this.#stateTracker.state;
 	}
 
-	get currentPhase(): Chapter {
-		return this.#fsm.phase;
+	get currentPhase(): Chapter | null {
+		return this.#fsm?.phase ?? null;
 	}
 
 	get isRunning(): boolean {
-		return !this.#disposed && this.#fsm.state.running;
+		return !this.#disposed && (this.#fsm?.state.running ?? false);
 	}
 }

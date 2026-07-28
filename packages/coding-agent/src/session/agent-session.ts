@@ -8005,13 +8005,14 @@ export class AgentSession {
 
 		if (engine === "graph") {
 			const graphPath = path.join(process.cwd(), "src/swarm/graph/builtin/theatre.graph.yaml");
-			this.#embeddedSwarm = new GraphRunner({
+			const bridge = new GraphRunner({
 				workspace: process.cwd(),
 				graphPath,
 				modelRegistry: this.#modelRegistry,
 				settings: this.settings,
 			});
-			await this.#embeddedSwarm.init();
+			await bridge.init();
+			this.#embeddedSwarm = bridge;
 			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
 			return;
 		}
@@ -8019,7 +8020,7 @@ export class AgentSession {
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
 		const profileRegistry = await ProfileRegistry.load(process.cwd());
-		this.#embeddedSwarm = new EmbeddedSwarmBridge(
+		const bridge = new EmbeddedSwarmBridge(
 			{
 				workspace: process.cwd(),
 				swarmDir,
@@ -8035,7 +8036,8 @@ export class AgentSession {
 			},
 		);
 
-		await this.#embeddedSwarm.init();
+		await bridge.init();
+		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
 	}
 
