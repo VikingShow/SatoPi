@@ -17257,7 +17257,7 @@ export class AgentSession {
 		const session = this.#swarmServices.get(name);
 		if (!session) return;
 		const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
-		await destroySwarmSession(session, (this.settings.get("workspace") as string) ?? process.cwd());
+		await destroySwarmSession(session, process.cwd());
 		this.#swarmServices.delete(name);
 	}
 
@@ -17265,7 +17265,7 @@ export class AgentSession {
 	async destroyAllSwarmSessions(): Promise<void> {
 		for (const [_name, session] of this.#swarmServices) {
 			const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
-			await destroySwarmSession(session, (this.settings.get("workspace") as string) ?? process.cwd());
+			await destroySwarmSession(session, process.cwd());
 		}
 		this.#swarmServices.clear();
 	}

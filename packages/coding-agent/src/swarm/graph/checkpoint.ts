@@ -22,6 +22,7 @@
  * match is the complete most-recent state.
  */
 
+import type { GraphRunState } from "../../graph/types";
 import { CTX, SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================

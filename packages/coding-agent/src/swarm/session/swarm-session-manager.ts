@@ -384,7 +384,7 @@ export class SwarmSessionManager {
 
 	/** Get the session header including parentSession information. */
 	getHeader(): Record<string, unknown> | null {
-		return this.#session.getHeader() ?? null;
+		return this.#session.getHeader() as Record<string, unknown> | null;
 	}
 
 	/** Get the current session file path. */

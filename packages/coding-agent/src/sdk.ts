@@ -2934,7 +2934,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				// Only place marks for production operations
 				const fileOp =
 					ctx.toolCall.name === "write" || ctx.toolCall.name === "edit" || ctx.toolCall.name === "bash";
-				if (!fileOp) return;
+				if (!fileOp) return undefined;
 
 				const argsPath = ctx.args?.path;
 				markEnvironment.placeMark({

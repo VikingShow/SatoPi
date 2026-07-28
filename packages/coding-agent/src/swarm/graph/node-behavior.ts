@@ -326,7 +326,7 @@ export class StageNodeBehavior implements NodeBehavior {
 			profileRegistry: ctx.profileRegistry!,
 			roleAssetManager: ctx.roleAssetManager!,
 			runtime: ctx.runtime,
-			ircBus: ctx.runtime.commBus.ircBus ?? undefined,
+			ircBus: ctx.runtime.ircBus,
 		});
 
 		try {

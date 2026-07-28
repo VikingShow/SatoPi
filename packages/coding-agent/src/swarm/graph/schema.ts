@@ -22,6 +22,7 @@ import type {
 	GraphEdge,
 	GraphHook,
 	GraphNode,
+	GraphValidationError,
 	NodeContext,
 	NodeOutput,
 	NodeResult,

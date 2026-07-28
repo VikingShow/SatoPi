@@ -219,7 +219,10 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				dependsOn: node.depends_on ?? [],
 			},
 			workspace: this.#config.workspace,
+			modelRegistry: this.#config.modelRegistry,
+			settings: this.#config.settings,
 			experience: "",
+			signal: this.#abortController!.signal,
 			upstreamOutputs: execCtx.upstreamOutputs,
 			runtime: this.#runtime,
 			agentRegistry: AgentRegistry.global(),
@@ -299,7 +302,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 					if (entry.type === "custom" && entry.customType === "graph_checkpoint") {
 						const data = entry.data as Record<string, unknown> | undefined;
 						if (data?.graphName === graphName) {
-							return data as GraphRunState;
+							return data as unknown as GraphRunState;
 						}
 					}
 				}
