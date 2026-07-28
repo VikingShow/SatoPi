@@ -166,6 +166,7 @@ import {
 	resolveAdvisorDeliveryChannel,
 	slugifyAdvisorName,
 } from "../advisor";
+import type { AgentProfile } from "../agent/agent-profile";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { type AsyncJob, type AsyncJobDeliveryState, AsyncJobManager } from "../async";
 import { classifyDifficulty } from "../auto-thinking/classifier";
@@ -196,6 +197,7 @@ import {
 	onModelRolesChanged,
 	validateProviderMaxInFlightRequests,
 } from "../config/settings";
+import { MarkEnvironment } from "../coordination";
 import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { loadCapability } from "../discovery";
 import { expandApplyPatchToEntries, normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../edit";
@@ -288,6 +290,7 @@ import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { t
 import ttsrToolReminderTemplate from "../prompts/system/ttsr-tool-reminder.md" with { type: "text" };
 import unexpectedStopRetryTemplate from "../prompts/system/unexpected-stop-retry.md" with { type: "text" };
 import vibeModeActivePrompt from "../prompts/system/vibe-mode-active.md" with { type: "text" };
+import type { AgentKind } from "../registry/agent-registry";
 import { AgentRegistry } from "../registry/agent-registry";
 import {
 	deobfuscateAssistantContent,
@@ -301,6 +304,7 @@ import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embe
 import { GraphRunner } from "../swarm/graph/graph-runner";
 import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
+import type { SingleResult } from "../task/types";
 import {
 	AUTO_THINKING,
 	type ConfiguredThinkingLevel,
@@ -384,12 +388,14 @@ import {
 	stripImagesFromMessage,
 	USER_INTERRUPT_LABEL,
 } from "./messages";
+import { SessionCompactor } from "./session-compactor";
 import type { BuildSessionContextOptions, SessionContext } from "./session-context";
 import { getLatestCompactionEntry, getRestorableSessionModels } from "./session-context";
 import { formatSessionDumpText } from "./session-dump-format";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionEntry } from "./session-entries";
 import { EPHEMERAL_MODEL_CHANGE_ROLE } from "./session-entries";
 import { formatSessionHistoryMarkdown } from "./session-history-format";
+import { SessionLifecycle } from "./session-lifecycle";
 import { cleanupEmptyMoveSession, type SessionManager } from "./session-manager";
 import type { ShakeMode, ShakeResult } from "./shake-types";
 import { ToolChoiceQueue } from "./tool-choice-queue";
@@ -881,7 +887,11 @@ export interface AgentSessionConfig {
 	/** Whether this session is the top-level agent or a subagent. Drives eager-task
 	 *  prelude gating so a top-level session created with a custom `agentId` still
 	 *  receives the always-mode reminder. Defaults to "main". */
-	agentKind?: "main" | "sub";
+	agentKind?: AgentKind;
+	/** Profile ID for persistent agents that survive across sessions. */
+	persistentProfileId?: string;
+	/** Mark environment tracking region locks and ownership. */
+	markEnvironment?: MarkEnvironment;
 	/**
 	 * Override the provider-facing session ID for all API requests from this session.
 	 * When absent, `sessionManager.getSessionId()` is used. Needed when benchmark or
@@ -1667,6 +1677,16 @@ export class AgentSession {
 	readonly sessionManager: SessionManager;
 	readonly settings: Settings;
 	readonly yieldQueue: YieldQueue;
+	/** Agent kind: "main" | "sub" | "advisor" | "persistent" */
+	readonly kind: AgentKind;
+	/** Profile ID for persistent agents that survive across sessions. */
+	readonly persistentProfileId?: string;
+	/** Mark environment tracking region locks and ownership. */
+	readonly markEnvironment: MarkEnvironment;
+	/** Agent role assigned at spawn (swarm tracking). */
+	role?: string;
+	/** Agent status for swarm lifecycle tracking. */
+	#status: "running" | "completed" | "failed" | "aborted" = "running";
 	fileSnapshotStore?: InMemorySnapshotStore;
 	#autoApprove: boolean;
 
@@ -1750,9 +1770,7 @@ export class AgentSession {
 	/** Setter registered by createAgentSession to expose the ToolContextStore.setAgentRuntime. */
 	#toolContextRuntimeSetter?: (r: unknown) => void;
 
-	// Compaction state
-	#compactionAbortController: AbortController | undefined = undefined;
-	#autoCompactionAbortController: AbortController | undefined = undefined;
+	readonly #compactor = new SessionCompactor();
 
 	// Branch summarization state
 	#branchSummaryAbortController: AbortController | undefined = undefined;
@@ -1832,11 +1850,10 @@ export class AgentSession {
 	#pendingIrcAsides: CustomMessage[] = [];
 	// Agent identity (registry id) used for IRC routing and job ownership.
 	#agentId: string | undefined;
-	#agentKind: "main" | "sub" = "main";
 	#providerSessionId: string | undefined;
 	#freshProviderSessionId: string | undefined;
 	#inheritedProviderPromptCacheKey: string | undefined;
-	#isDisposed = false;
+	readonly #lifecycle = new SessionLifecycle();
 	// Extension system
 	#extensionRunner: ExtensionRunner | undefined = undefined;
 	#turnIndex = 0;
@@ -2073,7 +2090,7 @@ export class AgentSession {
 	 *  the agent responds to the peer. Skip only when a queued steer/follow-up will itself drive a
 	 *  resume turn whose aside poll already consumes these (no double-wake). */
 	#resumeStrandedIrcAsides(): void {
-		if (this.#isDisposed || this.isStreaming) return;
+		if (this.#lifecycle.isDisposed || this.isStreaming) return;
 		if (this.#pendingIrcInterrupts.length === 0 && this.#pendingIrcAsides.length === 0) return;
 		if (this.#canAutoContinueForFollowUp() && this.agent.hasQueuedMessages()) return;
 		const records = [...this.#pendingIrcInterrupts, ...this.#pendingIrcAsides];
@@ -2608,7 +2625,9 @@ export class AgentSession {
 		this.#ttsrManager = config.ttsrManager;
 		this.#obfuscator = config.obfuscator;
 		this.#agentId = config.agentId;
-		this.#agentKind = config.agentKind ?? "main";
+		this.kind = config.agentKind ?? "main";
+		this.persistentProfileId = config.persistentProfileId;
+		this.markEnvironment = config.markEnvironment ?? new MarkEnvironment();
 		this.#providerSessionId = config.providerSessionId;
 		this.#inheritedProviderPromptCacheKey =
 			config.providerPromptCacheKeySource === "fork" ? this.agent.promptCacheKey : undefined;
@@ -2680,7 +2699,7 @@ export class AgentSession {
 		// Re-evaluate append-only context mode when the setting changes at runtime.
 		this.#unsubscribeAppendOnly = onAppendOnlyModeChanged(_value => this.#syncAppendOnlyContext(this.model));
 		this.#unsubscribeModelRoles = onModelRolesChanged(() => {
-			if (!this.#advisorEnabled || this.#isDisposed) return;
+			if (!this.#advisorEnabled || this.#lifecycle.isDisposed) return;
 			if (this.#advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig()) this.#stopAdvisorRuntime();
 			this.#buildAdvisorRuntime(true);
 		});
@@ -2845,10 +2864,10 @@ export class AgentSession {
 	}
 
 	#buildAdvisorRuntime(seedToCurrent = false): boolean {
-		if (this.#isDisposed) return false;
+		if (this.#lifecycle.isDisposed) return false;
 		if (this.#advisors.length > 0) return true;
 		if (!this.#advisorEnabled) return false;
-		if (this.#agentKind !== "main" && !this.settings.get("advisor.subagents")) return false;
+		if (this.kind !== "main" && !this.settings.get("advisor.subagents")) return false;
 
 		const descriptors = this.#resolveAdvisorRuntimeDescriptors(true);
 
@@ -4672,7 +4691,7 @@ export class AgentSession {
 				// streaming turn — agent.continue() here would race the handoff's session
 				// reset. The first-class fix is in #checkCompaction/the agent_end handler,
 				// but this guard catches anything that bypasses that path.
-				if (signal.aborted || this.#isDisposed || this.isCompacting || this.isGeneratingHandoff) {
+				if (signal.aborted || this.#lifecycle.isDisposed || this.isCompacting || this.isGeneratingHandoff) {
 					this.#skipAgentContinue("session-unavailable", options);
 					return;
 				}
@@ -4683,7 +4702,7 @@ export class AgentSession {
 				this.#beginInFlight();
 				try {
 					await this.#maybeRestoreRetryFallbackPrimary();
-					if (signal.aborted || this.#isDisposed) {
+					if (signal.aborted || this.#lifecycle.isDisposed) {
 						this.#skipAgentContinue("post-restore-unavailable", options);
 						return;
 					}
@@ -5461,10 +5480,10 @@ export class AgentSession {
 		this.agent.abort(GEMINI_HEADER_INTERRUPT_REASON);
 		const generation = this.#promptGeneration;
 		this.#schedulePostPromptTask(async signal => {
-			if (signal.aborted || this.#isDisposed || this.#promptGeneration !== generation) return;
+			if (signal.aborted || this.#lifecycle.isDisposed || this.#promptGeneration !== generation) return;
 			// Let the aborted stream finish unwinding so continue() doesn't race it.
 			await this.agent.waitForIdle();
-			if (signal.aborted || this.#isDisposed || this.#promptGeneration !== generation) return;
+			if (signal.aborted || this.#lifecycle.isDisposed || this.#promptGeneration !== generation) return;
 			const aborted = this.agent.state.messages.findLast(
 				(m): m is AssistantMessage => m.role === "assistant" && m.timestamp === targetTimestamp,
 			);
@@ -5813,7 +5832,7 @@ export class AgentSession {
 		messages: AgentMessage[],
 		lastAssistantMessage = this.getLastAssistantMessage(),
 	): Promise<void> {
-		if (this.#agentKind === "sub" || !this.#extensionRunner?.hasHandlers("session_stop")) return;
+		if (this.kind === "sub" || !this.#extensionRunner?.hasHandlers("session_stop")) return;
 		const generation = this.#promptGeneration;
 		const result = await this.#extensionRunner.emitSessionStop({
 			messages,
@@ -5823,7 +5842,7 @@ export class AgentSession {
 			session_file: this.sessionFile,
 			stop_hook_active: this.#sessionStopHookActive,
 		});
-		if (this.#promptGeneration !== generation || this.#abortInProgress || this.#isDisposed) {
+		if (this.#promptGeneration !== generation || this.#abortInProgress || this.#lifecycle.isDisposed) {
 			this.#resetSessionStopContinuationState();
 			return;
 		}
@@ -6125,15 +6144,62 @@ export class AgentSession {
 			await this.refreshBaseSystemPrompt();
 		}
 	}
-
 	/** True once dispose() has begun; deferred background work (e.g. the deferred
 	 *  MCP discovery task in sdk.ts) must not touch the session past this point. */
 	get isDisposed(): boolean {
-		return this.#isDisposed;
+		return this.#lifecycle.isDisposed;
 	}
 
 	markMovedFromEmptySessionFile(sessionFile: string): void {
 		this.#movedFromEmptySessionFile = path.resolve(sessionFile);
+	}
+
+	/** Profile for persistent agents that survive across sessions. */
+	get profile(): AgentProfile | undefined {
+		return this.persistentProfileId ? ProfileRegistry.global().get(this.persistentProfileId) : undefined;
+	}
+
+	/**
+	 * Wait for the agent to finish its current task and return a single-result
+	 * summary.  If the agent is already done, returns immediately.
+	 */
+	async wait(): Promise<SingleResult> {
+		await this.agent.waitForIdle();
+		const messages = this.agent.state.messages;
+		const lastAssistant = messages.filter(m => m.role === "assistant").at(-1);
+		const lastMsg = messages.at(-1);
+		const hasError = lastMsg?.role === "assistant" && "stopReason" in lastMsg && lastMsg.stopReason === "error";
+		const output =
+			lastAssistant && "content" in lastAssistant
+				? typeof lastAssistant.content === "string"
+					? lastAssistant.content
+					: JSON.stringify(lastAssistant.content)
+				: "";
+		this.#status = hasError ? "failed" : "completed";
+		return {
+			index: 0,
+			id: this.#agentId ?? this.sessionManager.getSessionId(),
+			agent: this.#agentId ?? "unknown",
+			agentSource: "bundled",
+			task: "",
+			exitCode: hasError ? 1 : 0,
+			output,
+			stderr: "",
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+		};
+	}
+
+	/** The agent's registry ID (e.g. "planner", "agent-1"). */
+	get id(): string {
+		return this.#agentId ?? this.sessionManager.getSessionId();
+	}
+
+	/** Current agent lifecycle status for swarm tracking. */
+	get status(): "running" | "completed" | "failed" | "aborted" {
+		return this.#status;
 	}
 
 	/**
@@ -6146,7 +6212,7 @@ export class AgentSession {
 	 * gap slips past the disposal guards.
 	 */
 	beginDispose(): void {
-		this.#isDisposed = true;
+		this.#lifecycle.beginDispose();
 		this.#flushPendingIrcAsides();
 		this.yieldQueue.clear();
 		this.agent.setAsideMessageProvider(undefined);
@@ -7359,7 +7425,7 @@ export class AgentSession {
 
 	/** Whether auto-compaction is currently running */
 	get isCompacting(): boolean {
-		return this.#autoCompactionAbortController !== undefined || this.#compactionAbortController !== undefined;
+		return this.#compactor.isCompacting;
 	}
 
 	/**
@@ -9361,15 +9427,15 @@ export class AgentSession {
 				// auto-compaction MUST still be cancelled, though: otherwise a
 				// background maintenance pass races the manual run and both
 				// appendCompaction/replaceMessages, double-rewriting session history.
-				this.#autoCompactionAbortController?.abort();
+				this.#compactor.abortAuto();
 			} else {
 				this.abortCompaction();
 			}
 			this.abortHandoff();
 			this.abortBash();
 			this.abortEval();
-			const postPromptDrain = this.#cancelPostPromptTasks();
 			this.agent.abort(options?.reason);
+			this.#status = "aborted";
 			await postPromptDrain;
 			await this.agent.waitForIdle();
 			await this.#goalRuntime.onTaskAborted({ reason: options?.goalReason ?? "interrupted" });
@@ -10379,7 +10445,7 @@ export class AgentSession {
 	 * @param options Optional callbacks for completion/error handling
 	 */
 	async compact(customInstructions?: string, options?: CompactOptions): Promise<CompactionResult> {
-		if (this.#compactionAbortController) {
+		if (this.#compactor.isManualCompacting) {
 			throw new Error("Compaction already in progress");
 		}
 		// Resolve the `/compact <mode>` subcommand up front so input validation
@@ -10395,8 +10461,7 @@ export class AgentSession {
 		if (compactMode?.rejectsFocus && (customInstructions || options?.internalGuidance)) {
 			throw new Error(`/compact ${compactMode.name} does not take focus instructions.`);
 		}
-		const compactionAbortController = new AbortController();
-		this.#compactionAbortController = compactionAbortController;
+		const compactionAbortController = this.#compactor.beginManualCompaction();
 
 		try {
 			this.#disconnectFromAgent();
@@ -10706,9 +10771,7 @@ export class AgentSession {
 			options?.onError?.(err);
 			throw error;
 		} finally {
-			if (this.#compactionAbortController === compactionAbortController) {
-				this.#compactionAbortController = undefined;
-			}
+			this.#compactor.endManualCompaction(compactionAbortController);
 			this.#reconnectToAgent();
 		}
 	}
@@ -10743,9 +10806,7 @@ export class AgentSession {
 	 * Cancel in-progress context maintenance (manual compaction, auto-compaction, or auto-handoff).
 	 */
 	abortCompaction(): void {
-		this.#compactionAbortController?.abort();
-		this.#autoCompactionAbortController?.abort();
-		this.#handoffAbortController?.abort();
+		this.#compactor.abortAll(this.#handoffAbortController);
 	}
 
 	/** Trigger idle compaction through the auto-compaction flow (with UI events). */
@@ -11064,7 +11125,7 @@ export class AgentSession {
 	): Promise<void> {
 		if (
 			signal?.aborted ||
-			this.#isDisposed ||
+			this.#lifecycle.isDisposed ||
 			this.isCompacting ||
 			this.isGeneratingHandoff ||
 			!context?.willContinue
@@ -12056,7 +12117,7 @@ export class AgentSession {
 		// so a salient delegate-reminder there would amplify nested fan-out. Gate on the
 		// resolved agent kind, not the id, so a top-level session with a custom `agentId`
 		// still gets the reminder.
-		if (this.#agentKind === "sub") return undefined;
+		if (this.kind === "sub") return undefined;
 		if (this.#planModeState?.enabled) return undefined;
 		// First-message-only gates are skipped post-compaction (`promptText === undefined`),
 		// where there is no fresh user message to suppress the reminder for.
@@ -13232,9 +13293,8 @@ export class AgentSession {
 			action = "context-full";
 		}
 		// Abort any older auto-compaction before installing this run's controller.
-		this.#autoCompactionAbortController?.abort();
-		const autoCompactionAbortController = new AbortController();
-		this.#autoCompactionAbortController = autoCompactionAbortController;
+		this.#compactor.abortAuto();
+		const autoCompactionAbortController = this.#compactor.beginAutoCompaction();
 		const autoCompactionSignal = autoCompactionAbortController.signal;
 
 		try {
@@ -13817,9 +13877,7 @@ export class AgentSession {
 							: `Auto-compaction failed: ${errorMessage}`,
 			});
 		} finally {
-			if (this.#autoCompactionAbortController === autoCompactionAbortController) {
-				this.#autoCompactionAbortController = undefined;
-			}
+			this.#compactor.endAutoCompaction(autoCompactionAbortController);
 		}
 		return COMPACTION_CHECK_NONE;
 	}
@@ -13843,9 +13901,8 @@ export class AgentSession {
 		suppressContinuation = false,
 	): Promise<CompactionCheckResult | "fallback"> {
 		const action = "shake";
-		this.#autoCompactionAbortController?.abort();
-		const controller = new AbortController();
-		this.#autoCompactionAbortController = controller;
+		this.#compactor.abortAuto();
+		const controller = this.#compactor.beginAutoCompaction();
 		const signal = controller.signal;
 		try {
 			await this.#emitSessionEvent({ type: "auto_compaction_start", reason, action });
@@ -13983,9 +14040,7 @@ export class AgentSession {
 			// Overflow still needs recovery even if shake threw.
 			return reason === "overflow" ? "fallback" : COMPACTION_CHECK_NONE;
 		} finally {
-			if (this.#autoCompactionAbortController === controller) {
-				this.#autoCompactionAbortController = undefined;
-			}
+			this.#compactor.endAutoCompaction(controller);
 		}
 	}
 
@@ -14050,7 +14105,7 @@ export class AgentSession {
 			message.stopReason !== "aborted" ||
 			message.content.length !== 0 ||
 			this.#abortInProgress ||
-			this.#isDisposed ||
+			this.#lifecycle.isDisposed ||
 			this.#streamingEditAbortTriggered
 		) {
 			return false;
@@ -15338,7 +15393,7 @@ export class AgentSession {
 	 * agent's behalf.
 	 */
 	async deliverIrcMessage(msg: IrcMessage, opts?: { expectsReply?: boolean }): Promise<"injected" | "woken"> {
-		if (this.#isDisposed) {
+		if (this.#lifecycle.isDisposed) {
 			throw new Error("Recipient session is disposed.");
 		}
 		// Auto-reply eligibility: the sender is blocked on an answer and this
@@ -15417,7 +15472,7 @@ export class AgentSession {
 				}),
 			});
 			const body = replyText.trim();
-			if (!body || this.#isDisposed) return;
+			if (!body || this.#lifecycle.isDisposed) return;
 			const record: CustomMessage = {
 				role: "custom",
 				customType: "irc:autoreply",

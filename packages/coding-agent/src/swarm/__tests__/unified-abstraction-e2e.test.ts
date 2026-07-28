@@ -10,6 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { MarkEnvironment } from "../../coordination/mark-environment";
+import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import { discoverAgents } from "../../task/discovery";
 import { ContextPipeline } from "../context-manager/context-pipeline";
@@ -41,7 +42,7 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 
 	return {
 		runtime: {
-			commBus: {} as NodeBehaviorFactoryConfig["runtime"]["commBus"],
+			ircBus: IrcBus.global(),
 			spawn: async () => [],
 			contextPipeline,
 		} as NodeBehaviorFactoryConfig["runtime"],

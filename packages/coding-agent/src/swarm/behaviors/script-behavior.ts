@@ -12,11 +12,11 @@
  *   5. exit() → clean up agent handle and conversation state
  *
  * This behavior does NOT import ScriptManager — it uses AgentRuntime,
- * CommBus, and HookPipeline directly, following the v3 unified architecture.
+ * IrcBus, and HookPipeline directly, following the v3 unified architecture.
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
@@ -29,7 +29,7 @@ export class ScriptBehavior implements PhaseBehavior {
 	readonly phase: Chapter = "script";
 
 	/** The Planner agent handle — the single agent for this phase. */
-	#planner?: AgentHandle;
+	#planner?: AgentSession;
 	/** The human↔planner direct communication channel. */
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set during script dialogue
 	#channel?: CommChannel;
@@ -52,7 +52,7 @@ export class ScriptBehavior implements PhaseBehavior {
 
 	async enter(ctx: PhaseContext): Promise<PhaseEnterResult> {
 		// 1. Create Human ↔ Planner direct channel
-		const channel = ctx.commBus.groupChannel("script-dialogue", ["human", "planner"], ctx.activityLogger);
+		const channel = ctx.ircBus.groupChannel("script-dialogue", ["human", "planner"], ctx.activityLogger);
 		this.#channel = channel;
 
 		// 2. Spawn the Planner agent
@@ -104,7 +104,7 @@ export class ScriptBehavior implements PhaseBehavior {
 		if (this.#planner && this.#planner.status === "running") {
 			this.#plannerFinished = false;
 			this.#plannerOutput = "";
-			await this.#planner.send(msg.body);
+			await this.#planner.steer(msg.body);
 			logger.info("[ScriptBehavior] Routed human message to Planner", {
 				bodyLength: msg.body.length,
 			});

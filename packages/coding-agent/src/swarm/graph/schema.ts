@@ -6,296 +6,31 @@
  * dependencies, and structural correctness before execution.
  */
 
+import type { AgentSpec } from "../agent-runtime/agent-spec";
 import { detectCycles } from "../core/dag";
-import {
-	type GateMode,
-	type GateResult,
-	type GateSpec,
-	type GateType,
-	normalizeGateSpec,
-	normalizeRetrySpec,
-	type RawGateSpec,
-	type RawRetrySpec,
-	type RetryOnFailure,
-	type RetrySpec,
-	type RetryStrategy,
-	VALID_GATE_MODES,
-	VALID_GATE_TYPES,
-} from "./schema-gate";
+import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 
-// Re-export gate types so existing imports from "./schema" still work.
-export type {
-	GateMode,
+// Re-export all graph types from the canonical location.
+export * from "../../graph/types";
+
+// Local imports needed for runtime function signatures and NodeBehavior.
+import type {
 	GateResult,
 	GateSpec,
-	GateType,
+	GraphDefaults,
+	GraphDefinition,
+	GraphEdge,
+	GraphHook,
+	GraphNode,
+	NodeContext,
+	NodeOutput,
+	NodeResult,
+	NodeType,
 	RawGateSpec,
 	RawRetrySpec,
-	RetryOnFailure,
-	RetrySpec,
-	RetryStrategy,
-};
-
-// ============================================================================
-// Discriminated unions
-// ============================================================================
-
-/** Node type determines which behavior controller drives execution. */
-export type NodeType = "script" | "stage" | "curtain" | "custom";
-
-/** Execution strategy for wave scheduling. */
-export type Strategy = "waves" | "dynamic";
-
-// ============================================================================
-// Core types
-// ============================================================================
-
-/**
- * Named output artifact produced by a node.
- * Referenced by downstream nodes via edge artifacts.
- */
-export interface NodeOutput {
-	/** Unique output identifier within the node. */
-	id: string;
-	/** Human-readable description of the output. */
-	description?: string;
-}
-
-/**
- * A single node in the theatre graph.
- *
- * Nodes declare their role, tool set, and dependency edges.
- * Optional gate/retry/timeout control execution behavior.
- */
-export interface GraphNode {
-	/** Human-readable label for display in dashboards and logs. */
-	label: string;
-	/** Description of what this node does (injected as task context). */
-	description: string;
-	/** Node type — determines the behavior controller. Default "custom". */
-	type?: NodeType;
-	/** Agent role profile to use for this node's agent. */
-	role: string;
-	/** Persistent agent profile ID — when set, routes to an existing persistent agent instead of spawning ephemeral. */
-	profile_id?: string;
-	/** Tools available to the agent executing this node. */
-	tools: string[];
-	/** Node names this node depends on (must complete before this node starts). */
-	depends_on: string[];
-	/** Output artifacts this node produces (referenced by edge artifacts). */
-	outputs?: NodeOutput[];
-	/** Optional verification gate. */
-	gate?: GateSpec;
-	/** Timeout as a duration string (e.g. "5m", "1h"). */
-	timeout?: string;
-	/** Retry policy for execution failures. */
-	retry?: RetrySpec;
-	/** Heavy nodes reserve a dedicated worker (no multiplexing). */
-	heavy?: boolean;
-	/** If true, downstream nodes still execute after this node fails. */
-	continue_on_failure?: boolean;
-	/** Context source pipeline IDs to inject (offload, mnemopi, stigmergy, etc.). */
-	context_sources?: string[];
-	/** Maximum context tokens for the agent executing this node. */
-	max_context_tokens?: number;
-}
-
-/**
- * A directed edge between two graph nodes.
- *
- * Edges carry optional artifact references — if specified, only the named
- * outputs from the source node are passed to the target.
- */
-export interface GraphEdge {
-	/** Source node name. */
-	from: string;
-	/** Target node name. */
-	to: string;
-	/** Artifact IDs to pass from source to target. All if omitted. */
-	artifacts?: string[];
-	/** Edge label for debugging and visualization. */
-	label?: string;
-}
-
-/**
- * Lifecycle hook triggered at graph-level events.
- */
-export interface GraphHook {
-	/** Event name (e.g. "graph:beforeAll", "graph:afterAll", "node:before", "node:after"). */
-	event: string;
-	/** Shell command to run. */
-	command?: string;
-	/** Script file to execute. */
-	script?: string;
-}
-
-/**
- * Default values applied to nodes that don't specify their own.
- */
-export interface GraphDefaults {
-	/** Default node type. */
-	type?: NodeType;
-	/** Default timeout. */
-	timeout?: string;
-	/** Default retry policy. */
-	retry?: RetrySpec;
-	/** Default heavy flag. */
-	heavy?: boolean;
-	/** Default continue_on_failure. */
-	continue_on_failure?: boolean;
-	/** Default tools available to all nodes. */
-	tools?: string[];
-	/** Default context sources. */
-	context_sources?: string[];
-}
-
-/**
- * A validation error with a structured path for pinpoint UI.
- */
-export interface GraphValidationError {
-	/** Dot-separated path to the invalid field (e.g. "nodes.build.gate.type"). */
-	path: string;
-	/** Human-readable error message. */
-	message: string;
-}
-
-/**
- * Top-level theatre graph definition.
- *
- * Parsed from YAML, this defines the complete workflow graph:
- * nodes + edges + hooks + defaults. version is the parser contract;
- * revision is the user-facing counter for change detection.
- */
-export interface GraphDefinition {
-	/** Graph name for logging and display. */
-	name: string;
-	/** Human-readable description of the graph's purpose. */
-	description: string;
-	/** Parser contract version (incremented when the schema shape changes). */
-	version: number;
-	/** User-facing revision counter (incremented when the user edits the graph). */
-	revision: number;
-	/** Execution strategy: "waves" (topological sort) or "dynamic" (runtime scheduler). */
-	strategy?: Strategy;
-	/** Maximum concurrent node executions. */
-	max_concurrency?: number;
-	/** All graph nodes, keyed by unique name. */
-	nodes: Record<string, GraphNode>;
-	/** Directed edges between nodes. */
-	edges?: GraphEdge[];
-	/** Graph-level lifecycle hooks. */
-	hooks?: GraphHook[];
-	/** Default values applied to nodes missing their own. */
-	defaults?: GraphDefaults;
-	/** Whether this is a built-in graph (e.g. theatre.graph.yaml). */
-	builtin?: boolean;
-}
-
-// ============================================================================
-// Runtime types — used by behaviors and executors at execution time
-// ============================================================================
-
-/**
- * Runtime output produced by an executed node.
- * Distinct from {@link NodeOutput} which is a compile-time artifact specification.
- */
-export interface NodeExecutionOutput {
-	/** The node that produced this output. */
-	nodeId: string;
-	/** File paths produced as artifacts. */
-	artifacts: string[];
-	/** Human-readable summary of what the node did. */
-	summary: string;
-	/** Raw execution result for downstream consumption. */
-	result?: unknown;
-}
-
-/**
- * Minimal node definition consumed by NodeBehavior at runtime.
- * Subset of {@link GraphNode} covering everything a behavior needs.
- */
-export interface NodeDefinition {
-	/** Unique node identifier within the graph. */
-	id: string;
-	/** Human-readable label for UI rendering. */
-	label: string;
-	/** Natural-language description of what this node does. */
-	description: string;
-	/** Node type — drives which behavior is selected. */
-	type?: NodeType;
-	/** Role name resolved via RoleProvider. */
-	role: string;
-	/** Tools available to the agent spawned by this node. */
-	tools: string[];
-	/** Node IDs this node depends on (upstream). */
-	dependsOn: string[];
-	/** Gate to run after execution. */
-	gate?: GateSpec;
-	/** Timeout string (e.g. "30m", "2h"). */
-	timeout?: string;
-	/** Explicit AgentProfile binding. */
-	profileId?: string;
-}
-
-/**
- * Result of a single node execution by a behavior.
- */
-export interface NodeResult {
-	/** Node that produced this result. */
-	nodeId: string;
-	/** Whether the agent completed without errors. */
-	success: boolean;
-	/** Agent output text. */
-	output?: string;
-	/** File paths produced by this node. */
-	artifacts?: string[];
-	/** Error message if execution failed. */
-	error?: string;
-	/** Per-agent results for downstream consumption. */
-	agentResults?: Array<{ agentId: string; output: string; error?: string }>;
-}
-
-import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { RoleAssetManager } from "../../agent/role-asset";
-import type { ModelRegistry } from "../../config/model-registry";
-import type { Settings } from "../../config/settings";
-import type { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentRuntime } from "../agent-runtime";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
-import type { StateTracker } from "../core/state";
-import type { ActivityLogger } from "../infra/activity-logger";
-
-/**
- * Context assembled by GraphExecutor and injected into every NodeBehavior method.
- */
-export interface NodeContext {
-	/** The node definition being executed. */
-	node: NodeDefinition;
-	/** Absolute path to the project workspace. */
-	workspace: string;
-	/** Model registry for resolving model references. */
-	modelRegistry: ModelRegistry;
-	/** Application settings (provider keys, concurrency, etc.). */
-	settings: Settings;
-	/** Outputs from nodes listed in node.dependsOn (keyed by node ID). */
-	upstreamOutputs: Record<string, NodeExecutionOutput>;
-	/** Concatenated lessons / hints from prior runs (ExperienceStore). */
-	experience: string;
-	/** AbortSignal for cooperative cancellation. */
-	signal: AbortSignal;
-	/** Agent runtime for spawning sub-agents. */
-	runtime: AgentRuntime;
-	/** Agent registry for persistent agent routing and lifecycle management. */
-	agentRegistry: AgentRegistry;
-	/** Role asset manager for library-based role resolution. */
-	roleAssetManager?: RoleAssetManager;
-	/** Agent profile registry for cross-run identity. */
-	profileRegistry?: ProfileRegistry;
-	/** State tracker for phase transitions and agent status. */
-	stateTracker?: StateTracker;
-	/** Activity logger for event auditing. */
-	activityLogger?: ActivityLogger;
-}
+	Strategy,
+} from "../../graph/types";
+import { VALID_GATE_MODES, VALID_GATE_TYPES } from "../../graph/types";
 
 /**
  * Pluggable behavior contract for a single Theatre Graph node.

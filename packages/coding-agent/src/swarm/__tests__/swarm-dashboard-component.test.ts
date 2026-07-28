@@ -20,6 +20,7 @@ function snapshot(phase: SwarmState["phase"] = "stage"): DashboardInput {
 		phase,
 	};
 	return {
+		agents: [],
 		swarm,
 		messages: [],
 		context: { sources: [], l1PendingCount: 0, l2LastFlushSeconds: 0, l3Nodes: 0, l3Edges: 0, agents: [] },

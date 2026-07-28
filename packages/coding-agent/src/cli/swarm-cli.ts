@@ -189,11 +189,11 @@ async function createSwarmServices(
 			runManager,
 			profileRegistry: s.profileRegistry,
 			roleAssetManager: s.roleAssetManager,
-			commBus: runtime.commBus,
+			ircBus: runtime.ircBus,
 		});
 		scriptManager.setRuntime(runtime);
 
-		// Real SteeringSink — routes human steering via CommBus → AgentRuntime.
+		// Real SteeringSink — routes human steering via IrcBus → AgentRuntime.
 		const steeringSink: SteeringSink = {
 			steer(text: string): void {
 				void runtime.sendHumanMessage("planner", text);

@@ -17,17 +17,17 @@
 import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ResolvedRole, RoleProvider } from "../../agent/role-provider";
+import type { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
+import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
-import type { CommBus } from "../comm-bus/comm-bus";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
 import { jaccardSimilarity } from "../core/convergence.js";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
-import type { AgentHandle } from "./agent-handle";
 import type { AgentLauncher, LaunchContext } from "./agent-launcher";
 import type { AgentSpec } from "./agent-spec";
-import type { ResolvedRole, RoleProvider } from "./role-provider";
 
 // ============================================================================
 // Types
@@ -81,7 +81,7 @@ export interface AgentRuntimeOptions {
 	launcher: AgentLauncher;
 
 	/** Communication bus for human steering and system messages. */
-	commBus: CommBus;
+	ircBus: IrcBus;
 
 	/** Hook pipeline for lifecycle events. */
 	hookPipeline: HookPipeline;
@@ -109,7 +109,7 @@ export interface AgentRuntimeOptions {
  * Usage:
  * ```ts
  * const runtime = new AgentRuntime({
- *   roleProvider, contextPipeline, launcher, commBus, hookPipeline,
+ *   roleProvider, contextPipeline, launcher, ircBus, hookPipeline,
  * });
  *
  * const handles = await runtime.spawn([
@@ -124,7 +124,7 @@ export class AgentRuntime {
 	readonly #roleProvider: RoleProvider;
 	readonly #contextPipeline: ContextPipeline;
 	readonly #launcher: AgentLauncher;
-	readonly #commBus: CommBus;
+	readonly #ircBus: IrcBus;
 	readonly #hookPipeline: HookPipeline;
 	readonly #modelRegistry: ModelRegistry;
 	readonly #settings: Settings;
@@ -142,7 +142,7 @@ export class AgentRuntime {
 		this.#roleProvider = options.roleProvider;
 		this.#contextPipeline = options.contextPipeline;
 		this.#launcher = options.launcher;
-		this.#commBus = options.commBus;
+		this.#ircBus = options.ircBus;
 		this.#hookPipeline = options.hookPipeline;
 		this.#modelRegistry = options.modelRegistry;
 		this.#settings = options.settings;
@@ -160,11 +160,11 @@ export class AgentRuntime {
 	 * All phases use this single entry point. Agents are spawned in parallel
 	 * when multiple specs are provided.
 	 *
-	 * @returns AgentHandle[] — each handle provides wait(), send(), abort(), outputStream()
+	 * @returns AgentSession[] — each session provides wait(), steer(), abort()
 	 */
-	async spawn(specs: AgentSpec[]): Promise<AgentHandle[]> {
-		const handles = await Promise.all(specs.map(spec => this.#spawnOne(spec)));
-		return handles;
+	async spawn(specs: AgentSpec[]): Promise<AgentSession[]> {
+		const sessions = await Promise.all(specs.map(spec => this.#spawnOne(spec)));
+		return sessions;
 	}
 
 	/**
@@ -267,7 +267,7 @@ export class AgentRuntime {
 	/**
 	 * Queue a human steering message for a specific agent.
 	 *
-	 * The message is logged via CommBus.receiveFromHuman(). Actual delivery
+	 * The message is logged via IrcBus.receiveFromHuman(). Actual delivery
 	 * to the agent is handled by PhaseBehaviors via handle.send().
 	 */
 	async sendHumanMessage(agentId: string, text: string): Promise<void> {
@@ -279,8 +279,8 @@ export class AgentRuntime {
 			timestamp: Date.now(),
 		});
 		this.#steeringQueues.set(agentId, queue);
-		// Also deliver via CommBus for real-time IRC routing
-		await this.#commBus.receiveFromHuman(text, agentId);
+		// Also deliver via IrcBus for real-time IRC routing
+		await this.#ircBus.receiveFromHuman(text, agentId);
 	}
 
 	/**
@@ -297,8 +297,8 @@ export class AgentRuntime {
 	}
 
 	/** The communication bus for human steering and agent messaging. */
-	get commBus(): CommBus {
-		return this.#commBus;
+	get ircBus(): IrcBus {
+		return this.#ircBus;
 	}
 
 	/** The context pipeline for registering additional context sources. */
@@ -317,11 +317,11 @@ export class AgentRuntime {
 	 * 1. HookPipeline.trigger("agent:beforeSpawn")
 	 * 2. RoleProvider.resolve(spec)
 	 * 3. ContextPipeline.assemble(spec, phase, base)
-	 * 4. Build AgentLoopConfig hooks from CommBus queues
+	 * 4. Build AgentLoopConfig hooks from IrcBus queues
 	 * 5. AgentLauncher.launch(launchContext)
 	 * 6. HookPipeline.trigger("agent:afterSpawn")
 	 */
-	async #spawnOne(spec: AgentSpec): Promise<AgentHandle> {
+	async #spawnOne(spec: AgentSpec): Promise<AgentSession> {
 		const agentId = spec.id;
 
 		// 1. Before-spawn hook
@@ -429,13 +429,13 @@ export class AgentRuntime {
 			pipeline: this.#contextPipeline,
 		};
 
-		let handle: AgentHandle;
+		let session: AgentSession;
 		try {
-			handle = await this.#launcher.launch(launchContext);
+			session = await this.#launcher.launch(launchContext);
 
-			// 5.5 Store handle for persistent agent steering/reuse
+			// 5.5 Store session for persistent agent steering/reuse
 			if (spec.profileId) {
-				AgentRegistry.global().setHandle(spec.id, handle);
+				AgentRegistry.global().setHandle(spec.id, session);
 			}
 		} catch (err) {
 			logger.error("[AgentRuntime] Agent launch failed", {
@@ -448,20 +448,13 @@ export class AgentRuntime {
 		// 6. After-spawn hook
 		await this.#hookPipeline.trigger(
 			"agent:afterSpawn",
-			{ agentId, role: spec.role, handle },
+			{ agentId, role: spec.role, session },
 			{ agentId, phase: spec.phase ?? "stage" },
 		);
 
-		// 6.5 Wire lifecycle callbacks for persistent agents
-		if (spec.profileId) {
-			handle.onComplete = () => {
-				AgentRegistry.global().setStatus(spec.id, "idle");
-			};
-			handle.onError = () => {
-				AgentRegistry.global().setStatus(spec.id, "aborted");
-			};
-		}
+		// 6.5 Persistent agent lifecycle: status is tracked by AgentSession.status
+		//     and surfaced via AgentRegistry — no explicit wiring needed.
 
-		return handle;
+		return session;
 	}
 }

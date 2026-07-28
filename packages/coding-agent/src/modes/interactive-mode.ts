@@ -92,7 +92,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -140,6 +140,7 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
+import { renderAgentPanel } from "./components/swarm/agent-panel";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -1987,9 +1988,18 @@ export class InteractiveMode implements InteractiveModeContext {
 	 */
 	#renderSubagentList(): void {
 		this.subagentContainer.clear();
-		const lines = renderSubagentHudLines(this.#observerRegistry.getSessions(), this.ui.terminal.columns);
-		if (lines.length === 0) return;
-		this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
+		const agentRefs = AgentRegistry.global().list();
+		if (agentRefs.length > 1) {
+			// Multi-agent: show the rich agent panel from AgentRegistry
+			const lines = renderAgentPanel(agentRefs, undefined, this.ui.terminal.columns);
+			if (lines.length === 0) return;
+			this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
+		} else {
+			// Single agent: show the simple subagent HUD (detached tasks)
+			const lines = renderSubagentHudLines(this.#observerRegistry.getSessions(), this.ui.terminal.columns);
+			if (lines.length === 0) return;
+			this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
+		}
 	}
 
 	async #loadTodoList(): Promise<void> {
@@ -4332,10 +4342,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				? {
 						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
-						activityLogger: bridge.activityLogger,
-						onSteering: (msg: string) => bridge.steer(msg),
 						graphDefinition: bridge instanceof GraphRunner ? bridge.graph : undefined,
-						gateController: bridge instanceof GraphRunner ? bridge.gateController : undefined,
 					}
 				: {},
 		);

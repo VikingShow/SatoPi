@@ -536,6 +536,18 @@ export class ProfileRegistry {
 		profile.offloadRefs.l1History.push(ref);
 		this.#bumpVersion(profileId);
 	}
+
+	/**
+	 * Update all offload refs for a profile (Phase 5: OffloadManager auto).
+	 * Replaces the entire offloadRefs object atomically.
+	 */
+	updateOffloadRefs(profileId: string, refs: AgentProfile["offloadRefs"]): void {
+		const profile = this.#profiles.get(profileId);
+		if (!profile) return;
+		profile.offloadRefs = { ...refs };
+		this.#bumpVersion(profileId);
+	}
+
 	// ── Persistence ──────────────────────────────────────────────────
 
 	/** Serialize all profiles to a JSON-serializable snapshot. */

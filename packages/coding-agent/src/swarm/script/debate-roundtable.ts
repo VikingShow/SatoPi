@@ -14,8 +14,8 @@
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import { logger, prompt } from "@oh-my-pi/pi-utils";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentToolRestriction } from "../core/schema";
 import debateSystemPrompt from "../prompts/debate-system.md" with { type: "text" };
 
@@ -132,7 +132,7 @@ export class DebateRoundtable {
 			const debatePrompt = this.#debateAgentSystemPrompt();
 			const restrictedTools = this.#toolRestriction?.allowed ?? [];
 
-			const handles: AgentHandle[] = await this.#runtime.spawn(
+			const sessions: AgentSession[] = await this.#runtime.spawn(
 				Array.from({ length: agentCount }, (_, i) => ({
 					id: `debate-agent-${i + 1}`,
 					role: "debater",
@@ -142,7 +142,7 @@ export class DebateRoundtable {
 				})),
 			);
 			// Use allSettled so one agent crashing doesn't lose all results (P1-7 fix)
-			const settled = await Promise.allSettled(handles.map(h => h.wait()));
+			const settled = await Promise.allSettled(sessions.map(s => s.wait()));
 			const results = settled.map((s, i) => {
 				if (s.status === "fulfilled") return s.value;
 				const errMsg = s.reason instanceof Error ? s.reason.message : String(s.reason);

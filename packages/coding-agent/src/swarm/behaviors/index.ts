@@ -5,13 +5,13 @@
  *
  * Each workflow phase (script, stage, curtain) is implemented as a
  * PhaseBehavior that wraps the phase-specific coordination logic. The
- * behaviors delegate to AgentRuntime, CommBus, HookPipeline, and
+ * behaviors delegate to AgentRuntime, IrcBus, HookPipeline, and
  * ContextPipeline for agent lifecycle and communication.
  */
 
+import type { IrcBus } from "../../irc/bus";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
-import type { CommBus } from "../comm-bus/comm-bus";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../core/schema";
@@ -36,7 +36,7 @@ export interface PhaseContext {
 	fsm: WorkflowFsm;
 
 	/** Communication bus — creates channels and routes messages. */
-	commBus: CommBus;
+	ircBus: IrcBus;
 
 	/** Agent runtime — spawns agents and delivers steering messages. */
 	runtime: AgentRuntime;
@@ -80,8 +80,8 @@ export interface PhaseContext {
  * event listeners and track agent lifecycle after the phase begins.
  */
 export interface PhaseEnterResult {
-	/** Agent handles for all agents spawned during phase entry. */
-	agents: AgentHandle[];
+	/** Agent sessions for all agents spawned during phase entry. */
+	agents: AgentSession[];
 
 	/** Communication channels created during phase entry. */
 	channels: CommChannel[];
@@ -147,7 +147,7 @@ export interface PhaseBehavior {
 	enter(ctx: PhaseContext): Promise<PhaseEnterResult>;
 
 	/**
-	 * Called when a human message is received through the CommBus.
+	 * Called when a human message is received through the IrcBus.
 	 *
 	 * The behavior routes the message to the appropriate agent(s) —
 	 * e.g. ScriptBehavior routes to the Planner, StageBehavior broadcasts

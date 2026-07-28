@@ -13,6 +13,7 @@
  *   < 60 cols   → compact mode (abbreviated labels)
  */
 
+import type { AgentRef } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
@@ -25,7 +26,9 @@ import { sato } from "./theme";
 // ============================================================================
 
 export interface DashboardInput {
-	/** Current swarm pipeline state */
+	/** Agent refs from AgentRegistry (primary source for agent list) */
+	agents: AgentRef[];
+	/** Current swarm pipeline state (optional enrichment) */
 	swarm: SwarmState;
 	/** Recent communication messages (newest first) */
 	messages: CommMessage[];
@@ -69,8 +72,8 @@ function renderSingleColumn(input: DashboardInput, width: number): string[] {
 	lines.push(...renderPhaseView(input.swarm));
 	lines.push("");
 
-	// Agent panel
-	lines.push(...renderAgentPanel(input.swarm, width));
+	// Agent panel (primary source: AgentRef[], swarm enrichment: SwarmState)
+	lines.push(...renderAgentPanel(input.agents, input.swarm, width));
 	lines.push("");
 
 	// Comm panel (last 5 messages)
@@ -96,7 +99,7 @@ function renderTwoColumn(input: DashboardInput, width: number): string[] {
 	lines.push("");
 
 	// Left: Agent panel | Right: Comm + Context
-	const agentLines = renderAgentPanel(input.swarm, leftWidth);
+	const agentLines = renderAgentPanel(input.agents, input.swarm, leftWidth);
 	const recentMsgs = input.messages.slice(0, 5);
 	const commLines = renderCommPanel(recentMsgs, rightWidth);
 	const contextLines = renderContextPanel(input.context, rightWidth);
@@ -120,14 +123,29 @@ function renderCompact(input: DashboardInput, _width: number): string[] {
 	const lines: string[] = [];
 
 	const phase = input.swarm.phase ?? "idle";
-	const agentCount = Object.keys(input.swarm.agents ?? {}).length;
+	const agentCount = input.agents.length > 0 ? input.agents.length : Object.keys(input.swarm.agents ?? {}).length;
 	const status = input.swarm.status ?? "idle";
 	lines.push(sato.dim(`[${status}] phase=${phase} agents=${agentCount}`));
 
-	for (const agent of Object.values(input.swarm.agents ?? {})) {
-		const glyph =
-			agent.status === "completed" ? "✓" : agent.status === "running" ? "◌" : agent.status === "failed" ? "✗" : "·";
-		lines.push(`  ${glyph} ${agent.name} [${agent.status}]`);
+	// Use AgentRef list when available; fall back to swarm state
+	if (input.agents.length > 0) {
+		for (const ref of input.agents) {
+			const glyph =
+				ref.status === "running" ? "◌" : ref.status === "idle" ? "✓" : ref.status === "aborted" ? "✗" : "·";
+			lines.push(`  ${glyph} ${ref.displayName} [${ref.status}]`);
+		}
+	} else {
+		for (const agent of Object.values(input.swarm.agents ?? {})) {
+			const glyph =
+				agent.status === "completed"
+					? "✓"
+					: agent.status === "running"
+						? "◌"
+						: agent.status === "failed"
+							? "✗"
+							: "·";
+			lines.push(`  ${glyph} ${agent.name} [${agent.status}]`);
+		}
 	}
 
 	return lines;

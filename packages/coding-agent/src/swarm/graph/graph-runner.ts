@@ -1,13 +1,14 @@
 /**
- * GraphRunner — Core orchestrator for Theatre Graph execution.
+ * GraphRunner — Thin adapter wrapping GraphEngine for ISwarmOrchestrator.
  *
- * Implements ISwarmOrchestrator so it's a drop-in replacement for
- * EmbeddedSwarmBridge in agent-session and the TUI.
+ * Implements ISwarmOrchestrator and NodeExecutor.
+ * DAG execution is delegated to GraphEngine; GraphRunner handles
+ * per-node behavior lifecycle (prepare → execute → gate → cleanup)
+ * and swarm lifecycle (FSM transitions, curtain pipeline).
  *
  * ## Lifecycle
- *   init() → parse graph → build waves → for each wave:
- *     spawn nodes → wait → run gates → handle failures
- *   → curtain → idle
+ *   init() → parse graph → build waves → confirmScript():
+ *     create GraphEngine → engine.run(this) → curtain → idle
  */
 
 import * as fs from "node:fs/promises";
@@ -16,6 +17,15 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager } from "../../agent/role-asset";
+import type { CheckpointStore } from "../../graph/checkpoint";
+import {
+	GraphEngine,
+	type GraphEngineConfig,
+	type GraphRunResult,
+	type NodeExecutionContext,
+	type NodeExecutor,
+} from "../../graph/graph-engine";
+import type { GraphRunState } from "../../graph/types";
 import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { SingleResult } from "../../task";
@@ -32,44 +42,10 @@ import { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
-import { type GraphRunState, type NodeRunState, recoverState, writeCheckpoint } from "./checkpoint";
 import { GateController } from "./gate-controller";
-import { type SchedulerNodeInfo, type SchedulingStrategy, WaveScheduler } from "./graph-executor";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
-import {
-	type GraphDefinition,
-	loadGraphDefinition,
-	type NodeContext,
-	type NodeExecutionOutput,
-	type NodeResult,
-} from "./schema";
+import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function buildUpstreamOutputs(
-	dependsOn: string[] | undefined,
-	resultsMap: Map<string, SingleResult[]>,
-): Record<string, NodeExecutionOutput> {
-	if (!dependsOn || dependsOn.length === 0) return {};
-	const outputs: Record<string, NodeExecutionOutput> = {};
-	for (const depId of dependsOn) {
-		const results = resultsMap.get(depId);
-		if (!results || results.length === 0) continue;
-		const summary = results
-			.map(r => r.output)
-			.filter(Boolean)
-			.join("\n");
-		outputs[depId] = {
-			nodeId: depId,
-			artifacts: [],
-			summary,
-			result: summary,
-		};
-	}
-	return outputs;
-}
 export interface GraphRunnerConfig {
 	workspace: string;
 	graphPath: string;
@@ -83,7 +59,7 @@ export interface GraphRunnerConfig {
 	activeMmd?: string;
 }
 
-export class GraphRunner implements ISwarmOrchestrator {
+export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	readonly #config: GraphRunnerConfig;
 	#fsm!: WorkflowFsm;
 	#stateTracker!: StateTracker;
@@ -92,8 +68,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
 	#runtime!: AgentRuntime;
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
-	#markEnv!: MarkEnvironment;
 	#graph!: GraphDefinition;
 	#waves!: string[][];
 	#abortController: AbortController | null = null;
@@ -101,7 +75,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 	#applaudResolve: (() => void) | null = null;
 	#roleAssetManager!: RoleAssetManager;
 	#gateController!: GateController;
-	#graphRunState!: GraphRunState;
 	#graphName!: string;
 	#ircBus!: IrcBus;
 	#swarmDir!: string;
@@ -161,7 +134,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 			activeMmd,
 		});
 		this.#hookPipeline = orch.hookPipeline;
-		this.#markEnv = orch.markEnvironment;
 		this.#runtime = orch.runtime;
 
 		this.#gateController = new GateController({ workspace });
@@ -172,35 +144,6 @@ export class GraphRunner implements ISwarmOrchestrator {
 		}
 		this.#waves = buildExecutionWaves(deps);
 
-		// Build initial GraphRunState — all nodes start pending.
-		const runId = `graph-${this.#graphName}-${Date.now()}`;
-		const initialNodes: Record<string, { nodeId: string; status: "pending" }> = {};
-		for (const nodeId of Object.keys(this.#graph.nodes)) {
-			initialNodes[nodeId] = { nodeId, status: "pending" };
-		}
-		this.#graphRunState = {
-			graphName: this.#graphName,
-			runId,
-			startedAt: Date.now(),
-			nodes: initialNodes,
-			currentWave: 0,
-			status: "running",
-		};
-
-		// Check for an existing checkpoint — when found, restore prior wave progress.
-		const priorCheckpoint = await recoverState(this.#sessionManager, this.#graphName);
-		if (priorCheckpoint) {
-			this.#graphRunState = priorCheckpoint;
-			logger.info("[GraphRunner] Resuming from prior checkpoint", {
-				runId,
-				completedNodes: Object.values(priorCheckpoint.nodes).filter(n => n.status === "completed").length,
-				currentWave: priorCheckpoint.currentWave,
-			});
-		} else {
-			// Persist the initial state so it's available for the first wave.
-			writeCheckpoint(this.#graphRunState, this.#sessionManager);
-		}
-
 		// Mark mode as graph for TUI dashboard rendering
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		logger.info("[GraphRunner] Initialized", {
@@ -209,21 +152,8 @@ export class GraphRunner implements ISwarmOrchestrator {
 			waves: this.#waves.length,
 		});
 	}
-
-	/** Update node status in GraphRunState and persist the checkpoint. */
-	#updateCheckpoint(nodeId: string, status: NodeRunState["status"], error?: string): void {
-		const prev = this.#graphRunState.nodes[nodeId];
-		this.#graphRunState.nodes[nodeId] = {
-			nodeId,
-			status,
-			startedAt: status === "running" ? Date.now() : prev?.startedAt,
-			completedAt: status === "completed" || status === "failed" ? Date.now() : undefined,
-			...(error ? { error } : {}),
-		};
-		writeCheckpoint(this.#graphRunState, this.#sessionManager);
-	}
-
 	/**
+
 	 * Auto-detect the FSM start phase from the graph's first wave.
 	 * If the first node in the first wave has type "script", start in "script";
 	 * otherwise default to "stage".
@@ -252,193 +182,200 @@ export class GraphRunner implements ISwarmOrchestrator {
 
 	onPlanUpdated(_content: string): void {}
 
+	// =========================================================================
+	// NodeExecutor — per-node behavior lifecycle (called by GraphEngine)
+	// =========================================================================
+
+	/**
+	 * Execute a single graph node. GraphEngine calls this once per node
+	 * during wave scheduling, providing upstream outputs and abort signal.
+	 */
+	async execute(nodeId: string, execCtx: NodeExecutionContext): Promise<NodeResult> {
+		const node = this.#graph.nodes[nodeId];
+		if (!node) return { nodeId, success: false, error: `Unknown node: ${nodeId}` };
+
+		await this.#stateTracker.registerAgent(nodeId);
+		await this.#stateTracker.updateAgent(nodeId, { status: "running" });
+
+		const behaviorFactoryConfig: NodeBehaviorFactoryConfig = {
+			runtime: this.#runtime,
+			fsm: this.#fsm,
+			hookPipeline: this.#hookPipeline,
+			contextPipeline: this.#runtime.contextPipeline,
+			workspace: this.#config.workspace,
+			swarmDir: this.#swarmDir,
+			loopConfig: this.#loopConfig,
+		};
+		const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
+		const ctx: NodeContext = {
+			node: {
+				id: nodeId,
+				label: node.label,
+				description: node.description,
+				role: node.role,
+				profileId: node.profile_id,
+				tools: node.tools,
+				type: node.type ?? "custom",
+				dependsOn: node.depends_on ?? [],
+			},
+			workspace: this.#config.workspace,
+			experience: "",
+			upstreamOutputs: execCtx.upstreamOutputs,
+			runtime: this.#runtime,
+			agentRegistry: AgentRegistry.global(),
+			roleAssetManager: this.#roleAssetManager,
+			profileRegistry: this.#config.profileRegistry,
+			stateTracker: this.#stateTracker,
+			activityLogger: this.#activityLogger,
+		};
+
+		try {
+			const prepared = await behavior.prepare(ctx);
+			const behaviorResult = await behavior.execute(ctx, prepared);
+
+			if (!node.gate) {
+				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
+				return { nodeId, success: behaviorResult.success, error: behaviorResult.error };
+			}
+
+			let lastGateResult = await this.#gateController.runGate(
+				node,
+				behaviorResult.output ?? "",
+				behaviorResult.success,
+			);
+			let attempt = 0;
+			while (!lastGateResult.passed) {
+				const action = await this.#gateController.handleGateFailure(node, lastGateResult, attempt);
+				if (action.type === "continue") {
+					await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
+					return { nodeId, success: true };
+				}
+				if (action.type === "block") {
+					await this.#stateTracker.updateAgent(nodeId, { status: "failed", error: action.reason });
+					return { nodeId, success: false, error: action.reason };
+				}
+				const { promise, resolve } = Promise.withResolvers<void>();
+				setTimeout(resolve, action.delayMs);
+				await promise;
+				lastGateResult = await this.#gateController.runGate(
+					node,
+					behaviorResult.output ?? "",
+					behaviorResult.success,
+				);
+				attempt++;
+			}
+			if (lastGateResult.passed) {
+				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
+				return { nodeId, success: true };
+			}
+			return { nodeId, success: false, error: lastGateResult.errors.join("; ") };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			await this.#stateTracker.updateAgent(nodeId, { status: "failed", error: msg });
+			return { nodeId, success: false, error: msg };
+		} finally {
+			await behavior.cleanup(ctx);
+		}
+	}
+
+	// =========================================================================
+	// ISwarmOrchestrator — confirmScript delegates to GraphEngine
+	// =========================================================================
+
 	async confirmScript(): Promise<string[]> {
 		await this.#fsm.transition("stage", { reason: "graph execution start" });
 		this.#abortController = new AbortController();
 
-		const graph = this.#graph;
-		const stateTracker = this.#stateTracker;
-		const workspace = this.#config.workspace;
-		const modelRegistry = this.#config.modelRegistry;
-		const settings = this.#config.settings;
-		const _abortSignal = this.#abortController.signal;
-		const runtime = this.#runtime;
-		const gateController = this.#gateController;
-		const updateCheckpoint = this.#updateCheckpoint.bind(this);
-		const profileRegistry = this.#config.profileRegistry;
-		const roleAssetManager = this.#roleAssetManager;
-		const activityLogger = this.#activityLogger;
-		const hookPipeline = this.#hookPipeline;
-		const fsm = this.#fsm;
-		const swarmDir = this.#swarmDir;
-		const loopConfig = this.#loopConfig;
-
-		// Build SchedulerNodeInfo from graph nodes for continueOnFailure
-		const nodeInfos: Record<string, SchedulerNodeInfo> = {};
-		for (const [id, node] of Object.entries(graph.nodes)) {
-			nodeInfos[id] = { continueOnFailure: node.continue_on_failure ?? false };
-		}
-		const scheduler: SchedulingStrategy = new WaveScheduler(nodeInfos);
-
-		const totalNodes = Object.keys(graph.nodes).length;
-		let completedCount = 0;
-		const executionErrors: string[] = [];
-		const agentsList: Array<{ id: string; role: string }> = [];
-		const agentResultsMap = new Map<string, SingleResult[]>();
-		try {
-			await scheduler.schedule(this.#waves, {
-				async runNode(nodeId: string): Promise<NodeResult> {
-					const node = graph.nodes[nodeId];
-					if (!node) return { nodeId, success: false, error: `Unknown node: ${nodeId}` };
-
-					await stateTracker.registerAgent(nodeId);
-					await stateTracker.updateAgent(nodeId, { status: "running" });
-					updateCheckpoint(nodeId, "running");
-
-					const behaviorFactoryConfig: NodeBehaviorFactoryConfig = {
-						runtime,
-						fsm,
-						hookPipeline,
-						contextPipeline: runtime.contextPipeline,
-						workspace,
-						swarmDir,
-						loopConfig,
-					};
-					const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
-					const ctx: NodeContext = {
-						node: {
-							id: nodeId,
-							label: node.label,
-							description: node.description,
-							role: node.role,
-							profileId: node.profile_id,
-							tools: node.tools,
-							type: node.type ?? "custom",
-							dependsOn: node.depends_on ?? [],
-						},
-						workspace,
-						experience: "",
-						upstreamOutputs: buildUpstreamOutputs(node.depends_on, agentResultsMap),
-						runtime,
-						agentRegistry: AgentRegistry.global(),
-						roleAssetManager,
-						profileRegistry,
-						stateTracker,
-						activityLogger,
-					};
-
-					try {
-						const prepared = await behavior.prepare(ctx);
-						const behaviorResult = await behavior.execute(ctx, prepared);
-
-						if (!node.gate) {
-							await stateTracker.updateAgent(nodeId, { status: "completed" });
-							updateCheckpoint(nodeId, "completed");
-							return { nodeId, success: behaviorResult.success, error: behaviorResult.error };
+		// Build CheckpointStore adapter wrapping SwarmSessionManager.
+		const sessionManager = this.#sessionManager;
+		const checkpointStore: CheckpointStore = {
+			write(state): void {
+				sessionManager.appendCustomEntry("graph_checkpoint", state);
+			},
+			async recover(graphName: string) {
+				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
+				for (let i = raw.length - 1; i >= 0; i--) {
+					const entry = raw[i];
+					if (entry.type === "custom" && entry.customType === "graph_checkpoint") {
+						const data = entry.data as Record<string, unknown> | undefined;
+						if (data?.graphName === graphName) {
+							return data as GraphRunState;
 						}
-
-						let lastGateResult = await gateController.runGate(
-							node,
-							behaviorResult.output ?? "",
-							behaviorResult.success,
-						);
-						let attempt = 0;
-						while (!lastGateResult.passed) {
-							const action = await gateController.handleGateFailure(node, lastGateResult, attempt);
-							if (action.type === "continue") {
-								// Gate failure skipped by policy — proceed as passed.
-								await stateTracker.updateAgent(nodeId, { status: "completed" });
-								updateCheckpoint(nodeId, "completed");
-								return { nodeId, success: true };
-							}
-							if (action.type === "block") {
-								await stateTracker.updateAgent(nodeId, { status: "failed", error: action.reason });
-								updateCheckpoint(nodeId, "failed", action.reason);
-								return { nodeId, success: false, error: action.reason };
-							}
-							// retry: sleep, then re-run the gate
-							const { promise, resolve } = Promise.withResolvers<void>();
-							setTimeout(resolve, action.delayMs);
-							await promise;
-							lastGateResult = await gateController.runGate(
-								node,
-								behaviorResult.output ?? "",
-								behaviorResult.success,
-							);
-							attempt++;
-						}
-						if (lastGateResult.passed) {
-							await stateTracker.updateAgent(nodeId, { status: "completed" });
-							updateCheckpoint(nodeId, "completed");
-							return { nodeId, success: true };
-						}
-						return { nodeId, success: false, error: lastGateResult.errors.join("; ") };
-					} catch (err) {
-						const msg = err instanceof Error ? err.message : String(err);
-						await stateTracker.updateAgent(nodeId, { status: "failed", error: msg });
-						updateCheckpoint(nodeId, "failed", msg);
-						return { nodeId, success: false, error: msg };
-					} finally {
-						await behavior.cleanup(ctx);
 					}
-				},
-				onNodeComplete(nodeId, result) {
-					if (result.success) completedCount++;
-					const node = graph.nodes[nodeId];
-					if (node) agentsList.push({ id: nodeId, role: node.role });
-					if (result.error) executionErrors.push(`${nodeId}: ${result.error}`);
-					agentResultsMap.set(nodeId, [
-						{
-							index: 0,
-							id: nodeId,
-							agent: nodeId,
-							agentSource: "project",
-							task: node?.description ?? "",
-							exitCode: result.success ? 0 : 1,
-							output: result.output ?? "",
-							stderr: result.error ?? "",
-							truncated: false,
-							durationMs: 0,
-							tokens: 0,
-							requests: 0,
-						},
-					]);
-				},
-			});
+				}
+				return null;
+			},
+		};
 
-			await this.#fsm.transition("curtain", { reason: "graph execution complete" });
-			const allSucceeded = executionErrors.length === 0;
-			await runCurtainPipeline(
-				{
-					status: allSucceeded ? "completed" : "failed",
-					agentResults: agentResultsMap,
-					errors: executionErrors,
-					agents: agentsList,
-					taskProgress: { total: totalNodes, completed: completedCount },
-				},
-				{
-					workspace,
-					stateTracker: this.#stateTracker,
-					activityLogger: this.#activityLogger,
-					experienceStore: this.#experienceStore,
-					loopConfig: null,
-					modelRegistry,
-					settings,
-					commBus: this.#runtime.commBus,
-					graphName: this.#graphName,
-				},
-			);
-			await this.#fsm.transition("idle", { reason: "graph complete" });
+		const engineConfig: GraphEngineConfig = {
+			graph: this.#graph,
+			waves: this.#waves,
+			checkpointStore,
+			graphName: this.#graphName,
+			abortSignal: this.#abortController.signal,
+		};
+		const engine = new GraphEngine(engineConfig);
+
+		let result: GraphRunResult;
+		try {
+			result = await engine.run(this);
 		} catch (err) {
-			logger.error("[GraphRunner] Execution failed", { error: String(err) });
+			logger.error("[GraphRunner] GraphEngine execution failed", { error: String(err) });
 			await this.#fsm.transition("blocked", { reason: String(err) }).catch(() => {});
+			return [];
 		}
+
+		await this.#fsm.transition("curtain", { reason: "graph execution complete" });
+		const allSucceeded = result.executionErrors.length === 0;
+
+		// Build agentResults map for curtain pipeline from nodeResults.
+		const agentResults = new Map<string, SingleResult[]>();
+		for (const [nodeId, nodeResult] of result.nodeResults) {
+			agentResults.set(nodeId, [
+				{
+					index: 0,
+					id: nodeId,
+					agent: nodeId,
+					agentSource: "project",
+					task: this.#graph.nodes[nodeId]?.description ?? "",
+					exitCode: nodeResult.success ? 0 : 1,
+					output: nodeResult.output ?? "",
+					stderr: nodeResult.error ?? "",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+				},
+			]);
+		}
+
+		await runCurtainPipeline(
+			{
+				status: allSucceeded ? "completed" : "failed",
+				agentResults,
+				errors: result.executionErrors,
+				agents: result.agentsList,
+				taskProgress: { total: result.totalNodes, completed: result.completedCount },
+			},
+			{
+				workspace: this.#config.workspace,
+				stateTracker: this.#stateTracker,
+				activityLogger: this.#activityLogger,
+				experienceStore: this.#experienceStore,
+				loopConfig: null,
+				modelRegistry: this.#config.modelRegistry,
+				settings: this.#config.settings,
+				ircBus: this.#runtime.ircBus,
+				graphName: this.#graphName,
+			},
+		);
+		await this.#fsm.transition("idle", { reason: "graph complete" });
 
 		return [];
 	}
 
 	async steer(message: string): Promise<void> {
-		await this.#runtime.commBus.receiveFromHuman(message);
+		await this.#runtime.ircBus.receiveFromHuman(message);
 	}
 
 	applaud(): void {

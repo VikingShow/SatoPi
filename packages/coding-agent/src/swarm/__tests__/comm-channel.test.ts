@@ -16,7 +16,6 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { IrcBus } from "../../irc/bus";
-import { CommBus } from "../comm-bus/comm-bus";
 import { CommChannel } from "../comm-bus/comm-channel";
 import { createEndpoint } from "../comm-bus/endpoint";
 import { runRoundtable } from "../comm-bus/roundtable";
@@ -384,10 +383,10 @@ describe("CommChannel", () => {
 });
 
 // ============================================================================
-// CommBus
+// IrcBus (merged CommBus functionality)
 // ============================================================================
 
-describe("CommBus", () => {
+describe("IrcBus (groupChannel / receiveFromHuman)", () => {
 	let bus: IrcBus;
 	let activityLogger: ActivityLogger;
 
@@ -404,80 +403,57 @@ describe("CommBus", () => {
 	// ── Singleton pattern ────────────────────────────────────
 
 	test("global() returns the same instance", () => {
-		const a = CommBus.global();
-		const b = CommBus.global();
+		const a = IrcBus.global();
+		const b = IrcBus.global();
 		expect(a).toBe(b);
-	});
-
-	test("ensureGlobal wires the IrcBus reference", () => {
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
-		expect(cb.ircBus).toBe(bus);
-		expect(cb).toBe(CommBus.global());
-	});
-
-	test("ensureGlobal updates an already-global instance", () => {
-		// Create a fresh unwired instance, then wire via ensureGlobal.
-		const cb = new CommBus();
-		expect(cb.ircBus).toBeNull();
-
-		// Wire it via ensureGlobal — since the global hasn't been set yet,
-		// ensureGlobal creates it with the given IrcBus.
-		const result = CommBus.ensureGlobal(bus, activityLogger);
-		expect(result.ircBus).toBe(bus);
 	});
 
 	// ── receiveFromHuman ─────────────────────────────────────
 
 	test("receiveFromHuman logs broadcast", async () => {
-		// Not much to assert without a session manager, but shouldn't throw
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
-		await expect(cb.receiveFromHuman("hello")).resolves.toBeUndefined();
+		bus.setActivityLogger(activityLogger);
+		await expect(bus.receiveFromHuman("hello")).resolves.toBeUndefined();
 	});
 
 	test("receiveFromHuman targets a specific agent", async () => {
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
+		bus.setActivityLogger(activityLogger);
 		// Best-effort delivery — won't throw even for unknown agent
-		await expect(cb.receiveFromHuman("hello worker", "worker-1")).resolves.toBeUndefined();
+		await expect(bus.receiveFromHuman("hello worker", "worker-1")).resolves.toBeUndefined();
 	});
 
 	// ── groupChannel ─────────────────────────────────────────
 
 	test("groupChannel creates and caches channels by name", () => {
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
-		const ch1 = cb.groupChannel("my-group", ["a1", "a2"]);
-		const ch2 = cb.groupChannel("my-group", ["a3"]); // same name, different members
+		bus.setActivityLogger(activityLogger);
+		const ch1 = bus.groupChannel("my-group", ["a1", "a2"]);
+		const ch2 = bus.groupChannel("my-group", ["a3"]); // same name, different members
 		expect(ch1).toBe(ch2); // cached — same instance
 	});
 
-	test("groupChannel throws when IrcBus is not wired", () => {
-		const cb = new CommBus(); // no IrcBus wired
-		expect(() => cb.groupChannel("test", ["a1"])).toThrow();
-	});
-
 	test("removeChannel evicts from cache", () => {
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
-		const ch1 = cb.groupChannel("temp", ["a1"]);
-		cb.removeChannel("temp");
-		const ch2 = cb.groupChannel("temp", ["a2"]);
+		bus.setActivityLogger(activityLogger);
+		const ch1 = bus.groupChannel("temp", ["a1"]);
+		bus.removeChannel("temp");
+		const ch2 = bus.groupChannel("temp", ["a2"]);
 		expect(ch2).not.toBe(ch1); // new instance
 	});
 
 	test("groupChannel accepts optional activityLogger override", () => {
-		const cb = CommBus.ensureGlobal(bus, activityLogger);
+		bus.setActivityLogger(activityLogger);
 		const logger2 = new ActivityLogger("/tmp/test-swarm", "session2");
 		// Should not throw
-		const ch = cb.groupChannel("logged", ["a1"], logger2);
+		const ch = bus.groupChannel("logged", ["a1"], logger2);
 		expect(ch.members.has("a1")).toBe(true);
 	});
 
 	// ── setActivityLogger ────────────────────────────────────
 
 	test("setActivityLogger updates logger reference", () => {
-		const cb = CommBus.ensureGlobal(bus);
+		bus.setActivityLogger(activityLogger);
 		const newLogger = new ActivityLogger("/tmp/test-swarm", "new-session");
-		cb.setActivityLogger(newLogger);
+		bus.setActivityLogger(newLogger);
 		// No direct assertion — verified via subsequent groupChannel calls
-		const ch = cb.groupChannel("test", ["a1"]);
+		const ch = bus.groupChannel("test", ["a1"]);
 		expect(ch).toBeDefined();
 	});
 });

@@ -3,26 +3,15 @@
  *
  * LLM-invokable tool that calls a persistent agent by profileId.
  * If the agent is already running and idle, it steers a new task.
- * Otherwise, it spawns a fresh persistent agent via AgentRuntime.
+ * Otherwise, it spawns a fresh persistent agent via createAgentSession.
  */
 
 import type { AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
+import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentRuntime } from "../swarm/agent-runtime";
-import type { ToolContextStore } from "./context";
-
-// ============================================================================
-// Context extension: expose AgentRuntime via tool context
-// ============================================================================
-
-declare module "@oh-my-pi/pi-agent-core" {
-	interface AgentToolContext {
-		/** AgentRuntime for spawning and steering persistent agents. */
-		agentRuntime?: AgentRuntime;
-	}
-}
+import { createAgentSession } from "../sdk";
 
 // ============================================================================
 // Schema
@@ -34,18 +23,6 @@ const agentInvokeSchema = type({
 });
 
 type AgentInvokeParams = typeof agentInvokeSchema.infer;
-
-// ============================================================================
-// Runtime-awareness: allow the tool to be hidden when AgentRuntime is unavailable
-// ============================================================================
-
-let _contextStore: ToolContextStore | undefined;
-
-/** Called by createAgentSession to wire the session's ToolContextStore so the
- *  hidden getter can check whether AgentRuntime is available. */
-export function setAgentInvokeContextStore(store: ToolContextStore | undefined): void {
-	_contextStore = store;
-}
 
 // ============================================================================
 // agentInvokeTool
@@ -70,9 +47,9 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 	loadMode: "discoverable" as const,
 	lenientArgValidation: false,
 
-	/** Dynamically hidden when no AgentRuntime is available (non-swarm sessions). */
+	/** Dynamically hidden when no agent profiles are registered. */
 	get hidden(): boolean {
-		return !_contextStore?.hasAgentRuntime();
+		return ProfileRegistry.global().list().length === 0;
 	},
 
 	async execute(
@@ -80,78 +57,85 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, string> = {
 		params: AgentInvokeParams,
 		signal?: AbortSignal,
 		_onUpdate?: (partial: AgentToolResult<string>) => void,
-		context?: AgentToolContext,
+		_context?: AgentToolContext,
 	): Promise<AgentToolResult<string>> {
 		const registry = AgentRegistry.global();
-		const runtime = context?.agentRuntime;
-
-		if (!runtime) {
-			return {
-				content: [
-					{
-						type: "text",
-						text: "agent_invoke requires a swarm session with AgentRuntime. Use this tool within a swarm-managed session.",
-					},
-				],
-				isError: true,
-			};
-		}
-
 		const { profileId, task } = params;
 
-		// Find existing persistent agent by profileId
-		const existing = registry.list().find(ref => ref.profileId === profileId && ref.kind === "persistent");
+		// Find existing persistent idle agent by profileId
+		const existing = registry.list().find(
+			ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle",
+		);
 
-		if (existing?.session && existing.status === "idle") {
-			// Identity-level reuse: the existing persistent agent's identity
-			// (profileId, credit, dashboard entry) is preserved. We spawn a
-			// new agent session with the same profileId, which AgentRegistry
-			// merges by disposing the old session. Process-level steer/reuse
-			// of the live agent handle is a future optimization (P3).
-			logger.info("[agent_invoke] Reusing persistent agent identity", {
+		let session;
+		if (existing?.session) {
+			// Steer the existing session with the new task
+			logger.info("[agent_invoke] Steering existing persistent agent", {
 				id: existing.id,
 				profileId,
 			});
-		}
-
-		// Spawn new persistent agent
-		try {
+			session = existing.session;
+		} else {
+			// Spawn new persistent agent session
+			logger.info("[agent_invoke] Creating new persistent agent session", { profileId });
 			signal?.throwIfAborted();
 
-			const handles = await runtime.spawn([
-				{
+			try {
+				const result = await createAgentSession({
+					agentKind: "persistent",
+					persistentProfileId: profileId,
+					agentId: `persist-${profileId}`,
+					autoApprove: true,
+					hasUI: false,
+					hasIrcInterrupts: true,
+				});
+				session = result.session;
+				// Register in the agent registry
+				registry.register({
 					id: `persist-${profileId}`,
-					role: "persistent",
-					roleSource: "library",
-					task,
+					displayName: `persist-${profileId}`,
+					kind: "persistent",
 					profileId,
-				},
-			]);
-
-			signal?.throwIfAborted();
-
-			const handle = handles[0];
-			if (!handle) {
+					session,
+				});
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				logger.error("[agent_invoke] Session creation failed", { profileId, error: msg });
 				return {
-					content: [{ type: "text", text: "agent_invoke: Spawn returned no handles." }],
+					content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 					isError: true,
 				};
 			}
+		}
 
-			const result = await handle.wait();
+		// Start the task and wait for completion
+		try {
+			signal?.throwIfAborted();
+			await session.prompt(task);
+			const result = await session.wait();
+
+			// Track profile credit
+			const profileRegistry = ProfileRegistry.global();
+			profileRegistry.recordTaskCompleted(profileId, result.exitCode === 0);
 
 			return {
 				content: [
 					{
 						type: "text",
-						text: result.output || result.error || "(no output)",
+						text: result.output || result.stderr || "(no output)",
 					},
 				],
 				isError: result.exitCode !== 0,
 			};
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			logger.error("[agent_invoke] Spawn failed", { profileId, error: msg });
+			logger.error("[agent_invoke] Task execution failed", { profileId, error: msg });
+			// Still record the failure in profile
+			try {
+				ProfileRegistry.global().recordTaskCompleted(profileId, false);
+			} catch {
+				// best-effort
+			}
 			return {
 				content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 				isError: true,

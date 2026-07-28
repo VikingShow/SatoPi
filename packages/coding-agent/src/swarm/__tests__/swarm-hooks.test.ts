@@ -426,7 +426,6 @@ import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { IrcBus } from "../../irc/bus";
 import { OffloadManager } from "../../offload/manager";
 import { MemorySessionStorage } from "../../session/session-storage";
-import { CommBus } from "../comm-bus/comm-bus";
 import { CommChannel } from "../comm-bus/comm-channel";
 import { runRoundtable } from "../comm-bus/roundtable";
 import { runVote } from "../comm-bus/vote";
@@ -484,9 +483,9 @@ describe("Hook event trigger E2E (real integration points)", () => {
 
 	test("comm:beforeMessage and comm:afterMessage fire through CommBus.receiveFromHuman", async () => {
 		const bus = IrcBus.global();
-		const commBus = new CommBus(bus, undefined, hookPipeline);
+		bus.setHookPipeline(hookPipeline);
 
-		await commBus.receiveFromHuman("hello", "agent-1");
+		await bus.receiveFromHuman("hello", "agent-1");
 
 		expect(fired).toContain("comm:beforeMessage");
 		expect(fired).toContain("comm:afterMessage");

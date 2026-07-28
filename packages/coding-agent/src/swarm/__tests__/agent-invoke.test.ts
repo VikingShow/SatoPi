@@ -1,148 +1,43 @@
 /**
- * agent-invoke.test.ts — E2E tests for agent_invoke tool integration with AgentRuntime.
+ * agent-invoke.test.ts — E2E tests for agent_invoke tool integration.
  *
  * Verifies:
- * - AgentRuntime flows through ToolContextStore to agent_invoke tool context
- * - agent_invoke calls runtime.spawn() with correct AgentSpec
- * - Error message when no agentRuntime is available
+ * - agent_invoke creates new persistent sessions via createAgentSession
+ * - agent_invoke steers existing idle persistent agents
+ * - Error handling on session creation / task failures
+ * - Hidden behavior when no profiles are registered
+ * - Profile credit tracking via ProfileRegistry
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+
+// ============================================================================
+// Mock createAgentSession at module level before anything imports it
+// ============================================================================
+
+const mockCreateAgentSession = mock();
+
+mock.module("../../sdk", () => ({
+	createAgentSession: mockCreateAgentSession,
+}));
+
+import { ProfileRegistry } from "../../agent/agent-profile";
+// Now these imports will resolve with the mocked sdk
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { Tool } from "../../tools";
 import { agentInvokeTool } from "../../tools/agent-invoke";
-import { ToolContextStore } from "../../tools/context";
-import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
-import { AgentLauncher } from "../agent-runtime/agent-launcher";
-import { AgentRuntime } from "../agent-runtime/index";
-import { RoleProvider } from "../agent-runtime/role-provider";
-import { CommBus } from "../comm-bus/comm-bus";
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-
-// ============================================================================
-// Mock session factory for AgentLauncher (avoids pulling in full SDK)
-// ============================================================================
-
-const mockSession = {
-	agent: {
-		setAsideMessageProvider: () => {},
-		subscribe: () => () => {},
-		prompt: async () => {},
-		steer: () => {},
-		followUp: () => {},
-	},
-	prompt: async () => {},
-	setToolContextAgentRuntime: () => {},
-};
-
-const mockSessionFactory = async () => ({
-	session: mockSession as unknown as import("../../session/agent-session").AgentSession,
-});
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-/** Create a minimal role asset for testing. */
-function makeRoleAsset(overrides?: Partial<RoleAsset>): RoleAsset {
+/** Create a minimal mock AgentSession for testing. */
+function makeMockSession(overrides?: Record<string, unknown>) {
 	return {
-		id: "planner",
-		name: "Planner",
-		description: "Test planner role",
-		version: 1,
-		author: "test",
-		status: "approved",
-		prompts: {
-			system: "You are a planner agent.",
-			guidelines: ["Plan carefully", "Ask questions"],
-		},
-		tools: ["read", "write", "grep"],
-		tags: ["planning"],
-		created_at: "2025-01-01T00:00:00Z",
-		updated_at: "2025-01-01T00:00:00Z",
-		usage_count: 0,
-		success_rate: 1.0,
+		prompt: mock().mockResolvedValue(true),
+		wait: mock().mockResolvedValue({ output: "Task completed", exitCode: 0 }),
 		...overrides,
 	};
-}
-
-/** Create a mock RoleAssetManager. */
-function mockRoleAssetManager(roles: Record<string, RoleAsset | null> = {}): RoleAssetManager {
-	return {
-		get: async (id: string) => roles[id] ?? null,
-		init: async () => {},
-		list: async () => [],
-		search: async () => [],
-		create: async () => ({}) as RoleAsset,
-		update: async () => ({}) as RoleAsset,
-		approve: async () => ({}) as RoleAsset,
-		deprecate: async () => ({}) as RoleAsset,
-		recordUsage: async () => {},
-		delete: async () => false,
-		seedIfEmpty: async () => 0,
-		get rolesDir() {
-			return "";
-		},
-	} as unknown as RoleAssetManager;
-}
-
-/** Build a minimal AgentRuntime with mocked launcher for testing. */
-function makeAgentRuntime(): AgentRuntime {
-	const roleMgr = mockRoleAssetManager({
-		planner: makeRoleAsset({ id: "planner" }),
-	});
-	const roleProvider = new RoleProvider(roleMgr);
-	const contextPipeline = new ContextPipeline();
-	const hookPipeline = new HookPipeline();
-	const commBus = new CommBus();
-
-	const mockTool = { name: "mock", execute: async () => ({ output: "ok" }) } as unknown as Tool;
-	const toolRegistry = new Map<string, Tool>([
-		["read", mockTool],
-		["grep", mockTool],
-		["write", mockTool],
-		["bash", mockTool],
-		["glob", mockTool],
-	]);
-
-	const modelRegistry = {
-		getAvailable: () => [{ id: "test-model", provider: "test", supportsTools: true }],
-		resolver: async () => undefined,
-		find: () => ({ id: "test-model", provider: "test" }),
-	} as unknown as ModelRegistry;
-
-	const settings = {} as Settings;
-
-	const launcher = new AgentLauncher(modelRegistry, settings, mockSessionFactory);
-
-	return new AgentRuntime({
-		roleProvider,
-		contextPipeline,
-		launcher,
-		commBus,
-		hookPipeline,
-		modelRegistry,
-		settings,
-		toolRegistry,
-	});
-}
-
-/** Create a ToolContextStore for testing with optional AgentRuntime. */
-function makeToolContextStore(agentRuntime?: AgentRuntime): ToolContextStore {
-	const store = new ToolContextStore(() => ({
-		isIdle: () => true,
-		hasQueuedMessages: () => false,
-		abort: () => {},
-		autoApprove: false,
-	}));
-	if (agentRuntime) {
-		store.setAgentRuntime(agentRuntime);
-	}
-	return store;
 }
 
 // ============================================================================
@@ -151,15 +46,17 @@ function makeToolContextStore(agentRuntime?: AgentRuntime): ToolContextStore {
 
 beforeEach(() => {
 	// Clear AgentRegistry global state to prevent cross-test leakage.
-	// The global singleton persists across tests; unregister any lingering refs.
 	const registry = AgentRegistry.global();
 	for (const ref of registry.list()) {
 		registry.unregister(ref.id);
 	}
+	// Reset ProfileRegistry for clean slate
+	ProfileRegistry.resetGlobalForTests();
+	mockCreateAgentSession.mockClear();
 });
 
 afterEach(() => {
-	vi.restoreAllMocks();
+	mock.restore();
 });
 
 // ============================================================================
@@ -167,154 +64,278 @@ afterEach(() => {
 // ============================================================================
 
 describe("agent_invoke E2E", () => {
-	describe("AgentRuntime in tool context", () => {
-		it("agentRuntime is accessible via ToolContextStore.getContext()", () => {
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore(runtime);
-
-			const ctx: AgentToolContext = store.getContext();
-
-			expect(ctx.agentRuntime).toBe(runtime);
+	describe("hidden behavior", () => {
+		it("is hidden when no profiles are registered", () => {
+			expect(agentInvokeTool.hidden).toBe(true);
 		});
 
-		it("agentRuntime is undefined when not set on ToolContextStore", () => {
-			const store = makeToolContextStore(); // no runtime
-
-			const ctx: AgentToolContext = store.getContext();
-
-			expect(ctx.agentRuntime).toBeUndefined();
+		it("is visible when profiles exist", () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "testProfile",
+				name: "Test Agent",
+				archetype: "worker",
+			});
+			expect(agentInvokeTool.hidden).toBe(false);
 		});
 	});
 
-	describe("agent_invoke with valid profileId", () => {
-		it("calls runtime.spawn() with correct AgentSpec", async () => {
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore(runtime);
-			const ctx = store.getContext();
+	describe("agent_invoke creates new persistent session", () => {
+		it("calls createAgentSession with correct options and waits for completion", async () => {
+			// Register a profile so the tool is visible
+			ProfileRegistry.global().createProfile({
+				profileId: "testProfile",
+				name: "Test Agent",
+				archetype: "worker",
+			});
 
-			// Mock spawn to verify call without executing real agent launch
-			const mockHandle = {
-				id: "persist-testProfile",
-				wait: vi.fn().mockResolvedValue({ output: "Task completed", exitCode: 0 }),
-			};
-			const spawnSpy = vi.spyOn(runtime, "spawn").mockResolvedValue([mockHandle as unknown as AgentHandle]);
+			const mockSession = makeMockSession();
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
 				{ profileId: "testProfile", task: "Build the API endpoint" },
 				undefined, // signal
 				undefined, // onUpdate
-				ctx,
+				{} as AgentToolContext,
 			);
 
-			// Verify spawn was called with the correct spec
-			expect(spawnSpy).toHaveBeenCalledTimes(1);
-			expect(spawnSpy).toHaveBeenCalledWith([
-				{
-					id: "persist-testProfile",
-					role: "persistent",
-					roleSource: "library",
-					task: "Build the API endpoint",
-					profileId: "testProfile",
-				},
-			]);
+			// Verify createAgentSession was called with the correct options
+			expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
+			expect(mockCreateAgentSession).toHaveBeenCalledWith({
+				agentKind: "persistent",
+				persistentProfileId: "testProfile",
+				agentId: "persist-testProfile",
+				autoApprove: true,
+				hasUI: false,
+				hasIrcInterrupts: true,
+			});
 
-			// Verify the tool returns the agent's output
+			// Verify session.prompt and session.wait were called
+			expect(mockSession.prompt).toHaveBeenCalledWith("Build the API endpoint");
+			expect(mockSession.wait).toHaveBeenCalled();
+
+			// Verify result
 			expect(result.isError).toBe(false);
 			expect(result.content).toEqual([{ type: "text", text: "Task completed" }]);
+
+			// Verify profile credit was tracked
+			const profile = ProfileRegistry.global().get("testProfile");
+			expect(profile?.credit.totalTasks).toBe(1);
+			expect(profile?.credit.successRate).toBe(1);
 		});
 
-		it("returns error when spawn returns no handles", async () => {
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore(runtime);
-			const ctx = store.getContext();
+		it("returns error when createAgentSession throws", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "crashing",
+				name: "Crash Agent",
+				archetype: "worker",
+			});
 
-			vi.spyOn(runtime, "spawn").mockResolvedValue([]);
-
-			const result = await agentInvokeTool.execute(
-				"toolCall-1",
-				{ profileId: "missingHandle", task: "Test task" },
-				undefined,
-				undefined,
-				ctx,
-			);
-
-			expect(result.isError).toBe(true);
-			expect(result.content).toEqual([{ type: "text", text: "agent_invoke: Spawn returned no handles." }]);
-		});
-
-		it("returns error when spawn throws", async () => {
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore(runtime);
-			const ctx = store.getContext();
-
-			vi.spyOn(runtime, "spawn").mockRejectedValue(new Error("Launch failed: no model"));
+			mockCreateAgentSession.mockRejectedValue(new Error("No model available"));
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
 				{ profileId: "crashing", task: "Test task" },
 				undefined,
 				undefined,
-				ctx,
+				{} as AgentToolContext,
 			);
 
 			expect(result.isError).toBe(true);
 			expect(result.content?.[0]).toEqual({
 				type: "text",
-				text: "agent_invoke failed: Launch failed: no model",
+				text: "agent_invoke failed: No model available",
 			});
 		});
-	});
 
-	describe("agent_invoke without AgentRuntime", () => {
-		it("returns improved error message when no agentRuntime is in context", async () => {
-			const store = makeToolContextStore(); // no runtime
-			const ctx = store.getContext();
+		it("returns error when task execution fails", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "failingTask",
+				name: "Failing Agent",
+				archetype: "worker",
+			});
+
+			const mockSession = makeMockSession({
+				prompt: mock().mockRejectedValue(new Error("Task rejected")),
+			});
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
-				{ profileId: "anyProfile", task: "Test task" },
+				{ profileId: "failingTask", task: "Test task" },
 				undefined,
 				undefined,
-				ctx,
+				{} as AgentToolContext,
 			);
 
 			expect(result.isError).toBe(true);
-			expect(result.content).toEqual([
-				{
-					type: "text",
-					text: "agent_invoke requires a swarm session with AgentRuntime. Use this tool within a swarm-managed session.",
-				},
-			]);
+			expect(result.content?.[0]).toEqual({
+				type: "text",
+				text: "agent_invoke failed: Task rejected",
+			});
+		});
+
+		it("records failed completion in profile even when task throws", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "throwCredit",
+				name: "Throw Credit",
+				archetype: "worker",
+			});
+
+			const mockSession = makeMockSession({
+				prompt: mock().mockRejectedValue(new Error("Boom")),
+			});
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
+
+			await agentInvokeTool.execute(
+				"toolCall-1",
+				{ profileId: "throwCredit", task: "Boom task" },
+				undefined,
+				undefined,
+				{} as AgentToolContext,
+			);
+
+			const profile = ProfileRegistry.global().get("throwCredit");
+			expect(profile?.credit.totalTasks).toBe(1);
+			expect(profile?.credit.successRate).toBe(0);
 		});
 	});
 
-	describe("AgentRuntime wiring through createAgentSession pattern", () => {
-		it("setToolContextAgentRuntime wires runtime into ToolContextStore", () => {
-			// This tests the same wiring path that createAgentSession uses:
-			//   session._registerToolContextRuntimeSetter(r => store.setAgentRuntime(r))
-			//   session.setToolContextAgentRuntime(runtime)
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore();
+	describe("agent_invoke steers existing idle persistent agent", () => {
+		it("reuses existing idle session instead of creating new one", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "existingProfile",
+				name: "Existing Agent",
+				archetype: "worker",
+			});
 
-			// Simulate the setter registration done by createAgentSession
-			const setter = (r: unknown) => store.setAgentRuntime(r as AgentRuntime);
-			setter(runtime);
+			const mockSession = makeMockSession();
+			// Register an existing idle persistent agent
+			AgentRegistry.global().register({
+				id: "persist-existingProfile",
+				displayName: "persist-existingProfile",
+				kind: "persistent",
+				profileId: "existingProfile",
+				session: mockSession,
+				status: "idle",
+			});
 
-			const ctx = store.getContext();
-			expect(ctx.agentRuntime).toBe(runtime);
+			mockCreateAgentSession.mockClear();
+
+			const result = await agentInvokeTool.execute(
+				"toolCall-1",
+				{ profileId: "existingProfile", task: "New steering task" },
+				undefined,
+				undefined,
+				{} as AgentToolContext,
+			);
+
+			// Should NOT create a new session
+			expect(mockCreateAgentSession).not.toHaveBeenCalled();
+
+			// Should steer the existing session
+			expect(mockSession.prompt).toHaveBeenCalledWith("New steering task");
+			expect(mockSession.wait).toHaveBeenCalled();
+
+			expect(result.isError).toBe(false);
+			expect(result.content).toEqual([{ type: "text", text: "Task completed" }]);
 		});
 
-		it("setter with undefined clears the runtime", () => {
-			const runtime = makeAgentRuntime();
-			const store = makeToolContextStore(runtime);
+		it("creates new session when existing agent is not idle", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "busyProfile",
+				name: "Busy Agent",
+				archetype: "worker",
+			});
 
-			expect(store.getContext().agentRuntime).toBe(runtime);
+			// Register a persistent agent that is running (not idle)
+			AgentRegistry.global().register({
+				id: "persist-busyProfile",
+				displayName: "persist-busyProfile",
+				kind: "persistent",
+				profileId: "busyProfile",
+				session: null,
+				status: "running",
+			});
 
-			// Simulate clearing the runtime
-			store.setAgentRuntime(undefined);
+			const mockSession = makeMockSession();
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
 
-			expect(store.getContext().agentRuntime).toBeUndefined();
+			const result = await agentInvokeTool.execute(
+				"toolCall-1",
+				{ profileId: "busyProfile", task: "Task while busy" },
+				undefined,
+				undefined,
+				{} as AgentToolContext,
+			);
+
+			// Should create a new session since the existing one is not idle
+			expect(mockCreateAgentSession).toHaveBeenCalled();
+			expect(result.isError).toBe(false);
+		});
+	});
+
+	describe("profile credit tracking", () => {
+		it("records successful task completion", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "creditProfile",
+				name: "Credit Agent",
+				archetype: "worker",
+			});
+
+			const mockSession = makeMockSession({
+				wait: mock().mockResolvedValue({ output: "Done", exitCode: 0 }),
+			});
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
+
+			await agentInvokeTool.execute(
+				"toolCall-1",
+				{ profileId: "creditProfile", task: "A successful task" },
+				undefined,
+				undefined,
+				{} as AgentToolContext,
+			);
+
+			const profile = ProfileRegistry.global().get("creditProfile");
+			expect(profile?.credit.totalTasks).toBe(1);
+			expect(profile?.credit.score).toBeGreaterThan(50); // rewarded for success
+		});
+
+		it("records failed task completion", async () => {
+			ProfileRegistry.global().createProfile({
+				profileId: "failCredit",
+				name: "Fail Credit",
+				archetype: "worker",
+			});
+
+			const mockSession = makeMockSession({
+				wait: mock().mockResolvedValue({ output: "Error occurred", exitCode: 1 }),
+			});
+			mockCreateAgentSession.mockResolvedValue({
+				session: mockSession,
+			});
+
+			await agentInvokeTool.execute(
+				"toolCall-1",
+				{ profileId: "failCredit", task: "A failing task" },
+				undefined,
+				undefined,
+				{} as AgentToolContext,
+			);
+
+			const profile = ProfileRegistry.global().get("failCredit");
+			expect(profile?.credit.totalTasks).toBe(1);
+			expect(profile?.credit.successRate).toBe(0); // failed
 		});
 	});
 });

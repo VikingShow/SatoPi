@@ -7,8 +7,8 @@
  * - For pipeline mode, iterations repeat the full DAG execution
  */
 import type { AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { AgentExecutor } from "../executor/executor";
 import type { SwarmDefinition } from "./schema";
@@ -185,7 +185,7 @@ export class PipelineController {
 	/** Active per-agent abort controllers keyed by agent name. */
 	#activeControllers: Map<string, AbortController> = new Map();
 	/** Phase A2: Active v3 agent handles keyed by agent name (runtime path). */
-	#activeHandles: Map<string, AgentHandle> = new Map();
+	#activeHandles: Map<string, AgentSession> = new Map();
 	/** Accumulated iteration count across the run (survives fatal errors). */
 	#completedIterations = 0;
 
@@ -221,7 +221,7 @@ export class PipelineController {
 		// Phase A2: Abort v3 runtime-spawned agents.
 		for (const [_name, handle] of this.#activeHandles) {
 			try {
-				handle.abort(reason);
+				handle.abort({ reason });
 			} catch {
 				// Handle may already be completed/aborted — ignore.
 			}

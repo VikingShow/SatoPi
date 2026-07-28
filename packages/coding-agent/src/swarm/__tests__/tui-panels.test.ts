@@ -65,7 +65,7 @@ describe("renderAgentPanel", () => {
 
 	it("shows 'No agents' when agents object is empty", () => {
 		const state = makeSwarmState({ agents: {} });
-		const lines = renderAgentPanel(state, W);
+		const lines = renderAgentPanel([], state, W);
 		expect(stripAnsi(lines.join("\n"))).toContain("No agents");
 	});
 
@@ -79,7 +79,7 @@ describe("renderAgentPanel", () => {
 				"agent-5": makeAgent({ name: "agent-5", status: "pending" }),
 			},
 		});
-		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
+		const visible = stripAnsi(renderAgentPanel([], state, W).join("\n"));
 		expect(visible).toContain("agent-1");
 		expect(visible).toContain("agent-2");
 		expect(visible).toContain("agent-3");
@@ -98,7 +98,7 @@ describe("renderAgentPanel", () => {
 				"agent-2": makeAgent({ name: "agent-2", status: "running", role: "reviewer" }),
 			},
 		});
-		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
+		const visible = stripAnsi(renderAgentPanel([], state, W).join("\n"));
 		expect(visible).toContain("reviewer:");
 		expect(visible).toContain("agent-2");
 	});
@@ -111,7 +111,7 @@ describe("renderAgentPanel", () => {
 			},
 			reviewVerdict: "请关注安全问题",
 		});
-		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
+		const visible = stripAnsi(renderAgentPanel([], state, W).join("\n"));
 		expect(visible).toContain("请关注安全问题");
 		expect(visible).toContain("review:");
 	});
@@ -122,7 +122,7 @@ describe("renderAgentPanel", () => {
 			agents: { "agent-1": makeAgent({ name: "agent-1", status: "running", role: "reviewer" }) },
 			reviewVerdict: longVerdict,
 		});
-		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
+		const visible = stripAnsi(renderAgentPanel([], state, W).join("\n"));
 		expect(visible).toContain("...");
 		expect(visible).not.toContain(longVerdict);
 	});
@@ -131,19 +131,19 @@ describe("renderAgentPanel", () => {
 		const state = makeSwarmState({
 			agents: { "agent-1": makeAgent({ name: "agent-1", status: "running", modelName: "claude-sonnet" }) },
 		});
-		expect(stripAnsi(renderAgentPanel(state, W).join("\n"))).toContain("claude-sonnet");
+		expect(stripAnsi(renderAgentPanel([], state, W).join("\n"))).toContain("claude-sonnet");
 	});
 
 	it("shows explicit role as role badge", () => {
 		const state = makeSwarmState({
 			agents: { "agent-1": makeAgent({ name: "agent-1", status: "running", role: "reviewer" }) },
 		});
-		expect(stripAnsi(renderAgentPanel(state, W).join("\n"))).toContain("[reviewer]");
+		expect(stripAnsi(renderAgentPanel([], state, W).join("\n"))).toContain("[reviewer]");
 	});
 
 	it("handles null/undefined state gracefully", () => {
-		expect(stripAnsi(renderAgentPanel(null, W).join("\n"))).toContain("No swarm state");
-		expect(stripAnsi(renderAgentPanel(undefined, W).join("\n"))).toContain("No swarm state");
+		expect(stripAnsi(renderAgentPanel([], null, W).join("\n"))).toContain("No agents");
+		expect(stripAnsi(renderAgentPanel([], undefined, W).join("\n"))).toContain("No agents");
 	});
 
 	it("handles agents with missing optional fields", () => {
@@ -160,7 +160,7 @@ describe("renderAgentPanel", () => {
 				},
 			},
 		});
-		const visible = stripAnsi(renderAgentPanel(state, W).join("\n"));
+		const visible = stripAnsi(renderAgentPanel([], state, W).join("\n"));
 		expect(visible).toContain("minimal");
 		expect(visible).toMatch(/running/);
 	});
@@ -171,26 +171,30 @@ describe("renderAgentPanel", () => {
 				"agent-1": makeAgent({ name: "agent-1", status: "completed", startedAt: 100000, completedAt: 232000 }),
 			},
 		});
-		expect(stripAnsi(renderAgentPanel(state, W).join("\n"))).toMatch(/2m\s+12s/);
+		expect(stripAnsi(renderAgentPanel([], state, W).join("\n"))).toMatch(/2m\s+12s/);
 	});
 
 	it("panel has proper border structure", () => {
 		const state = makeSwarmState({ agents: { "agent-1": makeAgent({ name: "agent-1", status: "running" }) } });
-		const lines = renderAgentPanel(state, W);
+		const lines = renderAgentPanel([], state, W);
 		expect(stripAnsi(lines[0])).toMatch(/^[┌╭].*Agents.*[┐╮]$/);
 		expect(stripAnsi(lines[lines.length - 1])).toMatch(/^[└╰].*[┘╯]$/);
 	});
 
-	it("status lines contain ANSI colour codes", () => {
+	it("status lines show glyphs and status labels", () => {
 		const state = makeSwarmState({
 			agents: {
 				"agent-1": makeAgent({ name: "agent-1", status: "completed", startedAt: 1000, completedAt: 2000 }),
 				"agent-2": makeAgent({ name: "agent-2", status: "failed", error: "broken" }),
 			},
 		});
-		const full = renderAgentPanel(state, W).join("\n");
-		// All colour output should contain ANSI escapes
-		expect(full).toContain("\x1b[");
+		const full = renderAgentPanel([], state, W).join("\n");
+		// Completed agents show done glyph and label
+		expect(full).toContain("agent-1");
+		expect(full).toMatch(/✓.*done/);
+		// Failed agents show error glyph and error message
+		expect(full).toContain("agent-2");
+		expect(full).toContain("broken");
 	});
 });
 
@@ -211,10 +215,13 @@ describe("renderCommPanel", () => {
 		expect(stripAnsi(lines.join("\n"))).toMatch(/\d{2}:\d{2}:\d{2}/);
 	});
 
-	it("color-codes senders with ANSI codes", () => {
+	it("shows sender, arrow, and recipient in messages", () => {
 		const msgs: CommMessage[] = [makeMsg({ from: "human", to: "planner", body: "test" })];
 		const full = renderCommPanel(msgs, W).join("\n");
-		expect(full).toContain("\x1b[");
+		expect(full).toContain("human");
+		expect(full).toContain("planner");
+		expect(full).toContain("→");
+		expect(full).toContain("test");
 	});
 
 	it("truncates long message bodies", () => {
@@ -310,12 +317,13 @@ describe("renderContextPanel", () => {
 		expect(stripAnsi(renderContextPanel(state, W).join("\n"))).toContain("25%");
 	});
 
-	it("token usage lines contain ANSI colour codes", () => {
+	it("shows high-usage percentage for near-full windows", () => {
 		const state = makeCtx({ agents: [{ agentId: "agent-1", tokensUsed: 30000, tokenBudget: 32768 }] });
 		const full = renderContextPanel(state, W).join("\n");
-		// 30000/32768 ≈ 92% — should trigger danger/red styling
-		expect(full).toContain("\x1b[");
+		// 30000/32768 ≈ 92% — high usage, should be visible
 		expect(full).toContain("92%");
+		expect(full).toContain("30,000");
+		expect(full).toContain("32,768");
 	});
 
 	it("handles zero token budget gracefully", () => {
@@ -363,7 +371,7 @@ describe("maxWidth compliance", () => {
 					startedAt: 1000,
 					reviewVerdict: "Please focus on security",
 				});
-				assertMaxWidth(renderAgentPanel(state, w), w);
+				assertMaxWidth(renderAgentPanel([], state, w), w);
 			});
 		}
 	});

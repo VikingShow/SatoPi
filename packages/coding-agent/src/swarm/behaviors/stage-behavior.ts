@@ -17,7 +17,7 @@
  * StageBehavior is a **simplified adapter** that:
  *   - Creates one agent per unique task role (no profile selection)
  *   - Delegates task-queue setup to {@link createTaskQueueFromPlan}
- *   - Uses AgentRuntime + CommBus + TaskQueue directly for the
+ *   - Uses AgentRuntime + IrcBus + TaskQueue directly for the
  *     event-driven lifecycle that the graph engine requires
  *
  * Both paths share {@link createTaskQueueFromPlan} and
@@ -32,7 +32,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";
 import { TaskQueue } from "../executor/task-queue";
@@ -44,7 +44,7 @@ import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } f
 
 /** Per-agent tracking state within the Stage phase. */
 interface AgentTracking {
-	handle: AgentHandle;
+	handle: AgentSession;
 	/** Current task being worked on (if any). */
 	currentTask?: string;
 	/** Whether this agent has been flagged with an error. */
@@ -101,7 +101,7 @@ export class StageBehavior implements PhaseBehavior {
 		const agentIds = roles.map((_role, i) => `agent-${i + 1}`);
 
 		// 3. Create swarm group channel (Human as observer)
-		const channel = ctx.commBus.groupChannel("swarm", ["human", ...agentIds], ctx.activityLogger);
+		const channel = ctx.ircBus.groupChannel("swarm", ["human", ...agentIds], ctx.activityLogger);
 		this.#channel = channel;
 
 		// 4. Optional: role roundtable if configured
@@ -135,30 +135,30 @@ export class StageBehavior implements PhaseBehavior {
 			};
 		});
 
-		const handles = await ctx.runtime.spawn(specs);
+		const sessions = await ctx.runtime.spawn(specs);
 
-		for (let i = 0; i < handles.length; i++) {
-			const handle = handles[i];
-			this.#agents.set(handle.id, {
-				handle,
+		for (let i = 0; i < sessions.length; i++) {
+			const session = sessions[i];
+			this.#agents.set(session.id, {
+				handle: session,
 				hasError: false,
 			});
 
 			// Register the agent in the StateTracker
-			await ctx.stateTracker.registerAgent(handle.id).catch(() => {
+			await ctx.stateTracker.registerAgent(session.id).catch(() => {
 				// Non-fatal: state tracker persistence is best-effort
 			});
 		}
 
 		logger.info("[StageBehavior] Worker agents spawned", {
-			agentCount: handles.length,
-			agentIds: handles.map(h => h.id),
+			agentCount: sessions.length,
+			agentIds: sessions.map(s => s.id),
 		});
 
 		return {
-			agents: handles,
+			agents: sessions,
 			channels: [channel],
-			initialUIMessage: `Stage started with ${handles.length} workers on ${rawTasks.length} tasks.`,
+			initialUIMessage: `Stage started with ${sessions.length} workers on ${rawTasks.length} tasks.`,
 		};
 	}
 
@@ -182,7 +182,7 @@ export class StageBehavior implements PhaseBehavior {
 			return;
 		}
 
-		// Broadcast steering message to all agents via CommBus channel
+		// Broadcast steering message to all agents via IrcBus channel
 		if (this.#channel) {
 			await this.#channel.send("human", msg.body);
 			logger.info("[StageBehavior] Broadcast steering to all workers", {
@@ -329,7 +329,7 @@ export class StageBehavior implements PhaseBehavior {
 		for (const tracking of this.#agents.values()) {
 			if (tracking.handle.status === "running") {
 				try {
-					tracking.handle.abort("phase exit");
+					tracking.handle.abort({ reason: "phase exit" });
 				} catch {
 					// Best-effort abort
 				}

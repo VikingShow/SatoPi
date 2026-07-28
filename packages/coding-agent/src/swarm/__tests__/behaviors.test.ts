@@ -23,22 +23,23 @@ import { StageBehavior } from "../behaviors/stage-behavior";
 // Mock factories
 // ============================================================================
 
-/** AgentHandle mock — simulates a running/completed agent. */
-function mockAgentHandle(id: string, role: string, status: "running" | "completed" | "failed" | "aborted" = "running") {
+/** AgentSession mock — simulates a running/completed agent. */
+function mockAgentSession(
+	id: string,
+	role: string,
+	status: "running" | "completed" | "failed" | "aborted" = "running",
+) {
 	return {
 		id,
 		role,
 		status,
 		agent: {},
 		session: {},
-		send: mock(async (_message: string) => {}),
+		steer: mock(async (_message: string) => {}),
 		followUp: mock(async (_message: string) => {}),
 		abort: mock((_reason?: string) => {}),
 		wait: mock(async (_timeoutMs?: number) => ({ output: "mock output", thinking: undefined })),
-		outputStream: mock(async function* () {
-			yield "mock";
-		}),
-	} as any;
+	} as unknown as Record<string, unknown>;
 }
 
 /** CommChannel mock — simulates a group communication channel. */
@@ -113,7 +114,7 @@ function mockPhaseContext(overrides: Partial<PhaseContext> = {}): PhaseContext {
 			cancelTimed: mock(() => {}),
 		} as any,
 
-		commBus: {
+		ircBus: {
 			groupChannel: mock((_name: string, _agentIds: string[], _activityLogger?: any) => channel),
 			receiveFromHuman: mock(async (_text: string, _target?: string) => {}),
 			removeChannel: mock((_name: string) => {}),
@@ -122,7 +123,7 @@ function mockPhaseContext(overrides: Partial<PhaseContext> = {}): PhaseContext {
 
 		runtime: {
 			spawn: mock(async (_specs: any[]) => {
-				return _specs.map((s: any) => mockAgentHandle(s.id, s.role));
+				return _specs.map((s: { id: string; role: string }) => mockAgentSession(s.id, s.role));
 			}),
 			spawnRoundtable: mock(async () => ({
 				converged: false,
@@ -316,7 +317,7 @@ describe("ScriptBehavior", () => {
 
 			expect(result.channels).toBeArray();
 			expect(result.channels.length).toBe(1);
-			expect(ctx.commBus.groupChannel).toHaveBeenCalled();
+			expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
 		});
 
 		it("returns PhaseEnterResult with initialUIMessage", async () => {
@@ -340,9 +341,9 @@ describe("ScriptBehavior", () => {
 
 			// Get the spawned planner mock
 			const _plannerHandle = (ctx.runtime.spawn as any).mock.results[0]?.value?.[0];
-			// For mocked spawn, we need to check the send was called
-			// Since we use mockAgentHandle, send is a mock function
-			// The behavior sends via handle.send(), so we verify no errors
+			// For mocked spawn, we need to check the steer was called
+			// Since we use mockAgentSession, steer is a mock function
+			// The behavior steers via session.steer(), so we verify no errors
 
 			await behavior.handleHumanMessage({ from: "human", body: "add authentication to the plan" }, ctx);
 
@@ -509,7 +510,7 @@ describe("StageBehavior", () => {
 
 			expect(result.channels).toBeArray();
 			expect(result.channels.length).toBeGreaterThanOrEqual(1);
-			expect(ctx.commBus.groupChannel).toHaveBeenCalled();
+			expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
 		});
 
 		it("spawns worker agents for each unique role in the plan", async () => {
@@ -689,8 +690,8 @@ describe("CurtainBehavior", () => {
 		it("creates a vote channel when multiple agents exist", async () => {
 			await behavior.enter(ctx);
 
-			// The commBus.groupChannel should have been called with "election"
-			expect(ctx.commBus.groupChannel).toHaveBeenCalled();
+			// The ircBus.groupChannel should have been called with "election"
+			expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
 		});
 
 		it("returns initialUIMessage", async () => {
@@ -885,7 +886,7 @@ describe("PhaseContext", () => {
 		// Verify context is accessible — all service mocks should have been
 		// callable (the behavior delegates to them internally)
 		expect(ctx.runtime.spawn).toHaveBeenCalled();
-		expect(ctx.commBus.groupChannel).toHaveBeenCalled();
+		expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
 	});
 
 	it("loopConfig is accessible for roundtable/roundtable configuration", async () => {

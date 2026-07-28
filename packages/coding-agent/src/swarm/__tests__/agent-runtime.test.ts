@@ -5,7 +5,7 @@
  * - AgentSpec: basic shape validation
  * - RoleProvider.resolve(): library found, library not found fallback,
  *   inline role, default fallback, error handling
- * - AgentHandle: status tracking, abort, send/followUp, wait timeout
+ * - AgentSession: status tracking, abort, send/followUp, wait timeout
  * - AgentRuntime.spawn(): single agent, multiple agents in parallel,
  *   HookPipeline triggers
  * - AgentLoopConfig assembly: transformContext, getSteeringMessages,
@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // Mock session factory for AgentLauncher tests — avoids pulling in full SDK
 // Variant A: agent stays "running" for basic lifecycle tests
-const mockSession = {
+const makeMockSession = (agentId?: string) => ({
 	agent: {
 		setAsideMessageProvider: () => {},
 		subscribe: () => () => {},
@@ -28,11 +28,19 @@ const mockSession = {
 	},
 	prompt: async () => {},
 	setToolContextAgentRuntime: () => {},
-};
-const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
+	get id() {
+		return agentId ?? "unknown";
+	},
+	get status() {
+		return "running" as const;
+	},
+	role: undefined as string | undefined,
+});
+const mockSessionFactory = async (opts?: { agentId?: string }) => ({
+	session: makeMockSession(opts?.agentId) as unknown as AgentSession,
+});
 
-// Variant B: fires agent_end synchronously — for tests needing handle.wait() to resolve
-const mockCompletingSession = {
+const makeCompletingMockSession = (agentId?: string) => ({
 	agent: {
 		setAsideMessageProvider: () => {},
 		subscribe: (cb: (event: { type: string }) => void) => {
@@ -45,26 +53,33 @@ const mockCompletingSession = {
 	},
 	prompt: async () => {},
 	setToolContextAgentRuntime: () => {},
-};
-const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
+	get id() {
+		return agentId ?? "completed-unknown";
+	},
+	get status() {
+		return "running" as const;
+	},
+	role: undefined as string | undefined,
+});
+const mockCompletingSessionFactory = async (opts?: { agentId?: string }) => ({
+	session: makeCompletingMockSession(opts?.agentId) as unknown as AgentSession,
+});
 
-import type { AgentEvent, AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import { type ResolvedRole, RoleProvider } from "../../agent/role-provider";
+import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { CreateAgentSessionOptions } from "../../sdk";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
 // Dependencies
 import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
-import { AgentHandle } from "../agent-runtime/agent-handle";
 import { AgentLauncher, type LaunchContext } from "../agent-runtime/agent-launcher";
 // Module under test
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
-import { type ResolvedRole, RoleProvider } from "../agent-runtime/role-provider";
-import { CommBus } from "../comm-bus/comm-bus";
 import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 
@@ -246,252 +261,6 @@ describe("RoleProvider", () => {
 });
 
 // ============================================================================
-// AgentHandle
-// ============================================================================
-
-describe("AgentHandle", () => {
-	describe("status tracking", () => {
-		test("starts with status running", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
-			expect(handle.status).toBe("running");
-		});
-
-		test("has correct id and role", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("worker-1", "backend", agent, {} as unknown as AgentSession);
-			expect(handle.id).toBe("worker-1");
-			expect(handle.role).toBe("backend");
-		});
-
-		test("exposes underlying Agent via getter", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
-			expect(handle.agent).toBe(agent);
-		});
-
-		test("exposes session via getter", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const session = { foo: "bar" } as unknown as AgentSession;
-			const handle = new AgentHandle("a1", "test", agent, session);
-			expect(handle.session).toBe(session);
-		});
-	});
-
-	describe("abort()", () => {
-		test("marks status as aborted", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
-
-			handle.abort("done");
-
-			expect(handle.status).toBe("aborted");
-		});
-
-		test("abort is idempotent", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {});
-
-			handle.abort("first");
-			handle.abort("second");
-
-			expect(handle.status).toBe("aborted");
-		});
-	});
-
-	describe("send() and followUp()", () => {
-		test("send() calls agent.steer() with a user message", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
-
-			// Should not throw
-			handle.send("Hello agent");
-			// Message is queued — verified by not throwing
-		});
-
-		test("followUp() calls agent.followUp() with a user message", () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
-
-			// Should not throw
-			handle.followUp("Follow up message");
-		});
-	});
-
-	describe("wait() timeout", () => {
-		test("times out after specified duration", async () => {
-			const agent = new Agent({ initialState: { systemPrompt: [], messages: [], tools: [] } });
-			const handle = new AgentHandle("a1", "test", agent, {} as unknown as AgentSession);
-
-			// The agent isn't running, so wait should either resolve immediately
-			// or time out. Since no agent loop is active, the completion promise
-			// won't be resolved by agent_end — but the AgentHandle's internal
-			// wiring may resolve it on construction. Let's test with a very short
-			// timeout to verify the timeout path.
-			try {
-				const result = await handle.wait(10);
-				// If resolved immediately, it should have output
-				expect(typeof result.output).toBe("string");
-			} catch (err: unknown) {
-				const error = err as Error;
-				expect(error.message).toContain("timed out");
-			}
-		});
-	});
-
-	describe("message cap and cleanup", () => {
-		/**
-		 * Contract: AgentHandle MUST never retain more than 10,000 messages.
-		 * When the cap is hit, the oldest message MUST be evicted.
-		 *
-		 * Exercises the real #pushMessage code path by firing message_update
-		 * events through a mocked Agent's subscribe callback, then asserting
-		 * the assembled output (via onComplete) excludes the evicted message.
-		 */
-		test("caps messages at MAX_MESSAGES and evicts oldest", () => {
-			// Build a minimal mock Agent that captures the subscribe callback
-			// so we can dispatch events directly — this is the only way to
-			// reach the private #pushMessage path without spinning up a full
-			// Agent loop.
-			const listeners = new Set<(e: AgentEvent) => void>();
-			const mockAgent = {
-				subscribe: (fn: (e: AgentEvent) => void) => {
-					listeners.add(fn);
-					return () => {
-						listeners.delete(fn);
-					};
-				},
-				steer: () => {},
-				followUp: () => {},
-				abort: () => {},
-			};
-
-			const handle = new AgentHandle(
-				"cap-test",
-				"worker",
-				mockAgent as unknown as Agent,
-				{} as unknown as AgentSession,
-			);
-
-			// The constructor wires completion tracking via subscribe,
-			// so we should have exactly one listener registered.
-			expect(listeners.size).toBe(1);
-			const emit = [...listeners][0];
-
-			// Push MAX_MESSAGES + 1 message_update events — one over the cap.
-			const extra = 1;
-			const total = AgentHandle.MAX_MESSAGES + extra;
-			for (let i = 0; i < total; i++) {
-				emit({
-					type: "message_update",
-					message: {
-						role: "assistant",
-						content: `msg-${i}`,
-						timestamp: Date.now(),
-					},
-					assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: `msg-${i}` },
-				} as unknown as AgentEvent);
-			}
-
-			// Capture the assembled output via onComplete callback.
-			let capturedOutput = "";
-			handle.onComplete = result => {
-				capturedOutput = result.output;
-			};
-
-			// Fire agent_end — this joins #messages with "\n" and resolves.
-			emit({
-				type: "agent_end",
-				messages: [],
-			} as unknown as AgentEvent);
-
-			// The output must NOT contain msg-0 (oldest, evicted).
-			expect(capturedOutput).not.toContain("msg-0");
-			// The output MUST contain msg-1 (oldest retained after eviction).
-			expect(capturedOutput).toContain("msg-1");
-			// The output MUST contain the last message pushed.
-			expect(capturedOutput).toContain(`msg-${AgentHandle.MAX_MESSAGES}`);
-			// Status transitions to "completed" on agent_end.
-			expect(handle.status).toBe("completed");
-		});
-
-		/**
-		 * Contract: After wait() resolves, the internal messages buffer MUST
-		 * be cleared and the completion-tracking subscription MUST be
-		 * unsubscribed so no further events affect the handle.
-		 *
-		 * Verifies both cleanup actions happen by checking that a second
-		 * agent_end event after wait() does NOT trigger onComplete again.
-		 */
-		test("wait() cleans up messages and unsubscribes completion listener", async () => {
-			const listeners = new Set<(e: AgentEvent) => void>();
-			let unsubscribeCount = 0;
-			const mockAgent = {
-				subscribe: (fn: (e: AgentEvent) => void) => {
-					listeners.add(fn);
-					return () => {
-						listeners.delete(fn);
-						unsubscribeCount++;
-					};
-				},
-				steer: () => {},
-				followUp: () => {},
-				abort: () => {},
-			};
-
-			const handle = new AgentHandle(
-				"cleanup-test",
-				"worker",
-				mockAgent as unknown as Agent,
-				{} as unknown as AgentSession,
-			);
-
-			expect(listeners.size).toBe(1);
-			const emit = [...listeners][0];
-
-			// Push a few messages so there is something to clear.
-			for (let i = 0; i < 5; i++) {
-				emit({
-					type: "message_update",
-					message: {
-						role: "assistant",
-						content: `msg-${i}`,
-						timestamp: Date.now(),
-					},
-					assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: `msg-${i}` },
-				} as unknown as AgentEvent);
-			}
-
-			// Complete the agent — this resolves the completion promise.
-			emit({
-				type: "agent_end",
-				messages: [],
-			} as unknown as AgentEvent);
-
-			// Call wait() — this should clear messages and unsubscribe.
-			const result = await handle.wait(1000);
-			expect(result.exitCode).toBe(0);
-			expect(typeof result.output).toBe("string");
-
-			// Verify unsubscribe was called during wait() cleanup.
-			expect(unsubscribeCount).toBe(1);
-
-			// After cleanup, firing another agent_end should NOT trigger
-			// onComplete again (listener was removed).
-			let onCompleteCallCount = 0;
-			handle.onComplete = () => {
-				onCompleteCallCount++;
-			};
-			emit({
-				type: "agent_end",
-				messages: [],
-			} as unknown as AgentEvent);
-			expect(onCompleteCallCount).toBe(0);
-		});
-	});
-});
-
-// ============================================================================
 // AgentLauncher
 // ============================================================================
 
@@ -535,12 +304,12 @@ describe("AgentLauncher", () => {
 		};
 	}
 
-	test("launches an agent and returns AgentHandle", async () => {
+	test("launches an agent and returns AgentSession", async () => {
 		const ctx = makeLaunchContext();
 		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
 
 		const handle = await launcher.launch(ctx);
-		expect(handle).toBeInstanceOf(AgentHandle);
+		expect(handle).toBeTruthy();
 		expect(handle.id).toBe("agent-1");
 		expect(handle.role).toBe("planner");
 		expect(handle.status).toBe("running");
@@ -580,7 +349,7 @@ describe("AgentLauncher", () => {
 		// Launch should succeed — the transformContext from assembled
 		// is wired into the Agent constructor
 		const handle = await launcher.launch(ctx);
-		expect(handle).toBeInstanceOf(AgentHandle);
+		expect(handle).toBeTruthy();
 	});
 
 	test("wires aside message provider from hook providers", async () => {
@@ -600,7 +369,7 @@ describe("AgentLauncher", () => {
 
 		// Should not throw — aside provider is wired
 		const handle = await launcher.launch(ctx);
-		expect(handle).toBeInstanceOf(AgentHandle);
+		expect(handle).toBeTruthy();
 	});
 
 	test("SP-7: hasIrcInterrupts reaches Agent through spawn path", async () => {
@@ -628,6 +397,10 @@ describe("AgentLauncher", () => {
 					agent,
 					prompt: async () => {},
 					setToolContextAgentRuntime: () => {},
+					get id() {
+						return options.agentId ?? "has-irc-unknown";
+					},
+					role: undefined as string | undefined,
 				} as unknown as AgentSession,
 			};
 		};
@@ -636,10 +409,10 @@ describe("AgentLauncher", () => {
 		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, hasIrcSessionFactory);
 
 		const handle = await launcher.launch(ctx);
-		expect(handle).toBeInstanceOf(AgentHandle);
+		expect(handle).toBeTruthy();
 		expect(handle.id).toBe("agent-1");
 
-		// Access the internal Agent through AgentHandle
+		// Access the internal Agent through AgentSession
 		const agent = handle.agent;
 		expect(agent).toBeInstanceOf(Agent);
 
@@ -659,7 +432,7 @@ describe("AgentRuntime", () => {
 	let contextPipeline: ContextPipeline;
 	let hookPipeline: HookPipeline;
 	let launcher: AgentLauncher;
-	let commBus: CommBus;
+	let ircBus: IrcBus;
 	let modelRegistry: ModelRegistry;
 	let settings: Settings;
 	let toolRegistry: Map<string, Tool>;
@@ -672,7 +445,7 @@ describe("AgentRuntime", () => {
 		roleProvider = new RoleProvider(roleMgr);
 		contextPipeline = new ContextPipeline();
 		hookPipeline = new HookPipeline();
-		commBus = new CommBus();
+		ircBus = new IrcBus();
 
 		// Mock tool registry so AgentLauncher can resolve tools without real implementations
 		const mockTool = { name: "mock", execute: async () => ({ output: "ok" }) } as unknown as Tool;
@@ -701,7 +474,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -711,7 +484,7 @@ describe("AgentRuntime", () => {
 			const handles = await runtime.spawn([makeSpec({ id: "agent-1", role: "planner" })]);
 
 			expect(handles.length).toBe(1);
-			expect(handles[0]).toBeInstanceOf(AgentHandle);
+			expect(handles[0]).toBeTruthy();
 			expect(handles[0].id).toBe("agent-1");
 		});
 
@@ -720,7 +493,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -752,7 +525,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -771,7 +544,7 @@ describe("AgentRuntime", () => {
 				events: ["agent:afterSpawn"],
 				handler: async (_event, payload, _ctx) => {
 					events.push(`after:${payload.agentId}`);
-					expect(payload.handle).toBeInstanceOf(AgentHandle);
+					expect(payload.handle).toBeTruthy();
 				},
 			});
 
@@ -779,7 +552,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -797,7 +570,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -813,7 +586,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -836,7 +609,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -853,7 +626,7 @@ describe("AgentRuntime", () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: mockCompletingSession as unknown as AgentSession };
+				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
@@ -862,7 +635,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher: capturingLauncher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -890,7 +663,7 @@ describe("AgentRuntime", () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: mockCompletingSession as unknown as AgentSession };
+				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
@@ -899,7 +672,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher: capturingLauncher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -941,7 +714,7 @@ describe("AgentRuntime", () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: mockCompletingSession as unknown as AgentSession };
+				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
@@ -950,7 +723,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher: capturingLauncher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -984,7 +757,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
-				commBus,
+				ircBus,
 				hookPipeline,
 				modelRegistry,
 				settings,
@@ -1026,7 +799,7 @@ describe("Error handling", () => {
 
 		const contextPipeline = new ContextPipeline();
 		const hookPipeline = new HookPipeline();
-		const commBus = new CommBus();
+		const ircBus = new IrcBus();
 
 		const modelRegistry = {
 			getAvailable: () => [],
@@ -1039,7 +812,7 @@ describe("Error handling", () => {
 			roleProvider: brokenRoleProvider,
 			contextPipeline,
 			launcher,
-			commBus,
+			ircBus,
 			hookPipeline,
 			modelRegistry,
 			settings: {} as Settings,
@@ -1051,7 +824,7 @@ describe("Error handling", () => {
 	test("AgentRuntime.spawnOne propagates ContextPipeline errors", async () => {
 		const roleProvider = new RoleProvider(mockRoleAssetManager({ planner: makeRoleAsset() }));
 		const hookPipeline = new HookPipeline();
-		const commBus = new CommBus();
+		const ircBus = new IrcBus();
 
 		const modelRegistry = {
 			getAvailable: () => [{ id: "test", provider: "test", supportsTools: true }],
@@ -1074,51 +847,13 @@ describe("Error handling", () => {
 			roleProvider,
 			contextPipeline: brokenPipeline,
 			launcher,
-			commBus,
+			ircBus,
 			hookPipeline,
 			modelRegistry,
 			settings: {} as Settings,
 		});
 
 		await expect(runtime.spawn([makeSpec({ id: "ctx-agent" })])).rejects.toThrow("Context DB offline");
-	});
-});
-
-// ============================================================================
-// AgentHandle callbacks
-// ============================================================================
-
-describe("AgentHandle callbacks", () => {
-	test("fires onComplete callback", () => {
-		const agent = new Agent({
-			initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
-		});
-		const handle = new AgentHandle("cb-test", "test", agent, {} as unknown as AgentSession);
-
-		let fired = false;
-		let agentId = "";
-		handle.onComplete = result => {
-			fired = true;
-			agentId = result.agentId;
-		};
-
-		// Simulate agent_end event
-		agent.emitExternalEvent?.({ type: "agent_end" } as AgentEvent);
-
-		expect(fired).toBe(true);
-		expect(agentId).toBe("cb-test");
-	});
-
-	test("onComplete is optional — does not throw when unset", () => {
-		const agent = new Agent({
-			initialState: { systemPrompt: [], model: {} as Model<"openai">, tools: [] },
-		});
-		const handle = new AgentHandle("no-cb", "test", agent, {} as unknown as AgentSession);
-
-		expect(() => {
-			agent.emitExternalEvent?.({ type: "agent_end" } as AgentEvent);
-		}).not.toThrow();
-		expect(handle.status).toBe("completed");
 	});
 });
 

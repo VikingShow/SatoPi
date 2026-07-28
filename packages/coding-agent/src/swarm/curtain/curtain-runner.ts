@@ -9,13 +9,12 @@
  */
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import { logger, prompt } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import { IrcBus } from "../../irc/bus";
 import { enqueueMemoryConsolidation } from "../../memories";
 import type { AgentRuntime } from "../agent-runtime";
-import { CommBus } from "../comm-bus";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import {
@@ -53,8 +52,6 @@ export interface CurtainRunnerOpts {
 	profileRegistry?: ProfileRegistry;
 	/** Optional IRC bus for agent-to-agent communication (enables reporter election). */
 	ircBus?: IrcBus;
-	/** Optional CommBus (injected from AgentRuntime; falls back to global singleton). */
-	commBus?: CommBus;
 	/** AgentRuntime for v3 agent spawning. */
 	runtime?: AgentRuntime;
 	/** Optional remote Hindsight handle — pushes lessons cross-session. Null/absent → local only. */
@@ -139,8 +136,8 @@ export async function runCurtainPipeline(
 				});
 			}
 			const eligibleIds = contributions.map(c => c.agentId);
-			const commBus = opts.commBus ?? CommBus.global();
-			const channel = commBus.groupChannel("election", eligibleIds, activityLogger);
+			const ircBus = opts.ircBus ?? IrcBus.global();
+			const channel = ircBus.groupChannel("election", eligibleIds, activityLogger);
 			const voteResult = await channel.vote("elect reporter", { eligibleIds, timeoutMs: 15000 });
 			electedReporter = voteResult.winner;
 			activityLogger.logBroadcast(

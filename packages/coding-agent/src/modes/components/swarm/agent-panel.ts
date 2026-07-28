@@ -1,26 +1,28 @@
 /**
- * Agent Panel — renders swarm agent status as ANSI-coloured panel lines.
+ * Agent Panel — renders agent status as ANSI-coloured panel lines.
  *
- * Shows each agent with role, current task, duration, and status glyph.
+ * Primary data source: AgentRegistry (AgentRef list).
+ * Optional enrichment: SwarmState for swarm-specific metrics (iteration, wave, praiseCount).
+ *
+ * Shows each agent with role, current task, duration, status glyph, and
+ * profile credit score for persistent agents.
  * Includes reviewer tag line when a reviewer agent is elected.
  */
 
-import { ProfileRegistry } from "../../../agent/agent-profile";
-import type { AgentState, SwarmState } from "../../../swarm/core/state";
+import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
+import type { SwarmState } from "../../../swarm/core/state";
 import { makeFooter, makeHeader, padLine } from "./panel-utils";
 import { sato } from "./theme";
 
-// ============================================================================
-// Status glyphs
-// ============================================================================
-
 const STATUS_GLYPH: Record<string, string> = {
-	completed: "✓", // ✓
-	running: "◌", // ◌
-	waiting: "○", // ○
-	failed: "✗", // ✗
-	pending: "·", // ·
-	aborted: "⊘", // ⊘
+	completed: "✓",
+	running: "◌",
+	waiting: "○",
+	failed: "✗",
+	pending: "·",
+	idle: "✓",
+	parked: "○",
+	aborted: "⊘",
 };
 
 const STATUS_COLOR: Record<string, (text: string) => string> = {
@@ -29,6 +31,8 @@ const STATUS_COLOR: Record<string, (text: string) => string> = {
 	waiting: sato.warning,
 	failed: sato.danger,
 	pending: sato.muted,
+	idle: sato.success,
+	parked: sato.muted,
 	aborted: sato.danger,
 };
 
@@ -38,8 +42,10 @@ const STATUS_LABEL: Record<string, string> = {
 	waiting: "waiting for tasks",
 	failed: "failed",
 	pending: "pending",
+	idle: "done",
+	parked: "parked",
+	aborted: "aborted",
 };
-
 // ============================================================================
 // Public API
 // ============================================================================
@@ -47,20 +53,27 @@ const STATUS_LABEL: Record<string, string> = {
 /**
  * Render the agent status panel.
  *
+ * Primary source: `agents` from `AgentRegistry.global().list()`.
+ * Optional swarm enrichment: `swarmState` overlays iteration, wave,
+ * praiseCount, and per-agent swarm-specific metrics when available.
+ *
  * Returns an array of chalk-coloured strings, one per display line.
  * Every visible line is guaranteed to be at most `maxWidth` columns wide.
  *
  * Gracefully handles:
  *  - Empty agents (shows "No agents" placeholder)
- *  - Null/undefined state (returns empty panel with error indicator)
- *  - Missing optional fields (modelName, role, etc.)
+ *  - Null/undefined swarmState (renders from registry only)
+ *  - Missing optional fields
  */
-export function renderAgentPanel(state: SwarmState | null | undefined, maxWidth: number): string[] {
-	if (!state) {
-		return emptyPanel(maxWidth, "No swarm state");
+export function renderAgentPanel(
+	agents: AgentRef[],
+	swarmState: SwarmState | null | undefined,
+	maxWidth: number,
+): string[] {
+	if (agents.length === 0 && !swarmState?.agents) {
+		return emptyPanel(maxWidth, "No agents");
 	}
 
-	const agents = Object.values(state.agents ?? {});
 	const innerWidth = maxWidth - 4; // "│ " + content + " │"
 	if (innerWidth < 10) return [];
 
@@ -69,36 +82,47 @@ export function renderAgentPanel(state: SwarmState | null | undefined, maxWidth:
 	// Header
 	lines.push(makeHeader("Agents", maxWidth));
 
-	if (agents.length === 0) {
+	// Merge: AgentRef list is primary; swarm state enriches.
+	// Use AgentRef list when available; fall back to swarmState.agents.
+	const agentList = agents.length > 0 ? agents : buildAgentRefsFromSwarm(swarmState);
+
+	if (agentList.length === 0) {
 		lines.push(padLine(` ${sato.dim("No agents")}`, maxWidth));
 	} else {
-		// Sort agents: reviewer first, then by name
-		const sorted = [...agents].sort((a, b) => {
-			if (a.role === "reviewer" && b.role !== "reviewer") return -1;
-			if (b.role === "reviewer" && a.role !== "reviewer") return 1;
-			return a.name.localeCompare(b.name);
+		// Sort: persistent/reviewer first, then by displayName
+		const sorted = [...agentList].sort((a, b) => {
+			const aRole = a.role ?? swarmState?.agents[a.id]?.role;
+			const bRole = b.role ?? swarmState?.agents[b.id]?.role;
+			if (aRole === "reviewer" && bRole !== "reviewer") return -1;
+			if (bRole === "reviewer" && aRole !== "reviewer") return 1;
+			return a.displayName.localeCompare(b.displayName);
 		});
 
 		// Agent lines (up to 20, then summary)
 		const maxAgentLines = 20;
 		const shown = sorted.slice(0, maxAgentLines);
-		for (const agent of shown) {
-			lines.push(formatAgentLine(agent, innerWidth, maxWidth));
+		for (const ref of shown) {
+			const swarmAgent = swarmState?.agents[ref.id];
+			lines.push(formatAgentLine(ref, swarmAgent, innerWidth, maxWidth));
 		}
 		if (sorted.length > maxAgentLines) {
 			lines.push(padLine(` ${sato.dim(`... and ${sorted.length - maxAgentLines} more agents`)}`, maxWidth));
 		}
 	}
 
-	// Reviewer footer
-	const reviewer = Object.values(state.agents ?? {}).find(a => a.role === "reviewer");
+	// Reviewer footer (from swarm state or ref role)
+	const reviewer = agentList.find(ref => {
+		const role = ref.role ?? swarmState?.agents[ref.id]?.role;
+		return role === "reviewer";
+	});
 	if (reviewer) {
-		const verdict = state.reviewVerdict;
-		let footer = ` 👑 reviewer: ${reviewer.name}`; // 👑
+		const verdict = swarmState?.reviewVerdict;
+		let footer = ` 👑 reviewer: ${reviewer.displayName}`;
 		if (verdict) {
-			const verdictMax = Math.max(5, innerWidth - (footer.length + 12));
+			const footerLen = footer.replace(/\x1b\[[0-9;]*m/g, "").length;
+			const verdictMax = Math.max(5, innerWidth - (footerLen + 12));
 			const display = verdict.length > verdictMax ? `${verdict.slice(0, verdictMax - 3)}...` : verdict;
-			footer += `  ·  review: "${display}"`; // ·
+			footer += `  ·  review: "${display}"`;
 		}
 		lines.push(padLine("", maxWidth));
 		lines.push(padLine(footer, maxWidth));
@@ -114,43 +138,76 @@ export function renderAgentPanel(state: SwarmState | null | undefined, maxWidth:
 // Internal
 // ============================================================================
 
-function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number): string {
-	const glyph = STATUS_GLYPH[agent.status] ?? STATUS_GLYPH.pending;
-	const colorFn = STATUS_COLOR[agent.status] ?? STATUS_COLOR.pending;
+/**
+ * Format a single agent line from an AgentRef, optionally enriched with
+ * swarm-specific AgentState metrics.
+ */
+function formatAgentLine(
+	ref: AgentRef,
+	swarmAgent:
+		| {
+				status: string;
+				iteration?: number;
+				wave?: number;
+				praiseCount?: number;
+				error?: string;
+				modelName?: string;
+				startedAt?: number;
+				completedAt?: number;
+		  }
+		| undefined,
+	innerWidth: number,
+	maxWidth: number,
+): string {
+	// Status: swarm agent status is ground truth when available; ref status is fallback
+	const displayStatus = swarmAgent?.status ?? ref.status;
+	const glyph = STATUS_GLYPH[displayStatus] ?? STATUS_GLYPH.idle;
+	const colorFn = STATUS_COLOR[displayStatus] ?? STATUS_COLOR.idle;
 	const glyphStr = colorFn(glyph);
-	const name = agent.name;
+	const name = ref.displayName;
 
-	// Role badge
-	const roleLabel = agent.role ?? agent.modelName ?? "";
+	// Role badge: ref.role first, then swarm role
+	const roleLabel = ref.role ?? swarmAgent?.role ?? swarmAgent?.modelName ?? "";
 	const roleBadge = roleLabel ? sato.dim(`[${roleLabel}]`) : "";
 
-	// Profile badge (persistent identity)
+	// Profile badge (persistent identity) — read credit from session profile
 	let profileBadge = "";
-	if (agent.profileId) {
-		const profile = ProfileRegistry.global().get(agent.profileId);
-		if (profile) {
-			profileBadge = sato.dim(`score:${profile.credit.score}`);
-		}
+	const profile = ref.session?.profile;
+	if (profile) {
+		profileBadge = sato.dim(`score:${profile.credit.score}`);
+	}
+
+	// Swarm metrics (shown when available from StateTracker and meaningful)
+	let swarmMetrics = "";
+	if (swarmAgent) {
+		const parts: string[] = [];
+		if ((swarmAgent.wave ?? 0) > 0) parts.push(`w${swarmAgent.wave}`);
+		if ((swarmAgent.iteration ?? 0) > 0) parts.push(`i${swarmAgent.iteration}`);
+		if ((swarmAgent.praiseCount ?? 0) > 0) parts.push(`👍${swarmAgent.praiseCount}`);
+		if (parts.length > 0) swarmMetrics = sato.muted(parts.join(" "));
 	}
 
 	// Status text
 	let statusText: string;
-	if (agent.status === "failed") {
-		const err = agent.error ?? "unknown error";
-		statusText = `${STATUS_LABEL.failed}: ${err}`;
-	} else if (agent.status === "completed") {
-		statusText = sato.success(STATUS_LABEL.completed);
-	} else if (agent.status === "running") {
+	if (displayStatus === "failed") {
+		const err = swarmAgent?.error ?? "unknown error";
+		statusText = `${STATUS_LABEL[displayStatus] ?? displayStatus}: ${err}`;
+	} else if (displayStatus === "idle") {
+		statusText = sato.success(STATUS_LABEL.idle);
+	} else if (displayStatus === "running") {
 		statusText = sato.info(STATUS_LABEL.running);
 	} else {
-		statusText = sato.dim(STATUS_LABEL[agent.status] ?? agent.status);
+		statusText = sato.dim(STATUS_LABEL[displayStatus] ?? displayStatus);
 	}
 
-	// Duration
+	// Duration (from swarm agent timing or ref lastActivity)
 	let durationStr = "";
-	if (agent.startedAt) {
-		const end = agent.completedAt ?? Date.now();
-		const ms = end - agent.startedAt;
+	if (swarmAgent?.startedAt) {
+		const end = swarmAgent.completedAt ?? Date.now();
+		const ms = end - swarmAgent.startedAt;
+		durationStr = sato.dim(`(${formatDuration(ms)})`);
+	} else if (ref.status === "running" && ref.createdAt) {
+		const ms = Date.now() - ref.createdAt;
 		durationStr = sato.dim(`(${formatDuration(ms)})`);
 	}
 
@@ -158,6 +215,7 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 	const segments: string[] = [glyphStr, name];
 	if (roleBadge) segments.push(roleBadge);
 	if (profileBadge) segments.push(profileBadge);
+	if (swarmMetrics) segments.push(swarmMetrics);
 	segments.push(statusText);
 	if (durationStr) segments.push(durationStr);
 
@@ -171,8 +229,8 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 		const suffixLen = suffix.replace(/\x1b\[[0-9;]*m/g, "").length;
 		const statusBudget = innerWidth - minimalLen - suffixLen - 1;
 
-		if (agent.status === "failed" && statusBudget > 10) {
-			const err = agent.error ?? "unknown error";
+		if (displayStatus === "failed" && statusBudget > 10) {
+			const err = swarmAgent?.error ?? "unknown error";
 			const errBudget = statusBudget - "failed: ".length;
 			if (errBudget >= 3) {
 				const truncated = err.length > errBudget ? `${err.slice(0, errBudget - 3)}...` : err;
@@ -181,7 +239,7 @@ function formatAgentLine(agent: AgentState, innerWidth: number, maxWidth: number
 				line = `${minimal}${suffix}`;
 			}
 		} else if (statusBudget >= 3) {
-			const label = STATUS_LABEL[agent.status] ?? agent.status;
+			const label = STATUS_LABEL[displayStatus] ?? displayStatus;
 			const truncated = label.length > statusBudget ? `${label.slice(0, statusBudget - 3)}...` : label;
 			line = `${minimal} ${sato.dim(truncated)}${suffix}`;
 		} else {
@@ -208,8 +266,50 @@ function formatDuration(ms: number): string {
 	return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`;
 }
 
+/**
+ * Fallback: build pseudo-AgentRef entries from SwarmState.agents when
+ * AgentRegistry has no entries (legacy / test-only path).
+ */
+function buildAgentRefsFromSwarm(swarmState: SwarmState | null | undefined): AgentRef[] {
+	if (!swarmState?.agents) return [];
+	return Object.values(swarmState.agents).map(a => {
+		const refStatus: "running" | "idle" | "parked" | "aborted" =
+			a.status === "running"
+				? "running"
+				: a.status === "failed"
+					? "aborted"
+					: a.status === "completed" || a.status === "waiting" || a.status === "pending"
+						? "idle"
+						: "parked";
+		return {
+			id: a.name,
+			displayName: a.name,
+			kind: "sub" as const,
+			status: refStatus,
+			session: null,
+			sessionFile: null,
+			createdAt: a.startedAt ?? 0,
+			lastActivity: a.completedAt ?? a.startedAt ?? 0,
+			profileId: a.profileId,
+			role: a.role,
+		};
+	});
+}
+
 function emptyPanel(maxWidth: number, message: string): string[] {
 	const innerWidth = maxWidth - 4;
 	if (innerWidth < 5) return [];
 	return [makeHeader("Agents", maxWidth), padLine(` ${sato.dim(message)}`, maxWidth), makeFooter(maxWidth)];
+}
+
+/**
+ * Legacy convenience: `renderAgentPanel()` that auto-reads from
+ * `AgentRegistry.global()` so existing callers don't need to thread
+ * the registry reference themselves.
+ */
+export function renderAgentPanelFromGlobalRegistry(
+	swarmState: SwarmState | null | undefined,
+	maxWidth: number,
+): string[] {
+	return renderAgentPanel(AgentRegistry.global().list(), swarmState, maxWidth);
 }

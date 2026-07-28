@@ -2,10 +2,9 @@
  * comm-bus — Unified swarm communication layer.
  *
  * Usage:
- *   import { CommBus, CommChannel } from "../comm-bus";
+ *   import { CommChannel } from "../comm-bus";
  */
 
-export { CommBus } from "./comm-bus";
 export {
 	CommChannel,
 	type RoundtableOpts,

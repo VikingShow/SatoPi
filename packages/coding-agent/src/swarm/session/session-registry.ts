@@ -20,12 +20,10 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { IOffloadManager } from "../../offload/manager";
-import { OffloadManager } from "../../offload/manager";
 import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
 import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
@@ -193,20 +191,6 @@ export class SessionRegistry {
 					status: snapshot.status,
 					phase: snapshot.phase,
 				});
-			}
-
-			// v3: Wire real OffloadManager and register builtin hooks.
-			// The factory may have registered hooks with NoopOffloadManager;
-			// we upgrade to a real OffloadManager backed by SessionStorage.
-			if (services.hookPipeline) {
-				const offloadManager = new OffloadManager(this.workspace, name, name, sessionManager.storage);
-				session.offloadManager = offloadManager;
-
-				registerBuiltinHooks(services.hookPipeline, {
-					offloadManager,
-					profileRegistry: this.#shared.profileRegistry,
-				});
-				logger.info("[SessionRegistry] Builtin hooks registered with OffloadManager", { name });
 			}
 		}
 

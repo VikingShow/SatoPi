@@ -28,14 +28,13 @@
  */
 
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
 import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import type { IrcBus } from "../../irc/bus";
 import type { AgentRuntime } from "../agent-runtime";
-import type { CommBus } from "../comm-bus/comm-bus";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
@@ -96,8 +95,7 @@ export interface StageOptions {
 	fsm?: WorkflowFsm;
 	/** v3: AgentRuntime — required for agent spawning (unified execution path). */
 	runtime?: AgentRuntime;
-	/** v3: CommBus for inter-agent communication (injected, not global singleton). */
-	commBus?: CommBus;
+	ircBus?: IrcBus;
 	/** P5: Max retries per task before blocking (default 3). */
 	maxRetries?: number;
 	/** P5: Base delay for exponential backoff between retries (default 5000ms). */
@@ -127,8 +125,6 @@ export interface RoleAssignmentOptions {
 	planContent: string;
 	roleAssetManager: Pick<RoleAssetManager, "list">;
 	activityLogger: Pick<ActivityLogger, "logBroadcast">;
-	/** Optional CommBus for roundtable negotiation. */
-	commBus?: CommBus;
 	/** Optional IrcBus for roundtable negotiation. */
 	ircBus?: IrcBus;
 }
@@ -145,7 +141,7 @@ export async function assignAgentRoles(
 	agents: ScoredAgent[],
 	opts: RoleAssignmentOptions,
 ): Promise<Array<{ id: string; role: string }>> {
-	const { planContent, roleAssetManager, activityLogger, commBus, ircBus } = opts;
+	const { planContent, roleAssetManager, activityLogger, ircBus } = opts;
 
 	// 1. Derive needed roles from plan.md task types
 	const taskRoles = TaskQueue.parseFromPlan(planContent)
@@ -175,9 +171,9 @@ export async function assignAgentRoles(
 		preferredRoles: a.preferredRoles ?? [],
 	}));
 
-	// 5. Try roundtable negotiation (if CommBus is available)
-	if (commBus && ircBus) {
-		commBus.groupChannel(
+	// 5. Try roundtable negotiation (if IrcBus is available)
+	if (ircBus) {
+		ircBus.groupChannel(
 			"role-negotiation",
 			candidates.map(c => c.agentId),
 			activityLogger,

@@ -17,7 +17,7 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "../behaviors/index";
 import type { CommChannel } from "../comm-bus/comm-channel";
@@ -54,7 +54,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	/** PhaseContext stored from execute() for use in validate() and event delegation. */
 	#phaseContext?: PhaseContext;
 	/** Agent handles from the last enter() call. */
-	#agents: AgentHandle[] = [];
+	#agents: AgentSession[] = [];
 	/** Channels from the last enter() call. */
 	#channels: CommChannel[] = [];
 
@@ -89,7 +89,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 		// Build PhaseContext from NodeContext + constructor config
 		const phaseCtx: PhaseContext = {
 			fsm: this.#config.fsm,
-			commBus: this.#config.runtime.commBus,
+			ircBus: this.#config.runtime.ircBus,
 			runtime: this.#config.runtime,
 			contextPipeline: this.#config.contextPipeline,
 			hookPipeline: this.#config.hookPipeline,

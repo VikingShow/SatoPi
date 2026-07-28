@@ -3,37 +3,20 @@
  *
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  * An AgentSpec describes WHAT to spawn — the AgentRuntime handles HOW.
+ *
+ * @deprecated Use AgentSessionOptions directly with AgentRuntime.spawn().
  */
 import type { Chapter } from "../core/state";
 
 /**
- * Declarative specification for spawning an agent.
- *
- * All phases (script, stage, curtain) use this single spec type.
- * The AgentRuntime resolves the role, assembles context, builds
- * AgentLoopConfig, and launches the SatoPi Agent instance.
+ * Common fields shared by all AgentSpec variants.
  */
-export interface AgentSpec {
+interface AgentSpecBase {
 	/** Unique agent identifier (e.g. "planner", "agent-1", "reporter"). */
 	id: string;
 
 	/** Role name to resolve from the role library (e.g. "planner", "backend", "reviewer"). */
 	role: string;
-
-	/**
-	 * Where the role definition comes from.
-	 *
-	 * - "library": Query RoleAssetManager for an approved role asset.
-	 * - "profile": Query agent profiles (future; falls back to default for now).
-	 * - "inline": Use the inline systemPrompt and tools directly.
-	 */
-	roleSource: "library" | "profile" | "inline";
-
-	/** Inline role definition — only used when roleSource is "inline". */
-	inline?: {
-		systemPrompt: string;
-		tools: string[];
-	};
 
 	/** Human-readable task description for this agent. */
 	task: string;
@@ -51,11 +34,40 @@ export interface AgentSpec {
 	 * compatibility.
 	 */
 	phase?: Chapter;
-
-	/**
-	 * Links this spec to a persistent agent identity in the AgentRegistry.
-	 * When set, the AgentRuntime associates the spawned agent with an existing
-	 * profile so its state (callbacks, status) can be tracked across lifetime events.
-	 */
+}
+/** @deprecated Use AgentSessionOptions directly. */
+export interface AgentSpecLibrary extends AgentSpecBase {
+	roleSource: "library";
+	/** Optional persistent agent profile binding (not required for library roles). */
 	profileId?: string;
 }
+
+/** @deprecated Use AgentSessionOptions directly. */
+export interface AgentSpecProfile extends AgentSpecBase {
+	roleSource: "profile";
+	/** Required persistent agent profile ID for profile-based role resolution. */
+	profileId: string;
+}
+
+/** @deprecated Use AgentSessionOptions directly. */
+export interface AgentSpecInline extends AgentSpecBase {
+	roleSource: "inline";
+	/** Inline role definition — required when roleSource is "inline". */
+	inline: {
+		systemPrompt: string;
+		tools: string[];
+	};
+	/** Optional persistent agent profile binding. */
+	profileId?: string;
+}
+
+/**
+ * Declarative specification for spawning an agent.
+ *
+ * All phases (script, stage, curtain) use this discriminated union.
+ * The AgentRuntime resolves the role, assembles context, builds
+ * AgentLoopConfig, and launches the SatoPi Agent instance.
+ *
+ * @deprecated Use AgentSessionOptions directly with AgentRuntime.spawn().
+ */
+export type AgentSpec = AgentSpecLibrary | AgentSpecProfile | AgentSpecInline;

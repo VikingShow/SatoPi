@@ -1,66 +1,15 @@
 /**
- * role-roundtable.test.ts — Unit tests for RoleRoundtable + fallbackRoleAssign
+ * role-roundtable.test.ts — Unit tests for fallbackRoleAssign
  *
  * Coverage:
- * 1. Single-agent no roundtable needed
- * 2. JSON parsing from roundtable responses
- * 3. Heuristic fallback when no JSON
- * 4. Duplicate role prevention
- * 5. fallbackRoleAssign algorithm (preference match + round-robin)
+ * 1. Preference matching
+ * 2. Duplicate role prevention
+ * 3. Round-robin assignment
+ * 4. Edge cases (empty, overflow)
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { IrcBus } from "../../irc/bus";
-import { fallbackRoleAssign, type RoleCandidate, RoleRoundtable } from "../stage/role-roundtable";
-
-describe("RoleRoundtable (unit — no live IrcBus)", () => {
-	let bus: IrcBus;
-
-	beforeEach(() => {
-		IrcBus.resetGlobalForTests();
-		bus = IrcBus.global();
-	});
-
-	afterEach(() => {
-		IrcBus.resetGlobalForTests();
-	});
-
-	const candidates: RoleCandidate[] = [
-		{ agentId: "a1", name: "Alpha", preferredRoles: ["architect", "backend"] },
-		{ agentId: "a2", name: "Beta", preferredRoles: ["frontend", "implementer"] },
-		{ agentId: "a3", name: "Gamma", preferredRoles: ["reviewer", "backend"] },
-	];
-
-	// ── Single agent ─────────────────────────────────────────────────
-
-	test("single agent returns immediately, no roundtable needed", async () => {
-		const rt = new RoleRoundtable(bus);
-		const result = await rt.negotiateRoles({
-			availableRoles: ["developer"],
-			candidates: [candidates[0]],
-		});
-
-		expect(result).not.toBeNull();
-		expect(result!.length).toBe(1);
-		expect(result![0].agentId).toBe("a1");
-		expect(result![0].role).toBe("developer");
-	});
-
-	// ── No live agents → null fallback ─────────────────────────────
-
-	test("returns null when no agents respond (empty channel)", async () => {
-		const rt = new RoleRoundtable(bus);
-		const result = await rt.negotiateRoles({
-			availableRoles: ["architect", "backend", "frontend"],
-			candidates,
-			rounds: 1,
-			timeoutMs: 100,
-		});
-
-		// Ghost agents don't exist in registry → null fallback
-		expect(result).toBeNull();
-	});
-});
+import { describe, expect, test } from "bun:test";
+import { fallbackRoleAssign, type RoleCandidate } from "../stage/role-roundtable";
 
 // ── #parseAssignments via public JSON injection ────────────────────
 

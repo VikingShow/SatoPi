@@ -25,9 +25,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
-import { OffloadManager } from "../../offload/manager";
 import type { AgentRuntime } from "../agent-runtime";
-import { OffloadSource } from "../context-manager/sources/offload-source";
 import { type CurtainResultData, runCurtainPipeline } from "../curtain/curtain-runner";
 import { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
@@ -136,7 +134,6 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#abortController: AbortController | null = null;
 	#loopConfig: LoopSwarmConfig;
 	#disposed = false;
-	#offloadManager?: OffloadManager;
 	/** Human-decision resolver for applaud flow. */
 	#applaudResolve: (() => void) | null = null;
 
@@ -180,8 +177,6 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		// 3. Create StateTracker
 		const swarmName = path.basename(swarmDir);
 
-		// Create OffloadManager for context compaction in embedded swarm path
-		this.#offloadManager = new OffloadManager(workspace, swarmName, swarmName, this.#sessionManager.storage);
 		this.#stateTracker = new StateTracker(workspace, swarmName);
 		this.#stateTracker.setSessionManager(this.#sessionManager);
 
@@ -220,15 +215,11 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			roleAssetManager,
 			experienceStore: this.#experienceStore,
 			profileRegistry,
-			offloadManager: this.#offloadManager,
 			activeMmd: this.#config.activeMmd,
 		});
 		this.#hookPipeline = orch.hookPipeline;
 		this.#markEnv = orch.markEnvironment;
 		this.#runtime = orch.runtime;
-
-		// Register OffloadSource for Mermaid-based context in agent prompts
-		this.#runtime.contextPipeline.register(new OffloadSource(this.#offloadManager));
 
 		// 10. Notify: script phase started
 		this.#listener({ phase: "script", subStatus: "planning" });
@@ -389,7 +380,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			runtime: this.#runtime,
 			hookPipeline: this.#hookPipeline,
 			fsm: this.#fsm,
-			commBus: this.#runtime.commBus,
+			ircBus: this.#runtime.ircBus,
 		});
 
 		try {
@@ -427,7 +418,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			settings,
 			roleAssetManager,
 			profileRegistry,
-			commBus: this.#runtime.commBus,
+			ircBus: this.#runtime.ircBus,
 		});
 
 		if (this.#config.autoApplaud) {
@@ -466,7 +457,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 	/** Route a human steering message to the current workers. */
 	async steer(message: string): Promise<void> {
-		await this.#runtime.commBus.receiveFromHuman(message);
+		await this.#runtime.ircBus.receiveFromHuman(message);
 	}
 
 	/** Pause the current stage. */

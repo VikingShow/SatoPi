@@ -85,8 +85,8 @@ export interface AgentBeforeSpawnPayload {
 export interface AgentAfterSpawnPayload {
 	agentId: string;
 	role: string;
-	/** The AgentHandle returned by AgentLauncher. */
-	handle: unknown;
+	/** The AgentSession returned by AgentLauncher. */
+	session: unknown;
 }
 
 /** Payload for agent:afterComplete — emitted when an agent finishes a task. */

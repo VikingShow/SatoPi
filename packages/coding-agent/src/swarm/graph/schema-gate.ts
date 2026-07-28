@@ -1,108 +1,34 @@
 /**
- * Gate types, retry specifications, and normalisation helpers extracted from schema.ts.
+ * Gate normalisation helpers.
  *
- * These types are used by GraphNode, GraphDefaults (schema.ts), and GateController
- * (gate-controller.ts). Extracted here to keep schema.ts under 500 lines.
+ * Types and validation constants have been moved to packages/coding-agent/src/graph/types.ts.
+ * This file re-exports them for backward compatibility and provides the normalisation logic.
  */
 
-// ============================================================================
-// Discriminated unions
-// ============================================================================
+export type {
+	GateMode,
+	GateResult,
+	GateSpec,
+	GateType,
+	RawGateSpec,
+	RawRetrySpec,
+	RetryOnFailure,
+	RetrySpec,
+	RetryStrategy,
+} from "../../graph/types";
+export { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "../../graph/types";
 
-/** Gate types map to built-in verification steps. */
-export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script";
-
-/** When the gate check should run. */
-export type GateMode = "always" | "on-failure" | "never";
-
-/** Retry backoff strategy. */
-export type RetryStrategy = "exponential" | "constant" | "linear";
-
-/** What happens when all retry attempts are exhausted. */
-export type RetryOnFailure = "block" | "skip" | "ask-human";
-
-// ============================================================================
-// Gate & retry interfaces
-// ============================================================================
-
-/**
- * Gate specification — a verification gate that runs before/after a node.
- */
-export interface GateSpec {
-	/** Built-in gate type or custom script gate. */
-	type: GateType;
-	/** Shell command for compile-check/test/lsp/script gates. */
-	command?: string;
-	/** Prompt text for human-review gates. */
-	prompt?: string;
-	/** Choices presented to the human reviewer. */
-	options?: string[];
-	/** When the gate should trigger (default: "always"). */
-	mode?: GateMode;
-}
-
-/** Retry configuration for node execution failures. */
-export interface RetrySpec {
-	/** Maximum number of retry attempts (>= 1). */
-	maxAttempts: number;
-	/** Backoff strategy for inter-attempt delays. */
-	strategy: RetryStrategy;
-	/** Base delay in milliseconds before the first retry. */
-	baseDelayMs: number;
-	/** Behavior when all attempts are exhausted. */
-	onFailure: RetryOnFailure;
-}
-
-/**
- * Outcome of gate validation after node execution.
- */
-export interface GateResult {
-	/** Whether all gates passed. */
-	passed: boolean;
-	/** Descriptions of failed gates. */
-	failures: string[];
-	/** Whether the human must review before proceeding. */
-	humanReviewRequired: boolean;
-	/** Recommended retry strategy based on failure type. */
-	retryStrategy?: "immediate" | "fixup" | "human";
-}
-
-// ============================================================================
-// Raw YAML shapes (snake_case input)
-// ============================================================================
-
-export interface RawGateSpec {
-	type: string;
-	command?: string;
-	prompt?: string;
-	options?: string[];
-	mode?: string;
-}
-
-export interface RawRetrySpec {
-	max_attempts: number;
-	strategy: string;
-	base_delay_ms: number;
-	on_failure: string;
-}
-
-// ============================================================================
-// Validation constants
-// ============================================================================
-
-export const VALID_GATE_TYPES: Record<string, true> = {
-	"compile-check": true,
-	test: true,
-	lsp: true,
-	"human-review": true,
-	script: true,
-};
-
-export const VALID_GATE_MODES: Record<string, true> = { always: true, "on-failure": true, never: true };
-
-export const VALID_RETRY_STRATEGIES: Record<string, true> = { exponential: true, constant: true, linear: true };
-
-export const VALID_ON_FAILURE: Record<string, true> = { block: true, skip: true, "ask-human": true };
+import type {
+	GateMode,
+	GateSpec,
+	GateType,
+	RawGateSpec,
+	RawRetrySpec,
+	RetryOnFailure,
+	RetrySpec,
+	RetryStrategy,
+} from "../../graph/types";
+import { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "../../graph/types";
 
 // ============================================================================
 // Normalisation helpers

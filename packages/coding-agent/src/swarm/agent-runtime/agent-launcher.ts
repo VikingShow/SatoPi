@@ -25,7 +25,6 @@ import type { AgentSession } from "../../session/agent-session";
 import type { Tool, ToolSession } from "../../tools";
 import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
-import { AgentHandle } from "./agent-handle";
 import type { AgentSpec } from "./agent-spec";
 import type { ResolvedRole } from "./role-provider";
 
@@ -147,7 +146,7 @@ export interface MinimalToolSession extends Partial<ToolSession> {
  * 2. System prompt assembly
  * 3. AgentSession creation via createAgentSession() with all hooks
  * 4. Agent lifecycle start (session.prompt)
- * 5. Returning an AgentHandle
+ * 5. Returning an AgentSession
  */
 export class AgentLauncher {
 	#modelRegistry: ModelRegistry;
@@ -162,16 +161,16 @@ export class AgentLauncher {
 	}
 
 	/**
-	 * Create and launch a single agent, returning an AgentHandle.
+	 * Create and launch a single agent, returning an AgentSession.
 	 *
 	 * Uses createAgentSession() instead of new Agent():
 	 *   1. Resolves the model
 	 *   2. Builds a system prompt from assembledContext + resolvedRole
 	 *   3. Creates an AgentSession via createAgentSession() with all hooks wired
 	 *   4. Starts the agent via session.prompt(spec.task)
-	 *   5. Wraps in AgentHandle
+	 *   5. Returns the AgentSession directly
 	 */
-	async launch(ctx: LaunchContext): Promise<AgentHandle> {
+	async launch(ctx: LaunchContext): Promise<AgentSession> {
 		const { spec, resolvedRole, assembledContext, hookProviders } = ctx;
 
 		// 1. Resolve model
@@ -197,6 +196,7 @@ export class AgentLauncher {
 			systemPrompt: [systemPrompt],
 			toolNames,
 			modelRegistry: this.#modelRegistry,
+			agentId: spec.id,
 			settings: this.#settings,
 			// ContextPipeline-driven transform: prepend injectedMessages + L3 compact
 			// (merged with SDK's extension-emit / steering-wrap pipeline)
@@ -226,11 +226,11 @@ export class AgentLauncher {
 			session.agent.setAsideMessageProvider(hookProviders.getAsideMessages);
 		}
 
-		// 6. Create AgentHandle with real session reference
-		const handle = new AgentHandle(spec.id, spec.role, session.agent, session);
+		// 6. Set agent identity on the session for swarm tracking
+		session.role = spec.role;
 
 		// 7. Launch the agent asynchronously
-		//    Use fire-and-forget: the handle's wait() method lets callers
+		//    Use fire-and-forget: the session's wait() method lets callers
 		//    await completion when they need results.
 		this.#startAgent(session, spec).catch(err => {
 			logger.warn("[AgentLauncher] Unhandled startAgent error", {
@@ -245,7 +245,7 @@ export class AgentLauncher {
 			modelId: model.id,
 		});
 
-		return handle;
+		return session;
 	}
 
 	// -----------------------------------------------------------------------

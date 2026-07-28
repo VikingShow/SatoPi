@@ -1,103 +1,155 @@
-# Plan: Swarm Architecture Audit — Dead Code, Redundancy, and Pattern Cleanup
+# Plan: Native Swarm Primitives — AgentSession-Level Refactor (v3)
 
 ## Overview
-Audit of `packages/coding-agent/src/swarm/` (30k LOC, 80+ source files) against: dead code removal, redundancy consolidation, infrastructure merge opportunities, convention compliance, and code splitting. Identified 5 dead files, 7 dead exports, 3 execution engine overlaps, 2 duplicate Jaccard implementations, 47+ pattern violations.
+将 swarm 能力从 `swarm/` 子系统下沉到 `AgentSession` 层。`Agent` 和 `AgentLoopConfig` 零变更。同时删除 `AgentHandle`（并入 `AgentSession`）、废弃 `AgentSpec`（统一为 `AgentSessionOptions`）、拆分 `AgentSession` 超大类。
 
-## Phase 1: Dead Code Removal
-**Contract:** No production code references removed files or exports. All tests for removed code are also cleaned up.
+## 关键设计决策
 
-- [ ] **Task: Remove dead files and their test files**
-  - Files: `packages/coding-agent/src/swarm/agent/agent-scaler.ts`, `packages/coding-agent/src/swarm/agent/index.ts`, `packages/coding-agent/src/swarm/core/convergence.ts`, `packages/coding-agent/src/swarm/core/blockage.ts`, `packages/coding-agent/src/swarm/render/index.ts`
-  - Change: Delete the 5 dead files that have zero production consumers. Remove corresponding test files: `worker-scaler.test.ts`, `convergence.test.ts`, `blockage.test.ts`. Remove re-exports from `agent/index.ts` and `core/index.ts`.
-  - Acceptance: `bun check` passes. `bun test src/swarm/__tests__/` has no broken import errors.
+| # | 决策 | 理由 |
+|---|------|------|
+| D1 | `persistent` 属于 Session 层 | 跨 session 身份连续性 = session 职责 |
+| D2 | `Agent` / `AgentLoopConfig` 零变更 | 只管 loop，不管身份 |
+| D3 | `ProfileRegistry` 拥有 profile | 跨 session 生命周期，AgentSession 只存 `persistentProfileId` 引用 |
+| D4 | `RoleProvider` 移出 swarm | 角色解析是通用能力，非 swarm 专属 |
+| D5 | `AgentHandle` 删除 | `AgentSession.wait()` 替代，减少中间层 |
+| D6 | `AgentSpec` → `AgentSessionOptions` 统一 | 一条创建路径，AgentRuntime 内部翻译 |
+| D7 | `MarkEnvironment` 始终创建 | stigmergy 是所有 session 的基础能力 |
+| D8 | Mark 实时性 | lock 已实时（RegionLockManager），其余 turn 级延迟可接受 |
+| D9 | `CommBus` 合并进 `IrcBus` | 薄封装不值得独立存在 |
+| D10 | `GraphEngine` 独立 DAG 执行器 | 不绑定 swarm lifecycle |
 
-- [ ] **Task: Remove dead exports from alive files**
-  - Files: `packages/coding-agent/src/swarm/core/services.ts`, `packages/coding-agent/src/swarm/core/dag.ts`, `packages/coding-agent/src/swarm/executor/executor.ts`, `packages/coding-agent/src/swarm/comm-bus/endpoint.ts`, `packages/coding-agent/src/swarm/comm-bus/vote.ts`, `packages/coding-agent/src/swarm/comm-bus/roundtable.ts`, `packages/coding-agent/src/swarm/stage/role-roundtable.ts`
-  - Change: Remove `SwarmServices`, `SwarmAgentRunner`, `SwarmMessageBus` interfaces from services.ts. Remove `buildDependencyGraph` from dag.ts. Remove `executeSwarmAgent` from executor.ts. Remove `createEndpoint`, `CommEndpoint`, `EndpointCapability` from endpoint.ts. Remove `parseVote`, `runVote` from vote.ts. Remove `jaccardSimilarity` and `tokenize` from roundtable.ts. Remove `RoleRoundtable` deprecated class from role-roundtable.ts. Clean up index.ts barrel re-exports.
-  - Acceptance: All removed symbols have zero production consumers (verified via grep). `bun check` passes.
+---
 
-## Phase 2: Redundancy Consolidation
-**Contract:** Three execution engines reduced to two; duplicate Jaccard deduplicated; overlapping Stage implementations clarified.
+## Phase 1: AgentSession 能力层
 
-- [ ] **Task: Merge duplicate Jaccard similarity implementations**
-  - Files: `packages/coding-agent/src/swarm/agent-runtime/index.ts`, `packages/coding-agent/src/swarm/comm-bus/roundtable.ts`
-  - Change: The private `jaccardSimilarity()` in agent-runtime/index.ts (line 478) and the public one in comm-bus/roundtable.ts (line 103) are semantic duplicates. Extract one canonical `jaccardSimilarity` and `tokenize` into `packages/coding-agent/src/swarm/core/convergence.ts` (restore the file for this single purpose). Import from there in both callers. Delete the roundtable.ts public exports (already dead) and have roundtable.ts import from convergence.ts.
-  - Acceptance: Single Jaccard implementation. Both AgentRuntime.spawnRoundtable and CommChannel.roundtable produce identical results. Tests pass.
+**Contract:** `AgentSession` 获得 `kind`, `persistentProfileId`, `markEnvironment`。`AgentSession.wait()` 替代 `AgentHandle`。
 
-- [ ] **Task: Deprecate PipelineController and SwarmRunner (legacy engines)**
-  - Files: `packages/coding-agent/src/swarm/core/pipeline.ts`, `packages/coding-agent/src/swarm/core/swarm-runner.ts`
-  - Change: Both are legacy execution engines now superseded by GraphRunner + PhaseBehavior. Add `@deprecated` JSDoc with migration notes. Move both into a `legacy/` subdirectory if they are still required by swarm-cli.ts. If swarm-cli.ts can be migrated to use GraphRunner directly, deprecate and schedule removal.
-  - Acceptance: GraphRunner is the single graph execution path. SwarmRunner and PipelineController are clearly marked deprecated. No new import paths broken.
-  - Depends: Merge duplicate Jaccard similarity implementations
+- [ ] **Task: 给 AgentSession 加 kind, persistentProfileId, markEnvironment, wait()**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`
+  - Change: 加 `kind: AgentKind`（默认 `"sub"`）、`persistentProfileId?: string`、`markEnvironment: MarkEnvironment`（默认 `new MarkEnvironment()`）。加 `async wait(): Promise<SingleResult>`。加 `get profile(): AgentProfile | undefined` 委托给 `ProfileRegistry.global().get()`。
+  - Acceptance: `session.markEnvironment` 始终可用。`session.profile` 可查询 persistent 身份。`session.wait()` 返回 agent 完成结果。
 
-- [ ] **Task: Consolidate StageController and StageBehavior**
-  - Files: `packages/coding-agent/src/swarm/stage/stage-controller.ts`, `packages/coding-agent/src/swarm/behaviors/stage-behavior.ts`
-  - Change: StageController (542 lines) and StageBehavior (238 lines) overlap in stage execution logic. StageBehavior wraps StageController via `createStageController`. Inline the orchestration logic from StageController into StageBehavior, or have StageController delegate to StageBehavior. The goal is one canonical path for stage execution.
-  - Acceptance: Single stage execution path. Tests in `behaviors.test.ts` continue to pass. Deprecated paths preserved for backward compat with swarm-cli.ts.
+- [ ] **Task: 拆分 AgentSession — 提取 SessionCompactor**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`, 新文件 `packages/coding-agent/src/session/session-compactor.ts`
+  - Change: 提取 `#compactContext`、`#shouldCompact`、压缩状态管理到 `SessionCompactor`。AgentSession 组合使用。
+  - Acceptance: `SessionCompactor` 独立可测。AgentSession 减少 ~500 行。
 
-## Phase 3: Infrastructure Merge
-**Contract:** Swarm-specific infra moved closer to shared coding-agent infrastructure where appropriate; no feature regressions.
+- [ ] **Task: 拆分 AgentSession — 提取 SessionLifecycle**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`, 新文件 `packages/coding-agent/src/session/session-lifecycle.ts`
+  - Change: 提取 `dispose()`、`beginDispose()`、park/revive 相关逻辑到 `SessionLifecycle`。AgentSession 组合使用。
+  - Acceptance: `SessionLifecycle` 独立可测。AgentSession 减少 ~300 行。
 
-- [ ] **Task: Extract ActivityLogger event taxonomy into shared types**
-  - Files: `packages/coding-agent/src/swarm/infra/activity-logger.ts`, new file `packages/coding-agent/src/session/activity-types.ts`
-  - Change: Move `ActivityEventType`, event payload interfaces, and SSE broadcast types from activity-logger into a shared types module. ActivityLogger stays in swarm/ as the implementation, but the types become reusable by non-swarm sessions.
-  - Acceptance: Types importable from `../session/activity-types`. No changes to ActivityLogger behavior.
+---
 
-- [ ] **Task: Merge SessionRegistry into coding-agent session infrastructure**
-  - Files: `packages/coding-agent/src/swarm/session/session-registry.ts`, `packages/coding-agent/src/session/agent-session.ts`
-  - Change: SessionRegistry manages per-session service graphs (AgentRuntime, CommBus, etc.). Since the main AgentSession already stores swarm state (`#embeddedSwarm`, `#swarmSession`), move SessionRegistry fields into AgentSession directly. Remove the separate registry module.
-  - Acceptance: AgentSession is the single session state container. SessionRegistry removed. Tests pass.
+## Phase 2: AgentHandle 删除 + AgentSpec 废弃
 
-## Phase 4: Convention Compliance
-**Contract:** Swarm code follows AGENTS.md conventions: `#private`, no `ReturnType<>`, prompts in `.md`, no `any`, no dynamic imports, `Promise.withResolvers()`.
+**Contract:** `AgentSession.wait()` 替代 `AgentHandle`。`AgentRuntime.spawn()` 接受 `AgentSessionOptions`。
 
-- [ ] **Task: Replace `private`/`protected` keywords with `#private`**
-  - Files: `packages/coding-agent/src/swarm/agent-runtime/index.ts`, `packages/coding-agent/src/swarm/agent-runtime/role-provider.ts`, `packages/coding-agent/src/swarm/core/pipeline.ts`, `packages/coding-agent/src/swarm/context-manager/context-pipeline.ts`, `packages/coding-agent/src/swarm/infra/activity-logger.ts`
-  - Change: Convert all `private`/`protected` field and method declarations to ES `#private`. For `protected` members, create protected accessor methods or make them public with `@internal` JSDoc.
-  - Acceptance: Zero `private`/`protected` keywords in swarm/ source files. Tests pass.
+- [ ] **Task: 删除 AgentHandle，迁移所有调用方到 AgentSession.wait()**
+  - Files: `packages/coding-agent/src/swarm/agent-runtime/agent-handle.ts`, 所有 import AgentHandle 的文件
+  - Change: 删除 `AgentHandle` 类。`AgentRuntime.spawn()` 返回 `AgentSession[]`。所有 `handle.wait()` → `session.wait()`，`handle.send()` → `session.steer()`，`handle.abort()` → `session.abort()`。`AgentRegistry.setHandle()` → `AgentRegistry.attachSession()`。
+  - Acceptance: 零 AgentHandle import。所有测试通过。
 
-- [ ] **Task: Replace `ReturnType<>` with explicit types**
-  - Files: `packages/coding-agent/src/swarm/core/workflow-fsm.ts`, `packages/coding-agent/src/swarm/core/embedded-swarm-bridge.ts`, `packages/coding-agent/src/swarm/executor/executor.ts`, `packages/coding-agent/src/swarm/curtain/curtain-runner.ts`, `packages/coding-agent/src/swarm/script/script-manager.ts`
-  - Change: Replace instances of `ReturnType<typeof setTimeout>` with `Timer`, `ReturnType<typeof setInterval>` with `Timer`, `ReturnType<typeof createStageController>` with the actual `StageController` type, etc.
-  - Acceptance: Zero `ReturnType<>` usages in swarm/ source files.
+- [ ] **Task: AgentRuntime.spawn() 接受 AgentSessionOptions**
+  - Files: `packages/coding-agent/src/swarm/agent-runtime/index.ts`, `packages/coding-agent/src/swarm/agent-runtime/agent-spec.ts`
+  - Change: `AgentRuntime.spawn()` 签名改为接受 `AgentSessionOptions[]`。内部映射旧的 `AgentSpec` 调用方。在 `agent-spec.ts` 加 `@deprecated`。更新 `agent_invoke`、`node-behavior`、`debate-roundtable` 等调用方直接传 `AgentSessionOptions`。
+  - Acceptance: `AgentSpec` 标记 deprecated。新代码直接用 `AgentSessionOptions`。
 
-- [ ] **Task: Extract inline prompts into `.md` files**
-  - Files: `packages/coding-agent/src/swarm/agent-runtime/role-provider.ts`, `packages/coding-agent/src/swarm/script/debate-roundtable.ts`, `packages/coding-agent/src/swarm/curtain/curtain-runner.ts`
-  - Change: Move inline system prompt strings and task prompt arrays into `.md` files under `swarm/prompts/`. Use Handlebars for dynamic content. Import via `import content from "./prompt.md" with { type: "text" }`.
-  - Acceptance: Zero inline prompt strings > 2 lines in swarm/ source files. Prompts live in `.md` files.
+---
 
-- [ ] **Task: Replace `new Promise()` with `Promise.withResolvers()` and dynamic imports**
-  - Files: `packages/coding-agent/src/swarm/agent-runtime/agent-handle.ts`, `packages/coding-agent/src/swarm/curtain/curtain-runner.ts`, `packages/coding-agent/src/swarm/infra/create-mnemopi-client.ts`, `packages/coding-agent/src/swarm/agent-runtime/agent-spec.ts`
-  - Change: Convert `new Promise(resolve => ...)` patterns to `Promise.withResolvers()`. Replace `await import(...)` with top-level imports where possible. For lazy-load patterns, use top-level dynamic `import()` at module scope.
-  - Acceptance: Zero `new Promise(...)` in swarm/ source files. Zero inline dynamic imports.
+## Phase 3: RoleProvider 移出 swarm + profile role 实现
 
-- [ ] **Task: Remove `any` type assertions and add proper types**
-  - Files: `packages/coding-agent/src/swarm/session/swarm-session-manager.ts`, any other files with `as any`
-  - Change: Replace `(this.#session as any)` with typed accessor methods or proper type guards. Add missing type declarations.
-  - Acceptance: Zero `any` type assertions in swarm/ source files.
+**Contract:** `RoleProvider` 在 `packages/coding-agent/src/agent/`。`roleSource: 'profile'` 可用。
 
-## Phase 5: Code Splitting and Cleanup
-**Contract:** Oversized files split; naming and barrel exports fixed.
+- [ ] **Task: 移动 RoleProvider 到共享位置**
+  - Files: `packages/coding-agent/src/swarm/agent-runtime/role-provider.ts` → `packages/coding-agent/src/agent/role-provider.ts`
+  - Change: 移动文件。更新所有 import。swarm 旧文件删除。
+  - Acceptance: `RoleProvider` 可从 `packages/coding-agent/src/agent/role-provider` 导入。
 
-- [ ] **Task: Split files exceeding 500 lines**
-  - Files: `packages/coding-agent/src/swarm/graph/schema.ts` (874), `packages/coding-agent/src/swarm/curtain/experience.ts` (874), `packages/coding-agent/src/swarm/graph/gate-controller.ts` (643), `packages/coding-agent/src/swarm/core/schema.ts` (636), `packages/coding-agent/src/swarm/core/workflow-fsm.ts` (618), `packages/coding-agent/src/swarm/stage/stage-controller.ts` (541), `packages/coding-agent/src/swarm/core/pipeline.ts` (538), `packages/coding-agent/src/swarm/core/embedded-swarm-bridge.ts` (507)
-  - Change: For each file, extract cohesive sub-modules (types→types.ts, validation→validate.ts, strategies→strategies.ts). Keep the main file as a coordinator that imports from sub-modules.
-  - Acceptance: No source file (excluding __tests__) exceeds 500 lines. All imports resolve correctly.
+- [ ] **Task: 实现 roleSource 'profile'**
+  - Files: `packages/coding-agent/src/agent/role-provider.ts`, 新文件 `packages/coding-agent/src/swarm/prompts/role-profile.md`
+  - Change: 加 `resolveFromProfile(profile: AgentProfile): ResolvedRole`。从 `AgentProfile` 读取 identity（name, archetype）、expertise（domains, proficiency）、credit（score, successRate）、offloadRefs（历史摘要）。用 Handlebars 模板生成系统提示词。按 proficiency 选择工具。修复 `AgentSpec` 类型——`roleSource === 'profile'` 时 `profileId` 必需（discriminated union）。
+  - Acceptance: Persistent agent 的角色由履历塑造。类型安全。
 
-- [ ] **Task: Fix barrel exports to use `export *` pattern**
-  - Files: All `index.ts` files under `packages/coding-agent/src/swarm/`
-  - Change: Replace named re-exports (`export { Foo } from "./foo"`) with star re-exports (`export * from "./foo"`). Remove `export type { ... }` — types are inferred.
-  - Acceptance: All barrel exports use `export *` pattern.
+---
 
-## Phase 6: Verification
-**Contract:** Full test suite passes; `bun check` has zero new diagnostics.
+## Phase 4: agent_invoke 全局可用
 
-- [ ] **Task: Run full test suite and fix regressions**
-  - Files: `packages/coding-agent/src/swarm/__tests__/`
-  - Change: Run `bun test src/swarm/__tests__/`. Fix any failures. Baseline: 611 pass, 3 fail (TUI color — pre-existing).
-  - Acceptance: >= 611 tests pass. No new failures.
+**Contract:** 不依赖 `AgentRuntime`，任何 session 可调用。
 
-- [ ] **Task: Run bun check and biome lint**
-  - Files: All changed files
-  - Change: Run `bun check` in packages/coding-agent/. Fix any new errors.
-  - Acceptance: Zero new biome errors or TS errors.
+- [ ] **Task: agent_invoke 移除 AgentRuntime 依赖**
+  - Files: `packages/coding-agent/src/tools/agent-invoke.ts`
+  - Change: 移除 `context.agentRuntime` 检查。查找 `AgentRegistry` 中同 `profileId` 的 idle session → 复用 `session.prompt(task)` 或创建新 `AgentSession({ kind: "persistent", persistentProfileId: profileId })`。任务完成后自动调用 `ProfileRegistry.recordTaskCompleted()`。
+  - Acceptance: 主 CLI session 中 `agent_invoke` 可用。Hidden 条件：当 `ProfileRegistry` 无已注册 profile 时隐藏。
+
+---
+
+## Phase 5: MarkEnvironment + Offload 会话级默认
+
+**Contract:** 所有 session 有 stigmergy。Persistent session 自动 offload。
+
+- [ ] **Task: createAgentSession 始终创建 MarkEnvironment**
+  - Files: `packages/coding-agent/src/sdk.ts`
+  - Change: `markEnvironment` 默认 `new MarkEnvironment()`。`afterToolCall` 无条件放置文件变更 mark。`StigmergySource` 注册到 `contextPipeline`（若提供）。
+  - Acceptance: 所有 session 的 write/edit 留下 stigmergic mark。
+
+- [ ] **Task: Persistent session 自动启用 OffloadManager**
+  - Files: `packages/coding-agent/src/sdk.ts`
+  - Change: `kind === "persistent"` 时创建 `OffloadManager`，注入 `transformContext`。offload refs 写入 `ProfileRegistry`。删除 swarm 中的重复 offload 设置。
+  - Acceptance: Persistent session 自动 L1→L3 offload。
+
+---
+
+## Phase 6: CommBus → IrcBus 合并
+
+**Contract:** `IrcBus` 获得 `receiveFromHuman` + `groupChannel`。`CommBus` 删除。
+
+- [ ] **Task: IrcBus 加 receiveFromHuman + groupChannel**
+  - Files: `packages/coding-agent/src/irc/bus.ts`
+  - Change: 加入两个方法。`groupChannel` 返回 `CommChannel`（保留 comm-channel.ts）。
+  - Acceptance: IrcBus 具备 CommBus 全部能力。
+
+- [ ] **Task: 删除 CommBus，迁移消费者**
+  - Files: `packages/coding-agent/src/swarm/comm-bus/comm-bus.ts`, 所有 import CommBus 的文件
+  - Change: 删除 `CommBus` 类。`AgentRuntime`、`EmbeddedSwarmBridge`、`GraphRunner`、所有 behavior 改用 `IrcBus` 直接调用。
+  - Acceptance: 零 CommBus import。所有通信功能正常。
+
+---
+
+## Phase 7: GraphEngine 独立
+
+**Contract:** `GraphEngine` 独立于 swarm lifecycle。`GraphRunner` 变薄适配器。
+
+- [ ] **Task: 从 GraphRunner 提取 GraphEngine**
+  - Files: `packages/coding-agent/src/swarm/graph/graph-runner.ts`, 新文件 `packages/coding-agent/src/graph/graph-engine.ts`
+  - Change: 提取 DAG 核心循环（WaveScheduler、节点执行、upstream 收集、gate 评估）到 `GraphEngine`。接受 `GraphDefinition` + `NodeExecutor` 接口。`GraphRunner` 实现 `NodeExecutor`，调用 `AgentRuntime.spawn()` 或直接 `createAgentSession()`。
+  - Acceptance: `GraphEngine` 可独立使用，无 swarm 依赖。
+
+- [ ] **Task: 图类型移到共享模块**
+  - Files: `packages/coding-agent/src/swarm/graph/schema.ts` → `packages/coding-agent/src/graph/types.ts`
+  - Change: 移动 `GraphDefinition`、`NodeDefinition`、`GateSpec`、`NodeContext`。swarm/graph 重新导出。
+  - Acceptance: 图类型无需 swarm import。
+
+---
+
+## Phase 8: TUI 原生集成
+
+**Contract:** 面板从 `AgentRegistry` + `AgentSession` 渲染，非 overlay。
+
+- [ ] **Task: 面板改用 AgentRegistry + AgentSession 通用状态**
+  - Files: `packages/coding-agent/src/modes/components/swarm/agent-panel.ts`, `context-panel.ts`
+  - Change: Agent 状态从 `AgentRegistry.global().list()` 读。上下文从 `AgentSession` 读。保留 `StateTracker` 用于 swarm 编排指标（wave、iteration、praiseCount 等）的增强显示。
+  - Acceptance: 面板在任何多 agent session 中正确渲染。
+
+- [ ] **Task: Dashboard 内联，删除 overlay 模式**
+  - Files: `packages/coding-agent/src/modes/components/swarm/swarm-dashboard-overlay.ts`, `interactive-mode.ts`
+  - Change: `AgentRegistry.list().length > 1` 或 `GraphEngine` 活跃时，主 TUI 内联显示多 agent 面板。不再切换到独立 swarm overlay。保留 overlay 组件为可选（用户可手动切换）。
+  - Acceptance: 多 agent 面板自动出现。单 agent session 不显示 panel。
+
+---
+
+## Phase 9: Verification
+
+- [ ] **Task: 冒烟测试 — agent_invoke, agent://, graph execution, AgentHandle 迁移**
+- [ ] **Task: 全量测试 + biome zero errors**
+- [ ] **Task: 确认 AgentHandle 零残留、CommBus 零残留、AgentLoopConfig 零变更**

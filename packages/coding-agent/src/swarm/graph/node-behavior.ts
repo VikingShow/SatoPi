@@ -19,8 +19,8 @@
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import { CurtainBehavior } from "../behaviors/curtain-behavior";
 import { ScriptBehavior } from "../behaviors/script-behavior";
@@ -54,7 +54,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 	readonly name = "custom";
 
 	/** Track spawned handles for cleanup. */
-	#handles: AgentHandle[] = [];
+	#sessions: AgentSession[] = [];
 
 	// ======================================================================
 	// prepare
@@ -128,11 +128,11 @@ export class CustomNodeBehavior implements NodeBehavior {
 		});
 
 		try {
-			const handles = await ctx.runtime.spawn([spec]);
-			this.#handles = handles;
+			const sessions = await ctx.runtime.spawn([spec]);
+			this.#sessions = sessions;
 
-			const handle = handles[0]!;
-			const result = await handle.wait();
+			const session = sessions[0]!;
+			const result = await session.wait();
 
 			const output = typeof result?.output === "string" ? result.output : String(result ?? "");
 			const success = !result?.error;
@@ -198,11 +198,11 @@ export class CustomNodeBehavior implements NodeBehavior {
 			profileId: ctx.node.profileId,
 		});
 
-		const handles = await ctx.runtime.spawn([spec]);
-		this.#handles = handles;
+		const sessions = await ctx.runtime.spawn([spec]);
+		this.#sessions = sessions;
 
-		const handle = handles[0]!;
-		const result = await handle.wait();
+		const session = sessions[0]!;
+		const result = await session.wait();
 
 		const output = typeof result?.output === "string" ? result.output : String(result ?? "");
 		const success = !result?.error;
@@ -262,14 +262,14 @@ export class CustomNodeBehavior implements NodeBehavior {
 	// ======================================================================
 
 	async cleanup(_ctx: NodeContext): Promise<void> {
-		for (const handle of this.#handles) {
+		for (const session of this.#sessions) {
 			try {
-				handle.abort();
+				session.abort({ reason: "cleanup" });
 			} catch {
 				// Agent already terminated — ignore
 			}
 		}
-		this.#handles = [];
+		this.#sessions = [];
 	}
 }
 

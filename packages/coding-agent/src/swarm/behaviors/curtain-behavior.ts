@@ -12,11 +12,11 @@
  *   5. exit() → clean up agent handles and channel
  *
  * This behavior does NOT import CurtainRunner — it uses AgentRuntime,
- * CommBus, and HookPipeline directly.
+ * IrcBus, and HookPipeline directly.
  */
 
 import { logger } from "@oh-my-pi/pi-utils";
-import type { AgentHandle } from "../agent-runtime/agent-handle";
+import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
@@ -29,13 +29,13 @@ export class CurtainBehavior implements PhaseBehavior {
 	readonly phase: Chapter = "curtain";
 
 	/** Reporter agent handle (elected from stage agents). */
-	#reporter?: AgentHandle;
+	#reporter?: AgentSession;
 
 	/** Reflector agent handle (lessons learned). */
-	#reflector?: AgentHandle;
+	#reflector?: AgentSession;
 
 	/** Both spawned agent handles. */
-	#agents: AgentHandle[] = [];
+	#agents: AgentSession[] = [];
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set during reporter election
 	#electionChannel?: CommChannel;
 
@@ -84,7 +84,7 @@ export class CurtainBehavior implements PhaseBehavior {
 			});
 		} else {
 			// 2. Elect reporter via vote
-			const voteChannel = ctx.commBus.groupChannel("election", agentIds, ctx.activityLogger);
+			const voteChannel = ctx.ircBus.groupChannel("election", agentIds, ctx.activityLogger);
 			this.#electionChannel = voteChannel;
 			channels.push(voteChannel);
 
@@ -150,19 +150,19 @@ export class CurtainBehavior implements PhaseBehavior {
 			},
 		];
 
-		const handles = await ctx.runtime.spawn(agentSpecs);
+		const sessions = await ctx.runtime.spawn(agentSpecs);
 
-		// The first handle may be the reporter (if the ID matched an existing agent
+		// The first session may be the reporter (if the ID matched an existing agent
 		// already in the state) or may be a new agent. Track both separately.
-		for (const handle of handles) {
-			if (handle.role === "reporter" || handle.id === reporterId) {
-				this.#reporter = handle;
-			} else if (handle.role === "reflector" || handle.id === "reflector") {
-				this.#reflector = handle;
+		for (const session of sessions) {
+			if (session.role === "reporter" || session.id === reporterId) {
+				this.#reporter = session;
+			} else if (session.role === "reflector" || session.id === "reflector") {
+				this.#reflector = session;
 			}
 		}
 
-		this.#agents = handles;
+		this.#agents = sessions;
 
 		logger.info("[CurtainBehavior] Reporter + Reflector spawned", {
 			reporterId: this.#reporter?.id,
@@ -170,7 +170,7 @@ export class CurtainBehavior implements PhaseBehavior {
 		});
 
 		return {
-			agents: handles,
+			agents: sessions,
 			channels,
 			initialUIMessage:
 				"Curtain phase: reporter is summarizing the build and reflector is analyzing lessons learned.",
@@ -219,9 +219,8 @@ export class CurtainBehavior implements PhaseBehavior {
 			return;
 		}
 
-		// Feedback: route to reporter for follow-up if still running
 		if (this.#reporter && this.#reporter.status === "running") {
-			await this.#reporter.send(msg.body).catch(() => {});
+			await this.#reporter.steer(msg.body).catch(() => {});
 		}
 	}
 
@@ -315,7 +314,7 @@ export class CurtainBehavior implements PhaseBehavior {
 		for (const agent of this.#agents) {
 			if (agent.status === "running") {
 				try {
-					agent.abort("phase exit");
+					agent.abort({ reason: "phase exit" });
 				} catch {
 					// Best-effort abort
 				}

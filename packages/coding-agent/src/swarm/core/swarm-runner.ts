@@ -187,7 +187,7 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 				hookPipeline: this.#hookPipeline,
 				fsm: this.#fsm,
 				runtime: this.#runtime,
-				commBus: this.#runtime?.commBus,
+				ircBus: this.#runtime?.ircBus,
 			});
 
 			stage
@@ -249,7 +249,7 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 			settings: this.#settings,
 			roleAssetManager: this.#roleAssetManager,
 			profileRegistry: this.#profileRegistry,
-			commBus: this.#runtime?.commBus,
+			ircBus: this.#runtime?.ircBus,
 			hindsightClient: this.#hindsightClient,
 			mnemopiClient: this.#mnemopiClient,
 		});
@@ -300,8 +300,8 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 
 	/** Route a human steering message to Stage workers. */
 	async steer(message: string): Promise<void> {
-		if (this.#runtime?.commBus) {
-			await this.#runtime.commBus.receiveFromHuman(message);
+		if (this.#runtime?.ircBus) {
+			await this.#runtime.ircBus.receiveFromHuman(message);
 		}
 	}
 

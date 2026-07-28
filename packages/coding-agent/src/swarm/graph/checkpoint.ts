@@ -25,36 +25,10 @@
 import { CTX, SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
-// Types
+// Types — re-exported from the canonical location
 // ============================================================================
 
-export type NodeStatus = "pending" | "running" | "completed" | "failed" | "skipped";
-export type GraphRunStatus = "running" | "completed" | "failed" | "aborted";
-
-export interface NodeRunState {
-	nodeId: string;
-	status: NodeStatus;
-	startedAt?: number;
-	completedAt?: number;
-	error?: string;
-	/** References to output artifacts produced by this node (file paths, artifact URIs). */
-	outputRefs?: string[];
-}
-
-export interface GraphRunState {
-	/** Logical name of the graph definition (e.g. "theatre-main"). */
-	graphName: string;
-	/** Unique run identifier — survives restarts. */
-	runId: string;
-	/** Epoch ms when this run was initiated. */
-	startedAt: number;
-	/** Node state keyed by node id. */
-	nodes: Record<string, NodeRunState>;
-	/** Which wave the executor is currently processing (0-based). */
-	currentWave: number;
-	/** Overall run status. */
-	status: GraphRunStatus;
-}
+export type { GraphRunState, GraphRunStatus, NodeRunState, NodeStatus } from "../../graph/types";
 
 // ============================================================================
 // Persistence

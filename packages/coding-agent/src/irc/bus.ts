@@ -19,6 +19,10 @@ import { logger, Snowflake } from "@oh-my-pi/pi-utils";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import type { CustomMessage } from "../session/messages";
+import { CommChannel } from "../swarm/comm-bus/comm-channel";
+import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
+import type { HookContext } from "../swarm/hook-system/types";
+import type { ActivityLogger } from "../swarm/infra/activity-logger";
 
 export interface IrcMessage {
 	id: string;
@@ -116,6 +120,10 @@ export class IrcBus {
 	}
 
 	readonly #registry: AgentRegistry;
+	// ── CommBus-migrated fields ──
+	readonly #channels = new Map<string, CommChannel>();
+	#activityLogger: ActivityLogger | undefined;
+	#hookPipeline: HookPipeline | undefined;
 	readonly #lifecycle: () => AgentLifecycleManager;
 	readonly #mailboxes = new Map<string, IrcMessage[]>();
 	readonly #waiters = new Map<string, IrcWaiter[]>();
@@ -410,5 +418,49 @@ export class IrcBus {
 			// Display-only forwarding must never affect delivery semantics.
 			logger.debug("IrcBus: main UI relay failed", { to: message.to, error: String(error) });
 		}
+	}
+
+	// ── CommBus-migrated: human interface ──
+
+	/** Route a Human message through the bus. Logs and optionally delivers to a target agent. */
+	async receiveFromHuman(text: string, target?: string): Promise<void> {
+		const hookCtx: HookContext = { phase: undefined, agentId: target };
+		await this.#hookPipeline?.trigger("comm:beforeMessage", { from: "human", to: target, message: text }, hookCtx);
+		this.#activityLogger?.logBroadcast("human", text);
+		if (target) {
+			await this.send({ from: "human", to: target, body: text }, { suppressRelay: true }).catch(() => {
+				// Best-effort: target agent may not exist yet
+			});
+		}
+		await this.#hookPipeline?.trigger("comm:afterMessage", { from: "human", to: target, message: text }, hookCtx);
+	}
+
+	// ── CommBus-migrated: channels ──
+
+	/** Get or create a named communication channel for a group of agents. */
+	groupChannel(name: string, agentIds: string[], activityLogger?: ActivityLogger): CommChannel {
+		let channel = this.#channels.get(name);
+		if (!channel) {
+			channel = new CommChannel(this, agentIds, [], activityLogger ?? this.#activityLogger);
+			this.#channels.set(name, channel);
+		}
+		return channel;
+	}
+
+	/** Remove a named channel from the cache. */
+	removeChannel(name: string): void {
+		this.#channels.delete(name);
+	}
+
+	// ── CommBus-migrated: wiring ──
+
+	/** Set the activity logger reference. */
+	setActivityLogger(logger: ActivityLogger): void {
+		this.#activityLogger = logger;
+	}
+
+	/** Set the hook pipeline reference. */
+	setHookPipeline(hookPipeline: HookPipeline): void {
+		this.#hookPipeline = hookPipeline;
 	}
 }

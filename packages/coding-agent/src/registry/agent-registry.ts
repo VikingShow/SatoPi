@@ -19,7 +19,6 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
-import type { AgentHandle } from "../swarm/agent-runtime/agent-handle";
 import { oneLineLabel } from "../task/types";
 
 export const MAIN_AGENT_ID = "Main";
@@ -205,22 +204,22 @@ export class AgentRegistry {
 	}
 
 	/**
-	 * Store a live AgentHandle for a persistent agent, keyed by the agent's
-	 * registry id. The handle enables steer/reuse of idle persistent agents
+	 * Store a live AgentSession for a persistent agent, keyed by the agent's
+	 * registry id. The session enables steer/reuse of idle persistent agents
 	 * without re-spawning.
 	 */
-	readonly #handles = new Map<string, AgentHandle>();
+	readonly #handles = new Map<string, AgentSession>();
 
-	setHandle(id: string, handle: AgentHandle): void {
-		this.#handles.set(id, handle);
+	setHandle(id: string, session: AgentSession): void {
+		this.#handles.set(id, session);
 	}
 
 	/**
-	 * Retrieve the live AgentHandle for an agent, if one was stored.
-	 * Returns undefined for transient agents or agents whose handle has
+	 * Retrieve the live AgentSession for an agent, if one was stored.
+	 * Returns undefined for transient agents or agents whose session has
 	 * not been wired (e.g. pre-v3 paths).
 	 */
-	getHandle(id: string): AgentHandle | undefined {
+	getHandle(id: string): AgentSession | undefined {
 		return this.#handles.get(id);
 	}
 

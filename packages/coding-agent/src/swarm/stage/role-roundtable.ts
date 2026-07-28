@@ -11,7 +11,7 @@
  *   4. 失败时 fallback 到算法分配
  *
  * @deprecated Use {@link CommChannel.roundtable} directly via
- * `CommBus.groupChannel(name, agentIds).roundtable(topic, config)`.
+ * `IrcBus.groupChannel(name, agentIds).roundtable(topic, config)`.
  * `StageBehavior` already uses this pattern for role assignment.
  * This class is retained for callers that have not yet migrated to the v3
  * PhaseBehavior architecture.

@@ -16,8 +16,8 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import { IrcBus } from "../../irc/bus";
 import type { AgentRuntime } from "../agent-runtime";
-import { CommBus } from "../comm-bus/comm-bus";
 import { type LoopSwarmConfig, parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
 import type { RunManager } from "../core/services";
 import type { Chapter, StateTracker } from "../core/state";
@@ -63,7 +63,7 @@ export class ScriptManager {
 	#runManager: RunManager;
 	#profileRegistry?: ProfileRegistry;
 	#roleAssetManager?: RoleAssetManager;
-	#commBus: CommBus;
+	#ircBus: IrcBus;
 
 	#conversation: ConversationTurn[] = [];
 	#taskDescription = "";
@@ -99,7 +99,7 @@ export class ScriptManager {
 		runManager: RunManager;
 		profileRegistry?: ProfileRegistry;
 		roleAssetManager?: RoleAssetManager;
-		commBus?: CommBus;
+		ircBus?: IrcBus;
 	}) {
 		this.#modelRegistry = opts.modelRegistry;
 		this.#settings = opts.settings;
@@ -112,9 +112,8 @@ export class ScriptManager {
 		this.#runManager = opts.runManager;
 		this.#profileRegistry = opts.profileRegistry;
 		this.#roleAssetManager = opts.roleAssetManager;
-		// Use injected CommBus, or fall back to global singleton for backward compat
-		this.#commBus = opts.commBus ?? CommBus.global();
-		this.#commBus.setActivityLogger(opts.activityLogger);
+		this.#ircBus = opts.ircBus ?? IrcBus.global();
+		this.#ircBus.setActivityLogger(opts.activityLogger);
 	}
 
 	async #saveConversation(): Promise<void> {
@@ -201,8 +200,8 @@ export class ScriptManager {
 		if (this.#phase !== "script") {
 			return { success: false, error: `Cannot send message in phase: ${this.#phase}` };
 		}
-		// Route through CommBus for unified Human message handling (logging included)
-		await this.#commBus.receiveFromHuman(text, "planner");
+		// Route through IrcBus for unified Human message handling (logging included)
+		await this.#ircBus.receiveFromHuman(text, "planner");
 		this.#conversation.push({ role: "user", content: text });
 		await this.#saveConversation();
 		this.#planMtime = await this.#getPlanMtime();
