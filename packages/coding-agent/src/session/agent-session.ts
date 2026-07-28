@@ -1743,6 +1743,8 @@ export class AgentSession {
 	#acpPermissionDecisions: Map<string, "allow_always" | "reject_always"> = new Map();
 	/** Session file created by this session's `/move`; removed on dispose if it stayed empty. */
 	#movedFromEmptySessionFile?: string;
+	/** Setter registered by createAgentSession to expose the ToolContextStore.setAgentRuntime. */
+	#toolContextRuntimeSetter?: (r: unknown) => void;
 
 	// Compaction state
 	#compactionAbortController: AbortController | undefined = undefined;
@@ -2678,6 +2680,20 @@ export class AgentSession {
 			if (this.#advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig()) this.#stopAdvisorRuntime();
 			this.#buildAdvisorRuntime(true);
 		});
+	}
+
+	/**
+	 * Set the AgentRuntime on the session's tool context store.
+	 * Called by AgentLauncher after session creation so tools like
+	 * `agent_invoke` can spawn and steer persistent agents.
+	 */
+	setToolContextAgentRuntime(runtime: unknown): void {
+		this.#toolContextRuntimeSetter?.(runtime);
+	}
+
+	/** Internal: called by createAgentSession to register the setter. */
+	_registerToolContextRuntimeSetter(setter: (r: unknown) => void): void {
+		this.#toolContextRuntimeSetter = setter;
 	}
 	// -------------------------------------------------------------------------
 	// Advisor runtime lifecycle

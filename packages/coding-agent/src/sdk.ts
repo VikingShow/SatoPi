@@ -3013,6 +3013,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			titleSystemPrompt: options.titleSystemPrompt,
 		});
 		hasSession = true;
+		// Register the tool context runtime setter so swarm layers can inject
+		// AgentRuntime — needed by agent_invoke to spawn/steer persistent agents.
+		session._registerToolContextRuntimeSetter(r => toolContextStore.setAgentRuntime(r as any));
 		if (asyncJobManager) {
 			session.yieldQueue.register<AsyncResultEntry>("async-result", {
 				isStale: entry => asyncJobManager.isDeliverySuppressed(entry.jobId),

@@ -27,8 +27,9 @@ const mockSession = {
 		followUp: () => {},
 	},
 	prompt: async () => {},
+	setToolContextAgentRuntime: () => {},
 };
-const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
+ const mockSessionFactory = async () => ({ session: mockSession as unknown as AgentSession });
 
 // Variant B: fires agent_end synchronously — for tests needing handle.wait() to resolve
 const mockCompletingSession = {
@@ -40,8 +41,9 @@ const mockCompletingSession = {
 		followUp: () => {},
 	},
 	prompt: async () => {},
+	setToolContextAgentRuntime: () => {},
 };
-const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
+ const mockCompletingSessionFactory = async () => ({ session: mockCompletingSession as unknown as AgentSession });
 import type { AgentEvent, AgentMessage, AgentTool, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";

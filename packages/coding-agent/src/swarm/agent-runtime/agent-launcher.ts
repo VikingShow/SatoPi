@@ -104,7 +104,14 @@ export interface LaunchContext {
 	 * Only consulted when {@link builtinToolNames} is also provided.
 	 */
 	createToolSession?: () => Partial<ToolSession>;
-}
+
+	/**
+	 * Optional AgentRuntime reference injected by the runtime.
+	 * When set, the launcher wires it into the spawned session's tool context
+	 * so tools like `agent_invoke` can spawn and steer persistent agents.
+	 */
+	agentRuntime?: AgentRuntime;
+ }
 
 /**
  * Minimal ToolSession for SatoPi swarm agents (Phase B1).
@@ -196,6 +203,12 @@ export class AgentLauncher {
 			hasUI: false,
 			autoApprove: true,
 		});
+
+		// 4.5 Wire AgentRuntime into the session's tool context so tools like
+		//     agent_invoke can spawn and steer persistent agents.
+		if (ctx.agentRuntime) {
+			session.setToolContextAgentRuntime(ctx.agentRuntime);
+		}
 
 		// 5. Wire aside message provider (system notifications from CommBus)
 		if (hookProviders.getAsideMessages) {
