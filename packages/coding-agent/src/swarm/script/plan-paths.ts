@@ -1,12 +1,12 @@
 /**
  * Plan-paths — canonical plan.md path utilities.
  *
- * plan.md is per-session: {swarmDir}/.stp/plan.md
+ * plan.md is per-session: {swarmDir}/.session/plan.md
  * Plan archives are workspace-scoped: {workspace}/.stp/plans/plan-*.md
  *
  * This module is the SINGLE source of truth for plan.md location.
  * Every plan.md consumer MUST use these functions — never hardcode a
- * path.join(…, ".stp", "plan.md") anywhere else.
+ * path.join(…, ".session", "plan.md") anywhere else.
  */
 
 import * as path from "node:path";
@@ -19,18 +19,18 @@ import * as path from "node:path";
  * durable across sessions, it belongs in the session directory, not at
  * the workspace root.
  *
- * Path: .stp/sessions/swarm-{name}/.stp/plan.md
+ * Path: .stp/sessions/swarm-{name}/.session/plan.md
  */
 export function getSessionPlanPath(swarmDir: string): string {
-	return path.join(swarmDir, ".stp", "plan.md");
+	return path.join(swarmDir, ".session", "plan.md");
 }
 
 /**
- * Per-session .stp directory (contains plan.md and session.jsonl).
+ * Per-session .session directory (contains plan.md and session.jsonl).
  * Created lazily on first write.
  */
 export function getSessionStpDir(swarmDir: string): string {
-	return path.join(swarmDir, ".stp");
+	return path.join(swarmDir, ".session");
 }
 
 /**

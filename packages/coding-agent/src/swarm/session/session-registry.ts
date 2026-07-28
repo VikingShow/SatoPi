@@ -280,7 +280,7 @@ export class SessionRegistry {
 	getPlanPath(name: string): string {
 		const session = this.#sessions.get(name);
 		if (!session) throw new Error(`Session "${name}" not found`);
-		return path.join(session.swarmDir, ".stp", "plan.md");
+		return path.join(session.swarmDir, ".session", "plan.md");
 	}
 
 	getPlanArchiveDir(): string {

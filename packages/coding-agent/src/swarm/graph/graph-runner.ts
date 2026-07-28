@@ -92,7 +92,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#graph = await loadGraphDefinition(this.#config.graphPath);
 
 		await fs.mkdir(this.#swarmDir, { recursive: true });
-		await fs.mkdir(path.join(this.#swarmDir, ".stp"), { recursive: true });
+		await fs.mkdir(path.join(this.#swarmDir, ".session"), { recursive: true });
 
 		this.#sessionManager = await SwarmSessionManager.create(this.#swarmDir);
 		this.#stateTracker = new StateTracker(workspace, this.#graphName);

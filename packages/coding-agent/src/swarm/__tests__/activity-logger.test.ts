@@ -289,7 +289,7 @@ describe("SwarmSessionManager JSON resilience", () => {
 
 	it("returns empty array for a file with only bad lines", async () => {
 		// Create a session file manually with only bad content
-		const sessionDir = path.join(tmpDir, ".stp", "sessions");
+		const sessionDir = path.join(tmpDir, ".session");
 		const fsPromises = await import("node:fs/promises");
 		await fsPromises.mkdir(sessionDir, { recursive: true });
 		const filePath = path.join(sessionDir, "test.jsonl");

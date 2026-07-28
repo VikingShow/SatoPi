@@ -126,12 +126,13 @@ describe("EmbeddedSwarmBridge", () => {
 			bridge = new EmbeddedSwarmBridge(config, callback);
 			await bridge.init();
 
-			// .stp directory should exist
-			await fs.access(path.join(config.swarmDir, ".stp"));
+			// .session directory should exist
+			await fs.access(path.join(config.swarmDir, ".session"));
 
-			// session should be created
-			const sessionDir = path.join(config.swarmDir, ".stp", "sessions");
-			await fs.access(sessionDir);
+			// session files should exist inside .session/
+			const files = await fs.readdir(path.join(config.swarmDir, ".session"));
+			const jsonlFiles = files.filter(f => f.endsWith(".jsonl"));
+			expect(jsonlFiles.length).toBeGreaterThan(0);
 		});
 	});
 

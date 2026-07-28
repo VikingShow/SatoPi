@@ -13,7 +13,7 @@
  *   注入 agent 对话流中。Human 回复后，Planner 自然引导至 plan.md 产出。
  *   当 plan.md 就绪 → runPlanDebate() → human 确认 → handler 执行实际循环。
  *
- * plan.md is per-session: {swarmDir}/.stp/plan.md
+ * plan.md is per-session: {swarmDir}/.session/plan.md
  * Archives are workspace-scoped: {workspace}/.stp/plans/
  */
 
@@ -59,7 +59,7 @@ export interface ScriptResult {
  * Planner engages the human in a Socratic dialogue to clarify goals,
  * constraints, and acceptance criteria, then produces plan.md.
  *
- * plan.md path (per-session): {swarmDir}/.stp/plan.md
+ * plan.md path (per-session): {swarmDir}/.session/plan.md
  *
  * @param experienceStore Optional store to query past loop experience.
  */

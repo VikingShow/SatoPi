@@ -169,7 +169,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 		// 1. Create swarm workspace directories
 		await fs.mkdir(swarmDir, { recursive: true });
-		await fs.mkdir(path.join(swarmDir, ".stp"), { recursive: true });
+		await fs.mkdir(path.join(swarmDir, ".session"), { recursive: true });
 
 		// 2. Create SwarmSessionManager for persistence
 		this.#sessionManager = await SwarmSessionManager.create(swarmDir);

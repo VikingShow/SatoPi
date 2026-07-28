@@ -76,7 +76,7 @@ function getLogFormat(): winston.Logform.Format {
 function makeFileTransport(dir?: string): winston.transport {
 	return new DailyRotateFile({
 		dirname: ensureDir(dir ?? getLogsDir()),
-		filename: "omp.%DATE%.log",
+		filename: "stp.%DATE%.log",
 		datePattern: "YYYY-MM-DD",
 		maxSize: "10m",
 		maxFiles: 5,
