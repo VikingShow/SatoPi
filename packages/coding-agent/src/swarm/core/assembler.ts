@@ -37,6 +37,7 @@ import { HindsightSource } from "../context-manager/sources/hindsight-source";
 import { MmdSource } from "../context-manager/sources/mmd-source";
 import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 import type { ExperienceStore } from "../curtain/experience";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 import { type BuiltinHookDeps, registerBuiltinHooks } from "../hook-system/register-builtins";
@@ -73,6 +74,8 @@ export interface AssemblerOptions {
 	mnemopiClient?: MnemopiClient | null;
 	/** MarkEnvironment for stigmergic coordination — enables StigmergySource. */
 	markEnvironment?: MarkEnvironment;
+	/** OffloadManager for context offload — enables OffloadSource (L1 summaries, MMD context). */
+	offloadManager?: IOffloadManager;
 	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
 }
@@ -129,6 +132,7 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		experienceStore: opts.experienceStore,
 		activeMmd: opts.activeMmd,
 		markEnvironment,
+		offloadManager: opts.offloadManager,
 	});
 
 	return { runtime, hookPipeline, markEnvironment };
@@ -176,6 +180,9 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 	}
 	if (opts.markEnvironment) {
 		contextPipeline.register(new StigmergySource(opts.markEnvironment));
+	}
+	if (opts.offloadManager) {
+		contextPipeline.register(new OffloadSource(opts.offloadManager));
 	}
 
 	// 3. AgentLauncher — creates Agent instances with full hook wiring

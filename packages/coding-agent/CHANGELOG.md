@@ -7,9 +7,12 @@
 
 - Added inline TUI renderer for `agent_invoke` persistent agent calls — transcripts now show a "Invoke Agent" framed block (matching the `task` tool's visual style exactly) with live progress streaming, output preview, yield tree, and auto-dismiss after 5s.
 - Status bar now shows `🤖 2p·3a` (or `🤖 N pgent` / `🤖 N agents`) to distinguish persistent agents from task subagents at a glance.
+- Agent HUD above the editor now dispatches by agent kind instead of count: subagent-only shows gold "Subagents" panel, persistent-only shows green "Persistent Agents" panel, and both together show a silver-blue "Agents" panel with per-kind item colours. Replaced the old framed-block `renderAgentPanel` in this path with the simpler tree-list HUD style for visual consistency.
 ### Fixed
 
 - Fixed a bug where swarm `agent-launcher.ts` did not pass `agentDisplayName` to `createAgentSession`, causing all swarm-spawned persistent agents to appear as "main" in the agent registry instead of their `spec.id`.
+- Fixed a bug where `OffloadSource` was never registered on the `ContextPipeline`, causing offloaded context (L1 summaries, MMD context) collected by `OffloadManager` to never be injected back into agent prompts — the summarize→store→inject pipeline is now closed via late binding in `createSwarmSession`.
+- Fixed status bar subagent badge double-counting persistent agents — `countRunningSubagentBadgeAgents` now correctly counts only `kind: "sub"` agents, so the badge shows distinct `N pgent` / `N agents` / `Np·Ma` formats instead of always falling into the combined format.
 ## [16.5.0] - 2026-07-13
 
 ### Breaking Changes

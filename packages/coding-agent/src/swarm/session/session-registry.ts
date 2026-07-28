@@ -20,6 +20,10 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { IOffloadManager } from "../../offload/manager";
+import { OffloadManager } from "../../offload/manager";
+import { OffloadSource } from "../context-manager/sources/offload-source";
+import { registerBuiltinHooks } from "../hook-system/register-builtins";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
 import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
@@ -70,6 +74,7 @@ export interface SessionServices {
 	hookPipeline?: HookPipeline;
 	/** v3: Offload manager for context offload (L1 summarization, MMD injection). */
 	offloadManager?: IOffloadManager;
+	runtime?: { contextPipeline: ContextPipeline };
 }
 
 /** High-level session status for the run listing. */
@@ -93,6 +98,8 @@ export class SessionRegistry {
 	#factory: SessionFactory;
 	/** Optional SSE broadcaster auto-injected into every new session. */
 	#broadcaster: ActivityBroadcaster | null = null;
+	/** Optional runtime reference for registering context sources on the pipeline. */
+	#runtime?: SessionServices["runtime"];
 
 	constructor(shared: SharedServices, factory: SessionFactory, maxConcurrent = Infinity) {
 		this.#shared = shared;
@@ -107,6 +114,14 @@ export class SessionRegistry {
 	 */
 	setBroadcaster(broadcaster: ActivityBroadcaster): void {
 		this.#broadcaster = broadcaster;
+	}
+
+	/**
+	 * Register the runtime so createSession() can wire OffloadSource onto the
+	 * context pipeline when an OffloadManager is created.
+	 */
+	setRuntime(runtime: SessionServices["runtime"]): void {
+		this.#runtime = runtime;
 	}
 
 	get shared(): SharedServices {
@@ -191,6 +206,23 @@ export class SessionRegistry {
 					status: snapshot.status,
 					phase: snapshot.phase,
 				});
+			}
+
+			// v3: Wire real OffloadManager and register builtin hooks.
+			if (services.hookPipeline) {
+				const offloadManager = new OffloadManager(this.#shared.workspace, name, name, sessionManager.storage);
+				session.offloadManager = offloadManager;
+
+				registerBuiltinHooks(services.hookPipeline, {
+					offloadManager,
+					profileRegistry: this.#shared.profileRegistry,
+				});
+				logger.info("[SessionRegistry] Builtin hooks registered with OffloadManager", { name });
+
+				// Register OffloadSource on the context pipeline.
+				if (this.#runtime?.contextPipeline) {
+					this.#runtime.contextPipeline.register(new OffloadSource(offloadManager));
+				}
 			}
 		}
 

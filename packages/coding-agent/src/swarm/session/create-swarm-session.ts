@@ -9,6 +9,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { OffloadManager } from "../../offload/manager";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";
 import type { ActivityBroadcaster } from "../infra/activity-logger";
 import type { SessionFactory, SessionServices, SharedServices } from "./session-types";
@@ -21,6 +22,7 @@ export async function createSwarmSession(
 	options?: {
 		broadcaster?: ActivityBroadcaster | null;
 		maxConcurrent?: number;
+		runtime?: SessionServices["runtime"];
 	},
 ): Promise<SessionServices> {
 	const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${name}`);
@@ -73,6 +75,11 @@ export async function createSwarmSession(
 			const offloadManager = new OffloadManager(shared.workspace, name, name, sessionManager.storage);
 			session.offloadManager = offloadManager;
 
+			// Register OffloadSource on the context pipeline.
+			if (options?.runtime?.contextPipeline) {
+				options.runtime.contextPipeline.register(new OffloadSource(offloadManager));
+			}
+
 			registerBuiltinHooks(services.hookPipeline, {
 				offloadManager,
 				profileRegistry: shared.profileRegistry,
@@ -118,8 +125,9 @@ export async function forkSwarmSession(
 	newName: string,
 	shared: SharedServices,
 	factory: SessionFactory,
+	runtime?: SessionServices["runtime"],
 ): Promise<SessionServices> {
-	const session = await createSwarmSession(shared, factory, newName);
+	const session = await createSwarmSession(shared, factory, newName, { runtime });
 	if (parent.sessionManager && session.sessionManager) {
 		try {
 			const forkResult = await parent.sessionManager.fork();

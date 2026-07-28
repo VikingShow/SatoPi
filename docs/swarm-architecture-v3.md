@@ -658,6 +658,14 @@ ContextManager
   │     ├── MnemopiSource      (priority=6, 所有 phase, 可选)
   │     └── TaskQueueSource    (priority=7, stage only)
   │
+
+> **Note:** `OffloadSource` depends on `OffloadManager`, which is created after
+> `ContextPipeline` initialization (in `createSwarmSession`).  It is registered
+> via late binding: `createSwarmSession` creates the `OffloadManager`, then
+> calls `contextPipeline.register(new OffloadSource(offloadManager))` to close
+> the summarize→store→inject loop.  At `createOrchestratorRuntime` time the
+> `offloadManager` is `undefined`; the `OffloadSource` is a no-op until
+> registered later.
   ├── OffloadManager (产出方向: 从 Agent 产出生成摘要)
   │     ├── L1  Summarizer    (文本截断 / LLM 压缩)
   │     ├── L1.5 Deduplicator (Jaccard 去重)

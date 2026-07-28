@@ -11,6 +11,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { IOffloadManager } from "../../offload/manager";
+import type { ContextPipeline } from "../context-manager/context-pipeline";
 import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
@@ -53,6 +54,7 @@ export interface SessionServices {
 	sessionManager?: SwarmSessionManager;
 	hookPipeline?: HookPipeline;
 	offloadManager?: IOffloadManager;
+	runtime?: { contextPipeline: ContextPipeline };
 }
 
 // ============================================================================

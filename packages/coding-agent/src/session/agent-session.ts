@@ -17237,9 +17237,10 @@ export class AgentSession {
 		shared: SharedServices,
 		factory: SessionFactory,
 		name: string,
+		runtime?: SessionServices["runtime"],
 	): Promise<SessionServices> {
 		const { createSwarmSession } = await import("../swarm/session/create-swarm-session");
-		return createSwarmSession(shared, factory, name);
+		return createSwarmSession(shared, factory, name, { runtime });
 	}
 
 	/** Register an active swarm session for disposal tracking. */

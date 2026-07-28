@@ -15,6 +15,7 @@ import { AgentRegistry } from "../../registry/agent-registry";
 import { discoverAgents } from "../../task/discovery";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { StateTracker } from "../core/state";
 import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
@@ -25,6 +26,8 @@ import type { NodeContext } from "../graph/schema";
 import { type GraphDefinition, loadGraphDefinition } from "../graph/schema";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
+import { OffloadManager } from "../../offload/manager";
+import { MemorySessionStorage } from "../../session/session-storage";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 
@@ -331,6 +334,47 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const result = await discoverAgents(WORKSPACE);
 			expect(result).toHaveProperty("agents");
 			expect(Array.isArray(result.agents)).toBe(true);
+		});
+	});
+
+	// ── 9. OffloadSource → ContextPipeline integration ─────────────────────
+
+	describe("OffloadSource → ContextPipeline integration", () => {
+		it("OffloadSource injects offload context during stage phase", async () => {
+			const storage = new MemorySessionStorage();
+			const mgr = new OffloadManager("/tmp/test-offload-e2e", "test-agent", "session-1", storage);
+
+			await mgr.summarizeL1("agent-1", "Completed auth module refactoring");
+
+			const pipeline = new ContextPipeline();
+			pipeline.register(new OffloadSource(mgr));
+
+			const result = await pipeline.assemble(
+				{ id: "agent-1", role: "dev", task: "Build API" },
+				{ phase: "stage", chapter: "stage" },
+				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e" },
+			);
+
+			expect(result.systemPrompt).toContain("<offload_context>");
+			expect(result.systemPrompt).toContain("auth module refactoring");
+		});
+
+		it("OffloadSource does not inject during script phase", async () => {
+			const storage = new MemorySessionStorage();
+			const mgr = new OffloadManager("/tmp/test-offload-e2e", "test-agent", "session-2", storage);
+
+			await mgr.summarizeL1("agent-1", "Completed auth module refactoring");
+
+			const pipeline = new ContextPipeline();
+			pipeline.register(new OffloadSource(mgr));
+
+			const result = await pipeline.assemble(
+				{ id: "agent-1", role: "dev", task: "Build API" },
+				{ phase: "script", chapter: "script" },
+				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e" },
+			);
+
+			expect(result.systemPrompt).not.toContain("<offload_context>");
 		});
 	});
 });
