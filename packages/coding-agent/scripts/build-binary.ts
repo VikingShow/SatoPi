@@ -90,11 +90,12 @@ async function main(): Promise<void> {
 		// hooks still contain that generated bundle.
 		// Build the native Rust addon before embedding it. For cross-compilation
 		// targets, pipe the Rust target triple through CROSS_TARGET so the napi
-		// build routes through cargo-zigbuild / cargo-xwin.
+		// build routes through cargo-zigbuild / cargo-xwin. x64 cross-builds
+		// require an explicit TARGET_VARIANTS (baseline = x86-64-v2).
 		await runCommand(
 			["bun", "run", "ci:build:native"],
 			crossBuild
-				? { ...Bun.env, CROSS_TARGET: crossBuild.rustTarget ?? "", TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch }
+				? { ...Bun.env, CROSS_TARGET: crossBuild.rustTarget ?? "", TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch, ...(crossBuild.arch === "x64" && crossBuild.rustTarget ? { TARGET_VARIANTS: "baseline" } : {}) }
 				: Bun.env,
 			repoRoot,
 		);
