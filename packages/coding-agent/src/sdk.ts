@@ -2926,12 +2926,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					? new AppendOnlyContextManager()
 					: undefined
 				: undefined,
-			hasIrcInterrupts: options.hasIrcInterrupts ? () => true : undefined,
 			getSteeringMessages: options.getSteeringMessages,
 			getFollowUpMessages: options.getFollowUpMessages,
 			// Stigmergy: place marks on tool execution (unconditional)
 			afterToolCall: (ctx, _signal) => {
-				// Only place marks for production operations
 				const fileOp =
 					ctx.toolCall.name === "write" || ctx.toolCall.name === "edit" || ctx.toolCall.name === "bash";
 				if (!fileOp) return undefined;
@@ -2943,11 +2941,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					agentId: resolvedAgentId,
 					path: typeof argsPath === "string" ? argsPath : undefined,
 					message: `${ctx.toolCall.name}: completed`,
-					ttlMs: 30 * 60_000, // 30 min TTL
+					ttlMs: 30 * 60_000,
 				});
 			},
 		});
 
+		agent.hasIrcInterrupts = options.hasIrcInterrupts ? () => true : undefined;
 		cursorEventEmitter = event => agent.emitExternalEvent(event);
 
 		// Restore messages if session has existing data
