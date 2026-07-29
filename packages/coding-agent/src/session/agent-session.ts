@@ -8227,7 +8227,7 @@ export class AgentSession {
 		const engine = (this.settings.get("swarm.engine") as string) ?? "legacy";
 
 		if (engine === "graph") {
-			const graphPath = path.join(process.cwd(), "src/swarm/graph/builtin/theatre.graph.yaml");
+			const graphPath = path.join(import.meta.dir, "..", "swarm", "graph", "builtin", "theatre.graph.yaml");
 			const bridge = new GraphRunner({
 				workspace: process.cwd(),
 				graphPath,
