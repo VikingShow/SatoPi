@@ -354,7 +354,7 @@ experience-hook (curtain 阶段)
 - 卸载是**手动的**（curtain 阶段固化），而非**自动的**（基于 token 压力触发）
 - 没有 L1/L2/L3 分层压缩
 - 被卸载的内容不包含 MMD 架构图
-- agent 的旧对话历史超过 token 预算时直接 truncate（由 oh-my-pi 底层处理），不会被结构化卸载
+- agent 的旧对话历史超过 token 预算时直接 truncate（由 satopi 底层处理），不会被结构化卸载
 
 ### 2.5 AgentProfile 信用分与上下文卸载无关联
 
@@ -461,6 +461,6 @@ main()
 | **P0** | load/save 路径不一致 | 重启后所有 AgentProfile 丢失 | 改一行路径 |
 | **P1** | 非原子写入 | 崩溃时 profiles.json 损坏 | tmp + rename |
 | **P2** | v3 架构（ContextPipeline + AgentRuntime）未接入生产 | 8 种上下文源（profile、experience、stigmergy、offload...）不生效；agent 收不到信用分、经验、环境标记 | 将 `SwarmRunManager` 迁移到 `AgentRuntime` 路径 |
-| **P3** | ContextCompactor hook stub | 长 agent 无上下文压缩，token 溢出 | 实现压缩触发逻辑，接入 oh-my-pi 的 `compact()`/`shouldCompact()` |
+| **P3** | ContextCompactor hook stub | 长 agent 无上下文压缩，token 溢出 | 实现压缩触发逻辑，接入 satopi 的 `compact()`/`shouldCompact()` |
 | **P4** | OffloadManager 两层占位符 | 无卸载上下文注入管道 | 实现 OffloadManager，统一 hook 层和 context 层的接口 |
 | **P5** | Schema 版本号 | 未来 schema 迁移时数据丢失 | 加 `version` 字段 + migration |

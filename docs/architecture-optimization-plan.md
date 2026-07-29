@@ -175,7 +175,7 @@
 
 ## 总体评估
 
-SatoPi 继承自 `oh-my-pi` (前身 `pi`)，拥有 6 年血统的生产级 Agent 运行时。**Agent 核心层（agent, ai, coding-agent CLI, natives, hashline, tui）极度成熟**，无 TODO/FIXME 标记，代码质量极高。
+SatoPi 继承自 `satopi` (前身 `pi`)，拥有 6 年血统的生产级 Agent 运行时。**Agent 核心层（agent, ai, coding-agent CLI, natives, hashline, tui）极度成熟**，无 TODO/FIXME 标记，代码质量极高。
 
 **SatoPi 的 Swarm 层（swarm-extension + swarm-gui）是在成熟单体上快速构建的 HTTP+React 壳**，功能完整但架构存在显著技术债务。前端仅消费了后端能力的约 30%。
 

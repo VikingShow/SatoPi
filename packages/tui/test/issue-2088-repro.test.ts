@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type Component, TUI } from "@satopi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
-// Regression test for https://github.com/can1357/oh-my-pi/issues/2088
+// Regression test for https://github.com/VikingShow/SatoPi/issues/2088
 //
 // Closing a tmux horizontal split widens the surviving pane. SIGWINCH fires
 // on the host process before tmux finishes repainting the pane buffer at

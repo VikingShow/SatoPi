@@ -87,7 +87,7 @@ Map<string, Session>    会话存储          ✅ Map<string,            ✅ Map
 
 **建议的合并方向**（低优先级）:
 
-在 `@oh-my-pi/pi-agent-core` 中提供一个统一的 `token-budget.ts` 模块，导出:
+在 `@satopi/pi-agent-core` 中提供一个统一的 `token-budget.ts` 模块，导出:
 - `countTokens(text)` — 已有，保留不变
 - `checkPromptBudget(text, window)` — 等价于当前的 `checkContextBudget()`
 - `shouldCompact(entries, window, settings)` — 等价于当前的 `shouldCompact()`

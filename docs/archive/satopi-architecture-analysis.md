@@ -25,7 +25,7 @@
 
 ## 摘要
 
-SatoPi 是一个基于 oh-my-pi（omp）的多智能体 swarm 编排系统，通过 **Loop Engineering** 机制实现 Worker 并行执行、Cloner Council 审查、计划辩论等复杂的多 Agent 协作。本文系统性梳理了其工程化架构（三层技术栈：Rust/TypeScript/Python）、Swarm 编排核心实现（Loop 三阶段、上下文构建、收敛检测）、oh-my-pi 可复用模块评估（mnemopi/snapcompact/hashline），并与 TencentDB-Agent-Memory 的四层记忆模型进行对比分析，最后提炼可借鉴的改造建议。
+SatoPi 是一个基于 satopi（omp）的多智能体 swarm 编排系统，通过 **Loop Engineering** 机制实现 Worker 并行执行、Cloner Council 审查、计划辩论等复杂的多 Agent 协作。本文系统性梳理了其工程化架构（三层技术栈：Rust/TypeScript/Python）、Swarm 编排核心实现（Loop 三阶段、上下文构建、收敛检测）、satopi 可复用模块评估（mnemopi/snapcompact/hashline），并与 TencentDB-Agent-Memory 的四层记忆模型进行对比分析，最后提炼可借鉴的改造建议。
 
 **dev 分支已落地的核心改进**: ContextGuard 令牌预算、反馈历史压缩、统一会话持久化（session.jsonl 替代三个独立文件）、多会话隔离架构 —— 这些正是初版分析报告推荐的前 3 个 Phase 改造路径。
 
@@ -35,7 +35,7 @@ SatoPi 是一个基于 oh-my-pi（omp）的多智能体 swarm 编排系统，通
 
 ### 1.1 项目全貌
 
-SatoPi（"Satori, a Team of Pi"）是 oh-my-pi 的一个 fork，在 omp 的 Agent 运行时基础上扩展了多智能体 swarm 编排能力。项目名蕴含禅宗"顿悟"(Satori) 概念 —— 多个 Pi agent 通过结构化圆桌辩论来收敛到真理。
+SatoPi（"Satori, a Team of Pi"）是 satopi 的一个 fork，在 omp 的 Agent 运行时基础上扩展了多智能体 swarm 编排能力。项目名蕴含禅宗"顿悟"(Satori) 概念 —— 多个 Pi agent 通过结构化圆桌辩论来收敛到真理。
 
 **基础信息**:
 
@@ -105,7 +105,7 @@ Rust 层的关键设计特点：
 
 #### 1.2.2 TypeScript 层 (packages/)
 
-19 个包，通过 `@oh-my-pi/*` scope 发布：
+19 个包，通过 `@satopi/*` scope 发布：
 
 ```mermaid
 graph TD
@@ -150,12 +150,12 @@ graph TD
 
 | 包 | scope | 职责 |
 |----|-------|------|
-| `@oh-my-pi/pi-agent-core` | `packages/agent` | Agent 运行时核心：对话循环、工具调用、子进程管理 |
-| `@oh-my-pi/pi-coding-agent` | `packages/coding-agent` | CLI 入口 + Swarm 编排核心(`src/swarm/`) |
-| `@oh-my-pi/pi-mnemopi` | `packages/mnemopi` | 本地记忆引擎，158+ API 方法 |
-| `@oh-my-pi/pi-ai` | `packages/ai` | LLM Provider 统一适配（OpenAI/Anthropic/本地） |
-| `@oh-my-pi/snapcompact` | `packages/snapcompact` | 上下文增量快照 + 差分压缩 |
-| `@oh-my-pi/hashline` | `packages/hashline` | Git-like 内容寻址行级存储 |
+| `@satopi/pi-agent-core` | `packages/agent` | Agent 运行时核心：对话循环、工具调用、子进程管理 |
+| `@satopi/pi-coding-agent` | `packages/coding-agent` | CLI 入口 + Swarm 编排核心(`src/swarm/`) |
+| `@satopi/pi-mnemopi` | `packages/mnemopi` | 本地记忆引擎，158+ API 方法 |
+| `@satopi/pi-ai` | `packages/ai` | LLM Provider 统一适配（OpenAI/Anthropic/本地） |
+| `@satopi/snapcompact` | `packages/snapcompact` | 上下文增量快照 + 差分压缩 |
+| `@satopi/hashline` | `packages/hashline` | Git-like 内容寻址行级存储 |
 
 #### 1.2.3 Python 层 (python/robomp/)
 
@@ -175,18 +175,18 @@ graph LR
 
     subgraph "TypeScript (packages/)"
         subgraph "Core"
-            agent["agent<br/>@oh-my-pi/pi-agent-core"]
-            ai["ai<br/>@oh-my-pi/pi-ai"]
+            agent["agent<br/>@satopi/pi-agent-core"]
+            ai["ai<br/>@satopi/pi-ai"]
         end
 
         subgraph "Swarm"
-            coding["coding-agent<br/>@oh-my-pi/pi-coding-agent"]
+            coding["coding-agent<br/>@satopi/pi-coding-agent"]
             swarm-ext["swarm-extension"]
             swarm-gui["swarm-gui"]
         end
 
         subgraph "Infrastructure"
-            mnemopi["mnemopi<br/>@oh-my-pi/pi-mnemopi"]
+            mnemopi["mnemopi<br/>@satopi/pi-mnemopi"]
             snapcompact["snapcompact"]
             hashline["hashline"]
             natives["natives<br/>(Rust 封装)"]
@@ -584,11 +584,11 @@ task: [
 
 ---
 
-## 三、oh-my-pi 可复用模块评估
+## 三、satopi 可复用模块评估
 
 ### 3.1 Mnemopi — 本地记忆引擎
 
-**包**: `@oh-my-pi/pi-mnemopi` v16.5.0  
+**包**: `@satopi/pi-mnemopi` v16.5.0  
 **路径**: `packages/mnemopi/src/core/`
 
 #### 核心架构
@@ -671,7 +671,7 @@ CREATE TABLE episodic_memory (
 
 ### 3.2 Snapcompact — 上下文快照压缩
 
-**包**: `@oh-my-pi/snapcompact` v16.5.0  
+**包**: `@satopi/snapcompact` v16.5.0  
 **路径**: `packages/snapcompact/`
 
 #### 核心能力
@@ -690,7 +690,7 @@ CREATE TABLE episodic_memory (
 
 ### 3.3 Hashline — 内容寻址存储
 
-**包**: `@oh-my-pi/hashline` v16.5.0  
+**包**: `@satopi/hashline` v16.5.0  
 **路径**: `packages/hashline/`
 
 Git-like 内容寻址行级存储，按内容哈希索引。目前主要用于代码 snip 的精确去重。
@@ -1437,7 +1437,7 @@ SatoPi 是一个工程化程度很高的多智能体编排系统：
 
 ### 7.4 关键洞察
 
-1. **mnemopi 仍然是最现成的复用资产**: oh-my-pi 生态中 158+ API 的本地记忆引擎可以直接作为 `ExperienceStore` 的升级版语义检索后端
+1. **mnemopi 仍然是最现成的复用资产**: satopi 生态中 158+ API 的本地记忆引擎可以直接作为 `ExperienceStore` 的升级版语义检索后端
 
 2. **TencentDB Memory 的分层范式依然有价值**: L0-L3 的渐进式披露 + Recall/Capture 钩子模式可以映射到 Swarm 的 Before-loop 经验注入 + After-loop 经验归档流程
 

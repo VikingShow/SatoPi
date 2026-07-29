@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@satopi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
-// Regression test for https://github.com/can1357/oh-my-pi/issues/2095
+// Regression test for https://github.com/VikingShow/SatoPi/issues/2095
 //
 // A session resume on Windows ConPTY paints the entire transcript (often
 // thousands of rows) through `#emitFullPaint` so the historical content lands

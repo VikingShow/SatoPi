@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@satopi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
-// Regression test for https://github.com/can1357/oh-my-pi/issues/2115
+// Regression test for https://github.com/VikingShow/SatoPi/issues/2115
 //
 // Large CJK session resumes on Windows legacy console hosts used to feed the
 // terminal a full synchronized paint for the entire transcript. ProcessTerminal

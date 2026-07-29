@@ -16,11 +16,10 @@ import { isTimeoutError, withTimeoutSignal } from "../utils/fetch-timeout";
 
 // [SatoPi] Use SatoPi's own GitHub repo for binary downloads
 const REPO = "VikingShow/SatoPi";
-// const REPO = "can1357/oh-my-pi";            // [original omp]
+// const REPO = "VikingShow/SatoPi";            // [original omp]
 const PACKAGE = "@satopi/pi-coding-agent";
-// TODO(satopi): Create VikingShow/homebrew-tap and publish satopi formula,
-// then change to "VikingShow/tap/satopi".
-const HOMEBREW_FORMULA = "can1357/tap/omp";
+// TODO(satopi): VikingShow/homebrew-tap repo not yet created; formula will 404 until published.
+const HOMEBREW_FORMULA = "VikingShow/tap/satopi";
 const MISE_TOOL = "github:VikingShow/SatoPi";
 /**
  * Official npm registry origin.

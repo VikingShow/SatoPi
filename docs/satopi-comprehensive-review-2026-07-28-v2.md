@@ -111,13 +111,13 @@ coding-agent 的子系统依赖呈**星型拓扑**：`tools/` 是中央枢纽，
 
 **圆桌结论**: "肌肉在，但神经系统未完全连接" — 所有 6 层结构完整，但层间集成接缝（Layer 1→3, Layer 1→Agent, Layer 4→CommBus/ContextPipeline）断裂。这符合分阶段推出策略（Phase 3A/4A 结构完成，Phase 2B/3B/4B 布线进行中），但**缺少端到端集成测试验证全链路**。
 
-### 2.4 oh-my-pi 耦合面
+### 2.4 satopi 耦合面
 
 - **pi-utils**: 最广泛依赖（logger, Snowflake, prompt, streams）— 低风险
 - **pi-catalog / pi-ai types**: 3 个 catalog import 规则违规（model-resolver.ts, models-config.ts, extensibility/types.ts — 从 pi-ai 导入了 catalog 类型而非从 pi-catalog）
 - **pi-agent-core (AgentLoopConfig)**: 5 个文件直接引用，165+ 文件传递依赖
 - **pi-natives**: 同步加载，import 时即运行（启动瓶颈）
-- **swarm/ 目录**: 最小化 oh-my-pi 依赖，主要用 pi-utils
+- **swarm/ 目录**: 最小化 satopi 依赖，主要用 pi-utils
 
 ---
 
@@ -168,7 +168,7 @@ writeChain、AgentHandle、ActivityLogger 三者共享同一反模式：**手动
 ### 4.1 插件系统
 
 - **加载管道**: discovery → extension-roots → plugin-dir-roots → skills/slash-commands/hooks，流程清晰
-- **兼容性**: legacy-pi-coding-agent-shim.ts 提供 oh-my-pi 插件兼容层
+- **兼容性**: legacy-pi-coding-agent-shim.ts 提供 satopi 插件兼容层
 - **缺口**: 无热加载/卸载、无插件间隔离（一个插件崩溃不影响其他的保证不明确）
 
 ### 4.2 MCP 集成
@@ -249,7 +249,7 @@ writeChain、AgentHandle、ActivityLogger 三者共享同一反模式：**手动
 
 ### 6.1 启动性能
 
-**关键瓶颈**: 原生 addon (`@oh-my-pi/pi-natives`) 在 import 时**同步加载** — 包括 AVX2 CPU 检测（读 `/proc/cpuinfo` 或 spawn `sysctl`/PowerShell）。ModelRegistry 构造函数也做同步文件系统读取。
+**关键瓶颈**: 原生 addon (`@satopi/pi-natives`) 在 import 时**同步加载** — 包括 AVX2 CPU 检测（读 `/proc/cpuinfo` 或 spawn `sysctl`/PowerShell）。ModelRegistry 构造函数也做同步文件系统读取。
 
 **好消息**: MCP 服务器**不在启动时连接** — 使用 250ms 超时 + 缓存回退的延迟模型。
 
@@ -333,7 +333,7 @@ writeChain、AgentHandle、ActivityLogger 三者共享同一反模式：**手动
 | `SubsystemDepGraph` | 2 | 子系统依赖 | 星型拓扑，3 目录边界模糊 |
 | `AgentLoopConfigReach` | 2 | AgentLoopConfig | 1/6 hook 不可达 |
 | `V3LayerImplDegree` | 2 | V3 六层实现 | 结构完整，集成断裂 |
-| `OhMyPiCoupling` | 2 | oh-my-pi 耦合 | 3 违规 + 165 传递依赖 |
+| `OhMyPiCoupling` | 2 | satopi 耦合 | 3 违规 + 165 传递依赖 |
 | `ErrorHandlingAudit` | 3 | 错误处理 | P1 await 缺失 + ~20 吞错 |
 | `ResourceLifecycleAudit` | 3 | 资源管理 | 5 泄漏 + 无 WAL |
 | `ConcurrencySafetyAudit` | 3 | 并发安全 | JS 语义安全，2 P3 语义问题 |

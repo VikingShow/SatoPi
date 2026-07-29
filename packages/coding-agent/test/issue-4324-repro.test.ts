@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/4324
+ * Regression for https://github.com/VikingShow/SatoPi/issues/4324
  *
  * The Kokoro TTS worker crash-loops with `exit code 7`, but every worker
  * subprocess was spawned with `stderr: "ignore"` — so the native crash message

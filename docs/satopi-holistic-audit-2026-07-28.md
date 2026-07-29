@@ -39,7 +39,7 @@
 **核心发现：**
 - **子系统边界清晰**：session/ 独立核心，swarm/ 内部耦合但不引入 session/tools/modes，tools/ 是中央枢纽。
 - **双路径状态**：stage/、script/、curtain/、core/pipeline/ 已迁至 AgentRuntime.spawn()；但 executor/ 默认走 runSubprocess（AgentRuntime 为可选覆盖）；render/streaming.ts 仅 legacy 路径。
-- **oh-my-pi 耦合**：12 个 `@oh-my-pi/*` 依赖，其中 pi-utils 为高扇出工具包。
+- **satopi 耦合**：12 个 `@satopi/*` 依赖，其中 pi-utils 为高扇出工具包。
 - **Rust-TS 桥接**：单 napi cdylib（pi-natives）封装 6 个内部 crate + ~40 个 vendored uutils，桥接层干净。
 - **工具调用数据流**：LLM response → agent-session (tool_execution_start) → event-controller (ToolExecutionComponent) → 工具执行 → agent-session (tool_execution_end) → TUI 渲染，事件驱动管道清晰。
 - **死引用**：`role-roundtable.ts` 引用了不存在的 `../comm-bus/roundtable` 模块。
@@ -311,4 +311,4 @@
 | CLI 命令数 | 32 + 2 aliases |
 | 硬编码 ANSI escape 文件 | 8 |
 | 未守卫 fire-and-forget IIFE | 2 |
-| oh-my-pi 直接依赖 | 12 |
+| satopi 直接依赖 | 12 |

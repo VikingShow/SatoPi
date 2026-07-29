@@ -1,7 +1,7 @@
 # SatoPi 项目全面深度调研报告
 
 > **调研日期**: 2025-07-24
-> **调研范围**: 完整项目（架构、Swarm 编排、上下文管理、Agent 通信、GUI/TUI、oh-my-pi 关系）
+> **调研范围**: 完整项目（架构、Swarm 编排、上下文管理、Agent 通信、GUI/TUI、satopi 关系）
 > **方法**: 源码级深度分析，覆盖 82 个 Swarm 文件及所有相关模块
 
 ---
@@ -13,7 +13,7 @@
 3. [上下文卸载与 Mermaid 机制](#三上下文卸载context-offloading与-mermaid-机制)
 4. [Agent 间通信机制](#四agent-间通信机制)
 5. [Role 分配与 Agent Forking](#五role-分配与-agent-forking)
-6. [Fork 自 oh-my-pi 的关系分析](#六fork-自-oh-my-pi-的关系分析)
+6. [Fork 自 satopi 的关系分析](#六fork-自-satopi-的关系分析)
 7. [GUI 与 TUI 状态评估](#七gui-与-tui-状态评估)
 8. [关键问题与差距总结](#八关键问题与差距总结)
 9. [附录：关键文件索引](#附录关键文件索引)
@@ -24,17 +24,17 @@
 
 ### 1.1 项目定位
 
-SatoPi 是一个 **纵深扩展型 fork**，基于 [oh-my-pi](https://github.com/can1357/oh-my-pi) 构建。核心创新是将单 Agent 对话能力扩展为**多 Agent Swarm 编排系统**，引入了三阶段生命周期（Script/Stage/Curtain）、多 Agent 协作、上下文卸载、环境标记协调等机制。
+SatoPi 是一个 **纵深扩展型 fork**，基于 [satopi](https://github.com/VikingShow/SatoPi) 构建。核心创新是将单 Agent 对话能力扩展为**多 Agent Swarm 编排系统**，引入了三阶段生命周期（Script/Stage/Curtain）、多 Agent 协作、上下文卸载、环境标记协调等机制。
 
 ### 1.2 技术栈
 
 | 层级 | 技术 | 来源 |
 |------|------|------|
-| 运行时 | Bun (TypeScript 直执) | oh-my-pi 原装 |
-| Agent 核心 | `packages/agent/` `packages/ai/` `packages/catalog/` | oh-my-pi 原装 |
-| 原生层 | Rust (~55K 行): mnemopi, snapcompact, hashline | oh-my-pi 原装 |
-| TUI | 差分渲染引擎 (~4000 行) | oh-my-pi 原装 |
-| Python REPL | robomp | oh-my-pi 原装 |
+| 运行时 | Bun (TypeScript 直执) | satopi 原装 |
+| Agent 核心 | `packages/agent/` `packages/ai/` `packages/catalog/` | satopi 原装 |
+| 原生层 | Rust (~55K 行): mnemopi, snapcompact, hashline | satopi 原装 |
+| TUI | 差分渲染引擎 (~4000 行) | satopi 原装 |
+| Python REPL | robomp | satopi 原装 |
 | **Swarm 编排** | **82 个 TypeScript 文件** | **SatoPi 新增** |
 | **GUI 监控面板** | React + Zustand + SSE | **SatoPi 新增** |
 | **经验学习** | SQLite FTS5 + JSONL | **SatoPi 新增** |
@@ -44,10 +44,10 @@ SatoPi 是一个 **纵深扩展型 fork**，基于 [oh-my-pi](https://github.com
 
 ```
 packages/
-├── agent/          # oh-my-pi: Agent 核心运行时
-├── ai/             # oh-my-pi: AI Provider 抽象
-├── catalog/        # oh-my-pi: 工具/插件目录
-├── coding-agent/   # oh-my-pi: Coding Agent（SatoPi 在此叠加 Swarm）
+├── agent/          # satopi: Agent 核心运行时
+├── ai/             # satopi: AI Provider 抽象
+├── catalog/        # satopi: 工具/插件目录
+├── coding-agent/   # satopi: Coding Agent（SatoPi 在此叠加 Swarm）
 │   └── src/
 │       ├── swarm/          # 🔥 SatoPi Swarm 编排核心（82 文件）
 │       │   ├── script/     # Script 阶段
@@ -62,9 +62,9 @@ packages/
 │       └── tools/          # Agent 工具（含 irc 工具）
 ├── swarm-gui/      # 🔥 SatoPi: Web 监控面板
 ├── swarm-extension/# 🔥 SatoPi: Swarm TUI 扩展
-├── tui/            # oh-my-pi: 通用 TUI 框架
-├── natives/        # oh-my-pi: Rust 原生模块
-└── python/         # oh-my-pi: Python REPL
+├── tui/            # satopi: 通用 TUI 框架
+├── natives/        # satopi: Rust 原生模块
+└── python/         # satopi: Python REPL
 ```
 
 ---
@@ -349,9 +349,9 @@ afterIteration
 | Plan 集成 | 无显式 phase | **plan.md 是 MMD 骨架** |
 | Experience 桥接 | 无 | **内置** FTS5 + 权重衰减 |
 
-### 3.5 与 oh-my-pi 原生 Compaction 的关系
+### 3.5 与 satopi 原生 Compaction 的关系
 
-oh-my-pi 有自己的 compaction 系统：
+satopi 有自己的 compaction 系统：
 
 | 组件 | 功能 | 文件 |
 |------|------|------|
@@ -360,7 +360,7 @@ oh-my-pi 有自己的 compaction 系统：
 | `snapcompact` | Bitmap 压缩（Rust 原生） | `crates/snapcompact/` |
 
 **关系总结**：两者是**互补的，不是替代**——
-- oh-my-pi compaction → 单 agent session 级别压缩
+- satopi compaction → 单 agent session 级别压缩
 - SatoPi offload → swarm 多 agent 级别压缩（Mermaid 图驱动）
 
 ### 3.6 当前实现状态
@@ -571,11 +571,11 @@ const reporter = spawnSubAgent("reporter", {
 
 ---
 
-## 六、Fork 自 oh-my-pi 的关系分析
+## 六、Fork 自 satopi 的关系分析
 
 ### 6.1 复用情况矩阵
 
-| 层级 | 模块 | oh-my-pi 原装 | SatoPi 新增 | 说明 |
+| 层级 | 模块 | satopi 原装 | SatoPi 新增 | 说明 |
 |------|------|:-----------:|:--------:|------|
 | **运行时** | `packages/agent/` | 100% | 0% | Agent 核心 |
 | | `packages/ai/` | 100% | 0% | AI Provider |
@@ -604,7 +604,7 @@ const reporter = spawnSubAgent("reporter", {
 |----------|------|
 | **Bun-first** | 运行时不编译，直接执行 TypeScript |
 | **TypeScript + Rust + Python** | 三层技术栈 |
-| `@oh-my-pi/*` scope | 统一的 npm scope |
+| `@satopi/*` scope | 统一的 npm scope |
 | **YAML 配置驱动** | 所有配置通过 YAML 文件 |
 | **Handlebars 模板 prompt** | Prompt 模板引擎 |
 | **ES `#private` 字段** | 私有字段使用 JS 原生语法 |
@@ -615,7 +615,7 @@ const reporter = spawnSubAgent("reporter", {
 
 详见 `docs/porting-from-pi-mono.md`：
 
-| 差异点 | oh-my-pi | SatoPi | 原因 |
+| 差异点 | satopi | SatoPi | 原因 |
 |--------|----------|--------|------|
 | UI 架构 | `StatusLineComponent` | `FooterDataProvider` | Swarm 需要更复杂的状态展示 |
 | Auth 存储 | `proper-lockfile` | `bun:sqlite` | 简化依赖 |
@@ -626,11 +626,11 @@ const reporter = spawnSubAgent("reporter", {
 ### 6.3 总体评价
 
 SatoPi 是**纵深扩展型 fork**：
-- **完整继承** oh-my-pi 的单 Agent 能力（运行时、工具、TUI、原生模块）
+- **完整继承** satopi 的单 Agent 能力（运行时、工具、TUI、原生模块）
 - **叠加全新**的多 Agent Swarm 编排层（三阶段生命周期 + Stigmergic 环境 + 存在性约束）
 - **架构风格保持一致**（Bun-first、TS 直执、YAML 驱动）
 - **理念转变**：从单 agent 对话 → 多 agent 协作
-- **保持优雅**：与 oh-my-pi 设计风格一致，代码组织和模块划分清晰
+- **保持优雅**：与 satopi 设计风格一致，代码组织和模块划分清晰
 
 ---
 
@@ -798,12 +798,12 @@ Phase 4 (P3 - 锦上添花):
 | `docs/multi-agent-emergence-stigmergy-2026.md` | Stigmergy 协调设计 |
 | `docs/frontier-multi-agent-architecture-2026.md` | 前沿多 agent 架构 |
 | `docs/agent-existential-constraints-2026.md` | Agent 存在性约束 |
-| `docs/porting-from-pi-mono.md` | oh-my-pi 迁移差异 |
+| `docs/porting-from-pi-mono.md` | satopi 迁移差异 |
 | `docs/satopi-frontend-optimization-2025-07.md` | 前端优化计划 |
 | `docs/satopi-v2-system-design.md` | V2 系统设计 |
 
 ---
 
 > **报告完成时间**: 2025-07-24
-> **调研方法**: 源码级分析，覆盖 82 个 Swarm 核心文件 + GUI/TUI + 通信模块 + oh-my-pi 对比
+> **调研方法**: 源码级分析，覆盖 82 个 Swarm 核心文件 + GUI/TUI + 通信模块 + satopi 对比
 > **总代码审查量**: 约 15,000+ 行 TypeScript

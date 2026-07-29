@@ -8,7 +8,7 @@
 
 | # | 问题 | 严重度 | 工作量 |
 |---|------|--------|--------|
-| 1 | `ContextCompactor` 与 oh-my-pi compaction 冗余 | 高 | 小 |
+| 1 | `ContextCompactor` 与 satopi compaction 冗余 | 高 | 小 |
 | 2 | OffloadPipeline 仅 swarm 使用，无法服务非 swarm agent | 高 | 大 |
 | 3 | Agent Profile 单文件多 agent，无 offload 引用 | 中 | 中 |
 | 4 | MarkEnvironment 本可全局使用但未全局化 | 低 | 小 |
@@ -25,7 +25,7 @@
 
 ### 现状
 
-| | oh-my-pi compaction | Swarm ContextCompactor |
+| | satopi compaction | Swarm ContextCompactor |
 |---|---|---|
 | 策略 | 5 种（v2 streaming, shake, prune, snapcompact, branch-summarize） | 3 种（Summarize, Truncate, OffloadToStigmergy） |
 | Token 计数 | `estimateTokens()` — 按消息类型精确（含 thinking, image, bash） | 无独立计数，用 `countTokens()` + 裸阈值 |
@@ -36,7 +36,7 @@
 ### 方案
 
 1. **删除** `swarm/context-manager/context-compactor.ts`
-2. 在所有 agent 创建时统一使用 oh-my-pi 的 `shouldCompact()` + `prepareCompaction()` + `compact()`
+2. 在所有 agent 创建时统一使用 satopi 的 `shouldCompact()` + `prepareCompaction()` + `compact()`
 3. `StageBehavior` / `AgentHandle` 中调用，不是新的包装器
 
 ---
@@ -295,12 +295,12 @@ AgentSession 每个 turn:
     2. fingerprint 对比,变化时重新注入
 ```
 
-### 8.7 与 oh-my-pi 现有 Compaction 的融合
+### 8.7 与 satopi 现有 Compaction 的融合
 
-融合策略: L3 compact context 是 oh-my-pi compaction 的增强层,不是替代。
+融合策略: L3 compact context 是 satopi compaction 的增强层,不是替代。
 
 ```
-oh-my-pi compaction graph:
+satopi compaction graph:
   prune (每次 turn)
     -> shake (tool output 过大)
       -> shouldCompact?

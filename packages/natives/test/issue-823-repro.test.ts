@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/823.
+ * Regression for https://github.com/VikingShow/SatoPi/issues/823.
  *
  * On WSL (and any host where the user moves the standalone binary away from the
  * build-time native artifacts), the compiled `omp` binary fails to load

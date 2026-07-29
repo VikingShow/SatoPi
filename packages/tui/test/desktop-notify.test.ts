@@ -142,7 +142,7 @@ describe("buildDesktopNotifyCommand", () => {
 	});
 
 	it("produces a freedesktop Notify call for gdbus including the urgency hint byte", () => {
-		expect(buildDesktopNotifyCommand(gdbus, { title: "Oh My Pi", body: "ping", urgency: "low" })).toEqual([
+		expect(buildDesktopNotifyCommand(gdbus, { title: "SatoPi", body: "ping", urgency: "low" })).toEqual([
 			"/usr/bin/gdbus",
 			"call",
 			"--session",
@@ -155,7 +155,7 @@ describe("buildDesktopNotifyCommand", () => {
 			"SatoPi",
 			"0",
 			"",
-			"Oh My Pi",
+			"SatoPi",
 			"ping",
 			"[]",
 			'{"urgency": <byte 0>}',

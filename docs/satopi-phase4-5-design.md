@@ -280,8 +280,8 @@ if (this.#mnemopi && result.status === "completed") {
 **新增文件**: `packages/coding-agent/src/swarm/mnemopi-adapter.ts`
 
 ```typescript
-import { Mnemopi } from "@oh-my-pi/mnemopi";
-import type { RecallResult } from "@oh-my-pi/mnemopi";
+import { Mnemopi } from "@satopi/mnemopi";
+import type { RecallResult } from "@satopi/mnemopi";
 
 export class SwarmMnemopiAdapter {
     readonly #mnemopi: Mnemopi;
@@ -574,7 +574,7 @@ Phase 4 是 Phase 5 的前置依赖：渐进式披露中的 L1 "按需语义召�
 
 | 新组件 | 复用的已有模块 | 复用方式 |
 |--------|---------------|---------|
-| `SwarmMnemopiAdapter` | `@oh-my-pi/mnemopi` 的 `Mnemopi`、`recall()`、`remember()` | 直接包装，不重写检索逻辑 |
+| `SwarmMnemopiAdapter` | `@satopi/mnemopi` 的 `Mnemopi`、`recall()`、`remember()` | 直接包装，不重写检索逻辑 |
 | L3 Persona | YAML schema 中已有 `agentRestrictions`，扩展即可 | 在 loop.yaml 中新增 `persona` 字段 |
 | L2 Scene | `StateTracker.state.todos`、`plan-paths.ts`、`planContent` | 已有数据源，只需重新组织注入位置 |
 | L1 Memory recall | Phase 4 的 `SwarmMnemopiAdapter.recall()` | 直接调用 |

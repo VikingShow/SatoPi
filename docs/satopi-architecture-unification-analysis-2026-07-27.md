@@ -30,19 +30,19 @@
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Coding Agent (packages/coding-agent/src/)        │
+│  satopi Coding Agent (packages/coding-agent/src/)        │
 │  AgentSession, AgentRegistry, IrcBus, ModelRegistry,       │
 │  SessionStorage, EventBus, Task Executor, Tools             │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Agent Core (packages/agent/)                     │
+│  satopi Agent Core (packages/agent/)                     │
 │  Agent class, agentLoop, AgentTool, AgentLoopConfig,       │
 │  AgentMessage, Compaction, Thinking, Telemetry              │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi AI (packages/ai/)                                │
+│  satopi AI (packages/ai/)                                │
 │  streamSimple, Model, Message, Provider, Auth, Streaming   │
 └──────────────────────────┴──────────────────────────────────┘
 
@@ -98,7 +98,7 @@ Layer 2: CommBus         → Human=Agent 对等端点, CommChannel(direct/group/
 Layer 1: AgentRuntime    → AgentSpec → Agent+AgentSession 直接创建 (不经过 runSubprocess)
 Layer 0: WorkflowFSM     → idle→script→script-debate→script-confirm→stage↔paused↔blocked→curtain→idle
 ─────────────────────────────────────────────────────────────────────────────
-oh-my-pi Platform(不动)  → Agent, AgentSession, IrcBus, AgentRegistry, ModelRegistry, compact()
+satopi Platform(不动)  → Agent, AgentSession, IrcBus, AgentRegistry, ModelRegistry, compact()
 ```
 
 ### 1.4 WorkflowFSM 完整状态图
@@ -224,7 +224,7 @@ export type AgentStatus = "running" | "idle" | "parked" | "aborted";
 
 2. **Swarm agent 是 AgentLoopConfig 的「最大用户」**——main/sub agent 的 AgentLoopConfig 注入点大多未被使用（尤其是 `transformContext`、`getSteeringMessages`、`getAsideMessages`），而 swarm agent 通过 ContextPipeline + CommBus 把全部 6 个注入点都打通了。这正是 v3 架构选 `Agent + AgentSession` 直接创建而非 `runSubprocess()` 的核心原因。
 
-3. **Swarm agent 的 Hook 系统是附加层，不是替换层**——HookPipeline 是 SatoPi 新增的编排层，但 oh-my-pi 原有的 `AgentSession.subscribe()` 仍然在底层工作。HookPipeline 在 agent 级别（beforeSpawn/afterComplete），AgentSession 事件在 session 级别（agent_start/agent_end/tool_*）。
+3. **Swarm agent 的 Hook 系统是附加层，不是替换层**——HookPipeline 是 SatoPi 新增的编排层，但 satopi 原有的 `AgentSession.subscribe()` 仍然在底层工作。HookPipeline 在 agent 级别（beforeSpawn/afterComplete），AgentSession 事件在 session 级别（agent_start/agent_end/tool_*）。
 
 4. **`kind: "persistent"` 的关键语义**——不与 `"sub"` 的 parked 机制混淆。AgentLifecycleManager 显式跳过 persistent agent，因为它们的生命周期由 ProfileRegistry + SwarmSessionManager 管理，而不是简单的 TTL 驱逐。
 

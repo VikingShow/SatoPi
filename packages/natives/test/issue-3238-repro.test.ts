@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/3238.
+ * Regression for https://github.com/VikingShow/SatoPi/issues/3238.
  *
  * On macOS x64 (Intel), `omp stats` builds only the `modern`
  * (`pi_natives.darwin-x64-modern.node`) variant when the host has AVX2,

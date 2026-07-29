@@ -107,7 +107,7 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 	}
 	try {
 		// Use GitHub Releases API so SatoPi releases drive the update notification,
-		// not the upstream oh-my-pi npm package.
+		// not the upstream satopi npm package.
 		const response = await fetch("https://api.github.com/repos/VikingShow/SatoPi/releases/latest", {
 			signal: withTimeoutSignal(5_000),
 		});

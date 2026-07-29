@@ -7,7 +7,7 @@
 
 ## 目录
 
-1. [oh-my-pi 基础设施全景](#1-oh-my-pi-基础设施全景)
+1. [satopi 基础设施全景](#1-satopi-基础设施全景)
 2. [关键发现：AgentLoopConfig 注入点不可达](#2-关键发现agentloopconfig-注入点不可达)
 3. [当前架构问题诊断](#3-当前架构问题诊断)
 4. [设计原则](#4-设计原则)
@@ -24,7 +24,7 @@
 
 ---
 
-## 1. oh-my-pi 基础设施全景
+## 1. satopi 基础设施全景
 
 ### 1.1 包依赖关系
 
@@ -35,19 +35,19 @@
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Coding Agent (packages/coding-agent/src/)        │
+│  satopi Coding Agent (packages/coding-agent/src/)        │
 │  AgentSession, AgentRegistry, IrcBus, ModelRegistry,       │
 │  SessionStorage, EventBus, Task Executor, Tools             │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Agent Core (packages/agent/)                     │
+│  satopi Agent Core (packages/agent/)                     │
 │  Agent class, agentLoop, AgentTool, AgentToolContext,      │
 │  AgentMessage, Compaction, Thinking, Telemetry              │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi AI (packages/ai/)                                │
+│  satopi AI (packages/ai/)                                │
 │  streamSimple, Model, Message, Provider, Auth, Streaming   │
 └──────────────────────────┴──────────────────────────────────┘
 
@@ -82,7 +82,7 @@ Cross-cutting:
 | | `ActivityLogger` | `coding-agent/swarm/hooks` | 事件日志 → SSE + session.jsonl |
 | | `StateTracker` | `coding-agent/swarm/core` | 内存状态追踪 → session.jsonl |
 
-### 1.3 oh-my-pi 已经提供的能力
+### 1.3 satopi 已经提供的能力
 
 ```
 ✅ Agent 生命周期管理    → Agent + AgentSession + AgentLifecycleManager
@@ -143,7 +143,7 @@ $ grep -rn "transformContext\|getSteeringMessages\|getAsideMessages\|getFollowUp
           多轮对话        → getFollowUpMessages
 ```
 
-`sdk.ts` 中大量使用 `Agent` + `AgentSession` 直接构造，这是 oh-my-pi 的合法公开 API。不需要修改 oh-my-pi 一行代码。
+`sdk.ts` 中大量使用 `Agent` + `AgentSession` 直接构造，这是 satopi 的合法公开 API。不需要修改 satopi 一行代码。
 
 ---
 
@@ -187,10 +187,10 @@ resolvePlannerRole()   roleAssetMgr.get()       roleAssetMgr.get()
 | **Hook 分散** | 4 套独立 hook/callback | 无法组合、无法排序 |
 | **AgentLoopConfig 不可达** | 注入点被 runSubprocess 屏蔽 | 上下文注入只能内联拼装 |
 
-### 3.3 oh-my-pi 能力未被充分利用
+### 3.3 satopi 能力未被充分利用
 
 ```
-oh-my-pi 能力                       当前 SatoPi 使用情况
+satopi 能力                       当前 SatoPi 使用情况
 ──────────────────────────────────  ────────────────────────
 AgentLoopConfig.transformContext    ✗ 不可达 (runSubprocess 不暴露)
 AgentLoopConfig.getSteeringMessages ✗ 不可达
@@ -216,7 +216,7 @@ compact() / shouldCompact()         ✗ 未用 (snapcompact 独立调用)
 
 4. **`compact()` + `snapcompact` 已是成熟方案。** ContextCompactor 是对现有压缩策略的封装。
 
-5. **oh-my-pi 类型不做修改。** `AgentDefinition`, `SingleResult`, `AgentMessage`, `AgentToolContext` 保持不变。
+5. **satopi 类型不做修改。** `AgentDefinition`, `SingleResult`, `AgentMessage`, `AgentToolContext` 保持不变。
 
 ### 4.2 新增 vs 复用的边界
 
@@ -235,7 +235,7 @@ compact() / shouldCompact()         ✗ 未用 (snapcompact 独立调用)
 │                                                              │
 │  ═══════════════════════════════════════════════════════════  │
 │                                                              │
-│                      复用 oh-my-pi                             │
+│                      复用 satopi                             │
 │                                                              │
 │  Agent + AgentSession   — 单个 Agent 的执行                    │
 │  IrcBus                 — 底层消息传输                         │
@@ -299,7 +299,7 @@ compact() / shouldCompact()         ✗ 未用 (snapcompact 独立调用)
 │  ══════════════════════╪══════════════════════════════════════ │
 │                        │                                        │
 │  ┌─────────────────────┼─────────────────────────────────────┐  │
-│  │ oh-my-pi Platform (不改动)                                 │  │
+│  │ satopi Platform (不改动)                                 │  │
 │  │  Agent + AgentSession    IrcBus + AgentRegistry           │  │
 │  │  AgentLoopConfig         compact() + snapcompact          │  │
 │  │  ModelRegistry + Settings  SessionStorage + EventBus      │  │
@@ -335,7 +335,7 @@ PhaseBehavior.enter()
   │      │     hasSteeringMessages:    () → commBus.hasPendingHumanMessages()
   │      │     hasIrcInterrupts:       () → commBus.hasPendingIrcMessages()
   │      │
-  │      └─ 直接创建 Agent + AgentSession (oh-my-pi 公开 API)
+  │      └─ 直接创建 Agent + AgentSession (satopi 公开 API)
   │           → AgentHandle 包装
   │
   ├─ 5. Agent 完成后 → HookPipeline.trigger("agent:afterComplete")
@@ -469,10 +469,10 @@ const PHASES: PhaseDefinition[] = [
 ```typescript
 // packages/coding-agent/src/swarm/agent-runtime/index.ts
 
-import { Agent } from "@oh-my-pi/pi-agent-core";              // 复用
-import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core"; // 复用
-import type { AgentDefinition, SingleResult } from "@oh-my-pi/pi-coding-agent"; // 复用
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";       // 复用
+import { Agent } from "@satopi/pi-agent-core";              // 复用
+import type { AgentLoopConfig } from "@satopi/pi-agent-core"; // 复用
+import type { AgentDefinition, SingleResult } from "@satopi/pi-coding-agent"; // 复用
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";       // 复用
 
 interface AgentSpec {
   id: string;
@@ -483,7 +483,7 @@ interface AgentSpec {
   modelPreference?: "cheapest" | "smartest" | "role-default";
 }
 
-/** 对 oh-my-pi Agent 实例的薄包装 */
+/** 对 satopi Agent 实例的薄包装 */
 interface AgentHandle {
   readonly id: string;
   readonly role: string;
@@ -524,7 +524,7 @@ AgentRuntime.spawn([spec])
   ├─ 3. ContextPipeline.assemble(spec, phase, base) → AssembledContext
   │     → 管道式应用 ContextSource[] (priority 排序)
   │
-  ├─ 4. 组装 AgentLoopConfig (直接使用 oh-my-pi 公开接口):
+  ├─ 4. 组装 AgentLoopConfig (直接使用 satopi 公开接口):
   │     {
   │       model: resolvedModel,
   │       tools: resolvedTools,
@@ -702,7 +702,7 @@ interface ContextSource {
 interface ContextFragment {
   systemPromptAddition?: string;
   taskPromptAddition?: string;
-  injectedMessages?: AgentMessage[];  // oh-my-pi 原生类型
+  injectedMessages?: AgentMessage[];  // satopi 原生类型
   tools?: string[];
 }
 
@@ -712,7 +712,7 @@ class ContextPipeline {
   /** 管道式构建 */
   async assemble(spec: AgentSpec, phase: Chapter, base: BuildContext): Promise<AssembledContext>;
 
-  /** 转化为 AgentLoopConfig.transformContext — 与 oh-my-pi 的集成点 */
+  /** 转化为 AgentLoopConfig.transformContext — 与 satopi 的集成点 */
   toTransformContext(assembled: AssembledContext): AgentLoopConfig["transformContext"];
 }
 ```
@@ -1170,7 +1170,7 @@ Human Applaud:
 
 ### Phase 1: 基础设施准备（1-2 周）
 
-**目标**: 建立 HookPipeline + ContextPipeline，不改变现有 Phase 代码。不修改 oh-my-pi。
+**目标**: 建立 HookPipeline + ContextPipeline，不改变现有 Phase 代码。不修改 satopi。
 
 #### Step 1.1: 创建 HookPipeline
 
@@ -1330,11 +1330,11 @@ Human Applaud:
     2. HookPipeline.trigger("agent:beforeSpawn")
     3. ContextPipeline.assemble() → AssembledContext
     4. 组装 AgentLoopConfig (6 个注入点全部接入)
-    5. 创建 Agent + AgentSession (直接使用 oh-my-pi 公开 API)
+    5. 创建 Agent + AgentSession (直接使用 satopi 公开 API)
     6. agent.start(task) → 返回 AgentHandle
 
   关键: 不走 runSubprocess(), 直接创建 Agent/AgentSession
-  (这是 sdk.ts 中的标准做法，不修改 oh-my-pi)
+  (这是 sdk.ts 中的标准做法，不修改 satopi)
 
 AgentHandle:
   - 包装 Agent + AgentSession
@@ -1422,7 +1422,7 @@ ScriptManager 的新角色:
   - 注册到 HookPipeline: agent:beforeLaunch 事件
 
 集成:
-  - 使用 oh-my-pi 的 compact() / shouldCompact() (复用)
+  - 使用 satopi 的 compact() / shouldCompact() (复用)
   - 使用 snapcompact (复用)
   - 压缩后的摘要可注入 stigmergy 环境或 offload
 ```
@@ -1481,7 +1481,7 @@ ScriptManager 的新角色:
 | **Offload** | 仅 Stage 有 | 所有 phase 可配置 |
 | **Hook** | 4 套独立系统 | 1 个 HookPipeline |
 | **上下文压缩** | 不存在统一策略 | ContextCompactor，3 种策略 |
-| **oh-my-pi 修改** | — | **0 行** |
+| **satopi 修改** | — | **0 行** |
 | **新增依赖** | — | **0** |
 | **对外 API 变更** | — | **0** (ScriptManager/StageController 公共 API 不变) |
 | **可测试性** | 每个组件需 mock 多个依赖 | 每层独立可测 |

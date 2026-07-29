@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/3031
+ * Regression for https://github.com/VikingShow/SatoPi/issues/3031
  *
  * Mnemopi's local embedding provider used to `import("onnxruntime-node")` and
  * `import("fastembed")` directly inside `fastembed-runtime.ts`. With

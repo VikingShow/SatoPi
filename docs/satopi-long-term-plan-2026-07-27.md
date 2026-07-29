@@ -9,16 +9,16 @@
 | 交互界面 | CLI + TUI | 保留 `swarm-dashboard.ts`，ActivityLogger 保留回调机制供 TUI 订阅，删除 SSE/Web 相关死代码 |
 | Script 阶段 | 本轮实现 | 实现 `stp swarm plan` 命令，修复 ScriptManager 语法错误 |
 | IRC Bus | CLI 也需要 | CLI 模式创建 in-process IRC bus，Agent 间直接通信 + MarkEnvironment 间接通信 |
-| 长期能力 | Agent 重试 + Fsm 验证 | 不做预算管理（oh-my-pi 已有 deadline + token tracking）；不做分布式扩展 |
+| 长期能力 | Agent 重试 + Fsm 验证 | 不做预算管理（satopi 已有 deadline + token tracking）；不做分布式扩展 |
 
 ## 预算管理说明
 
-oh-my-pi 已有：
+satopi 已有：
 - **时间截止**：`AgentLoopConfig.deadline`（到时间点自动 abort）
 - **用量追踪**：telemetry 的 `ChatUsageEvent` / `CostDelta`（每次 chat step 记录 token/cost）
 - **速率限制**：Settings 中的 provider request limits
 
-oh-my-pi **没有**：预算强制执行（"花完 $X 就停"）。但用户决策不做此能力，deadline 已足够防止运行失控。
+satopi **没有**：预算强制执行（"花完 $X 就停"）。但用户决策不做此能力，deadline 已足够防止运行失控。
 
 ---
 
@@ -66,7 +66,7 @@ oh-my-pi **没有**：预算强制执行（"花完 $X 就停"）。但用户决�
 3. **三阶段完整可用**：Script（CLI 交互式）→ Stage（AgentRuntime 驱动）→ Curtain（反思 + 经验提取）
 4. **TUI 实时渲染**：保留 swarm-dashboard.ts，ActivityLogger 回调驱动 TUI 更新
 5. **IRC 必需**：CLI 模式也创建 in-process IRC bus
-6. **不改基础库**：不改 oh-my-pi，不改 loop.yaml 格式，不影响单 Agent 模式
+6. **不改基础库**：不改 satopi，不改 loop.yaml 格式，不影响单 Agent 模式
 
 ---
 
@@ -358,7 +358,7 @@ async spawnRoundtable(specs: AgentSpec[], config: RoundtableConfig): Promise<Rou
 ### 4.1 创建 in-process IRC Bus
 **新文件**: `packages/coding-agent/src/swarm/comm-bus/in-process-irc.ts`
 
-oh-my-pi 的 IrcBus 接口需要适配。CLI 模式下创建一个 in-process 实现：
+satopi 的 IrcBus 接口需要适配。CLI 模式下创建一个 in-process 实现：
 ```typescript
 export function createInProcessIrcBus(): IrcBus {
     // 基于 EventEmitter 的 in-process IRC
@@ -595,11 +595,11 @@ bun test packages/agent/test/
 
 | 项目 | 原因 |
 |------|------|
-| 预算管理 | oh-my-pi 已有 deadline + token tracking，足够防止失控 |
+| 预算管理 | satopi 已有 deadline + token tracking，足够防止失控 |
 | 分布式扩展（RemoteAgentExecutor） | 当前规模不需要，>50 agent 时再考虑 |
 | collab-web 恢复 | 已确认无 swarm web GUI |
 | SSE 推送 | 已确认无 web GUI，TUI 用回调 |
-| oh-my-pi 基础库修改 | 约束：不改基础库 |
+| satopi 基础库修改 | 约束：不改基础库 |
 | loop.yaml 格式变更 | 约束：不改配置格式 |
 | 单 Agent 模式变更 | 约束：不影响现有单 Agent |
 
@@ -611,8 +611,8 @@ bun test packages/agent/test/
 
 2. **P2 ScriptManager 交互式 CLI**：需要处理 stdin 读取、TUI 渲染、plan.md 文件监听的并发问题。建议用 `readline.createInterface()` + `fs.watch()`。
 
-3. **P3 AgentHandle 指标**：Agent 完成后需要从 telemetry 提取 token usage。需确认 oh-my-pi 的 `Agent` 类是否暴露了累计 usage 数据。
+3. **P3 AgentHandle 指标**：Agent 完成后需要从 telemetry 提取 token usage。需确认 satopi 的 `Agent` 类是否暴露了累计 usage 数据。
 
-4. **P4 IRC Bus 适配**：oh-my-pi 的 IrcBus 接口可能假设了网络连接。in-process 实现需要完整模拟 IrcBus 的所有方法（channel 创建、消息广播、投票等）。
+4. **P4 IRC Bus 适配**：satopi 的 IrcBus 接口可能假设了网络连接。in-process 实现需要完整模拟 IrcBus 的所有方法（channel 创建、消息广播、投票等）。
 
 5. **P1 MarkEnvironment 去全局化**：需搜索所有 `MarkEnvironment.global()` 调用点，确保全部改为注入。测试代码可能也需要修改。

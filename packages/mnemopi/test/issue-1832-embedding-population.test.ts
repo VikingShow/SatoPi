@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/1832
+ * Regression for https://github.com/VikingShow/SatoPi/issues/1832
  *
  * Before the fix:
  *   - `remember()`/`rememberBatch()` never invoked `embed()`, so the

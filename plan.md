@@ -170,8 +170,8 @@
 
 - [ ] **Task: 添加 Cost 估算显示**
   - Files: `packages/coding-agent/src/modes/components/swarm/cost-panel.ts`（新建）, `packages/coding-agent/src/modes/components/swarm/swarm-dashboard.ts`
-  - Change: 新建 CostPanel 组件，从 StateTracker 读取累计 token 用量，根据当前 model pricing 估算成本。显示在 dashboard 底部状态行。PlanReviewOverlay 的 agent-count slider 旁显示预估成本
-  - Acceptance: swarm dashboard 底部显示估算 token 用量和成本；plan review 时 agent count 调整实时更新预估
+  - Change: 数据管道已存在——`SwarmState.totalTokens`（state.ts:92）和 `PipelineContext.totalTokens`（pipeline.ts:494）已逐 wave 累加 token 用量，`context-panel.ts` 已显示 per-agent token 用量条。缺失的是：从 `totalTokens` → 查 model catalog pricing → 换算成本 → 显示。新建 CostPanel：读 totalTokens，通过 ModelRegistry 获取当前 model 的 input/output pricing，计算估算成本，显示在 dashboard 底部。PlanReviewOverlay 的 agent-count slider 旁显示预估
+  - Acceptance: swarm dashboard 底部显示 `Tokens: 142K · Est: ~$0.42`；plan review 时 agent count 调整实时更新预估
   - Depends: —
 
 ## Phase 8: 深层优化（跨系统协调）

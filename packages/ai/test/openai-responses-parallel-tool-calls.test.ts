@@ -1,4 +1,4 @@
-// Regression for https://github.com/can1357/oh-my-pi/issues/1880.
+// Regression for https://github.com/VikingShow/SatoPi/issues/1880.
 //
 // llama.cpp (and any OpenAI-Responses-compatible host that interleaves
 // multiple function_call items) emits `output_item.added` for every parallel

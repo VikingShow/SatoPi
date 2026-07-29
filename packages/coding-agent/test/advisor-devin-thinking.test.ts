@@ -10,7 +10,7 @@ import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
-// Regression for https://github.com/can1357/oh-my-pi/issues/4579.
+// Regression for https://github.com/VikingShow/SatoPi/issues/4579.
 //
 // When the advisor role resolves to a reasoning model without a controllable
 // effort surface (Devin `devin-agent`: `reasoning: true`, `thinking: undefined`

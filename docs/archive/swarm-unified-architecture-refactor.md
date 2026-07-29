@@ -1,13 +1,13 @@
 # SatoPi Swarm 统一架构重构方案
 
 > 设计日期: 2026-07-25
-> 核心目标: 在复用 oh-my-pi 基础设施的前提下，统一 Script/Stage/Curtain 三阶段的共性抽象
+> 核心目标: 在复用 satopi 基础设施的前提下，统一 Script/Stage/Curtain 三阶段的共性抽象
 
 ---
 
 ## 目录
 
-1. [oh-my-pi 基础设施全景](#1-oh-my-pi-基础设施全景)
+1. [satopi 基础设施全景](#1-satopi-基础设施全景)
 2. [当前架构问题诊断](#2-当前架构问题诊断)
 3. [设计原则：复用而非重写](#3-设计原则复用而非重写)
 4. [统一后的架构分层](#4-统一后的架构分层)
@@ -23,7 +23,7 @@
 
 ---
 
-## 1. oh-my-pi 基础设施全景
+## 1. satopi 基础设施全景
 
 ### 1.1 包依赖关系
 
@@ -34,19 +34,19 @@
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Coding Agent (packages/coding-agent/src/)        │
+│  satopi Coding Agent (packages/coding-agent/src/)        │
 │  AgentSession, AgentRegistry, IrcBus, ModelRegistry,       │
 │  SessionStorage, EventBus, Task Executor, Tools             │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi Agent Core (packages/agent/)                     │
+│  satopi Agent Core (packages/agent/)                     │
 │  Agent class, agentLoop, AgentTool, AgentToolContext,      │
 │  AgentMessage, Compaction, Thinking, Telemetry              │
 └──────────────────────────┬──────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────┼──────────────────────────────────┐
-│  oh-my-pi AI (packages/ai/)                                │
+│  satopi AI (packages/ai/)                                │
 │  streamSimple, Model, Message, Provider, Auth, Streaming   │
 └──────────────────────────┴──────────────────────────────────┘
 
@@ -80,7 +80,7 @@ Cross-cutting:
 | | `ActivityLogger` | 事件日志 → SSE + session.jsonl |
 | | `StateTracker` | 内存状态追踪 → session.jsonl |
 
-### 1.3 oh-my-pi 已经提供的能力
+### 1.3 satopi 已经提供的能力
 
 ```
 ✅ Agent 生命周期管理    → Agent + AgentSession + AgentLifecycleManager
@@ -137,10 +137,10 @@ resolvePlannerRole()   roleAssetMgr.get()       roleAssetMgr.get()
 | **角色注入分散** | 三处各自调用 `roleAssetManager.get()` + 各自 fallback | 无统一的 RoleProvider |
 | **上下文构建分散** | Profile、Stigmergy、Experience、TurnGuidance、MMD、Mnemopi — 6 种来源，4 处注入 | 无 ContextPipeline |
 
-### 2.3 oh-my-pi 能力未被充分利用
+### 2.3 satopi 能力未被充分利用
 
 ```
-oh-my-pi 能力             当前 SatoPi 使用情况
+satopi 能力             当前 SatoPi 使用情况
 ────────────────────────  ────────────────────
 AgentLoopConfig.transformContext    ✗ 未用（内联拼装 prompt）
 AgentLoopConfig.getSteeringMessages ✗ 未用（手动调用 interrupt）
@@ -165,7 +165,7 @@ compact() / shouldCompact()        ✗ 未用（snapcompact 独立调用）
 
 4. **`compact()` + `snapcompact` 已是成熟方案。** ContextCompactor 是对现有压缩策略的封装，按 Phase 选择策略。
 
-5. **oh-my-pi 类型不做修改。** `AgentDefinition`, `SingleResult`, `AgentMessage`, `AgentToolContext` 保持不变。
+5. **satopi 类型不做修改。** `AgentDefinition`, `SingleResult`, `AgentMessage`, `AgentToolContext` 保持不变。
 
 ### 3.2 新增 vs 复用的边界
 
@@ -183,7 +183,7 @@ compact() / shouldCompact()        ✗ 未用（snapcompact 独立调用）
 │                                                              │
 │  ═══════════════════════════════════════════════════════════  │
 │                                                              │
-│                      复用 oh-my-pi                             │
+│                      复用 satopi                             │
 │                                                              │
 │  Agent + AgentSession   — 单个 Agent 的执行                    │
 │  IrcBus                 — 底层消息传输                         │
@@ -248,7 +248,7 @@ compact() / shouldCompact()        ✗ 未用（snapcompact 独立调用）
 │  ══════════════════════╪══════════════════════════════════════ │
 │                        │                                        │
 │  ┌─────────────────────┼─────────────────────────────────────┐  │
-│  │ oh-my-pi Platform (不改动)                                 │  │
+│  │ satopi Platform (不改动)                                 │  │
 │  │                                                           │  │
 │  │  Agent + AgentSession    IrcBus + AgentRegistry           │  │
 │  │  AgentLoopConfig         compact() + snapcompact          │  │
@@ -289,7 +289,7 @@ PhaseBehavior.enter()
   │      │       └→ getFollowUpMessages: 多轮对话
   │      │       └→ getApiKey: modelRegistry.resolver() (透传)
   │      │
-  │      └─ 4c. 创建 Agent 实例 (oh-my-pi)
+  │      └─ 4c. 创建 Agent 实例 (satopi)
   │             └→ agent = new Agent({ ...agentLoopConfig })
   │             └→ AgentHandle 包装
   │
@@ -435,10 +435,10 @@ const PHASES: PhaseDefinition[] = [
 ```typescript
 // packages/coding-agent/src/swarm/agent-runtime/index.ts
 
-import { Agent } from "@oh-my-pi/pi-agent-core";              // 复用
-import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core"; // 复用
-import type { AgentDefinition, SingleResult } from "@oh-my-pi/pi-coding-agent"; // 复用
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";       // 复用
+import { Agent } from "@satopi/pi-agent-core";              // 复用
+import type { AgentLoopConfig } from "@satopi/pi-agent-core"; // 复用
+import type { AgentDefinition, SingleResult } from "@satopi/pi-coding-agent"; // 复用
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";       // 复用
 
 interface AgentSpec {
   id: string;
@@ -455,7 +455,7 @@ interface LaunchOptions {
   modelOverride?: string;
 }
 
-/** 对 oh-my-pi Agent 实例的薄包装 */
+/** 对 satopi Agent 实例的薄包装 */
 interface AgentHandle {
   readonly id: string;
   readonly role: string;
@@ -498,7 +498,7 @@ AgentRuntime.spawn([spec])
   │     → 管道式应用 ContextSource[] (priority 排序)
   │     → 产出 AgentLoopConfig.transformContext 实现
   │
-  ├─ 4. 组装 AgentLoopConfig (oh-my-pi 原生接口):
+  ├─ 4. 组装 AgentLoopConfig (satopi 原生接口):
   │     {
   │       model, tools,
   │       transformContext:       contextPipeline.toTransformContext(assembled),
@@ -511,7 +511,7 @@ AgentRuntime.spawn([spec])
   │     }
   │
   ├─ 5. AgentLauncher.launch(spec, agentLoopConfig)
-  │     → 创建 Agent + AgentSession (oh-my-pi)
+  │     → 创建 Agent + AgentSession (satopi)
   │     → 调用 agent.start(task) 或 streamAgentOutput()
   │
   └─ 6. 返回 AgentHandle
@@ -539,8 +539,8 @@ Human 和 Agent 成为对等的通信端点。CommBus 是对 IrcBus + ActivityLo
 ```typescript
 // packages/coding-agent/src/swarm/comm-bus/index.ts
 
-import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";         // 复用
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry";  // 复用
+import { IrcBus } from "@satopi/pi-coding-agent/irc/bus";         // 复用
+import { AgentRegistry } from "@satopi/pi-coding-agent/registry";  // 复用
 import type { ActivityLogger } from "../hooks/activity-logger";      // 复用
 
 // ── 通信端点 — Human 和 Agent 是同一种东西 ──
@@ -656,7 +656,7 @@ ContextManager
 ```typescript
 // packages/coding-agent/src/swarm/context-manager/context-pipeline.ts
 
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";  // 复用
+import type { AgentMessage } from "@satopi/pi-agent-core";  // 复用
 import type { Chapter } from "../core/state";                   // 复用
 
 interface ContextSource {
@@ -673,7 +673,7 @@ interface ContextSource {
 interface ContextFragment {
   systemPromptAddition?: string;
   taskPromptAddition?: string;
-  injectedMessages?: AgentMessage[];  // oh-my-pi 原生类型
+  injectedMessages?: AgentMessage[];  // satopi 原生类型
   tools?: string[];
 }
 
@@ -683,7 +683,7 @@ class ContextPipeline {
   /** 管道式构建，返回可直接注入 AgentLoopConfig 的上下文 */
   async assemble(spec: AgentSpec, phase: Chapter, base: BuildContext): Promise<AssembledContext>;
 
-  /** 转化为 AgentLoopConfig.transformContext — 与 oh-my-pi 的集成点 */
+  /** 转化为 AgentLoopConfig.transformContext — 与 satopi 的集成点 */
   toTransformContext(assembled: AssembledContext): AgentLoopConfig["transformContext"];
 }
 ```
@@ -1214,7 +1214,7 @@ packages/coding-agent/src/swarm/
 |------|------|--------|
 | **SatoPi 新增代码** | — | ~1200 行（6 个新类） |
 | **可删除的重复代码** | — | ~800 行 |
-| **oh-my-pi 代码修改** | — | **0 行** |
+| **satopi 代码修改** | — | **0 行** |
 | **新增依赖** | — | 0 |
 | **对外 API 变更** | — | 0（ScriptManager/StageController/CurtainRunner 公共 API 不变） |
 | **状态管理** | 4 处独立 phase 追踪 | 1 个 WorkflowFsm |

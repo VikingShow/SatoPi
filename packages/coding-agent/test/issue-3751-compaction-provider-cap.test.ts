@@ -1,5 +1,5 @@
 /**
- * Regression for the [#3751](https://github.com/can1357/oh-my-pi/pull/3751)
+ * Regression for the [#3751](https://github.com/VikingShow/SatoPi/pull/3751)
  * chatgpt-codex follow-up: the per-LLM-turn provider concurrency wrapper
  * (`wrapStreamFnWithProviderConcurrency`) was only attached to
  * `Agent.streamFn` / `Agent.sideStreamFn`, so direct compaction oneshots

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { EnhancedPasteController } from "@satopi/pi-coding-agent/utils/enhanced-paste";
 
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/2127
+ * Regression for https://github.com/VikingShow/SatoPi/issues/2127
  *
  * On kitty (Linux/Wayland), the `/login` flow for OpenCode Zen (and any
  * other modal `Input` prompt: Perplexity OTP, GitHub Enterprise URL,

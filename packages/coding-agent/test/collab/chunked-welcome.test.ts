@@ -2,7 +2,7 @@
  * Contract: a large session snapshot is delivered as a small `welcome` frame
  * plus a train of `snapshot-chunk` frames, so the guest can clear its 30s
  * first-welcome timeout long before the full transcript arrives — the fix for
- * [#3144](https://github.com/can1357/oh-my-pi/issues/3144) where a multi-MB
+ * [#3144](https://github.com/VikingShow/SatoPi/issues/3144) where a multi-MB
  * single-frame welcome timed out on the default relay.
  *
  * The test drives the production `CollabHost` (real sealing, real envelopes)

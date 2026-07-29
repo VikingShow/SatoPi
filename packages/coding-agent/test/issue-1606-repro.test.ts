@@ -1,5 +1,5 @@
 /**
- * Regression for https://github.com/can1357/oh-my-pi/issues/1606
+ * Regression for https://github.com/VikingShow/SatoPi/issues/1606
  *
  * On Windows, `onnxruntime-node`'s NAPI finalizer segfaults Bun during
  * shutdown after `@huggingface/transformers` has loaded a tiny model in a

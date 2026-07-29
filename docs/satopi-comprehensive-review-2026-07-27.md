@@ -16,7 +16,7 @@
 |------|---------|--------|
 | 设计缺陷补充 | 测试隔离假象、错误路径盲区、并发竞态窗口、资源生命周期缺口 | P1-P2 |
 | 工程设计 | 双路径无收敛计划、agent-session.ts 上帝对象、依赖链脆弱 | 长期 |
-| 架构设计 | 无分布式扩展、无预算管理、ContextCompactor 断线、oh-my-pi 紧耦合 | 长期 |
+| 架构设计 | 无分布式扩展、无预算管理、ContextCompactor 断线、satopi 紧耦合 | 长期 |
 | 用户交互 | collab-web 非 swarm 专用、TUI 轮询延迟、幽灵字段、无运行回放 | 中期 |
 | 测试现状 | 298 单测中 13 个因依赖缺失失败、无 e2e、无属性测试、无混沌测试 | 阻断 |
 
@@ -37,11 +37,11 @@
 - **文件**: `packages/coding-agent/src/swarm/__tests__/` 全部 25 个测试文件
 - **现象**: 运行 `bun test packages/coding-agent/src/swarm/__tests__/` 时，298 个测试中 **13 个失败**，全部是模块解析错误：
   ```
-  Cannot find module '@oh-my-pi/pi-utils' from '.../irc/bus.ts'
-  Cannot find module '@oh-my-pi/pi-agent-core' from '.../agent-runtime.test.ts'
-  Cannot find module '@oh-my-pi/pi-tui' from '.../index.ts'
+  Cannot find module '@satopi/pi-utils' from '.../irc/bus.ts'
+  Cannot find module '@satopi/pi-agent-core' from '.../agent-runtime.test.ts'
+  Cannot find module '@satopi/pi-tui' from '.../index.ts'
   ```
-- **根因**: 项目依赖 `@oh-my-pi/*` 系列包（catalog 版本 `16.5.0`），但未运行 `bun setup`（安装依赖 + 构建 Rust addon + link CLI + `scripts/link-omp.sh`）。测试在未完成初始化的环境中运行。
+- **根因**: 项目依赖 `@satopi/*` 系列包（catalog 版本 `16.5.0`），但未运行 `bun setup`（安装依赖 + 构建 Rust addon + link CLI + `scripts/link-omp.sh`）。测试在未完成初始化的环境中运行。
 - **影响**: CI 环境必须先 `bun setup` 才能跑 swarm 测试；本地开发者首次 clone 后直接 `bun test` 会看到大量误报失败。
 - **建议**: 在 `package.json` 的 `test` 脚本前增加 pre-check，或文档中明确标注前置步骤。
 
@@ -478,21 +478,21 @@ class BudgetGuard {
 
 **优先级**: 中期（影响长 context agent 的稳定性）
 
-### 3.4 oh-my-pi 适配层
+### 3.4 satopi 适配层
 
 #### 当前耦合
 
-SatoPi 直接依赖 `@oh-my-pi/*` 系列包的公开 API：
+SatoPi 直接依赖 `@satopi/*` 系列包的公开 API：
 
-| SatoPi 模块 | 依赖的 oh-my-pi API |
+| SatoPi 模块 | 依赖的 satopi API |
 |------------|-------------------|
 | `agent-launcher.ts` | `Agent` class, `AgentLoopConfig`, `AgentTool`, `AgentMessage` |
 | `executor.ts` | `runSubprocess()`, `AgentDefinition`, `SingleResult` |
 | `swarm-cli.ts` | `ModelRegistry`, `Settings`, `discoverAuthStorage()` |
 | `core/state.ts` | `SwarmSessionManager`（间接通过 pi-utils） |
-| 全局 | `@oh-my-pi/pi-utils` 的 `logger` |
+| 全局 | `@satopi/pi-utils` 的 `logger` |
 
-**风险**: oh-my-pi 版本升级（当前 `16.5.0`）如果改变公开 API，SatoPi 直接 break。当前 "0 行修改" 是优势但也是脆弱点。
+**风险**: satopi 版本升级（当前 `16.5.0`）如果改变公开 API，SatoPi 直接 break。当前 "0 行修改" 是优势但也是脆弱点。
 
 #### 建议：引入适配层
 
@@ -506,11 +506,11 @@ export interface IAgent {
 
 export class OhMyPiAgentAdapter implements IAgent {
   #agent: Agent;
-  // 包装 @oh-my-pi/pi-agent-core 的 Agent class
+  // 包装 @satopi/pi-agent-core 的 Agent class
 }
 ```
 
-**优先级**: 长期（当前 oh-my-pi API 稳定，但升级时适配层可以隔离变更）
+**优先级**: 长期（当前 satopi API 稳定，但升级时适配层可以隔离变更）
 
 ### 3.5 WorkflowFsm 形式化验证
 
@@ -553,7 +553,7 @@ SatoPi 有三个用户触点：
 | TUI Dashboard | 终端渲染 | `swarm/tui/swarm-dashboard.ts` | 依赖 polling StateTracker |
 | collab-web | WebSocket relay | `packages/collab-web/` | 实时（relay frame 推送） |
 
-**重要发现**: `collab-web` **不是** swarm 专用 UI。它是通用的协作 web 客户端（用于 `@oh-my-pi/pi-wire` 协议），展示的是 AgentSession 的 transcript + agents，**不展示** swarm 特有的 phase pipeline、topology、wave 进度等信息。
+**重要发现**: `collab-web` **不是** swarm 专用 UI。它是通用的协作 web 客户端（用于 `@satopi/pi-wire` 协议），展示的是 AgentSession 的 transcript + agents，**不展示** swarm 特有的 phase pipeline、topology、wave 进度等信息。
 
 swarm 的实时状态实际上通过 `ActivityLogger` → SSE 推送，但前端没有 swarm 专用的 SSE 消费组件。
 
@@ -700,11 +700,11 @@ cd SatoPi
 curl -fsSL https://bun.sh/install | bash
 # 或使用 mise/asdf: mise install bun@1.3.14
 
-# 3. 完整初始化（安装依赖 + 构建 Rust addon + link CLI + link oh-my-pi）
+# 3. 完整初始化（安装依赖 + 构建 Rust addon + link CLI + link satopi）
 bun run setup
 ```
 
-**关键**: `bun run setup` 会执行 `scripts/link-omp.sh`，将 `@oh-my-pi/*` 包 link 到本地 workspace。不执行此步骤会导致 swarm 测试全部因模块解析失败。
+**关键**: `bun run setup` 会执行 `scripts/link-omp.sh`，将 `@satopi/*` 包 link 到本地 workspace。不执行此步骤会导致 swarm 测试全部因模块解析失败。
 
 #### 5.1.2 API Key 配置
 
@@ -942,17 +942,17 @@ Swarm "loop-test" completed: success
 
 ### 5.5 排障清单
 
-#### 问题 1: `Cannot find module '@oh-my-pi/*'`
+#### 问题 1: `Cannot find module '@satopi/*'`
 
 ```
-error: Cannot find module '@oh-my-pi/pi-utils' from '.../bus.ts'
+error: Cannot find module '@satopi/pi-utils' from '.../bus.ts'
 ```
 
 **原因**: 未运行 `bun run setup`
 **修复**:
 ```bash
 bun run setup
-# 如果只缺 oh-my-pi link:
+# 如果只缺 satopi link:
 sh scripts/link-omp.sh
 ```
 
@@ -1134,6 +1134,6 @@ SatoPi 的 swarm 子系统在架构设计上具有前瞻性（六层统一架构
 
 1. **短期**: 修复 v3 路径的 mock stub + session 为空问题，使其可端到端运行
 2. **中期**: 收敛双路径、接入 ContextCompactor、增加预算管理、补全 e2e 测试
-3. **长期**: 分布式执行、oh-my-pi 适配层、WorkflowFsm 形式化验证、运行回放
+3. **长期**: 分布式执行、satopi 适配层、WorkflowFsm 形式化验证、运行回放
 
 测试方面，当前只能通过 CLI 运行 legacy 路径的 swarm（`stp swarm run .stp/loop.yaml`），需要真实 LLM API key。298 个单元测试覆盖了隔离行为但无集成验证。建议增加分层测试策略（单元 → 集成 → e2e），并在 CI 中加入 swarm 单元测试 job。

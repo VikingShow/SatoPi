@@ -20,7 +20,7 @@
 | Tailwind | 3.4 + 手写 CSS | **4.3.2（CSS-first @theme）** ✅ 已升级 | 4.3 + shadcn/ui |
 | 组件体系 | 纯手写 | **shadcn 4.13.0 已安装，9 个 UI 组件已实现，但 0 个被业务代码使用** | shadcn/ui + 自定义 |
 | 后端测试 | ✅ 已有 10 个 swarm 测试 | **~1,090 个 Bun 测试** | 扩展到 30+ 测试 |
-| 包数量 | swarm-gui + collab-web（分离） | 统一 @oh-my-pi/pi-web（可独立发布的 SDK 包 + 内置 App） | ✅ 已统一 |
+| 包数量 | swarm-gui + collab-web（分离） | 统一 @satopi/pi-web（可独立发布的 SDK 包 + 内置 App） | ✅ 已统一 |
 | **依赖安装率** | N/A | **95%**（几乎所有需要的库都已安装） | — |
 | **依赖接入率** | N/A | **~15%**（已安装但未在业务代码中使用） | 90%+ |
 
@@ -195,12 +195,12 @@ const KEYBINDINGS = {
 
 ### 4.1 统一 Web 前端架构（第 5-6 周）
 
-**核心决策**：将 `swarm-gui` 和 `collab-web` 合并为统一的 `@oh-my-pi/pi-web` 包。
+**核心决策**：将 `swarm-gui` 和 `collab-web` 合并为统一的 `@satopi/pi-web` 包。
 
 **架构设计**：
 
 ```
-packages/web/                         # 新包: @oh-my-pi/pi-web
+packages/web/                         # 新包: @satopi/pi-web
 ├── package.json
 ├── src/
 │   ├── core/                        # 可独立发布的 SDK

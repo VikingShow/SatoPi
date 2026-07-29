@@ -1,5 +1,5 @@
 /**
- * Regression for [#3749](https://github.com/can1357/oh-my-pi/issues/3749):
+ * Regression for [#3749](https://github.com/VikingShow/SatoPi/issues/3749):
  * the per-provider concurrency cap used to bracket the whole subagent
  * lifecycle (acquired before session creation, released only after the
  * subagent yielded), so any spawn tree wider than `maxConcurrency`
