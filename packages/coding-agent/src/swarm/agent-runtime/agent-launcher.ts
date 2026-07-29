@@ -183,8 +183,8 @@ export class AgentLauncher {
 		// 2. Build system prompt
 		const systemPrompt = this.#buildSystemPrompt(spec, resolvedRole, assembledContext);
 
-		// 3. Resolve tool names for selection
-		const toolNames = this.#resolveTools(resolvedRole, assembledContext);
+		// 3. Resolve tool names for selection (role + context + spec-injected)
+		const toolNames = this.#resolveTools(resolvedRole, assembledContext, spec);
 
 		// 3.5 Build transformContext from ContextPipeline (SP-7: pipeline-driven context)
 		const transformCtx = ctx.pipeline?.toTransformContext(assembledContext, {
@@ -324,11 +324,12 @@ export class AgentLauncher {
 	 * Resolve tool names from the resolved role and assembled context.
 	 * Merges both sets, removing duplicate tool names.
 	 */
-	#resolveTools(resolvedRole: ResolvedRole, assembledContext: AssembledContext): string[] {
+	#resolveTools(resolvedRole: ResolvedRole, assembledContext: AssembledContext, spec: AgentSpec): string[] {
 		const toolSet = new Set<string>();
 
 		for (const t of resolvedRole.tools) toolSet.add(t);
 		for (const t of assembledContext.tools) toolSet.add(t);
+		for (const t of spec.tools ?? []) toolSet.add(t);
 
 		return [...toolSet];
 	}

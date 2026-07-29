@@ -34,6 +34,15 @@ interface AgentSpecBase {
 	 * compatibility.
 	 */
 	phase?: Chapter;
+
+	/**
+	 * Optional tool names to inject into the agent session.
+	 *
+	 * Merged with tools from role resolution and context assembly.
+	 * Used by callers to inject tooling-strategy-specific tools
+	 * (e.g. swift: quick-task-complete; persistent: session-save).
+	 */
+	tools?: string[];
 }
 /** @deprecated Use AgentSessionOptions directly. */
 export interface AgentSpecLibrary extends AgentSpecBase {

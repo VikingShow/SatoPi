@@ -23,7 +23,10 @@ export class GraphRunnerAsRunManager implements RunManager {
 		return { success: true };
 	}
 	async resume(): Promise<{ success: boolean; error?: string }> {
-		return { success: false, error: "Resume via checkpoint replay; not yet implemented" };
+		if (this.#orchestrator.resumeGraphRun) {
+			return this.#orchestrator.resumeGraphRun();
+		}
+		return { success: false, error: "Resume not supported by this orchestrator" };
 	}
 	async updatePlanAndContinue(_plan: string): Promise<{ success: boolean; error?: string }> {
 		return { success: false, error: "Not supported in graph mode" };

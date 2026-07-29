@@ -103,10 +103,10 @@ describe("buildDesktopNotifyCommand", () => {
 		expect(buildDesktopNotifyCommand(notifySend, "ping")).toEqual([
 			"/usr/bin/notify-send",
 			"--app-name",
-			"Oh My Pi",
+			"SatoPi",
 			"--urgency=normal",
 			"--expire-time=5000",
-			"Oh My Pi",
+			"SatoPi",
 			"ping",
 		]);
 	});
@@ -121,7 +121,7 @@ describe("buildDesktopNotifyCommand", () => {
 		).toEqual([
 			"/usr/bin/notify-send",
 			"--app-name",
-			"Oh My Pi",
+			"SatoPi",
 			"--urgency=critical",
 			"--expire-time=5000",
 			"Session 12",
@@ -133,10 +133,10 @@ describe("buildDesktopNotifyCommand", () => {
 		expect(buildDesktopNotifyCommand(notifySend, { title: "   ", body: "Waiting for input" })).toEqual([
 			"/usr/bin/notify-send",
 			"--app-name",
-			"Oh My Pi",
+			"SatoPi",
 			"--urgency=normal",
 			"--expire-time=5000",
-			"Oh My Pi",
+			"SatoPi",
 			"Waiting for input",
 		]);
 	});
@@ -152,7 +152,7 @@ describe("buildDesktopNotifyCommand", () => {
 			"/org/freedesktop/Notifications",
 			"--method",
 			"org.freedesktop.Notifications.Notify",
-			"Oh My Pi",
+			"SatoPi",
 			"0",
 			"",
 			"Oh My Pi",
@@ -191,7 +191,7 @@ describe("sendDesktopNotification", () => {
 		expect(opts.cmd).toEqual([
 			"/usr/bin/notify-send",
 			"--app-name",
-			"Oh My Pi",
+			"SatoPi",
 			"--urgency=normal",
 			"--expire-time=5000",
 			"Session",

@@ -2024,7 +2024,7 @@ export class AgentSession {
 		if (mode === "off") return;
 		try {
 			this.#powerAssertion = MacOSPowerAssertion.start({
-				reason: "Oh My Pi agent session",
+				reason: "SatoPi agent session",
 				idle: true,
 				display: mode === "display" || mode === "system",
 				system: mode === "system",

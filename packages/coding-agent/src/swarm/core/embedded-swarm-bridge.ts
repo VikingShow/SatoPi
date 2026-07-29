@@ -102,6 +102,8 @@ export interface ISwarmOrchestrator {
 	steer(message: string): Promise<void>;
 	applaud(): void;
 	pauseStage(): Promise<void>;
+	/** Resume graph execution from last checkpoint. Returns success/error. */
+	resumeGraphRun?(): Promise<{ success: boolean; error?: string }>;
 	readonly fsm: WorkflowFsm;
 	readonly stateTracker: StateTracker;
 	readonly activityLogger: ActivityLogger;
@@ -357,6 +359,13 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 					error: String(err),
 				});
 			}
+
+			// Return to script-confirm before stage transition
+			const postDebateResult = await this.#fsm.transition("script-confirm", {
+				reason: "debate complete",
+			});
+			if (!postDebateResult.ok)
+				return [postDebateResult.reason ?? "FSM rejected script-confirm transition after debate"];
 		}
 
 		// Transition: script-confirm → stage

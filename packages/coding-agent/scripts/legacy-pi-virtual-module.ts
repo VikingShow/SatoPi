@@ -180,9 +180,9 @@ function renderVirtualModule(entries: readonly BundledPiEntry[]): string {
 export async function createLegacyPiVirtualModulePlugin(): Promise<Bun.BunPlugin> {
 	const source = renderVirtualModule(await collectBundledPiEntries());
 	return {
-		name: "omp:legacy-pi-modules",
+		name: "stp:legacy-pi-modules",
 		setup(build) {
-			build.onResolve({ filter: /^omp-legacy-pi-modules$/ }, () => ({
+			build.onResolve({ filter: /^stp-legacy-pi-modules$/ }, () => ({
 				path: LEGACY_PI_MODULES_SPECIFIER,
 				namespace: VIRTUAL_NAMESPACE,
 			}));

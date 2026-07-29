@@ -43,6 +43,7 @@ import type { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { GateController } from "./gate-controller";
+import { recoverState } from "./checkpoint";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
 
@@ -394,6 +395,112 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	async pauseStage(): Promise<void> {
 		this.#abortController?.abort();
 		await this.#fsm.transition("paused", { reason: "human paused" });
+	}
+
+	async resumeGraphRun(): Promise<{ success: boolean; error?: string }> {
+		// Verify a checkpoint exists to resume from.
+		const checkpointState = await recoverState(this.#sessionManager, this.#graphName);
+		if (!checkpointState) {
+			return { success: false, error: "No checkpoint found — nothing to resume" };
+		}
+		if (checkpointState.status !== "running" && checkpointState.status !== "failed") {
+			return { success: false, error: `Cannot resume: graph run status is "${checkpointState.status}"` };
+		}
+
+		logger.info("[GraphRunner] Resuming from checkpoint", {
+			graphName: this.#graphName,
+			completedNodes: Object.values(checkpointState.nodes).filter(n => n.status === "completed").length,
+			currentWave: checkpointState.currentWave,
+		});
+
+		await this.#fsm.transition("stage", { reason: "graph resume from checkpoint" });
+		this.#abortController = new AbortController();
+
+		// Build CheckpointStore adapter wrapping SwarmSessionManager.
+		const sessionManager = this.#sessionManager;
+		const checkpointStore: CheckpointStore = {
+			write(state): void {
+				sessionManager.appendCustomEntry("graph_checkpoint", state);
+			},
+			async recover(graphName: string) {
+				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
+				for (let i = raw.length - 1; i >= 0; i--) {
+					const entry = raw[i];
+					if (entry.type === "custom" && entry.customType === "graph_checkpoint") {
+						const data = entry.data as Record<string, unknown> | undefined;
+						if (data?.graphName === graphName) {
+							return data as unknown as GraphRunState;
+						}
+					}
+				}
+				return null;
+			},
+		};
+
+		const engineConfig: GraphEngineConfig = {
+			graph: this.#graph,
+			waves: this.#waves,
+			checkpointStore,
+			graphName: this.#graphName,
+			abortSignal: this.#abortController.signal,
+		};
+		const engine = new GraphEngine(engineConfig);
+
+		let result: GraphRunResult;
+		try {
+			result = await engine.run(this);
+		} catch (err) {
+			logger.error("[GraphRunner] GraphEngine resume execution failed", { error: String(err) });
+			await this.#fsm.transition("blocked", { reason: String(err) }).catch(() => {});
+			return { success: false, error: String(err) };
+		}
+
+		await this.#fsm.transition("curtain", { reason: "graph resume complete" });
+		const allSucceeded = result.executionErrors.length === 0;
+
+		const agentResults = new Map<string, SingleResult[]>();
+		for (const [nodeId, nodeResult] of result.nodeResults) {
+			agentResults.set(nodeId, [
+				{
+					index: 0,
+					id: nodeId,
+					agent: nodeId,
+					agentSource: "project",
+					task: this.#graph.nodes[nodeId]?.description ?? "",
+					exitCode: nodeResult.success ? 0 : 1,
+					output: nodeResult.output ?? "",
+					stderr: nodeResult.error ?? "",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					requests: 0,
+				},
+			]);
+		}
+
+		await runCurtainPipeline(
+			{
+				status: allSucceeded ? "completed" : "failed",
+				agentResults,
+				errors: result.executionErrors,
+				agents: result.agentsList,
+				taskProgress: { total: result.totalNodes, completed: result.completedCount },
+			},
+			{
+				workspace: this.#config.workspace,
+				stateTracker: this.#stateTracker,
+				activityLogger: this.#activityLogger,
+				experienceStore: this.#experienceStore,
+				loopConfig: null,
+				modelRegistry: this.#config.modelRegistry,
+				settings: this.#config.settings,
+				ircBus: this.#runtime.ircBus,
+				graphName: this.#graphName,
+			},
+		);
+		await this.#fsm.transition("idle", { reason: "graph resume complete" });
+
+		return { success: true };
 	}
 
 	get fsm(): WorkflowFsm {

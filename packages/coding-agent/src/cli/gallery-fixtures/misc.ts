@@ -110,7 +110,7 @@ export const miscFixtures: Record<string, GalleryFixture> = {
 		},
 		args: {
 			host: "deploy@web-01",
-			command: "systemctl status omp-api --no-pager | head -n 12",
+			command: "systemctl status stp-api --no-pager | head -n 12",
 			cwd: "/srv/omp",
 			timeout: 60,
 		},
@@ -119,14 +119,14 @@ export const miscFixtures: Record<string, GalleryFixture> = {
 				{
 					type: "text",
 					text: [
-						"● omp-api.service - Oh My Pi API",
-						"     Loaded: loaded (/etc/systemd/system/omp-api.service; enabled)",
+						"● stp-api.service - SatoPi API",
+						"     Loaded: loaded (/etc/systemd/system/stp-api.service; enabled)",
 						"     Active: active (running) since Sat 2026-06-06 09:14:02 UTC; 3h 21min ago",
 						"   Main PID: 4812 (bun)",
 						"      Tasks: 17 (limit: 4915)",
 						"     Memory: 142.6M",
 						"        CPU: 38.214s",
-						"     CGroup: /system.slice/omp-api.service",
+						"     CGroup: /system.slice/stp-api.service",
 						"             └─4812 /usr/local/bin/bun run dist/server.js",
 					].join("\n"),
 				},

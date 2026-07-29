@@ -227,22 +227,43 @@ export class CustomNodeBehavior implements NodeBehavior {
 
 		const failures: string[] = [];
 
-		// Gate type determines which checks run (all stubs for v1).
 		switch (gate.type) {
-			case "compile-check":
-				logger.debug("[CustomNodeBehavior] Compile gate: not yet wired");
+			case "compile-check": {
+				const cmd = gate.command ?? "bun check";
+				try {
+					const proc = Bun.spawn({ cmd: "/bin/sh", args: ["-c", cmd], stdio: ["ignore", "pipe", "pipe"] });
+					const exitCode = await proc.exited;
+					const stderr = await new Response(proc.stderr).text();
+					if (exitCode !== 0) {
+						failures.push(`Compile gate failed (exit ${exitCode}): ${stderr.trim()}`);
+					}
+				} catch (err) {
+					failures.push(`Compile gate error: ${String(err)}`);
+				}
 				break;
-			case "test":
-				logger.debug("[CustomNodeBehavior] Test gate: not yet wired", { cmd: gate.command });
+			}
+			case "test": {
+				const cmd = gate.command ?? "bun test";
+				try {
+					const proc = Bun.spawn({ cmd: "/bin/sh", args: ["-c", cmd], stdio: ["ignore", "pipe", "pipe"] });
+					const exitCode = await proc.exited;
+					const stderr = await new Response(proc.stderr).text();
+					if (exitCode !== 0) {
+						failures.push(`Test gate failed (exit ${exitCode}): ${stderr.trim()}`);
+					}
+				} catch (err) {
+					failures.push(`Test gate error: ${String(err)}`);
+				}
 				break;
+			}
 			case "lsp":
-				logger.debug("[CustomNodeBehavior] LSP gate: not yet wired");
+				logger.trace("[CustomNodeBehavior] LSP gate: not yet wired");
 				break;
 			case "human-review":
 				// Handled below via mode check.
 				break;
 			case "script":
-				logger.debug("[CustomNodeBehavior] Script gate: not yet wired");
+				logger.trace("[CustomNodeBehavior] Script gate: not yet wired");
 				break;
 		}
 
