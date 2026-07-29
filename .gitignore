@@ -82,3 +82,5 @@ packages/coding-agent/bench/boot-baseline.json
 # Swarm runtime artifacts
 .swarm-workspace/
 *.swarm-workspace/
+
+plan.md
