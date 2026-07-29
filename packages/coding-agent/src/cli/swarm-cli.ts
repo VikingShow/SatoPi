@@ -128,7 +128,7 @@ async function createSwarmServices(
 		});
 
 		// Assemble AgentRuntime with full DI (no global singletons).
-		// IrcBus.global() is the one exception — oh-my-pi owns it.
+		// IrcBus.global() is the one exception — SatoPi owns it.
 		const ircBus = IrcBus.global();
 		const runtime = assembleAgentRuntime({
 			modelRegistry: s.modelRegistry,

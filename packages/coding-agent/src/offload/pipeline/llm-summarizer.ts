@@ -1,7 +1,7 @@
 /**
  * L1LlmSummarizer — LLM-powered semantic summarizer (L1)
  *
- * Uses oh-my-pi's LLM client for structured semantic summarization,
+ * Uses SatoPi's LLM client for structured semantic summarization,
  * inspired by TencentDB-Agent-Memory's L1 summarization prompt design.
  *
  * Prompt: "You are a concise summarizer. Given a tool call result, produce:

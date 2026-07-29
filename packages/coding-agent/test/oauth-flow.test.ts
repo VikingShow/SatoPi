@@ -61,7 +61,7 @@ async function completeLocalOAuthCallback(url: string): Promise<void> {
 }
 
 describe("mcp oauth flow", () => {
-	it("uses oh-my-pi client name for dynamic client registration", async () => {
+	it("uses satopi client name for dynamic client registration", async () => {
 		let registrationPayload: Record<string, unknown> | null = null;
 
 		const flow = new MCPOAuthFlow(

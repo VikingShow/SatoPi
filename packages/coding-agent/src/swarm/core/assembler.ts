@@ -6,7 +6,7 @@
  *   → AgentRuntime
  *
  * All services are created fresh per session — no global singletons.
- * The IrcBus is the single exception (oh-my-pi owns it); we accept
+ * The IrcBus is the single exception (SatoPi owns it); we accept
  * the global instance and inject it explicitly.
  *
  * Usage:

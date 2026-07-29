@@ -1,7 +1,7 @@
 /**
  * LlmMermaidSynthesizer — LLM-powered Mermaid flowchart TD generator (L2)
  *
- * Uses oh-my-pi's LLM client for semantic Mermaid generation from tool-call
+ * Uses SatoPi's LLM client for semantic Mermaid generation from tool-call
  * records, inspired by TencentDB-Agent-Memory's L2 graph synthesis prompt.
  *
  * System prompt: "You are a pragmatic AI task topology architect.

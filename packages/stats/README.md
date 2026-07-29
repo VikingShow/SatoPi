@@ -1,4 +1,4 @@
-# @oh-my-pi/stp-stats
+# @SatoPi/stp-stats
 
 Local observability dashboard for AI usage statistics.
 
@@ -41,7 +41,7 @@ omp stats --json
 ### Programmatic
 
 ```typescript
-import { getDashboardStats, syncAllSessions } from "@oh-my-pi/stp-stats";
+import { getDashboardStats, syncAllSessions } from "@SatoPi/stp-stats";
 
 // Sync session logs to database
 const { processed, files } = await syncAllSessions();

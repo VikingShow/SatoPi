@@ -1,7 +1,7 @@
 /**
  * OTLP trace export bootstrap.
  *
- * oh-my-pi's agent core (`@satopi/pi-agent-core`) emits OpenTelemetry GenAI
+ * SatoPi's agent core (`@satopi/pi-agent-core`) emits OpenTelemetry GenAI
  * spans through the global `@opentelemetry/api` tracer, but only when a
  * TracerProvider is registered in the process — otherwise the API returns a
  * no-op tracer and the spans are silently dropped. The shipped CLI never

@@ -1,4 +1,4 @@
-# @oh-my-pi/pi-mnemopi
+# @SatoPi/pi-mnemopi
 
 Local SQLite memory engine for SatoPi agents.
 
@@ -14,7 +14,7 @@ The package does not bundle or download a local GGUF LLM. LLM paths are host-bac
 ## Basic use
 
 ```ts
-import { Mnemopi } from "@oh-my-pi/pi-mnemopi";
+import { Mnemopi } from "@SatoPi/pi-mnemopi";
 
 const memory = new Mnemopi({ dbPath: "./mnemopi.db", bank: "project" });
 const id = memory.remember("The deployment target is stable-cluster.", {
@@ -34,8 +34,8 @@ memory.close();
 `Mnemopi` accepts LLM and embedding options directly. `MNEMOPI_*` environment variables remain fallbacks/defaults when the matching constructor option is omitted.
 
 ```ts
-import { Mnemopi } from "@oh-my-pi/pi-mnemopi";
-import type { Model } from "@oh-my-pi/pi-ai";
+import { Mnemopi } from "@SatoPi/pi-mnemopi";
+import type { Model } from "@SatoPi/pi-ai";
 
 const ftsOnly = new Mnemopi({ noEmbeddings: true });
 

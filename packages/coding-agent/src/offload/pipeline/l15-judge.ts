@@ -1,7 +1,7 @@
 /**
  * L1.5 Task Boundary Judge — LLM-powered task lifecycle gatekeeper
  *
- * Uses oh-my-pi's LLM client for task boundary detection.
+ * Uses SatoPi's LLM client for task boundary detection.
  * Inspired by TencentDB-Agent-Memory's L1.5 task judgment prompt design.
  *
  * System prompt: "You are a task lifecycle gatekeeper..."

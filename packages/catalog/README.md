@@ -1,6 +1,6 @@
-# @oh-my-pi/pi-catalog
+# @SatoPi/pi-catalog
 
-Model catalog for [oh-my-pi](https://github.com/VikingShow/SatoPi): bundled model database, provider discovery, model identity, classification, and equivalence.
+Model catalog for [SatoPi](https://github.com/VikingShow/SatoPi): bundled model database, provider discovery, model identity, classification, and equivalence.
 
 ## What's inside
 
@@ -17,7 +17,7 @@ Model catalog for [oh-my-pi](https://github.com/VikingShow/SatoPi): bundled mode
 | `wire` | Wire-level helpers: Codex, Gemini headers, GitHub Copilot |
 | `effort` | Reasoning-effort level definitions |
 
-Import from subpaths (`@oh-my-pi/pi-catalog/<module>`) or the root barrel.
+Import from subpaths (`@SatoPi/pi-catalog/<module>`) or the root barrel.
 
 ## models.json is generated
 
@@ -32,7 +32,7 @@ To change an entry, fix the source: resolver overrides in `provider-models/opena
 ## Install
 
 ```sh
-bun add @oh-my-pi/pi-catalog
+bun add @SatoPi/pi-catalog
 ```
 
 Ships TypeScript source directly (no build step); requires Bun ≥ 1.3.14.
