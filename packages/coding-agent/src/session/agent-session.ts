@@ -4938,19 +4938,22 @@ export class AgentSession {
 		};
 	}
 
-	/** `afterToolCall` hook: detect ask-tool "Launch Stage" selection → confirm script. */
+	/** `afterToolCall` hook: detect ask-tool "Launch Stage" selection.
+	 *  confirmScript() is now called inside the PlanReviewOverlay flow
+	 *  (showSwarmPlanReview), so this hook only handles legacy ask-dialog
+	 *  paths where the overlay was not shown. */
 	#swarmAfterToolCall(ctx: AfterToolCallContext): void {
 		if (ctx.toolCall.name !== "ask" || ctx.isError) return;
 		const details = ctx.result.details as AskToolDetails | undefined;
 		if (!details) return;
+		// Primary: structured intent field (model sets intent: "launch_stage" on the option)
+		const isLaunchIntent = details.intent === "launch_stage";
+		// Fallback: legacy string match for backward compatibility
 		const selected = details.selectedOptions ?? details.results?.flatMap(r => r.selectedOptions) ?? [];
-		if (!selected.includes("Launch Stage")) return;
-		const agentType = details.agentConfig?.type;
-		const agentCount = details.agentConfig?.count;
-		// Fire-and-forget: confirmScript is async but we don't block the hook on it.
-		this.#embeddedSwarm
-			?.confirmScript(agentType || agentCount ? { agentType: agentType as "swift" | "persistent" | undefined, agentCount } : undefined)
-			.catch(err => logger.error("Swarm confirmScript failed from ask hook", { error: String(err) }));
+		const isLegacyLaunch = selected.includes("Launch Stage");
+		if (!isLaunchIntent && !isLegacyLaunch) return;
+		// confirmScript() is called inside showSwarmPlanReview when the
+		// PlanReviewOverlay is used. This hook is a no-op for that path.
 	}
 
 	#extractTtsrRuleNames(details: unknown): string[] {
@@ -8226,6 +8229,11 @@ export class AgentSession {
 				settings: this.settings,
 			});
 			await bridge.init();
+			this.emitNotice(
+				"info",
+				"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
+				"swarm",
+			);
 			this.setToolContextAgentRuntime(bridge.runtime);
 			this.#embeddedSwarm = bridge;
 			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
@@ -8234,6 +8242,7 @@ export class AgentSession {
 				if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
 					const args = ctx.args as { path?: string; content?: string };
 					if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+						this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
 						this.#embeddedSwarm.onPlanUpdated(args.content);
 					}
 				}
@@ -8244,7 +8253,6 @@ export class AgentSession {
 
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
-		const profileRegistry = await ProfileRegistry.load(process.cwd());
 		const bridge = new EmbeddedSwarmBridge(
 			{
 				workspace: process.cwd(),
@@ -8256,12 +8264,22 @@ export class AgentSession {
 				maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
 				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
 			},
-			_event => {
-				// Events forwarded to interactive-mode via the public embeddedSwarm getter
+			event => {
+				if (event.phase === "script") {
+					const taskInfo = event.progress?.totalTasks
+						? ` (${event.progress.totalTasks} task${event.progress.totalTasks === 1 ? "" : "s"} outlined)`
+						: "";
+					this.emitNotice("info", `Script phase: ${event.subStatus}${taskInfo}`, "swarm");
+				}
 			},
 		);
 
 		await bridge.init();
+		this.emitNotice(
+			"info",
+			"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
+			"swarm",
+		);
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
@@ -8271,6 +8289,7 @@ export class AgentSession {
 			if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
 				const args = ctx.args as { path?: string; content?: string };
 				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+					this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
 					this.#embeddedSwarm.onPlanUpdated(args.content);
 				}
 			}

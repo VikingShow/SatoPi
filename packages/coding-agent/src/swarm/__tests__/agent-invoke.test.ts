@@ -65,7 +65,6 @@ afterEach(() => {
 // Tests
 // ============================================================================
 describe("agent_invoke E2E", () => {
-
 	describe("agent_invoke creates new persistent session", () => {
 		it("calls createAgentSession with correct options and waits for completion", async () => {
 			// Register a profile so the tool is visible

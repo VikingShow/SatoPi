@@ -85,6 +85,8 @@ export interface GraphRunResult {
 	nodeResults: Map<string, NodeResult>;
 	/** Node metadata for curtain reporting. */
 	agentsList: Array<{ id: string; role: string }>;
+	/** True if at least one checkpoint write failed (degraded durability). */
+	checkpointDegraded: boolean;
 }
 
 // ============================================================================
@@ -148,6 +150,7 @@ export class GraphEngine {
 	readonly #checkpointStore: CheckpointStore;
 	readonly #graphName: string;
 	readonly #abortSignal: AbortSignal | undefined;
+	#checkpointDegraded = false;
 
 	constructor(config: GraphEngineConfig) {
 		this.#graph = config.graph;
@@ -224,6 +227,7 @@ export class GraphEngine {
 			executionErrors,
 			nodeResults,
 			agentsList,
+			checkpointDegraded: this.#checkpointDegraded,
 		};
 	}
 
@@ -297,6 +301,7 @@ export class GraphEngine {
 
 	/**
 	 * Write a full-state checkpoint via the configured store.
+	 * Sets the degraded flag if the write fails.
 	 */
 	#writeCheckpoint(
 		status: "running" | "completed" | "failed",
@@ -311,7 +316,7 @@ export class GraphEngine {
 			};
 		}
 
-		this.#checkpointStore.write({
+		const ok = this.#checkpointStore.write({
 			graphName: this.#graphName,
 			runId: `graph-${this.#graphName}-${Date.now()}`,
 			startedAt: Date.now(),
@@ -319,5 +324,9 @@ export class GraphEngine {
 			currentWave,
 			status,
 		});
+
+		if (!ok) {
+			this.#checkpointDegraded = true;
+		}
 	}
 }

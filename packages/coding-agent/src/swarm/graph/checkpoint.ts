@@ -22,6 +22,7 @@
  * match is the complete most-recent state.
  */
 
+import { logger } from "@satopi/pi-utils";
 import type { GraphRunState } from "../../graph/types";
 import { CTX, SwarmSessionManager } from "../session/swarm-session-manager";
 
@@ -41,8 +42,17 @@ export type { GraphRunState, GraphRunStatus, NodeRunState, NodeStatus } from "..
  * Each call writes a complete snapshot — the session file is append-only
  * so the latest matching entry always holds the current state.
  */
-export function writeCheckpoint(state: GraphRunState, sessionManager: SwarmSessionManager): void {
-	sessionManager.appendCustomEntry(CTX.GRAPH_CHECKPOINT, state);
+export function writeCheckpoint(state: GraphRunState, sessionManager: SwarmSessionManager): boolean {
+	try {
+		sessionManager.appendCustomEntry(CTX.GRAPH_CHECKPOINT, state);
+		return true;
+	} catch (err) {
+		logger.error("[checkpoint] Failed to write checkpoint", {
+			graphName: state.graphName,
+			error: err instanceof Error ? err.message : String(err),
+		});
+		return false;
+	}
 }
 
 // ============================================================================

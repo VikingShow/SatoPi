@@ -112,8 +112,8 @@ export class ActivityLogger {
 
 	// -- Phase transitions ----------------------------------------------------
 
-	logPhase(phase: string, round?: number, iteration?: number): void {
-		this.#log({ ts: Date.now(), type: "phase", phase, round, iteration });
+	logPhase(phase: string, round?: number, iteration?: number, from?: string, reason?: string): void {
+		this.#log({ ts: Date.now(), type: "phase", phase, round, iteration, from, reason });
 	}
 
 	logConvergence(scope: string, jaccard: number, converged: boolean): void {

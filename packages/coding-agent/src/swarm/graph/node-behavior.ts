@@ -447,7 +447,7 @@ export class StageNodeBehavior implements NodeBehavior {
 // ============================================================================
 
 // ============================================================================
-// NodeBehaviorFactoryConfig — shared config for behavior construction
+// NodeBehaviorFactory — pluggable behavior construction
 // ============================================================================
 
 /**
@@ -466,25 +466,52 @@ export interface NodeBehaviorFactoryConfig {
 }
 
 /**
+ * Factory signature for constructing a NodeBehavior from configuration.
+ *
+ * Registered via {@link registerNodeBehavior} for each node type.
+ */
+export type NodeBehaviorFactory = (config: NodeBehaviorFactoryConfig) => NodeBehavior;
+
+/**
+ * Registry mapping node types to their behavior factories.
+ *
+ * New node types can be added at runtime via {@link registerNodeBehavior}
+ * without editing the selectNodeBehavior switch.
+ */
+const behaviorRegistry: Map<string, NodeBehaviorFactory> = new Map([
+	["script", config => new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config)],
+	["stage", config => new PhaseBehaviorNodeAdapter(new StageBehavior(), config)],
+	["curtain", config => new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config)],
+]);
+
+/**
+ * Register a NodeBehavior factory for a node type.
+ *
+ * Re-registering an existing type overwrites the previous factory
+ * (last-write-wins).
+ *
+ * @param type    Node type string (e.g. "script", "stage", "review").
+ * @param factory Factory function that constructs a NodeBehavior.
+ */
+export function registerNodeBehavior(type: string, factory: NodeBehaviorFactory): void {
+	behaviorRegistry.set(type, factory);
+}
+
+/**
  * Select the appropriate NodeBehavior for a node's type.
  *
- * All node types are wired through selectNodeBehavior():
- *   - custom: CustomNodeBehavior (direct agent spawn)
+ * All node types are wired through the behavior registry:
  *   - script/stage/curtain: PhaseBehaviorNodeAdapter wrapping the real
  *     ScriptBehavior/StageBehavior/CurtainBehavior implementations
+ *   - custom / unregistered: CustomNodeBehavior (direct agent spawn)
  *
  * @param type — node type from GraphNode.type (undefined = "custom")
  * @param config — service configuration for PhaseBehaviorNodeAdapter construction
  */
 export function selectNodeBehavior(type: string | undefined, config: NodeBehaviorFactoryConfig): NodeBehavior {
-	switch (type) {
-		case "script":
-			return new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config);
-		case "stage":
-			return new PhaseBehaviorNodeAdapter(new StageBehavior(), config);
-		case "curtain":
-			return new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config);
-		default:
-			return new CustomNodeBehavior();
+	const factory = type ? behaviorRegistry.get(type) : undefined;
+	if (factory) {
+		return factory(config);
 	}
+	return new CustomNodeBehavior();
 }

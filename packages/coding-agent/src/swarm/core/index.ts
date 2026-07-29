@@ -32,7 +32,6 @@ export {
 } from "./schema";
 export type {
 	RunManager,
-	ScriptManager,
 	SteeringSink,
 } from "./services";
 export {
@@ -43,6 +42,7 @@ export {
 	StateTracker,
 	type SwarmState,
 	type TodoItem,
+	type TransitionRecord,
 } from "./state";
 export { SwarmRunner } from "./swarm-runner";
 export { VerificationHook, type VerificationResult } from "./verification-hook";

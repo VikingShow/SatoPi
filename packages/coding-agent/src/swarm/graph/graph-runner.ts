@@ -6,46 +6,52 @@
  * per-node behavior lifecycle (prepare → execute → gate → cleanup)
  * and swarm lifecycle (FSM transitions, curtain pipeline).
  *
- * ## Lifecycle
+ * ## Lifecycle (PhaseBehavior-driven)
  *   init() → parse graph → build waves → confirmScript():
- *     create GraphEngine → engine.run(this) → curtain → idle
+ *     create GraphEngine → engine.run(this) → CurtainBehavior → idle
+ *
+ * Per-node behaviors (script / stage / curtain) are driven by
+ * PhaseBehaviorNodeAdapter inside GraphEngine.execute(). The
+ * top-level CurtainBehavior in confirmScript() handles the
+ * post-execution curtain phase when no dedicated curtain node exists.
  */
 
-import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
-import { RoleAssetManager } from "../../agent/role-asset";
+import type { RoleAssetManager } from "../../agent/role-asset";
 import type { CheckpointStore } from "../../graph/checkpoint";
 import {
 	GraphEngine,
 	type GraphEngineConfig,
-	type GraphRunResult,
 	type NodeExecutionContext,
 	type NodeExecutor,
 } from "../../graph/graph-engine";
 import type { GraphRunState } from "../../graph/types";
-import { IrcBus } from "../../irc/bus";
+import type { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { SingleResult } from "../../task";
+import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import { createOrchestratorRuntime } from "../core/assembler";
-import { buildExecutionWaves } from "../core/dag";
+import { CurtainBehavior } from "../behaviors/curtain-behavior";
+import type { PhaseBehavior, PhaseContext } from "../behaviors/index";
 import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import type { LoopSwarmConfig } from "../core/schema";
-import type { Chapter, SwarmState } from "../core/state";
-import { StateTracker } from "../core/state";
-import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
-import { runCurtainPipeline } from "../curtain/curtain-runner";
-import { ExperienceStore } from "../curtain/experience";
+import type { Chapter, StateTracker, SwarmState } from "../core/state";
+import { createSwarmInfra } from "../core/swarm-infra";
+import type { WorkflowFsm } from "../core/workflow-fsm";
+import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
-import { ActivityLogger } from "../infra/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
-import { GateController } from "./gate-controller";
 import { recoverState } from "./checkpoint";
+import { GateController } from "./gate-controller";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
+
+// ============================================================================
+// Types
+// ============================================================================
 
 export interface GraphRunnerConfig {
 	workspace: string;
@@ -59,6 +65,10 @@ export interface GraphRunnerConfig {
 	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
 }
+
+// ============================================================================
+// GraphRunner
+// ============================================================================
 
 export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	readonly #config: GraphRunnerConfig;
@@ -81,33 +91,54 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#swarmDir!: string;
 	#loopConfig!: LoopSwarmConfig;
 
+	// ── PhaseBehavior instances ─────────────────────────────────────────
+	#curtainBehavior!: CurtainBehavior;
+	#currentBehavior: PhaseBehavior | null = null;
+	/** Active agent event unsubscriptions for the current phase. */
+	#agentUnsubscribes: Array<() => void> = [];
+
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
 	}
+
+	// ── Lifecycle ──────────────────────────────────────────────────────────
 
 	async init(): Promise<void> {
 		const { workspace, modelRegistry, settings, profileRegistry, activeMmd } = this.#config;
 		this.#graphName = path.basename(this.#config.graphPath, ".graph.yaml");
 		this.#swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
 
+		// Load graph and compute execution waves (needed for start-phase detection)
 		this.#graph = await loadGraphDefinition(this.#config.graphPath);
+		const deps = new Map<string, Set<string>>();
+		for (const [id, node] of Object.entries(this.#graph.nodes)) {
+			deps.set(id, new Set(node.depends_on ?? []));
+		}
+		this.#waves = buildExecutionWaves(deps);
 
-		await fs.mkdir(this.#swarmDir, { recursive: true });
-		await fs.mkdir(path.join(this.#swarmDir, ".session"), { recursive: true });
+		const infra = await createSwarmInfra({
+			workspace,
+			swarmDir: this.#swarmDir,
+			swarmName: this.#graphName,
+			modelRegistry,
+			settings,
+			profileRegistry,
+			activeMmd,
+			startPhase: this.#detectStartPhase(),
+		});
 
-		this.#sessionManager = await SwarmSessionManager.create(this.#swarmDir);
-		this.#stateTracker = new StateTracker(workspace, this.#graphName);
-		this.#stateTracker.setSessionManager(this.#sessionManager);
-		this.#activityLogger = new ActivityLogger(this.#swarmDir, this.#graphName);
-		this.#activityLogger.setSessionManager(this.#sessionManager);
-		this.#experienceStore = new ExperienceStore(workspace);
-		await this.#experienceStore.init();
+		this.#sessionManager = infra.sessionManager;
+		this.#stateTracker = infra.stateTracker;
+		this.#activityLogger = infra.activityLogger;
+		this.#fsm = infra.fsm;
+		this.#experienceStore = infra.experienceStore;
+		this.#hookPipeline = infra.hookPipeline;
+		this.#runtime = infra.runtime;
+		this.#roleAssetManager = infra.roleAssetManager;
+		this.#ircBus = infra.ircBus;
 
-		const startPhase = this.#detectStartPhase();
-		this.#fsm = new WorkflowFsm(this.#stateTracker, this.#activityLogger, startPhase);
-		for (const def of PHASES) this.#fsm.registerPhase(def);
-
-		this.#ircBus = IrcBus.global();
+		// Create CurtainBehavior for post-execution curtain phase
+		this.#curtainBehavior = new CurtainBehavior();
 
 		// Default loop config for PhaseBehavior-backed nodes
 		this.#loopConfig = {
@@ -121,40 +152,20 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			iterationTimeoutMs: 300_000,
 			enableDeliberation: true,
 		};
-		this.#roleAssetManager = new RoleAssetManager(workspace);
-		await this.#roleAssetManager.init();
-		// Create orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
-		const orch = createOrchestratorRuntime({
-			modelRegistry,
-			settings,
-			activityLogger: this.#activityLogger,
-			roleAssetManager: this.#roleAssetManager,
-			experienceStore: this.#experienceStore,
-			profileRegistry,
-			ircBus: this.#ircBus,
-			activeMmd,
-		});
-		this.#hookPipeline = orch.hookPipeline;
-		this.#runtime = orch.runtime;
-
 		this.#gateController = new GateController({ workspace });
 
-		const deps = new Map<string, Set<string>>();
-		for (const [id, node] of Object.entries(this.#graph.nodes)) {
-			deps.set(id, new Set(node.depends_on ?? []));
-		}
-		this.#waves = buildExecutionWaves(deps);
-
 		// Mark mode as graph for TUI dashboard rendering
-		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
+		await this.#stateTracker
+			.updatePipeline({ phase: "stage" })
+			.catch(err => logger.error("StateTracker updatePipeline failed", { error: String(err) }));
 		logger.info("[GraphRunner] Initialized", {
 			graph: this.#graphName,
 			nodes: Object.keys(this.#graph.nodes).length,
 			waves: this.#waves.length,
 		});
 	}
-	/**
 
+	/**
 	 * Auto-detect the FSM start phase from the graph's first wave.
 	 * If the first node in the first wave has type "script", start in "script";
 	 * otherwise default to "stage".
@@ -167,12 +178,19 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		if (firstNode?.type === "script") return "script";
 		return "stage";
 	}
+
 	async dispose(): Promise<void> {
 		if (this.#disposed) return;
 		this.#disposed = true;
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
 		this.#gateController.removeAllListeners();
+		// Exit current behavior
+		if (this.#currentBehavior) {
+			await this.#currentBehavior.exit().catch(() => {});
+			this.#currentBehavior = null;
+		}
+		this.#unwireAgentEvents();
 		try {
 			this.#experienceStore.close();
 		} catch {
@@ -181,7 +199,108 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		logger.info("[GraphRunner] Disposed");
 	}
 
-	onPlanUpdated(_content: string): void {}
+	// ── PhaseContext builder ───────────────────────────────────────────────
+
+	#buildPhaseContext(planContent?: string): PhaseContext {
+		return {
+			fsm: this.#fsm,
+			ircBus: this.#ircBus,
+			runtime: this.#runtime,
+			contextPipeline: this.#runtime.contextPipeline,
+			hookPipeline: this.#hookPipeline,
+			stateTracker: this.#stateTracker,
+			activityLogger: this.#activityLogger,
+			workspace: this.#config.workspace,
+			swarmDir: this.#swarmDir,
+			planContent: planContent ?? "",
+			loopConfig: this.#loopConfig,
+			signal: this.#abortController?.signal ?? new AbortController().signal,
+		};
+	}
+
+	// ── Agent event wiring ─────────────────────────────────────────────────
+
+	#wireAgentEvents(agents: AgentSession[]): void {
+		this.#unwireAgentEvents();
+		for (const agent of agents) {
+			const unsub = agent.subscribe(event => {
+				if (event.type === "agent_end") {
+					const status =
+						event.stopReason === "aborted"
+							? "aborted"
+							: event.stopReason === "error" || event.stopReason === "max_turns"
+								? "failed"
+								: "completed";
+					const ctx = this.#buildPhaseContext();
+					this.#currentBehavior
+						?.handleAgentEvent({ agentId: agent.id, status, result: event }, ctx)
+						.catch(err => logger.error("handleAgentEvent failed", { error: String(err) }));
+				}
+			});
+			this.#agentUnsubscribes.push(unsub);
+		}
+	}
+
+	#unwireAgentEvents(): void {
+		for (const unsub of this.#agentUnsubscribes) unsub();
+		this.#agentUnsubscribes = [];
+	}
+
+	// ── Curtain lifecycle (synchronous — called within confirmScript) ──────
+
+	/**
+	 * Run the CurtainBehavior lifecycle to completion.
+	 * Polls checkCompletion every 750ms until the curtain phase resolves.
+	 */
+	async #runCurtainLifecycle(ctx: PhaseContext): Promise<void> {
+		const curtainCtx = ctx;
+
+		while (!this.#disposed) {
+			const { promise: pollPromise, resolve: pollResolve } = Promise.withResolvers<void>();
+			const timer = setTimeout(pollResolve, 750);
+			await pollPromise;
+			clearTimeout(timer);
+
+			if (this.#disposed) return;
+
+			const completion = await this.#curtainBehavior.checkCompletion(curtainCtx);
+			if (!completion) continue;
+
+			// Curtain complete — exit behavior
+			await this.#curtainBehavior
+				.exit()
+				.catch(err => logger.error("CurtainBehavior.exit failed", { error: String(err) }));
+			this.#unwireAgentEvents();
+			this.#currentBehavior = null;
+
+			// Handle transition
+			if (completion.nextPhase === "idle") {
+				if (completion.needApplaud && !this.#config.autoApplaud) {
+					const { promise: applaudPromise, resolve: applaudResolve } = Promise.withResolvers<void>();
+					this.#applaudResolve = applaudResolve;
+					const CURTAIN_TIMEOUT_MS = 300_000;
+					const timeout = setTimeout(() => {
+						if (this.#applaudResolve) {
+							this.#applaudResolve();
+							this.#applaudResolve = null;
+						}
+					}, CURTAIN_TIMEOUT_MS);
+					await applaudPromise;
+					clearTimeout(timeout);
+					this.#applaudResolve = null;
+				}
+
+				await this.#fsm.transition("idle", {
+					reason: completion.message ?? "curtain complete",
+				});
+				return;
+			}
+
+			// Re-plan or unknown — go idle
+			await this.#fsm.transition("idle", { reason: completion.message ?? "curtain complete" }).catch(() => {});
+			return;
+		}
+	}
 
 	// =========================================================================
 	// NodeExecutor — per-node behavior lifecycle (called by GraphEngine)
@@ -282,6 +401,12 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		}
 	}
 
+	onPlanUpdated(_content: string): void {}
+
+	getPlanContent(): string {
+		return "";
+	}
+
 	// =========================================================================
 	// ISwarmOrchestrator — confirmScript delegates to GraphEngine
 	// =========================================================================
@@ -298,8 +423,17 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		// Build CheckpointStore adapter wrapping SwarmSessionManager.
 		const sessionManager = this.#sessionManager;
 		const checkpointStore: CheckpointStore = {
-			write(state): void {
-				sessionManager.appendCustomEntry("graph_checkpoint", state);
+			write(state): boolean {
+				try {
+					sessionManager.appendCustomEntry("graph_checkpoint", state);
+					return true;
+				} catch (err) {
+					logger.error("[GraphRunner] Failed to write checkpoint", {
+						graphName: state.graphName,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					return false;
+				}
 			},
 			async recover(graphName: string) {
 				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
@@ -325,69 +459,53 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		};
 		const engine = new GraphEngine(engineConfig);
 
-		let result: GraphRunResult;
 		try {
-			result = await engine.run(this);
+			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine execution failed", { error: String(err) });
-			await this.#fsm.transition("blocked", { reason: String(err) }).catch(() => {});
+			await this.#fsm
+				.transition("blocked", { reason: String(err) })
+				.catch(err2 => logger.error("FSM transition failed during error recovery", { error: String(err2) }));
 			return [];
 		}
 
+		// Transition to curtain via CurtainBehavior lifecycle
 		await this.#fsm.transition("curtain", { reason: "graph execution complete" });
-		const allSucceeded = result.executionErrors.length === 0;
 
-		// Build agentResults map for curtain pipeline from nodeResults.
-		const agentResults = new Map<string, SingleResult[]>();
-		for (const [nodeId, nodeResult] of result.nodeResults) {
-			agentResults.set(nodeId, [
-				{
-					index: 0,
-					id: nodeId,
-					agent: nodeId,
-					agentSource: "project",
-					task: this.#graph.nodes[nodeId]?.description ?? "",
-					exitCode: nodeResult.success ? 0 : 1,
-					output: nodeResult.output ?? "",
-					stderr: nodeResult.error ?? "",
-					truncated: false,
-					durationMs: 0,
-					tokens: 0,
-					requests: 0,
-				},
-			]);
+		const curtainCtx = this.#buildPhaseContext();
+		const curtainEnterResult = await this.#curtainBehavior.enter(curtainCtx);
+		this.#currentBehavior = this.#curtainBehavior;
+		this.#wireAgentEvents(curtainEnterResult.agents);
+
+		// If auto-applaud, immediately signal applaud
+		if (this.#config.autoApplaud) {
+			await this.#curtainBehavior.handleHumanMessage({ from: "human", body: "applaud" }, curtainCtx).catch(() => {});
 		}
 
-		await runCurtainPipeline(
-			{
-				status: allSucceeded ? "completed" : "failed",
-				agentResults,
-				errors: result.executionErrors,
-				agents: result.agentsList,
-				taskProgress: { total: result.totalNodes, completed: result.completedCount },
-			},
-			{
-				workspace: this.#config.workspace,
-				stateTracker: this.#stateTracker,
-				activityLogger: this.#activityLogger,
-				experienceStore: this.#experienceStore,
-				loopConfig: null,
-				modelRegistry: this.#config.modelRegistry,
-				settings: this.#config.settings,
-				ircBus: this.#runtime.ircBus,
-				graphName: this.#graphName,
-			},
-		);
-		await this.#fsm.transition("idle", { reason: "graph complete" });
+		// Run curtain lifecycle synchronously (blocking until curtain complete)
+		await this.#runCurtainLifecycle(curtainCtx);
 
 		return [];
 	}
 
 	async steer(message: string): Promise<void> {
+		// Forward to current behavior if active
+		if (this.#currentBehavior) {
+			const ctx = this.#buildPhaseContext();
+			await this.#currentBehavior.handleHumanMessage({ from: "human", body: message }, ctx);
+		}
+		// Also deliver via IrcBus for backward compat
 		await this.#runtime.ircBus.receiveFromHuman(message);
 	}
 
 	applaud(): void {
+		// Forward applaud to CurtainBehavior if active
+		if (this.#currentBehavior === this.#curtainBehavior) {
+			const ctx = this.#buildPhaseContext();
+			this.#curtainBehavior
+				.handleHumanMessage({ from: "human", body: "applaud" }, ctx)
+				.catch(err => logger.error("CurtainBehavior applaud failed", { error: String(err) }));
+		}
 		this.#applaudResolve?.();
 		this.#applaudResolve = null;
 	}
@@ -419,8 +537,17 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		// Build CheckpointStore adapter wrapping SwarmSessionManager.
 		const sessionManager = this.#sessionManager;
 		const checkpointStore: CheckpointStore = {
-			write(state): void {
-				sessionManager.appendCustomEntry("graph_checkpoint", state);
+			write(state): boolean {
+				try {
+					sessionManager.appendCustomEntry("graph_checkpoint", state);
+					return true;
+				} catch (err) {
+					logger.error("[GraphRunner] Failed to write checkpoint", {
+						graphName: state.graphName,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					return false;
+				}
 			},
 			async recover(graphName: string) {
 				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
@@ -446,62 +573,34 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		};
 		const engine = new GraphEngine(engineConfig);
 
-		let result: GraphRunResult;
 		try {
-			result = await engine.run(this);
+			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine resume execution failed", { error: String(err) });
-			await this.#fsm.transition("blocked", { reason: String(err) }).catch(() => {});
+			await this.#fsm
+				.transition("blocked", { reason: String(err) })
+				.catch(err2 => logger.error("FSM transition failed during error recovery", { error: String(err2) }));
 			return { success: false, error: String(err) };
 		}
 
+		// Transition to curtain via CurtainBehavior lifecycle
 		await this.#fsm.transition("curtain", { reason: "graph resume complete" });
-		const allSucceeded = result.executionErrors.length === 0;
 
-		const agentResults = new Map<string, SingleResult[]>();
-		for (const [nodeId, nodeResult] of result.nodeResults) {
-			agentResults.set(nodeId, [
-				{
-					index: 0,
-					id: nodeId,
-					agent: nodeId,
-					agentSource: "project",
-					task: this.#graph.nodes[nodeId]?.description ?? "",
-					exitCode: nodeResult.success ? 0 : 1,
-					output: nodeResult.output ?? "",
-					stderr: nodeResult.error ?? "",
-					truncated: false,
-					durationMs: 0,
-					tokens: 0,
-					requests: 0,
-				},
-			]);
+		const curtainCtx = this.#buildPhaseContext();
+		const curtainEnterResult = await this.#curtainBehavior.enter(curtainCtx);
+		this.#currentBehavior = this.#curtainBehavior;
+		this.#wireAgentEvents(curtainEnterResult.agents);
+
+		if (this.#config.autoApplaud) {
+			await this.#curtainBehavior.handleHumanMessage({ from: "human", body: "applaud" }, curtainCtx).catch(() => {});
 		}
 
-		await runCurtainPipeline(
-			{
-				status: allSucceeded ? "completed" : "failed",
-				agentResults,
-				errors: result.executionErrors,
-				agents: result.agentsList,
-				taskProgress: { total: result.totalNodes, completed: result.completedCount },
-			},
-			{
-				workspace: this.#config.workspace,
-				stateTracker: this.#stateTracker,
-				activityLogger: this.#activityLogger,
-				experienceStore: this.#experienceStore,
-				loopConfig: null,
-				modelRegistry: this.#config.modelRegistry,
-				settings: this.#config.settings,
-				ircBus: this.#runtime.ircBus,
-				graphName: this.#graphName,
-			},
-		);
-		await this.#fsm.transition("idle", { reason: "graph resume complete" });
+		await this.#runCurtainLifecycle(curtainCtx);
 
 		return { success: true };
 	}
+
+	// ── Accessors ──────────────────────────────────────────────────────────
 
 	get fsm(): WorkflowFsm {
 		return this.#fsm;

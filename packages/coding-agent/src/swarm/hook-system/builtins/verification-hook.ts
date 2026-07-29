@@ -11,7 +11,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { VerificationHook } from "../../core/verification-hook";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration, WorkflowBeforePhasePayload } from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -43,14 +43,12 @@ export function createVerificationHook(verification: VerificationHook): HookRegi
 		events: ["workflow:beforePhase"],
 		phases: ACTIVE_PHASES,
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
 			if (event !== "workflow:beforePhase") {
 				return;
 			}
 
-			// payload is WorkflowBeforePhasePayload — commands is string[] | undefined
-			const p = payload as unknown as WorkflowBeforePhasePayload;
-			const commands = p.commands ?? [];
+			const commands = payload.commands ?? [];
 
 			if (commands.length === 0) {
 				logger.debug("[VerificationHook] No verification commands to run");

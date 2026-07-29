@@ -10,14 +10,7 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { SwarmMnemopiAdapter } from "../../infra/mnemopi-adapter";
-import type {
-	AgentAfterCompletePayload,
-	AgentBeforeSpawnPayload,
-	HookContext,
-	HookEvent,
-	HookPayloadMap,
-	HookRegistration,
-} from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 /**
  * Create a mnemopi memory hook.
@@ -37,26 +30,24 @@ export function createMnemopiHook(adapter: SwarmMnemopiAdapter): HookRegistratio
 		priority: 3,
 		events: ["agent:beforeSpawn", "agent:afterComplete"],
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:beforeSpawn — recall historical context
 				// -----------------------------------------------------------------
 				case "agent:beforeSpawn": {
-					// Narrow payload for TS: switch on event doesn't narrow generic K.
-					const p = payload as unknown as AgentBeforeSpawnPayload;
-					const planSummary = p.planSummary ?? "";
-					const taskSummary = p.taskSummary ?? "";
+					const planSummary = payload.planSummary ?? "";
+					const taskSummary = payload.taskSummary ?? "";
 
 					try {
 						const recallResult = await adapter.recallForIteration(planSummary, taskSummary);
 						logger.debug("[MnemopiHook] Recall completed", {
-							agentId: p.agentId,
+							agentId: payload.agentId,
 							hasResults: !!recallResult,
 						});
 					} catch (err: unknown) {
 						logger.warn("[MnemopiHook] Recall failed — continuing", {
-							agentId: p.agentId,
+							agentId: payload.agentId,
 							error: err instanceof Error ? err.message : String(err),
 						});
 					}
@@ -67,22 +58,20 @@ export function createMnemopiHook(adapter: SwarmMnemopiAdapter): HookRegistratio
 				// agent:afterComplete — store iteration results
 				// -----------------------------------------------------------------
 				case "agent:afterComplete": {
-					// Narrow payload for TS: switch on event doesn't narrow generic K.
-					const p = payload as unknown as AgentAfterCompletePayload;
-					if (!p.summary) {
+					if (!payload.summary) {
 						return;
 					}
-					const summary: string = p.summary;
-					const score: number = p.score ?? 0;
+					const summary: string = payload.summary;
+					const score: number = payload.score ?? 0;
 
 					try {
 						await adapter.storeAfterIteration(summary, score);
 						logger.debug("[MnemopiHook] Iteration stored", {
-							agentId: p.agentId,
+							agentId: payload.agentId,
 						});
 					} catch (err: unknown) {
 						logger.warn("[MnemopiHook] Store failed — continuing", {
-							agentId: p.agentId,
+							agentId: payload.agentId,
 							error: err instanceof Error ? err.message : String(err),
 						});
 					}

@@ -101,6 +101,8 @@ export interface StageOptions {
 	maxRetries?: number;
 	/** P5: Base delay for exponential backoff between retries (default 5000ms). */
 	retryBaseDelayMs?: number;
+	/** P6: Per-agent execution timeout in ms (default 300_000 = 5 minutes). */
+	agentTimeoutMs?: number;
 }
 
 export interface StageResult {
@@ -111,6 +113,8 @@ export interface StageResult {
 	agents: Array<{ id: string; role: string }>;
 	/** Task queue progress snapshot. */
 	taskProgress: { total: number; completed: number };
+	/** Non-fatal degradation events accumulated during stage execution. */
+	degradedMode: string[];
 }
 
 // ============================================================================
@@ -340,11 +344,14 @@ export class StageController {
 				errors: ["No agents available"],
 				agents: [],
 				taskProgress: { total: 0, completed: 0 },
+				degradedMode: [],
 			};
 		}
 
 		// Save profiles immediately so they persist across restarts
-		await registry.save(this.#opts.workspace).catch(() => {});
+		await registry
+			.save(this.#opts.workspace)
+			.catch(err => logger.error("Profile registry save failed", { error: String(err) }));
 
 		// P7: Notify callbacks that agents have been selected
 		this.#opts.callbacks?.onAgentsSelected(selectedAgents);
@@ -404,6 +411,7 @@ export class StageController {
 			errors,
 			agents: roleAssignments,
 			taskProgress: { total: progress.total, completed: progress.completed },
+			degradedMode: [],
 		};
 
 		// P7: Notify callbacks that the stage is complete
@@ -438,6 +446,7 @@ export class StageController {
 		const { activityLogger } = this.#opts;
 		const maxRetries = this.#opts.maxRetries ?? 3;
 		const retryBaseDelayMs = this.#opts.retryBaseDelayMs ?? 5_000;
+		const agentTimeoutMs = this.#opts.agentTimeoutMs ?? 300_000;
 		const retryCounts = new Map<string, number>();
 		const results: SingleResult[] = [];
 
@@ -505,7 +514,23 @@ export class StageController {
 					},
 				]);
 
-				const agentResult = await handle.wait();
+				// Race handle.wait() against per-agent timeout
+				const waitResult = await Promise.race([
+					handle.wait().then(r => ({ type: "result" as const, value: r })),
+					Bun.sleep(agentTimeoutMs).then(() => ({ type: "timeout" as const })),
+				]);
+
+				if (waitResult.type === "timeout") {
+					handle.abort();
+					queue.release(task.id, `agent timeout after ${agentTimeoutMs}ms`);
+					activityLogger.logBroadcast(
+						"system",
+						`${agent.id} timed out on "${task.title}" after ${agentTimeoutMs}ms, releasing for retry`,
+					);
+					continue;
+				}
+
+				const agentResult = waitResult.value;
 				result = {
 					index: results.length,
 					id: msgId,
@@ -527,11 +552,15 @@ export class StageController {
 					queue.complete(task.id);
 					this.#opts.callbacks?.onTaskCompleted(agent.id, task, result);
 					// v3: also fire HookPipeline event for Profile + Stigmergy hooks
-					void this.#opts.hookPipeline?.trigger(
-						"agent:afterComplete",
-						{ agentId: agent.id, taskId: task.id, success: true, result },
-						{ phase: "stage" },
-					);
+					this.#opts.hookPipeline
+						?.trigger(
+							"agent:afterComplete",
+							{ agentId: agent.id, taskId: task.id, success: true, result },
+							{ phase: "stage" },
+						)
+						?.catch(err =>
+							logger.error("Hook agent:afterComplete failed", { err, agentId: agent.id, taskId: task.id }),
+						);
 					activityLogger.logBroadcast("system", `${agent.id} completed: ${task.title}`);
 				} else {
 					// P5: Retry non-zero exit codes with exponential backoff
@@ -548,28 +577,10 @@ export class StageController {
 						await Bun.sleep(delay);
 						continue; // retry
 					}
-					queue.block(
-						task.id,
-						`Agent ${agent.id} failed with exit ${result.exitCode} after ${maxRetries} attempts`,
-					);
-					this.#opts.callbacks?.onTaskFailed(
-						agent.id,
-						task,
-						`exit code ${result.exitCode} after ${maxRetries} attempts`,
-					);
-					// v3: also fire HookPipeline error event
-					void this.#opts.hookPipeline?.trigger(
-						"agent:onError",
-						{
-							agentId: agent.id,
-							error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
-						},
-						{ phase: "stage" },
-					);
-					activityLogger.logBroadcast(
-						"system",
-						`${agent.id} failed: ${task.title} (exit ${result.exitCode} after ${maxRetries} attempts)`,
-					);
+					// Circuit breaker: retries exhausted → human-in-the-loop
+					const exitReason = `exit code ${result.exitCode} after ${maxRetries} attempts`;
+					const circuitResult = await this.#circuitBreak(agent, task, queue, exitReason);
+					if (circuitResult === "break") break;
 				}
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
@@ -588,15 +599,98 @@ export class StageController {
 					await Bun.sleep(delay);
 					continue; // retry — the released task will be re-claimed
 				}
-
-				// Max retries exhausted — block the task permanently
-				queue.block(task.id, `Failed after ${maxRetries} attempts: ${msg}`);
-				this.#opts.callbacks?.onTaskFailed(agent.id, task, `Failed after ${maxRetries} attempts: ${msg}`);
-				activityLogger.logCrash(agent.id, `Failed after ${maxRetries} attempts: ${msg}`);
+				// Circuit breaker: retries exhausted → human-in-the-loop
+				const crashReason = `Failed after ${maxRetries} attempts: ${msg}`;
+				const circuitResult = await this.#circuitBreak(agent, task, queue, crashReason);
+				if (circuitResult === "break") break;
 			}
 		}
 
 		return results;
+	}
+
+	// ────────────────────────────────────────────────────────────────────────
+	// Circuit breaker — human-in-the-loop after retry exhaustion
+	// ────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Activate circuit breaker when retries are exhausted for a task.
+	 *
+	 * Transitions the FSM to "blocked" and awaits a human decision via
+	 * {@link WorkflowFsm.waitForHumanDecision}. The caller (TUI / behavior)
+	 * resolves the decision by transitioning the FSM:
+	 *
+	 * - `stage` → retry (releases task back to queue)
+	 * - `stage` with reason `"skip"` → skip this task (block it, continue)
+	 * - `idle` → abort the entire pipeline
+	 *
+	 * Falls back to the old permanent-block behavior when no FSM is available.
+	 *
+	 * @returns `"continue"` to keep the agent loop running, `"break"` to exit.
+	 */
+	async #circuitBreak(
+		agent: { id: string; role: string },
+		task: Task,
+		queue: TaskQueue,
+		failureReason: string,
+	): Promise<"continue" | "break"> {
+		const { activityLogger } = this.#opts;
+
+		logger.error(`Circuit breaker tripped: agent ${agent.id} failed task "${task.title}"`, {
+			agentId: agent.id,
+			taskId: task.id,
+			reason: failureReason,
+		});
+
+		const fsm = this.#opts.fsm;
+		if (fsm && fsm.phase === "stage") {
+			await fsm.transition("blocked", {
+				reason: `Agent ${agent.id}: task "${task.title}" — ${failureReason}`,
+			});
+
+			activityLogger.logBroadcast(
+				"system",
+				`${agent.id}: Circuit breaker — "${task.title}" blocked. ` +
+					`Transition to stage (retry/skip) or idle (abort).`,
+			);
+
+			let decision: string;
+			try {
+				decision = (await fsm.waitForHumanDecision()) as string;
+			} catch (err) {
+				logger.error("Human decision wait failed, skipping task", {
+					agentId: agent.id,
+					taskId: task.id,
+					error: String(err),
+				});
+				queue.block(task.id, `Circuit breaker: human decision error — skipped`);
+				return "continue";
+			}
+
+			if (decision === "stage") {
+				const subStatus = fsm.state.subStatus;
+				if (subStatus === "skip") {
+					queue.block(task.id, `Circuit breaker: human chose to skip`);
+					return "continue";
+				}
+				// Default: retry — release back to the queue
+				queue.release(task.id, `Circuit breaker: human approved retry`);
+				return "continue";
+			}
+
+			// Abort (idle or any other unexpected transition)
+			queue.block(task.id, `Circuit breaker: human chose to abort pipeline`);
+			return "break";
+		}
+
+		// No FSM available — fall back to permanent block (legacy behavior)
+		queue.block(task.id, `Agent ${agent.id} failed: ${failureReason}`);
+		this.#opts.callbacks?.onTaskFailed(agent.id, task, failureReason);
+		this.#opts.hookPipeline
+			?.trigger("agent:onError", { agentId: agent.id, error: failureReason }, { phase: "stage" })
+			?.catch(err => logger.error("Hook agent:onError failed", { err, agentId: agent.id }));
+		activityLogger.logBroadcast("system", `${agent.id} failed: ${task.title} (${failureReason})`);
+		return "continue";
 	}
 }
 

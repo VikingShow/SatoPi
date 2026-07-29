@@ -37,14 +37,14 @@ describe("renderPhaseView", () => {
 	it("returns two lines for every phase", () => {
 		for (const phase of ["idle", "script", "stage", "curtain"] as Chapter[]) {
 			const state = makeState({ phase });
-			const lines = renderPhaseView(state, theme);
+			const lines = renderPhaseView(state, theme, 120);
 			expect(lines.length).toBe(2);
 		}
 	});
 
 	it("contains phase labels", () => {
 		const state = makeState({ phase: "stage" });
-		const lines = renderPhaseView(state, theme);
+		const lines = renderPhaseView(state, theme, 120);
 		const plain = stripAnsi(lines[0]);
 		expect(plain).toContain("Idle");
 		expect(plain).toContain("Script");
@@ -53,13 +53,13 @@ describe("renderPhaseView", () => {
 
 	it("defaults to idle when phase is undefined", () => {
 		const state = makeState({ phase: undefined as unknown as Chapter });
-		const lines = renderPhaseView(state, theme);
+		const lines = renderPhaseView(state, theme, 120);
 		expect(stripAnsi(lines[0])).toContain("Idle");
 	});
 
 	it("sub-status line shows status text", () => {
 		const state = makeState({ phase: "stage", status: "running" });
-		const lines = renderPhaseView(state, theme);
+		const lines = renderPhaseView(state, theme, 120);
 		expect(stripAnsi(lines[1]).toLowerCase()).toContain("running");
 	});
 
@@ -71,7 +71,7 @@ describe("renderPhaseView", () => {
 				{ id: "2", title: "b", status: "pending" as const },
 			],
 		});
-		const lines = renderPhaseView(state, theme);
+		const lines = renderPhaseView(state, theme, 120);
 		expect(stripAnsi(lines[1])).toContain("1/2");
 	});
 });

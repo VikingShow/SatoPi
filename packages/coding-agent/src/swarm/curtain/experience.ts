@@ -436,7 +436,9 @@ export class ExperienceStore {
 			runId: `${existingRunId}-merged-${Date.now()}`,
 			lesson: mergedLesson,
 		};
-		fs.appendFile(jsonlPath, `${JSON.stringify(mergedEntry)}\n`).catch(() => {});
+		fs.appendFile(jsonlPath, `${JSON.stringify(mergedEntry)}\n`).catch(err =>
+			logger.error("ExperienceStore appendFile failed (merge)", { error: String(err) }),
+		);
 	}
 
 	/**
@@ -465,7 +467,9 @@ export class ExperienceStore {
 
 		// Also append to jsonl
 		const jsonlPath = path.join(this.#basePath, "lessons.jsonl");
-		fs.appendFile(jsonlPath, `${JSON.stringify(entry)}\n`).catch(() => {});
+		fs.appendFile(jsonlPath, `${JSON.stringify(entry)}\n`).catch(err =>
+			logger.error("ExperienceStore appendFile failed (insert)", { error: String(err) }),
+		);
 	}
 
 	// ========================================================================
@@ -849,7 +853,9 @@ export class ExperienceStore {
 		);
 		// Also append to main jsonl
 		const jsonlPath = path.join(this.#basePath, "lessons.jsonl");
-		fs.appendFile(jsonlPath, `${JSON.stringify(entry)}\n`).catch(() => {});
+		fs.appendFile(jsonlPath, `${JSON.stringify(entry)}\n`).catch(err =>
+			logger.error("ExperienceStore appendFile failed (principle)", { error: String(err) }),
+		);
 	}
 
 	// ========================================================================

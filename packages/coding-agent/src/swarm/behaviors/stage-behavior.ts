@@ -145,9 +145,9 @@ export class StageBehavior implements PhaseBehavior {
 			});
 
 			// Register the agent in the StateTracker
-			await ctx.stateTracker.registerAgent(session.id).catch(() => {
-				// Non-fatal: state tracker persistence is best-effort
-			});
+			await ctx.stateTracker
+				.registerAgent(session.id)
+				.catch(err => logger.error("StateTracker registerAgent failed", { error: String(err) }));
 		}
 
 		logger.info("[StageBehavior] Worker agents spawned", {
@@ -193,9 +193,9 @@ export class StageBehavior implements PhaseBehavior {
 		// Also deliver via AgentRuntime for agent-level steering queue
 		for (const [agentId, tracking] of this.#agents) {
 			if (tracking.handle.status === "running") {
-				await ctx.runtime.sendHumanMessage(agentId, msg.body).catch(() => {
-					// Best-effort: agent may not be accepting messages
-				});
+				await ctx.runtime
+					.sendHumanMessage(agentId, msg.body)
+					.catch(err => logger.error("sendHumanMessage failed", { agentId, error: String(err) }));
 			}
 		}
 	}
@@ -216,7 +216,9 @@ export class StageBehavior implements PhaseBehavior {
 				this.#completedAgents.add(event.agentId);
 
 				// Update StateTracker
-				await ctx.stateTracker.updateAgent(event.agentId, { status: "completed" }).catch(() => {});
+				await ctx.stateTracker
+					.updateAgent(event.agentId, { status: "completed" })
+					.catch(err => logger.error("StateTracker updateAgent failed (completed)", { error: String(err) }));
 
 				// If this agent had a current task, mark it complete
 				if (tracking.currentTask && this.#taskQueue) {
@@ -245,7 +247,7 @@ export class StageBehavior implements PhaseBehavior {
 								? event.result
 								: ((event.result as { error?: string })?.error ?? "unknown error"),
 					})
-					.catch(() => {});
+					.catch(err => logger.error("StateTracker updateAgent failed (failed)", { error: String(err) }));
 
 				// If this agent had a current task, mark it blocked
 				if (tracking.currentTask && this.#taskQueue) {
@@ -267,7 +269,9 @@ export class StageBehavior implements PhaseBehavior {
 
 			case "running":
 				// Agent started processing — update state tracker
-				await ctx.stateTracker.updateAgent(event.agentId, { status: "running" }).catch(() => {});
+				await ctx.stateTracker
+					.updateAgent(event.agentId, { status: "running" })
+					.catch(err => logger.error("StateTracker updateAgent failed (running)", { error: String(err) }));
 				break;
 
 			default:

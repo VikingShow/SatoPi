@@ -604,6 +604,15 @@ export class ExtensionUiController {
 		questions: ExtensionAskDialogQuestion[],
 		dialogOptions?: ExtensionUIDialogOptions,
 	): Promise<ExtensionAskDialogResult | undefined> {
+		// Swarm Script phase plan review: use PlanReviewOverlay instead of AskDialogComponent
+		const swarmBridge = this.ctx.session.embeddedSwarm;
+		if (swarmBridge && questions.length === 1 && questions[0].options.some(o => o.label === "Launch Stage")) {
+			const planContent = swarmBridge.getPlanContent();
+			if (planContent) {
+				return this.#showSwarmAskDialog(questions, planContent);
+			}
+		}
+
 		return this.#presentDialog<ExtensionAskDialogResult>(dialogOptions?.signal, settle => {
 			let askDialog: AskDialogComponent | undefined;
 			let promptEditor: HookEditorComponent | undefined;
@@ -675,6 +684,30 @@ export class ExtensionUiController {
 				this.ctx.ui.requestRender();
 			};
 		});
+	}
+
+	/**
+	 * Use PlanReviewOverlay for swarm Script phase plan review instead of
+	 * the standard AskDialogComponent. Returns an AskDialogResult so the
+	 * ask() tool sees it as a normal ask response.
+	 */
+	async #showSwarmAskDialog(
+		questions: ExtensionAskDialogQuestion[],
+		planContent: string,
+	): Promise<ExtensionAskDialogResult | undefined> {
+		const question = questions[0]!;
+		const choice = await this.ctx.showSwarmPlanReview(planContent);
+		if (choice === undefined) return undefined;
+
+		const optionLabels = question.options.map(o => o.label);
+		const resultItem: ExtensionAskDialogResultItem = {
+			id: question.id,
+			question: question.question,
+			options: optionLabels,
+			multi: question.multi ?? false,
+			selectedOptions: [choice],
+		};
+		return { kind: "submit", results: [resultItem] };
 	}
 
 	/**

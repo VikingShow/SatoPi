@@ -231,15 +231,9 @@ export class AgentLauncher {
 		// 6. Set agent identity on the session for swarm tracking
 		session.role = spec.role;
 
-		// 7. Launch the agent asynchronously
-		//    Use fire-and-forget: the session's wait() method lets callers
-		//    await completion when they need results.
-		this.#startAgent(session, spec).catch(err => {
-			logger.warn("[AgentLauncher] Unhandled startAgent error", {
-				agentId: spec.id,
-				error: err instanceof Error ? err.message : String(err),
-			});
-		});
+		// 7. Launch the agent and wait for prompt() to complete.
+		//    If prompt() fails, propagate the error — don't return a zombie session.
+		await this.#startAgent(session, spec);
 
 		logger.debug("[AgentLauncher] Agent launched", {
 			id: spec.id,
@@ -344,13 +338,6 @@ export class AgentLauncher {
 	 * injection boundary — no separate polling loop needed.
 	 */
 	async #startAgent(session: AgentSession, spec: AgentSpec): Promise<void> {
-		try {
-			await session.prompt(spec.task);
-		} catch (err) {
-			logger.warn("[AgentLauncher] Agent prompt threw", {
-				agentId: spec.id,
-				error: err instanceof Error ? err.message : String(err),
-			});
-		}
+		await session.prompt(spec.task);
 	}
 }

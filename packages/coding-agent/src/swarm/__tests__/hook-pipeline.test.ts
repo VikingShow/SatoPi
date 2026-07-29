@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "bun:test";
 import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../hook-system/types";
+import type { HandlerArgs, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../hook-system/types";
 import { resolveAgentId } from "../hook-system/utils";
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ function makeHook(
 		phases: opts?.phases as HookRegistration["phases"],
 		handler:
 			fn ??
-			(async () => {
+			(async (_args: HandlerArgs) => {
 				/* no-op */
 			}),
 	};
@@ -62,7 +62,7 @@ function makeRecordingHook(name: string, priority: number, order: string[], even
 		name,
 		priority,
 		events: events ?? ["agent:beforeSpawn"],
-		handler: async () => {
+		handler: async (_args: HandlerArgs) => {
 			order.push(name);
 		},
 	};

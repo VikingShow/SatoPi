@@ -25,6 +25,7 @@
  * for phase capability introspection and human-decision waiting.
  */
 
+import { logger } from "@satopi/pi-utils";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";
 import type { ActivityLogger } from "../infra/activity-logger";
@@ -240,6 +241,92 @@ export const PHASES: PhaseDefinition[] = [
 	},
 ];
 
+// ============================================================================
+// PhaseRegistry — extensible phase registration
+// ============================================================================
+
+/**
+ * Registry for workflow phase definitions.
+ *
+ * Allows new phases to be added at runtime by calling {@link register}
+ * with a PhaseDefinition, without editing the Chapter type or the
+ * built-in {@link PHASES} array. The {@link WorkflowFsm} constructor and
+ * `registerPhase()` method accept both the legacy PHASES array and a
+ * PhaseRegistry instance.
+ *
+ * @example
+ * ```ts
+ * const registry = new PhaseRegistry();
+ * registry.register({
+ *   phase: "review",
+ *   allowedFrom: ["stage"],
+ *   allowedTo: ["curtain", "idle"],
+ *   capabilities: { multiAgent: true, roundtable: true, vote: true, offload: false, compaction: false, humanMode: "observer" },
+ *   defaultTimeoutMs: 0,
+ * });
+ * for (const def of PHASES) registry.register(def);
+ * const fsm = new WorkflowFsm(stateTracker, activityLogger, "idle", hookPipeline, registry);
+ * ```
+ */
+export class PhaseRegistry {
+	/** All registered phase definitions, keyed by phase identifier. */
+	readonly #definitions = new Map<string, PhaseDefinition>();
+
+	/**
+	 * Register a phase definition.
+	 *
+	 * Re-registering an existing phase overwrites the previous definition
+	 * (last-write-wins). Callers that need to preserve existing definitions
+	 * should guard with {@link has}.
+	 *
+	 * @param def — The phase definition to register.
+	 */
+	register(def: PhaseDefinition): void {
+		this.#definitions.set(def.phase, def);
+	}
+
+	/**
+	 * Look up a phase definition by identifier.
+	 *
+	 * @param phase — The phase identifier (e.g. "script", "stage").
+	 * @returns The PhaseDefinition if registered, or undefined.
+	 */
+	get(phase: string): PhaseDefinition | undefined {
+		return this.#definitions.get(phase);
+	}
+
+	/**
+	 * Check whether a phase is registered.
+	 *
+	 * @param phase — The phase identifier.
+	 * @returns True if the phase has a registered definition.
+	 */
+	has(phase: string): boolean {
+		return this.#definitions.has(phase);
+	}
+
+	/**
+	 * Return all registered phase identifiers.
+	 */
+	phases(): IterableIterator<string> {
+		return this.#definitions.keys();
+	}
+
+	/**
+	 * Return all registered phase definitions.
+	 */
+	definitions(): IterableIterator<PhaseDefinition> {
+		return this.#definitions.values();
+	}
+
+	/**
+	 * Number of registered phases.
+	 */
+	get size(): number {
+		return this.#definitions.size;
+	}
+}
+
 /** Phases where the workflow is considered actively running. */
 const ACTIVE_PHASES: Set<Chapter> = new Set(["script", "script-debate", "stage", "curtain"]);
 
@@ -315,12 +402,17 @@ export class WorkflowFsm {
 	 * @param stateTracker  Existing StateTracker instance for persistence.
 	 * @param activityLogger  Existing ActivityLogger instance for event recording.
 	 * @param initialPhase  Starting phase (defaults to "idle").
+	 * @param hookPipeline  Optional HookPipeline for lifecycle events.
+	 * @param registry  Optional PhaseRegistry — if supplied, all registered
+	 *   definitions are seeded into the internal phase map (after any manually
+	 *   registered phases, so manual calls take precedence).
 	 */
 	constructor(
 		stateTracker: StateTracker,
 		activityLogger: ActivityLogger,
 		initialPhase: Chapter = "idle",
 		hookPipeline?: HookPipeline,
+		registry?: PhaseRegistry,
 	) {
 		this.#stateTracker = stateTracker;
 		this.#activityLogger = activityLogger;
@@ -330,6 +422,13 @@ export class WorkflowFsm {
 		this.#running = ACTIVE_PHASES.has(initialPhase);
 		this.#iteration = 0;
 		this.#phaseStartedAt = Date.now();
+
+		// Seed from PhaseRegistry if provided — last-write-wins on conflict.
+		if (registry) {
+			for (const def of registry.definitions()) {
+				this.#phases.set(def.phase, def);
+			}
+		}
 	}
 
 	// -- Public accessors -------------------------------------------------------
@@ -445,13 +544,25 @@ export class WorkflowFsm {
 		this.#phaseStartedAt = Date.now();
 
 		// Persist to StateTracker (fire-and-forget — non-blocking).
-		this.#stateTracker.updatePipeline({ phase: to }).catch(() => {
+		this.#stateTracker
+			.updatePipeline({ phase: to })
+			.catch(err => logger.error("StateTracker updatePipeline persist failed", { error: String(err) }));
+
+		// Persist transition to FSM audit trail (fire-and-forget — non-blocking).
+		const transitionRecord = {
+			from,
+			to,
+			reason: meta.reason,
+			iteration: this.#iteration,
+			timestamp: Date.now(),
+		};
+		this.#stateTracker.logTransition(transitionRecord).catch(() => {
 			// Swallow persist errors — in-memory state is still accurate.
 		});
 
 		// Log the phase transition (fire-and-forget — non-blocking).
 		try {
-			this.#activityLogger.logPhase(to, undefined, this.#iteration);
+			this.#activityLogger.logPhase(to, undefined, this.#iteration, from, meta.reason);
 		} catch {
 			// Swallow logPhase errors — logging is best-effort and must not break the FSM.
 		}

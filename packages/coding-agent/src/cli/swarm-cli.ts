@@ -17,6 +17,7 @@ import { NoopOffloadManager } from "../offload/manager";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
 import { assembleAgentRuntime } from "../swarm/core/assembler";
+import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
 import type { RunManager, SteeringSink } from "../swarm/core/services";
 import { StateTracker } from "../swarm/core/state";
@@ -29,7 +30,8 @@ import { ActivityLogger } from "../swarm/infra/activity-logger";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
-import { ScriptManager } from "../swarm/script/script-manager";
+import { DebateRoundtable } from "../swarm/script/debate-roundtable";
+import { getSessionPlanPath } from "../swarm/script/plan-paths";
 import { SessionRegistry } from "../swarm/session";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
 
@@ -176,23 +178,6 @@ async function createSwarmServices(
 			});
 		}
 
-		// Real ScriptManager with AgentRuntime wired in.
-		const scriptManager = new ScriptManager({
-			modelRegistry: s.modelRegistry,
-			settings: s.settings,
-			workspace: s.workspace,
-			swarmDir,
-			yamlPath: s.yamlPath,
-			stateTracker,
-			activityLogger,
-			experienceStore: s.experienceStore,
-			runManager,
-			profileRegistry: s.profileRegistry,
-			roleAssetManager: s.roleAssetManager,
-			ircBus: runtime.ircBus,
-		});
-		scriptManager.setRuntime(runtime);
-
 		// Real SteeringSink — routes human steering via IrcBus → AgentRuntime.
 		const steeringSink: SteeringSink = {
 			steer(text: string): void {
@@ -200,7 +185,7 @@ async function createSwarmServices(
 			},
 		};
 
-		return { name, swarmDir, stateTracker, activityLogger, runManager, scriptManager, steeringSink, hookPipeline };
+		return { name, swarmDir, stateTracker, activityLogger, runManager, steeringSink, hookPipeline };
 	};
 
 	return { shared, factory };
@@ -306,20 +291,47 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 
 	const swarmName = def.name;
 	const authStorage = await discoverAuthStorage();
+
+	// State variables for the REPL
+	let phase: string = "idle";
+	let busy = false;
+	let planReady = false;
+	let conversationLength = 0;
+
 	try {
-		const { shared, factory } = await createSwarmServices(cwd, yamlPath, def);
-		const registry = new SessionRegistry(shared, factory, 1);
-		const session = await registry.createSession(swarmName);
+		// Create shared services (reuse createSwarmServices for consistency).
+		// We only need `shared`; the factory and session are unused in plan mode.
+		const { shared } = await createSwarmServices(cwd, yamlPath, def, "graph");
+		const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${swarmName}`);
+		await fs.mkdir(swarmDir, { recursive: true });
 
-		const sm = session.scriptManager as ScriptManager;
+		const bridge = new EmbeddedSwarmBridge(
+			{
+				workspace: shared.workspace,
+				swarmDir,
+				modelRegistry: shared.modelRegistry,
+				settings: shared.settings,
+				roleAssetManager: shared.roleAssetManager,
+				profileRegistry: shared.profileRegistry,
+				autoApplaud: true,
+			},
+			event => {
+				if (event.phase) phase = event.phase;
+				if (event.subStatus) {
+					process.stderr.write(`[${event.phase}] ${event.subStatus}\n`);
+				}
+			},
+		);
+		await bridge.init();
+		phase = "script";
 
-		process.stderr.write(`\n`);
-		process.stderr.write(`╔══════════════════════════════════════════════╗\n`);
-		process.stderr.write(`║  SatoPi Swarm Plan — Interactive Planner      ║\n`);
+		process.stderr.write("\n");
+		process.stderr.write("╔══════════════════════════════════════════════╗\n");
+		process.stderr.write("║  SatoPi Swarm Plan — Interactive Planner      ║\n");
 		process.stderr.write(`║  Swarm: ${swarmName.padEnd(36)}║\n`);
-		process.stderr.write(`╚══════════════════════════════════════════════╝\n`);
-		process.stderr.write(`\nCommands: /send <text>, /debate, /confirm [N], /status, /cancel, /quit\n`);
-		process.stderr.write(`Type a message and press Enter to chat with the planner.\n\n`);
+		process.stderr.write("╚══════════════════════════════════════════════╝\n");
+		process.stderr.write("\nCommands: /send <text>, /debate, /confirm [N], /status, /cancel, /quit\n");
+		process.stderr.write("Type a message and press Enter to chat with the planner.\n\n");
 
 		const rl = readline.createInterface({
 			input: process.stdin,
@@ -336,72 +348,132 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 				return;
 			}
 
-			// Slash commands
 			if (input.startsWith("/")) {
-				const [cmd, ...rest] = input.slice(1).split(/\s+/);
-				switch (cmd) {
+				const [slashCmd, ...rest] = input.slice(1).split(/\s+/);
+				switch (slashCmd) {
 					case "send": {
 						const text = rest.join(" ");
 						if (!text) {
 							process.stderr.write("Usage: /send <text>\n");
 							break;
 						}
-						const r = await sm.sendMessage(text);
-						if (!r.success) process.stderr.write(`Error: ${r.error}\n`);
+						await sendToPlanner(bridge, text);
+						conversationLength++;
 						break;
 					}
 					case "debate": {
-						const r = await sm.runDebate();
-						if (!r.success) process.stderr.write(`Error: ${r.error}\n`);
+						if (busy) {
+							process.stderr.write("The planner is still thinking. Please wait.\n");
+							break;
+						}
+						busy = true;
+						try {
+							const planPath = getSessionPlanPath(swarmDir);
+							let planContent: string;
+							try {
+								planContent = await Bun.file(planPath).text();
+							} catch {
+								process.stderr.write("No plan.md found. Ask the planner to generate one first.\n");
+								busy = false;
+								break;
+							}
+							process.stderr.write("Starting plan debate...\n");
+							const debate = new DebateRoundtable({
+								agentCount: 2,
+								maxRounds: 2,
+								convergenceThreshold: 2,
+								runtime: bridge.runtime,
+							});
+							const result = await debate.debate(
+								planContent,
+								shared.workspace,
+								shared.modelRegistry,
+								shared.settings,
+							);
+							await Bun.write(planPath, result.refinedPlan);
+							bridge.onPlanUpdated(result.refinedPlan);
+							planReady = true;
+							process.stderr.write(
+								`Debate ${result.converged ? "converged" : "completed"}. ` +
+									`Review the plan and /confirm to begin.\n`,
+							);
+						} catch (err) {
+							process.stderr.write(`Debate failed: ${String(err)}\n`);
+						} finally {
+							busy = false;
+						}
 						break;
 					}
 					case "confirm": {
 						const agentCount = rest[0] ? parseInt(rest[0], 10) : undefined;
-						const r = await sm.confirm(agentCount);
-						if (r.success) {
-							process.stderr.write("Plan confirmed. Starting stage execution…\n");
+						const errors = await bridge.confirmScript(agentCount ? { agentCount } : undefined);
+						if (errors.length === 0) {
+							process.stderr.write("Plan confirmed. Starting stage execution...\n");
 							rl.close();
 						} else {
-							process.stderr.write(`Error: ${r.error}\n`);
+							process.stderr.write(`Cannot confirm: ${errors.join("; ")}\n`);
 						}
 						break;
 					}
 					case "status": {
-						const state = sm.getState();
 						process.stderr.write(
-							`Phase: ${state.phase} | Busy: ${state.busy} | ` +
-								`Plan ready: ${state.planReady} | ` +
-								`Conversation: ${state.conversationLength} turns\n`,
+							`Phase: ${phase} | Busy: ${busy} | ` +
+								`Plan ready: ${planReady || bridge.isPlanReady()} | ` +
+								`Conversation: ${conversationLength} turns\n`,
 						);
 						break;
 					}
 					case "cancel": {
-						await sm.cancel();
+						await bridge.dispose();
+						phase = "idle";
+						busy = false;
+						planReady = false;
+						conversationLength = 0;
 						process.stderr.write("Script phase cancelled.\n");
 						break;
 					}
 					case "quit":
 					case "exit": {
-						await sm.cancel();
+						await bridge.dispose();
 						rl.close();
 						return;
 					}
 					default:
-						process.stderr.write(`Unknown command: /${cmd}\n`);
+						process.stderr.write(`Unknown command: /${slashCmd}\n`);
 				}
 				rl.prompt();
 				return;
 			}
 
-			// If this is the first message, start the planner with it.
-			const state = sm.getState();
-			if (state.phase === "idle" || state.phase === "curtain") {
-				const r = await sm.start(input);
-				if (!r.success) process.stderr.write(`Error: ${r.error}\n`);
-			} else {
-				// Subsequent messages go through sendMessage
-				const r = await sm.sendMessage(input);
-				if (!r.success) process.stderr.write(`Error: ${r.error}\n`);
+			// Regular message: start planner or send follow-up
+			if (busy) {
+				process.stderr.write("The planner is still thinking. Please wait.\n");
+				rl.prompt();
+				return;
+			}
+			busy = true;
+			try {
+				await sendToPlanner(bridge, input);
+				conversationLength++;
+				// Check if plan.md was created/updated
+				const planPath = getSessionPlanPath(swarmDir);
+				try {
+					const stat = await fs.stat(planPath);
+					if (stat.size > 0) {
+						const content = await Bun.file(planPath).text();
+						bridge.onPlanUpdated(content);
+						planReady = bridge.isPlanReady();
+						if (planReady) {
+							process.stderr.write("Plan draft is ready. Use /debate to refine or /confirm to begin.\n");
+						}
+					}
+				} catch {
+					/* plan.md not created yet */
+				}
+			} catch (err) {
+				process.stderr.write(`Planner error: ${String(err)}\n`);
+			} finally {
+				busy = false;
 			}
 			rl.prompt();
 		});
@@ -410,12 +482,30 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 			process.stderr.write("\nExiting plan mode.\n");
 		});
 
-		// Keep the process alive until the user quits
 		await new Promise<void>(resolve => {
 			rl.on("close", () => resolve());
 		});
 	} finally {
 		authStorage.close();
+	}
+}
+
+/** Spawn planner agent and wait for response. */
+async function sendToPlanner(bridge: EmbeddedSwarmBridge, text: string): Promise<void> {
+	const runtime = bridge.runtime;
+	await runtime.ircBus.receiveFromHuman(text, "planner");
+	const [planner] = await runtime.spawn([
+		{
+			id: "planner",
+			role: "planner",
+			roleSource: "library",
+			task: text,
+			modelPreference: "smartest",
+		},
+	]);
+	const result = await planner.wait();
+	if (result?.output) {
+		process.stderr.write(`\nPlanner: ${String(result.output).slice(0, 500)}...\n\n`);
 	}
 }
 

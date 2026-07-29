@@ -220,7 +220,9 @@ export class CurtainBehavior implements PhaseBehavior {
 		}
 
 		if (this.#reporter && this.#reporter.status === "running") {
-			await this.#reporter.steer(msg.body).catch(() => {});
+			await this.#reporter
+				.steer(msg.body)
+				.catch(err => logger.error("Reporter steer failed", { error: String(err) }));
 		}
 	}
 

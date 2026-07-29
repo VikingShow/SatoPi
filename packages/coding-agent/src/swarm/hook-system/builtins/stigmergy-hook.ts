@@ -9,14 +9,7 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { MarkEnvironment } from "../../../coordination";
-import type {
-	AgentAfterCompletePayload,
-	AgentOnErrorPayload,
-	HookContext,
-	HookEvent,
-	HookPayloadMap,
-	HookRegistration,
-} from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 
 /**
@@ -35,22 +28,19 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 		priority: 1,
 		events: ["agent:afterComplete", "agent:onError", "context:afterCompaction"],
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
-			const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
-
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:afterComplete — place artifact mark
 				// -----------------------------------------------------------------
 				case "agent:afterComplete": {
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
 						logger.warn("[StigmergyHook] agent:afterComplete missing agentId");
 						return;
 					}
-					// payload is AgentAfterCompletePayload
-					const p = payload as unknown as AgentAfterCompletePayload;
-					const artifactPath = p.artifactPath;
-					const message = p.message ?? `Agent ${agentId} completed task`;
+					const artifactPath = payload.artifactPath;
+					const message = payload.message ?? `Agent ${agentId} completed task`;
 
 					markEnv.placeMark({
 						markId: generateMarkId(agentId, "artifact"),
@@ -67,12 +57,12 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 				// agent:onError — place warning mark
 				// -----------------------------------------------------------------
 				case "agent:onError": {
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
 						logger.warn("[StigmergyHook] agent:onError missing agentId");
 						return;
 					}
-					const p = payload as unknown as AgentOnErrorPayload;
-					const errorMessage = p.error;
+					const errorMessage = payload.error;
 
 					markEnv.placeMark({
 						markId: generateMarkId(agentId, "warning"),

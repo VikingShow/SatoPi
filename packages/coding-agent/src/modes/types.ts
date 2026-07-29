@@ -409,6 +409,9 @@ export interface InteractiveModeContext {
 	handlePlanApproval(details: PlanApprovalDetails): Promise<void>;
 	openPlanReview(): Promise<void>;
 
+	// Swarm plan review
+	showSwarmPlanReview(planContent: string): Promise<string | undefined>;
+
 	// Hook UI methods
 	initHooksAndCustomTools(): Promise<void>;
 	emitCustomToolSessionEvent(

@@ -37,7 +37,7 @@ import { stampAndArchivePlanMd } from "../script";
 import { getSessionPlanPath } from "../script/plan-paths";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createStageController, type StageResult } from "../stage/stage-controller";
-import type { ISwarmOrchestrator } from "./embedded-swarm-bridge";
+import { type ISwarmOrchestrator, validatePlanTasks } from "./embedded-swarm-bridge";
 
 // ============================================================================
 // SwarmRunner
@@ -289,9 +289,19 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 		try {
 			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);
 			const content = await fs.readFile(planPath, "utf-8");
+
 			if (content.trim().length < 50) {
 				issues.push("Plan is too short — needs at least 50 characters.");
 			}
+
+			// Check for ## Phase headings
+			const phaseHeadings = [...content.matchAll(/^##\s+Phase\b/gm)];
+			if (phaseHeadings.length === 0) {
+				issues.push('plan.md must contain at least one "## Phase" heading');
+			}
+
+			// Task checklist validation
+			issues.push(...validatePlanTasks(content));
 		} catch {
 			issues.push("No plan.md found. Create one before confirming the script.");
 		}

@@ -19,6 +19,7 @@ import type {
 	Settings,
 	SingleResult,
 } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { AgentRuntime } from "../agent-runtime";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
@@ -201,10 +202,10 @@ async function executeWithRuntime(
 				completedAt: Date.now(),
 				error: isTimeout ? `Timed out after ${timeoutMs}ms` : error,
 			})
-			.catch(() => {});
+			.catch(err => logger.error("StateTracker updateAgent failed", { agent: agent.name, error: String(err) }));
 		stateTracker
 			.appendLog(agent.name, `Iteration ${iteration} ${isTimeout ? "timed out" : "error"}: ${error}`)
-			.catch(() => {});
+			.catch(err => logger.error("StateTracker appendLog failed", { agent: agent.name, error: String(err) }));
 		activityLogger?.logStreamEnd(streamMsgId, agent.name, `[Error] ${error}`, undefined);
 
 		const failResult: SingleResult = {

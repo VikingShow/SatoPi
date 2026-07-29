@@ -8,8 +8,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "./types";
+import type { HandlerArgs, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "./types";
 
 // ---------------------------------------------------------------------------
 // HookPipeline
@@ -90,7 +89,8 @@ export class HookPipeline {
 			}
 
 			try {
-				const result = await hook.handler(event, payload, ctx);
+				const args: HandlerArgs = { event, payload } as HandlerArgs;
+				const result = await hook.handler(args, ctx);
 				if (result === false) {
 					logger.debug("[HookPipeline] Hook returned false — short-circuiting", {
 						name: hook.name,

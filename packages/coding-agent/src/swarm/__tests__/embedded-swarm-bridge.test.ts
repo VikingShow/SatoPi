@@ -237,20 +237,82 @@ describe("EmbeddedSwarmBridge", () => {
 			expect(errors[0]).toContain("plan.md not found");
 		});
 
-		it("returns error when plan.md lacks headings", async () => {
+		it("returns error when plan.md lacks ## Phase headings", async () => {
 			config = await makeConfig();
 			const { callback } = captureEvents();
 			bridge = new EmbeddedSwarmBridge(config, callback);
 			await bridge.init();
 
-			// Write a plan without headings
+			// Write a plan without ## Phase headings (but with enough chars and some generic heading)
 			const planPath = getSessionPlanPath(config.swarmDir);
 			await fs.mkdir(path.dirname(planPath), { recursive: true });
-			await fs.writeFile(planPath, "Some content without headings. ".repeat(20));
+			await fs.writeFile(planPath, "# Overview\nSome content without Phase headings. ".repeat(20));
 
 			const errors = await bridge.confirmScript();
 			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e: string) => e.includes("heading"))).toBe(true);
+			expect(errors.some((e: string) => e.includes("## Phase"))).toBe(true);
+		});
+
+		it("returns error when task checklist items lack contracts", async () => {
+			config = await makeConfig();
+			const { callback } = captureEvents();
+			bridge = new EmbeddedSwarmBridge(config, callback);
+			await bridge.init();
+
+			// Write a plan with Phase heading but incomplete tasks
+			const planPath = getSessionPlanPath(config.swarmDir);
+			await fs.mkdir(path.dirname(planPath), { recursive: true });
+			const planContent = [
+				"# Plan",
+				"",
+				"## Phase 1: Setup",
+				"",
+				"- [ ] Do the thing (missing contract fields)",
+				"  Some details here",
+				"- [ ] Another incomplete task",
+				"",
+				"Some filler text. ".repeat(30),
+			].join("\n");
+			await fs.writeFile(planPath, planContent);
+
+			const errors = await bridge.confirmScript();
+			expect(errors.length).toBeGreaterThan(0);
+			expect(errors.some((e: string) => e.includes("missing"))).toBe(true);
+		});
+
+		it("passes validation for well-formed plan with contracts", async () => {
+			config = await makeConfig();
+			const { callback } = captureEvents();
+			bridge = new EmbeddedSwarmBridge(config, callback);
+			await bridge.init();
+
+			// Write a well-formed plan
+			const planPath = getSessionPlanPath(config.swarmDir);
+			await fs.mkdir(path.dirname(planPath), { recursive: true });
+			const planContent = [
+				"# Plan",
+				"",
+				"## Phase 1: Setup",
+				"",
+				"- [ ] Initialize project",
+				"  Files: package.json, tsconfig.json",
+				"  Change: Set up the base config",
+				"  Acceptance: `bun run build` succeeds",
+				"",
+				"- [ ] Add tests",
+				"  Files: src/__tests__/",
+				"  Change: Write unit tests",
+				"  Acceptance: All tests pass",
+				"",
+				"Some filler text to meet the length requirement. ".repeat(30),
+			].join("\n");
+			await fs.writeFile(planPath, planContent);
+
+			const errors = await bridge.confirmScript();
+			// Should pass validation (empty errors array)
+			expect(errors.filter(e => e.includes("missing") || e.includes("Phase") || e.includes("short"))).toHaveLength(
+				0,
+			);
 		});
 	});
 

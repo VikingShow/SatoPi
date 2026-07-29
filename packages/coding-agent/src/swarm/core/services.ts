@@ -3,7 +3,7 @@
  *
  * These interfaces decouple the swarm engine from concrete implementations.
  * Includes agent lifecycle (SwarmAgentRunner), communication (SwarmMessageBus),
- * and phase orchestration (RunManager, ScriptManager, SteeringSink).
+ * and phase orchestration (RunManager, SteeringSink).
  */
 
 import type { CurtainResult } from "../curtain/types";
@@ -26,28 +26,6 @@ export interface RunManager {
 	readonly isRunning: boolean;
 	getLastCurtainResult?: () => CurtainResult | null;
 	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
-}
-
-/** Manages the Script (planning) phase. */
-export interface ScriptManager {
-	setSessionManager?(sm: SwarmSessionManager): void;
-	start(task: string, agentId?: string): Promise<{ success: boolean; error?: string }>;
-	sendMessage(text: string): Promise<{ success: boolean; error?: string }>;
-	runDebate(): Promise<{ success: boolean; error?: string }>;
-	confirm(agentCount?: number): Promise<{ success: boolean; error?: string }>;
-	cancel(): Promise<{ success: boolean; error?: string }>;
-	getState(): {
-		phase: string;
-		task: string;
-		conversationLength: number;
-		planReady: boolean;
-		busy: boolean;
-		selectedAgentId?: string;
-		recommendedAgents?: number;
-		estimatedAgentHours?: number;
-	};
-	getHistory(): Array<{ role: "user" | "assistant"; content: string }>;
-	readonly isBusy: boolean;
 }
 
 /** Accepts steering messages from the human during a running loop. */

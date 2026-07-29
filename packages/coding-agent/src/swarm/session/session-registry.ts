@@ -2,7 +2,7 @@
  * SessionRegistry — manages all swarm sessions.
  *
  * Each session owns its own StateTracker, ActivityLogger, RunManager,
- * ScriptManager, SteeringSink, and AbortController.  Sessions share
+ * SteeringSink, and AbortController.  Sessions share
  * workspace-scoped services (ExperienceStore, ModelRegistry, RoleAssetManager)
  * through a SharedServices bag.
  *
@@ -23,7 +23,7 @@ import type { IOffloadManager } from "../../offload/manager";
 import { OffloadManager } from "../../offload/manager";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
 import { OffloadSource } from "../context-manager/sources/offload-source";
-import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
+import type { RunManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
@@ -65,7 +65,6 @@ export interface SessionServices {
 	stateTracker: StateTracker;
 	activityLogger: ActivityLogger;
 	runManager: RunManager;
-	scriptManager: ScriptManager;
 	steeringSink: SteeringSink;
 	abortController: AbortController;
 	/** OH-MY-PI-based session persistence (replaces pipeline.json, activity.jsonl, conversation.json). */
@@ -195,7 +194,6 @@ export class SessionRegistry {
 		if (sessionManager) {
 			services.stateTracker.setSessionManager(sessionManager);
 			services.activityLogger.setSessionManager(sessionManager);
-			services.scriptManager.setSessionManager?.(sessionManager);
 
 			// Seed the in-memory StateTracker from the persisted snapshot.
 			const snapshot = await SwarmSessionManager.readLatestState(swarmDir);

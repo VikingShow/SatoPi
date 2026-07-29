@@ -2,7 +2,6 @@
 
 export { DebateRoundtable } from "./debate-roundtable";
 export { getPlanArchiveDir, getSessionPlanPath, getSessionStpDir } from "./plan-paths";
-export { ScriptManager } from "./script-manager";
 export {
 	archivePlanForHistory,
 	generatePlanningPrompt,

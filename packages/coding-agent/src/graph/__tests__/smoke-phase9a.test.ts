@@ -199,8 +199,9 @@ describe("Phase 9A: Smoke Tests", () => {
 		class InMemoryCheckpointStore implements CheckpointStore {
 			readonly #store = new Map<string, GraphRunState>();
 
-			write(state: GraphRunState): void {
+			write(state: GraphRunState): boolean {
 				this.#store.set(state.graphName, state);
+				return true;
 			}
 
 			async recover(graphName: string): Promise<GraphRunState | null> {

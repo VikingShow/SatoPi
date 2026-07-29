@@ -58,6 +58,7 @@ const OptionItem = arkType({
 	label: arkType("string").describe("display label"),
 	"description?": arkType("string").describe("optional explanatory text displayed below the label"),
 	"preview?": arkType("string").describe("optional rich preview content for interactive ask dialogs"),
+	"intent?": arkType("string").describe("optional structured intent for automated routing (e.g. launch_stage)"),
 });
 
 const QuestionItem = arkType({
@@ -113,6 +114,8 @@ export interface AskToolDetails {
 	questions?: string[];
 	/** Agent configuration for swarm stage launch. */
 	agentConfig?: { type?: string; count?: number };
+	/** Structured intent of the selected option, for automated routing. */
+	intent?: string;
 }
 
 interface AskOption {
@@ -943,6 +946,9 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 						context.abort();
 						throw new ToolAbortError("Ask tool was cancelled by the user");
 					}
+					const selectedIntent = params.questions[0].options.find(o =>
+						result.selectedOptions.includes(o.label),
+					)?.intent;
 					const details: AskToolDetails = {
 						question: result.question,
 						options: result.options,
@@ -951,6 +957,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 						customInput: result.customInput,
 						note: result.note,
 						timedOut: result.timedOut,
+						...(selectedIntent ? { intent: selectedIntent } : {}),
 					};
 					const responseText = formatSingleQuestionResponse(result);
 					return { content: [{ type: "text" as const, text: responseText }], details };
@@ -1006,6 +1013,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 				context.abort();
 				throw new ToolAbortError("Ask tool was cancelled by the user");
 			}
+			const selectedIntent = q.options.find(o => selectedOptions.includes(o.label))?.intent;
 			const details: AskToolDetails = {
 				question: q.question,
 				options: optionLabels,
@@ -1014,6 +1022,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 				customInput,
 				note,
 				timedOut: timedOut || undefined,
+				...(selectedIntent ? { intent: selectedIntent } : {}),
 			};
 
 			const responseText = formatSingleQuestionResponse({

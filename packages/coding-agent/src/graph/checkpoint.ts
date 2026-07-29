@@ -18,8 +18,8 @@ import type { GraphRunState } from "./types";
  * layer, but kept abstract here so GraphEngine has zero swarm deps.
  */
 export interface CheckpointStore {
-	/** Persist a full-state checkpoint. */
-	write(state: GraphRunState): void;
+	/** Persist a full-state checkpoint. Returns true on success. */
+	write(state: GraphRunState): boolean;
 
 	/** Recover the most recent checkpoint for a graph, or null if none exists. */
 	recover(graphName: string): Promise<GraphRunState | null>;

@@ -11,14 +11,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { ExperienceEntry, ExperienceStore } from "../../curtain/experience";
-import type {
-	HookContext,
-	HookEvent,
-	HookPayloadMap,
-	HookRegistration,
-	OffloadFlushPayload,
-	WorkflowAfterPhasePayload,
-} from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -47,18 +40,17 @@ export function createExperienceHook(experienceStore: ExperienceStore): HookRegi
 		events: ["offload:afterFlush", "workflow:afterPhase"],
 		phases: ACTIVE_PHASES,
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// offload:afterFlush — bridge offload data to experience store
 				// -----------------------------------------------------------------
 				case "offload:afterFlush": {
-					const p = payload as unknown as OffloadFlushPayload;
-					if (p.entry) {
+					if (payload.entry) {
 						try {
-							await experienceStore.saveLesson(p.entry as unknown as ExperienceEntry);
+							await experienceStore.saveLesson(payload.entry as ExperienceEntry);
 							logger.debug("[ExperienceHook] Bridged offload entry to experience", {
-								runId: p.runId,
+								runId: payload.runId,
 							});
 						} catch (err: unknown) {
 							logger.warn("[ExperienceHook] Failed to bridge offload entry", {
@@ -73,10 +65,9 @@ export function createExperienceHook(experienceStore: ExperienceStore): HookRegi
 				// workflow:afterPhase — save session summary + decay unreferenced
 				// -----------------------------------------------------------------
 				case "workflow:afterPhase": {
-					const p = payload as unknown as WorkflowAfterPhasePayload;
-					if (p.sessionSummary) {
+					if (payload.sessionSummary) {
 						try {
-							await experienceStore.saveLesson(p.sessionSummary as unknown as ExperienceEntry);
+							await experienceStore.saveLesson(payload.sessionSummary as ExperienceEntry);
 							logger.debug("[ExperienceHook] Session summary stored");
 						} catch (err: unknown) {
 							logger.warn("[ExperienceHook] Failed to store session summary", {
@@ -85,7 +76,7 @@ export function createExperienceHook(experienceStore: ExperienceStore): HookRegi
 						}
 					}
 
-					const runIds = p.runIds ?? [];
+					const runIds = payload.runIds ?? [];
 					if (runIds.length > 0) {
 						try {
 							await experienceStore.markReferenced(runIds);

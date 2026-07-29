@@ -22,8 +22,8 @@ import type { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
+import { CommChannel } from "../comm-bus";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
-import { jaccardSimilarity } from "../core/convergence.js";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentLauncher, LaunchContext } from "./agent-launcher";
@@ -131,11 +131,14 @@ export class AgentRuntime {
 	readonly #activityLogger?: ActivityLogger;
 	readonly #toolRegistry?: Map<string, Tool>;
 
-	/** Per-agent queues for system notification (aside) messages. */
+	/** Runtime-level CommChannel wrapping all spawned agents for inter-agent communication. */
+	readonly #commChannel: CommChannel;
+
+	/** Per-agent queues for system notification (aside) messages — drained by hookProviders. */
 	readonly #asideQueues = new Map<string, AsideMessage[]>();
-	/** Per-agent queues for human steering messages (drained by hookProviders). */
+	/** Per-agent queues for human steering messages — drained by hookProviders. */
 	readonly #steeringQueues = new Map<string, AgentMessage[]>();
-	/** Per-agent queues for follow-up messages (drained by hookProviders). */
+	/** Per-agent queues for follow-up messages — drained by hookProviders. */
 	readonly #followUpQueues = new Map<string, AgentMessage[]>();
 
 	constructor(options: AgentRuntimeOptions) {
@@ -148,6 +151,13 @@ export class AgentRuntime {
 		this.#settings = options.settings;
 		this.#activityLogger = options.activityLogger;
 		this.#toolRegistry = options.toolRegistry;
+		this.#commChannel = new CommChannel(
+			this.#ircBus!,
+			[], // members added as agents spawn
+			["human"], // human is always an observer
+			this.#activityLogger,
+			this.#hookPipeline,
+		);
 	}
 
 	// -----------------------------------------------------------------------
@@ -168,107 +178,51 @@ export class AgentRuntime {
 	}
 
 	/**
-	 * Spawn agents for a structured roundtable discussion.
+	 * Spawn agents and run a structured roundtable discussion via CommChannel.
 	 *
-	 * Each spec becomes a participant. The roundtable runs for the
-	 * configured number of rounds, with optional convergence-based
-	 * early exit.
-	 *
-	 * Flow per round:
-	 * 1. Build each agent's task with prior round positions appended
-	 * 2. Spawn all agents in parallel via spawn()
-	 * 3. Collect responses
-	 * 4. Check convergence (Jaccard similarity of token sets)
-	 * 5. If converged for N consecutive rounds, exit early
+	 * Agents are spawned once, then CommChannel.roundtable() runs the
+	 * multi-round discussion among the live agent sessions. Convergence
+	 * is detected via Jaccard text similarity (delegated to CommChannel).
 	 */
 	async spawnRoundtable(specs: AgentSpec[], config: RoundtableConfig): Promise<RoundtableResult> {
-		const allResponses: string[] = [];
-		let lastRoundPositions: string[] = [];
-		let prevRoundPositions: string[] = [];
-		let convergenceStreak = 0;
-		const convergenceThreshold = config.convergenceThreshold ?? 0.8;
-		const convergenceStreakRequired = config.convergenceStreak ?? 1;
-
-		for (let round = 0; round < config.rounds; round++) {
-			// Build per-agent tasks with prior round context
-			const priorContext =
-				prevRoundPositions.length > 0
-					? "\n\n## Prior Round Positions\n" +
-						prevRoundPositions.map((p, j) => `**Agent ${specs[j]?.id ?? j}:** ${p}`).join("\n\n") +
-						"\n\nReview the above positions. Provide your updated position."
-					: "";
-
-			const roundSpecs = specs.map(s => ({
-				...s,
-				task: s.task + priorContext,
-			}));
-
-			// Spawn all agents in parallel
-			const handles = await this.spawn(roundSpecs);
-
-			// Wait for all responses with optional per-round timeout
-			const results = await Promise.allSettled(handles.map(h => h.wait()));
-
-			const roundResponses = results.map((r, i) => {
-				if (r.status === "fulfilled") {
-					const out = r.value;
-					return out?.output ?? out ?? "(no response)";
-				}
-				logger.warn("[AgentRuntime] Roundtable agent failed", {
-					round,
-					agentId: specs[i]?.id,
-					error: String(r.reason),
-				});
-				return "(no response)";
-			});
-
-			allResponses.push(...roundResponses);
-			lastRoundPositions = roundResponses;
-
-			// Check convergence (skip first round — nothing to compare against)
-			if (round > 0 && prevRoundPositions.length === roundResponses.length) {
-				const similarity = jaccardSimilarity(roundResponses.join(" "), prevRoundPositions.join(" "));
-
-				if (similarity >= convergenceThreshold) {
-					convergenceStreak++;
-					if (convergenceStreak >= convergenceStreakRequired) {
-						logger.info("[AgentRuntime] Roundtable converged", {
-							round: round + 1,
-							similarity,
-							streak: convergenceStreak,
-						});
-						return {
-							converged: true,
-							rounds: round + 1,
-							responses: allResponses,
-							finalPositions: lastRoundPositions,
-						};
-					}
-				} else {
-					convergenceStreak = 0;
-				}
-			}
-
-			prevRoundPositions = [...lastRoundPositions];
+		if (specs.length === 0) {
+			return { converged: true, rounds: 0, responses: [], finalPositions: [] };
 		}
 
-		logger.info("[AgentRuntime] Roundtable completed without convergence", {
+		// 1. Spawn all agents once
+		await this.spawn(specs);
+
+		// 2. Register agents in the runtime-level CommChannel
+		for (const spec of specs) {
+			this.#commChannel.addMember(spec.id);
+		}
+
+		// 3. Build roundtable topic from agent tasks
+		const topic = specs.map(s => `[${s.id}] ${s.task}`).join("\n\n");
+
+		// 4. Delegate multi-round discussion to CommChannel
+		const channelResult = await this.#commChannel.roundtable(topic, {
 			rounds: config.rounds,
+			timeoutMs: config.timeoutMs ?? 30_000,
+			convergenceThreshold: config.convergenceThreshold,
+			convergenceStreak: config.convergenceStreak,
+			agentIds: specs.map(s => s.id),
 		});
 
+		// 5. Map CommChannel result to AgentRuntime shape
 		return {
-			converged: false,
-			rounds: config.rounds,
-			responses: allResponses,
-			finalPositions: lastRoundPositions,
+			converged: channelResult.converged,
+			rounds: channelResult.rounds,
+			responses: channelResult.responses,
+			finalPositions: channelResult.finalPositions,
 		};
 	}
 
 	/**
 	 * Queue a human steering message for a specific agent.
 	 *
-	 * The message is logged via IrcBus.receiveFromHuman(). Actual delivery
-	 * to the agent is handled by PhaseBehaviors via handle.send().
+	 * The message is pushed to the steering queue (drained by hookProviders)
+	 * and routed through CommChannel.interrupt() for real-time IRC delivery.
 	 */
 	async sendHumanMessage(agentId: string, text: string): Promise<void> {
 		// Push to steering queue (drained by hookProviders.getSteeringMessages)
@@ -279,12 +233,15 @@ export class AgentRuntime {
 			timestamp: Date.now(),
 		});
 		this.#steeringQueues.set(agentId, queue);
-		// Also deliver via IrcBus for real-time IRC routing
-		await this.#ircBus!.receiveFromHuman(text, agentId);
+		// Route through CommChannel for real-time IRC delivery
+		await this.#commChannel.interrupt("human", agentId, text);
 	}
 
 	/**
 	 * Queue a system notification (aside message) for a specific agent.
+	 *
+	 * Pushed to the aside queue for hookProvider draining and also broadcast
+	 * through CommChannel for real-time delivery to observing agents.
 	 */
 	async sendSystemNotification(agentId: string, text: string): Promise<void> {
 		const queue = this.#asideQueues.get(agentId) ?? [];
@@ -294,11 +251,18 @@ export class AgentRuntime {
 			timestamp: Date.now(),
 		});
 		this.#asideQueues.set(agentId, queue);
+		// Also route through CommChannel for real-time delivery
+		await this.#commChannel.send("system", `[System] ${text}`);
 	}
 
 	/** The communication bus for human steering and agent messaging. */
 	get ircBus(): IrcBus {
 		return this.#ircBus!;
+	}
+
+	/** The runtime-level CommChannel for inter-agent communication. */
+	get commChannel(): CommChannel {
+		return this.#commChannel;
 	}
 
 	/** The context pipeline for registering additional context sources. */
@@ -317,7 +281,7 @@ export class AgentRuntime {
 	 * 1. HookPipeline.trigger("agent:beforeSpawn")
 	 * 2. RoleProvider.resolve(spec)
 	 * 3. ContextPipeline.assemble(spec, phase, base)
-	 * 4. Build AgentLoopConfig hooks from IrcBus queues
+	 * 4. Build AgentLoopConfig hooks from CommChannel-backed queues
 	 * 5. AgentLauncher.launch(launchContext)
 	 * 6. HookPipeline.trigger("agent:afterSpawn")
 	 */
@@ -377,7 +341,7 @@ export class AgentRuntime {
 			throw err;
 		}
 
-		// 4. Build AgentLoopConfig hook providers from internal queues
+		// 4. Build AgentLoopConfig hook providers from CommChannel-backed queues
 		const hookProviders: LaunchContext["hookProviders"] = {
 			getAsideMessages: async () => {
 				const queue = this.#asideQueues.get(agentId);
@@ -415,6 +379,7 @@ export class AgentRuntime {
 				role: spec.role,
 			});
 		}
+
 		// 5. Build launch context and launch
 		const launchContext: LaunchContext = {
 			spec,
@@ -444,6 +409,9 @@ export class AgentRuntime {
 			});
 			throw err;
 		}
+
+		// 5.6 Register agent in the runtime-level CommChannel
+		this.#commChannel.addMember(agentId);
 
 		// 6. After-spawn hook
 		await this.#hookPipeline.trigger(

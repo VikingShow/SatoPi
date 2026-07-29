@@ -17,8 +17,12 @@ import type { Theme } from "../../theme/theme";
 import { renderAgentPanel } from "./agent-panel";
 import { type CommMessage, renderCommPanel } from "./comm-panel";
 import { type ContextPanelState, renderContextPanel } from "./context-panel";
+import { type ModelCostInfo, renderCostLine } from "./cost-panel";
 import { type GraphViewInput, renderGraphView } from "./graph-view";
 import { renderPhaseView } from "./phase-view";
+import { renderPlanPanel } from "./plan-view";
+import { type RoundtableViewState, renderRoundtableView } from "./roundtable-view";
+import { renderTaskPanel, type TaskPanelInput } from "./task-panel";
 
 // ============================================================================
 // Types
@@ -30,7 +34,14 @@ export interface DashboardInput {
 	messages: CommMessage[];
 	context: ContextPanelState;
 	graphView?: GraphViewInput;
+	taskPanel?: TaskPanelInput;
 	theme: Theme;
+	/** Per-million-token pricing for the active model, used to estimate cost. */
+	modelCost?: ModelCostInfo;
+	/** Raw plan.md content for the plan structure panel. */
+	planContent?: string;
+	/** Roundtable debate state — populated during plan debate phase. */
+	roundtable?: RoundtableViewState;
 }
 
 // ============================================================================
@@ -55,68 +66,95 @@ export function renderDashboard(input: DashboardInput): Component {
 	};
 }
 
-// ============================================================================
-// Layouts
-// ============================================================================
-
 function renderSingleColumn(input: DashboardInput, width: number): string[] {
 	const lines: string[] = [];
-	const { agents, swarm, messages, context, theme } = input;
+	const { agents, swarm, messages, context, theme, modelCost, planContent } = input;
 
-	lines.push(...renderPhaseView(swarm, theme));
+	lines.push(...renderPhaseView(swarm, theme, width));
+	lines.push(...renderPlanPanel(planContent, theme).render(width));
+	lines.push("");
 	lines.push("");
 	lines.push(...renderAgentPanel(agents, swarm, theme).render(width));
 	lines.push("");
+	if (input.roundtable) {
+		lines.push(...renderRoundtableView(input.roundtable, theme).render(width));
+		lines.push("");
+	}
 	lines.push(...renderCommPanel(messages, theme).render(width));
 	lines.push("");
 	lines.push(...renderContextPanel(context, theme).render(width));
+	if (input.taskPanel && input.taskPanel.todos.length > 0) {
+		lines.push(...renderTaskPanel(input.taskPanel, theme).render(width));
+		lines.push("");
+	}
+	lines.push("");
+	lines.push(renderCostLine(swarm.totalTokens, modelCost, theme));
 
 	return lines;
 }
 
 function renderTwoColumn(input: DashboardInput, width: number): string[] {
 	const lines: string[] = [];
-	const { agents, swarm, messages, context, theme } = input;
+	const { agents, swarm, messages, context, theme, planContent } = input;
 
 	const leftWidth = Math.floor(width * 0.45);
 	const rightWidth = width - leftWidth - 2;
 
 	// Phase bar (full width)
-	lines.push(...renderPhaseView(swarm, theme));
+	lines.push(...renderPhaseView(swarm, theme, width));
 	lines.push("");
-
-	// Left: Agent panel
+	lines.push(...renderPlanPanel(planContent, theme).render(width));
+	lines.push("");
 	const agentLines = renderAgentPanel(agents, swarm, theme).render(leftWidth);
 
-	// Right: Comm + Context stacked
-	const recentMsgs = messages.slice(0, 5);
-	const commLines = renderCommPanel(recentMsgs, theme).render(rightWidth);
-	const contextLines = renderContextPanel(context, theme).render(rightWidth);
+	// Right: Roundtable (during debate) or Comm + Context stacked
+	let rightLines: string[];
+	if (input.roundtable) {
+		const rtLines = renderRoundtableView(input.roundtable, theme).render(rightWidth);
+		const ctxLines = renderContextPanel(context, theme).render(rightWidth);
+		rightLines = [...rtLines, "", ...ctxLines];
+	} else {
+		const recentMsgs = messages.slice(0, 5);
+		const commLines = renderCommPanel(recentMsgs, theme).render(rightWidth);
+		const contextLines = renderContextPanel(context, theme).render(rightWidth);
+		rightLines = [...commLines, ...contextLines];
+	}
 
 	// Interleave
 	const maxLeft = agentLines.length;
-	const maxRight = Math.max(commLines.length, contextLines.length);
+	const maxRight = rightLines.length;
 	const spacer = "  ";
 
 	for (let i = 0; i < Math.max(maxLeft, maxRight); i++) {
 		const left = i < maxLeft ? agentLines[i] : "";
-		const right =
-			i < maxRight ? (i < commLines.length ? commLines[i] : (contextLines[i - commLines.length] ?? "")) : "";
+		const right = i < maxRight ? rightLines[i] : "";
 		lines.push(`${left.padEnd(leftWidth)}${spacer}${right}`);
 	}
-
+	// Task panel — full width below columns
+	if (input.taskPanel && input.taskPanel.todos.length > 0) {
+		lines.push("");
+		const taskLines = renderTaskPanel(input.taskPanel, theme).render(width);
+		lines.push(...taskLines);
+	}
 	return lines;
 }
 
 function renderCompact(input: DashboardInput, _width: number): string[] {
 	const lines: string[] = [];
-	const { agents, swarm, theme } = input;
+	const { agents, swarm, theme, modelCost } = input;
 
-	lines.push(...renderPhaseView(swarm, theme));
+	lines.push(...renderPhaseView(swarm, theme, _width));
 
 	const agentCount = agents.length > 0 ? agents.length : Object.keys(swarm.agents ?? {}).length;
 	const status = swarm.status ?? "idle";
 	lines.push(theme.fg("dim", `[${status}] phase=${swarm.phase ?? "idle"} agents=${agentCount}`));
+
+	// Condensed roundtable
+	if (input.roundtable) {
+		const rt = input.roundtable;
+		const convergeIcon = rt.converged ? theme.fg("success", "✓") : theme.fg("warning", "◌");
+		lines.push(theme.fg("accent", `  Roundtable: Round ${rt.currentRound}/${rt.totalRounds} ${convergeIcon}`));
+	}
 
 	if (agents.length > 0) {
 		for (const ref of agents) {
@@ -129,6 +167,9 @@ function renderCompact(input: DashboardInput, _width: number): string[] {
 			lines.push(`  ${glyph} ${agent.role ?? "agent"}`);
 		}
 	}
+
+	lines.push("");
+	lines.push(renderCostLine(swarm.totalTokens, modelCost, theme));
 
 	return lines;
 }

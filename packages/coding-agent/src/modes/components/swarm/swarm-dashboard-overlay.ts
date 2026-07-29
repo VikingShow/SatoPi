@@ -10,12 +10,15 @@ import type { Component } from "@satopi/pi-tui";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import type { WorkflowFsm } from "../../../swarm/core/workflow-fsm";
-import type { Theme } from "../../theme/theme";
-import { theme as appTheme } from "../../theme/theme";
+import { theme as appTheme, type Theme } from "../../theme/theme";
 import type { CommMessage } from "./comm-panel";
 import type { ContextPanelState } from "./context-panel";
+import type { ModelCostInfo } from "./cost-panel";
+import { startPhasePulse, stopPhasePulse } from "./phase-view";
+import type { RoundtableViewState } from "./roundtable-view";
 import type { DashboardInput } from "./swarm-dashboard";
 import { renderDashboard } from "./swarm-dashboard";
+import type { TaskPanelInput } from "./task-panel";
 
 // ============================================================================
 // SwarmDashboardOverlay
@@ -28,17 +31,25 @@ export class SwarmDashboardOverlay implements Component {
 	readonly #stateTracker: StateTrackerLike | null;
 	readonly #graphDefinition: GraphDefinitionLike | null;
 	readonly #theme: Theme;
+	readonly #modelCost: ModelCostInfo | undefined;
+	readonly #roundtableState: RoundtableViewState | undefined;
+	readonly #planContent: string | undefined;
 	#unsubscribe?: () => void;
 
 	constructor(deps: SwarmDashboardOverlayDeps) {
 		this.#stateTracker = deps.stateTracker ?? null;
 		this.#graphDefinition = deps.graphDefinition ?? null;
 		this.#theme = deps.theme ?? appTheme;
-
+		this.#roundtableState = deps.roundtableState;
+		this.#planContent = deps.planContent;
+		this.#modelCost = deps.modelCost;
 		// Subscribe to FSM phase transitions for live updates
 		this.#unsubscribe = deps.fsm?.onChange(() => {
 			this.onRequestRender?.();
 		});
+
+		// Start pulse animation for the current-phase highlight.
+		startPhasePulse(() => this.onRequestRender?.());
 	}
 
 	render(width: number): readonly string[] {
@@ -54,8 +65,8 @@ export class SwarmDashboardOverlay implements Component {
 	}
 
 	invalidate(): void {}
-
 	dispose(): void {
+		stopPhasePulse();
 		this.#unsubscribe?.();
 		this.#unsubscribe = undefined;
 	}
@@ -125,7 +136,30 @@ export class SwarmDashboardOverlay implements Component {
 			};
 		}
 
-		return { agents, swarm, messages, context, graphView, theme: this.#theme };
+		// Build task panel data from todos + graph edges
+		let taskPanel: TaskPanelInput | undefined;
+		const todos = swarm.todos;
+		if (todos && todos.length > 0) {
+			taskPanel = {
+				todos,
+				agents: swarm.agents,
+				dagEdges: this.#graphDefinition?.edges,
+				startedAt: typeof swarm.startedAt === "number" ? swarm.startedAt : undefined,
+			};
+		}
+
+		return {
+			agents,
+			swarm,
+			messages,
+			context,
+			graphView,
+			taskPanel,
+			theme: this.#theme,
+			modelCost: this.#modelCost,
+			planContent: this.#planContent,
+			roundtable: this.#roundtableState,
+		};
 	}
 }
 
@@ -157,4 +191,9 @@ export interface SwarmDashboardOverlayDeps {
 	stateTracker?: StateTrackerLike;
 	graphDefinition?: GraphDefinitionLike;
 	theme?: Theme;
+	modelCost?: ModelCostInfo;
+	/** Raw plan.md content for the plan structure panel. */
+	planContent?: string;
+	/** Roundtable debate state for the structured debate panel. */
+	roundtableState?: RoundtableViewState;
 }

@@ -9,15 +9,7 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../../agent/agent-profile";
-import type {
-	AgentAfterCompletePayload,
-	AgentBeforeSpawnPayload,
-	HookContext,
-	HookEvent,
-	HookPayloadMap,
-	HookRegistration,
-	WorkflowAfterPhasePayload,
-} from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 
 /**
@@ -36,20 +28,19 @@ export function createProfileHook(profileRegistry: ProfileRegistry): HookRegistr
 		priority: 0,
 		events: ["agent:beforeSpawn", "agent:afterComplete", "workflow:afterPhase"],
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:beforeSpawn — ensure profile exists
 				// -----------------------------------------------------------------
 				case "agent:beforeSpawn": {
-					const p = payload as unknown as AgentBeforeSpawnPayload;
-					const agentId = resolveAgentId(p, ctx);
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
-						logger.warn("[ProfileHook] agent:beforeSpawn missing agentId", { payload: p });
+						logger.warn("[ProfileHook] agent:beforeSpawn missing agentId", { payload });
 						return;
 					}
-					const name = p.name ?? agentId;
-					const archetype = p.archetype ?? "worker";
+					const name = payload.name ?? agentId;
+					const archetype = payload.archetype ?? "worker";
 					profileRegistry.getOrCreate({ profileId: agentId, name, archetype });
 					logger.debug("[ProfileHook] Profile ensured", { agentId, name });
 					return;
@@ -59,13 +50,12 @@ export function createProfileHook(profileRegistry: ProfileRegistry): HookRegistr
 				// agent:afterComplete — record task result
 				// -----------------------------------------------------------------
 				case "agent:afterComplete": {
-					const p = payload as unknown as AgentAfterCompletePayload;
-					const agentId = resolveAgentId(p, ctx);
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
-						logger.warn("[ProfileHook] agent:afterComplete missing agentId", { payload: p });
+						logger.warn("[ProfileHook] agent:afterComplete missing agentId", { payload });
 						return;
 					}
-					const success = p.success !== false;
+					const success = payload.success !== false;
 					profileRegistry.recordTaskCompleted(agentId, success);
 					logger.debug("[ProfileHook] Task completion recorded", {
 						agentId,
@@ -78,8 +68,7 @@ export function createProfileHook(profileRegistry: ProfileRegistry): HookRegistr
 				// workflow:afterPhase — record collaboration
 				// -----------------------------------------------------------------
 				case "workflow:afterPhase": {
-					const p = payload as unknown as WorkflowAfterPhasePayload;
-					const agentIds = p.agentIds ?? [];
+					const agentIds = payload.agentIds ?? [];
 					const filtered = agentIds.filter((v): v is string => typeof v === "string");
 					if (filtered.length > 0) {
 						profileRegistry.recordCollaboration(filtered);

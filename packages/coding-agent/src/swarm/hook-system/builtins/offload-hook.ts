@@ -10,7 +10,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { IOffloadManager } from "../../../offload/manager";
 import type { Chapter } from "../../core/state";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
+import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 
 // ---------------------------------------------------------------------------
@@ -41,19 +41,17 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 		events: ["agent:afterComplete", "workflow:beforePhase", "roundtable:afterRound"],
 		phases: ACTIVE_PHASES,
 
-		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
-			const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
-
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:afterComplete — L1 summarize
 				// -----------------------------------------------------------------
 				case "agent:afterComplete": {
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
 						logger.warn("[OffloadHook] agent:afterComplete missing agentId");
 						return;
 					}
-					// payload is AgentAfterCompletePayload
 					await offloadManager.summarizeL1(agentId, payload);
 					logger.debug("[OffloadHook] L1 summarize triggered", { agentId });
 					return;
@@ -74,11 +72,11 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 				// roundtable:afterRound — L1 summarize
 				// -----------------------------------------------------------------
 				case "roundtable:afterRound": {
+					const agentId = resolveAgentId(payload, ctx);
 					if (!agentId) {
 						logger.warn("[OffloadHook] roundtable:afterRound missing agentId");
 						return;
 					}
-					// payload is RoundtableAfterRoundPayload
 					await offloadManager.summarizeL1(agentId, payload);
 					logger.debug("[OffloadHook] Roundtable L1 summarize", { agentId });
 					return;

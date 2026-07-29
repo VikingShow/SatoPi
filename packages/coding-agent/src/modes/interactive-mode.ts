@@ -59,6 +59,7 @@ import { KeybindingsManager } from "../config/keybindings";
 import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { isSettingsInitialized, onStatusLineSessionAccentChanged, Settings, settings } from "../config/settings";
 import { clearClaudePluginRootsCache } from "../discovery/helpers";
+import { generateDiffString } from "../edit/diff";
 import type {
 	AutocompleteProviderFactory,
 	ContextUsage,
@@ -140,7 +141,7 @@ import type { EvalExecutionComponent } from "./components/eval-execution";
 import type { HookEditorComponent } from "./components/hook-editor";
 import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
-import { PlanReviewOverlay } from "./components/plan-review-overlay";
+import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import type { ToolExecutionHandle } from "./components/tool-execution";
@@ -1437,23 +1438,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.addMessageToChat(message, options);
 	}
 
-	/**
-	 * Applaud keywords that trigger Curtain completion when the swarm bridge
-	 * is in "curtain" phase awaiting human confirmation.
-	 */
-	static readonly APPLAUD_KEYWORDS: Record<string, true> = {
-		applaud: true,
-		"👏": true,
-		完成: true,
-		approve: true,
-		done: true,
-		complete: true,
-	};
-
-	static #isApplaudInput(text: string): boolean {
-		const trimmed = text.trim().toLowerCase();
-		return Object.keys(InteractiveMode.APPLAUD_KEYWORDS).some(kw => trimmed === kw || trimmed.includes(kw));
-	}
 	startPendingSubmission(input: {
 		text: string;
 		images?: ImageContent[];
@@ -1462,13 +1446,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		display?: boolean;
 		streamingBehavior?: "steer" | "followUp";
 	}): SubmittedUserInput {
-		// Intercept applaud when swarm Curtain is awaiting human confirmation
-		const bridge = this.session.embeddedSwarm;
-		if (bridge && bridge.currentPhase === "curtain" && InteractiveMode.#isApplaudInput(input.text)) {
-			bridge.applaud();
-			this.showStatus("👏 Swarm Curtain complete.");
-			return { text: input.text, cancelled: true, started: false };
-		}
 		const submission: SubmittedUserInput = {
 			text: input.text,
 			images: input.images,
@@ -2575,7 +2552,11 @@ export class InteractiveMode implements InteractiveModeContext {
 			onFeedbackChange?: (feedback: string) => void;
 			initialIndex?: number;
 		},
-		extra?: { slider?: HookSelectorSlider; radioGroup?: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void } },
+		extra?: {
+			slider?: HookSelectorSlider;
+			radioGroup?: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void };
+			debateAnnotations?: DebateAnnotations;
+		},
 	): Promise<string | undefined> {
 		this.#hidePlanReview();
 		const { promise, resolve } = Promise.withResolvers<string | undefined>();
@@ -2597,6 +2578,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				initialIndex: dialogOptions?.initialIndex,
 				slider: extra?.slider,
 				radioGroup: extra?.radioGroup,
+				debateAnnotations: extra?.debateAnnotations,
 				externalEditorLabel: this.keybindings.getDisplayString("app.editor.external") || undefined,
 			},
 			{
@@ -2620,6 +2602,116 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.setFocus(overlay);
 		this.ui.requestRender();
 		return promise;
+	}
+
+	/**
+	 * Show the PlanReviewOverlay for swarm Script phase plan review.
+	 * Presents the plan with agent-count slider, agent-type radio group,
+	 * and "Launch Stage" / "Revise Plan" / "Cancel" options.
+	 * Calls `confirmScript()` on the swarm bridge when "Launch Stage" is selected.
+	 */
+	async showSwarmPlanReview(planContent: string): Promise<string | undefined> {
+		const swarmBridge = this.session.embeddedSwarm;
+		if (!swarmBridge) return undefined;
+
+		// Agent-count slider — same logic as handlePlanApproval
+		let selectedAgentCount = 0;
+		let selectedAgentType: "swift" | "persistent" = "swift";
+		const maxWorkers = (this.session.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4;
+		const maxRounds = (this.session.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3;
+		const loopConfig: LoopSwarmConfig = {
+			maxIterations: maxRounds,
+			autoRetry: true,
+			humanEscalation: true,
+			enableDeliberation: false,
+			agents: {
+				initial: maxWorkers,
+				min: 1,
+				max: maxWorkers,
+				auto: false,
+				maxRounds: maxRounds,
+				roundsConvergenceThreshold: 2,
+			},
+			debate: { enabled: false, maxRounds: 2 },
+			planDebate: { enabled: false, agentCount: 2, maxRounds: 2, convergenceThreshold: 2 },
+			convergenceThreshold: 2,
+			iterationTimeoutMs: 300_000,
+		};
+		const rec = await new TaskComplexityAnalyzer().analyze(planContent, loopConfig);
+		const count = Math.max(1, rec.agents);
+		const segments = [count - 2, count - 1, count, count + 1, count + 2]
+			.filter(n => n >= 1)
+			.map(n => ({ label: String(n) }));
+		selectedAgentCount = count;
+		const recIndex = segments.findIndex(s => Number(s.label) === count);
+		const slider: HookSelectorSlider = {
+			caption: "agents",
+			segments,
+			index: Math.max(0, recIndex),
+			onChange: index => {
+				selectedAgentCount = Number(segments[index]!.label);
+			},
+		};
+
+		const choice = await this.showPlanReview(
+			planContent,
+			"Swarm — Script Review",
+			["Launch Stage", "Revise Plan", "Cancel"],
+			{
+				helpText: "esc cancel",
+			},
+			{
+				slider,
+				radioGroup: {
+					labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
+					selectedIndex: 0,
+					onChange: index => {
+						selectedAgentType = index === 0 ? "swift" : "persistent";
+					},
+				},
+			},
+		);
+
+		if (choice === "Launch Stage") {
+			swarmBridge.setAgentConfig({ agentType: selectedAgentType, agentCount: selectedAgentCount });
+			const errors = await swarmBridge.confirmScript();
+			for (const error of errors) {
+				this.showError(error);
+			}
+		}
+
+		return choice;
+	}
+
+	/**
+	 * Compute and surface a projected cost estimate in the plan-review overlay.
+	 * Uses a rough formula: plan tokens × agent count × round multiplier.
+	 */
+	#updatePlanCostEstimate(planContent: string, agentCount: number): void {
+		const over = this.#planReviewOverlay;
+		if (!over) return;
+
+		const modelCost = this.session.model?.cost;
+		if (!modelCost) {
+			over.setCostLine("");
+			return;
+		}
+
+		// Rough token estimate: ~4 chars per token, each agent processes plan
+		// input + generates ~half that as output, across ~3 rounds
+		const planTokens = Math.max(1, Math.round(planContent.length / 4));
+		const totalTokens = planTokens * agentCount * 3;
+		const blendedRate = (modelCost.input + modelCost.output) / 2;
+		const cost = (totalTokens / 1_000_000) * blendedRate;
+
+		const tokStr =
+			totalTokens >= 1_000_000
+				? `${(totalTokens / 1_000_000).toFixed(1)}M`
+				: totalTokens >= 1000
+					? `${(totalTokens / 1000).toFixed(0)}K`
+					: String(totalTokens);
+		const costStr = cost < 0.01 ? "< $0.01" : `~$${cost.toFixed(2)}`;
+		over.setCostLine(`Est. tokens: ${tokStr} · Est. cost: ${costStr}`);
 	}
 
 	#hidePlanReview(): void {
@@ -3451,11 +3543,12 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		const planFilePath = details.planFilePath || this.planModePlanFilePath || (await this.#getPlanFilePath());
 		this.planModePlanFilePath = planFilePath;
-		const planContent = await this.#readPlanFile(planFilePath);
-		if (!planContent) {
+		const rawPlanContent = await this.#readPlanFile(planFilePath);
+		if (!rawPlanContent) {
 			this.showError(`Plan file not found at ${planFilePath}`);
 			return;
 		}
+		let displayPlan = rawPlanContent;
 
 		const contextUsage = this.#getPlanApprovalContextUsage();
 		const keepContextLabel = this.#formatKeepContextLabel(contextUsage);
@@ -3514,7 +3607,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				convergenceThreshold: 2,
 				iterationTimeoutMs: 300_000,
 			};
-			const rec = await new TaskComplexityAnalyzer().analyze(planContent, loopConfig);
+			const rec = await new TaskComplexityAnalyzer().analyze(displayPlan, loopConfig);
 			const count = Math.max(1, rec.agents);
 			// Build segments [rec-2, rec-1, rec, rec+1, rec+2], clamped to ≥1
 			const segments = [count - 2, count - 1, count, count + 1, count + 2]
@@ -3528,8 +3621,34 @@ export class InteractiveMode implements InteractiveModeContext {
 				index: Math.max(0, recIndex),
 				onChange: index => {
 					selectedAgentCount = Number(segments[index]!.label);
+					this.#updatePlanCostEstimate(displayPlan, selectedAgentCount);
 				},
 			};
+		}
+
+		// Compute initial cost estimate for the default agent count
+		if (swarmBridge) {
+			this.#updatePlanCostEstimate(displayPlan, selectedAgentCount);
+		}
+
+		// Run plan debate if swarm bridge supports it. The debate returns a
+		// refined plan + round data; we surface annotations in the overlay
+		// so the operator can review what changed before approving.
+		let debateAnnotations: DebateAnnotations | undefined;
+		const debateResult = await swarmBridge?.debatePlan?.(displayPlan);
+		if (debateResult) {
+			// Compute line-level diff for annotation display
+			const diffResult = generateDiffString(debateResult.draftPlan, debateResult.refinedPlan);
+			debateAnnotations = {
+				converged: debateResult.converged,
+				roundCount: debateResult.rounds.length,
+				similarities: debateResult.rounds.map(r => r.similarity),
+				diffText: diffResult.diff,
+			};
+			// Show the refined plan in the overlay (operator reviews the debate output)
+			displayPlan = debateResult.refinedPlan;
+			// Persist refined plan to disk so approval picks up the debated version
+			await Bun.write(this.#resolvePlanFilePath(planFilePath), debateResult.refinedPlan);
 		}
 		// The overlay now owns the dynamic, focus-aware help line; the caller only
 		// supplies the trailing cancel hint.
@@ -3541,7 +3660,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		let feedback = "";
 
 		const choice = await this.showPlanReview(
-			planContent,
+			displayPlan,
 			"Plan mode - next step",
 			["Approve and execute", "Approve and compact context", keepContextLabel, "Refine plan"],
 			{
@@ -3567,6 +3686,7 @@ export class InteractiveMode implements InteractiveModeContext {
 							},
 						}
 					: undefined,
+				debateAnnotations,
 			},
 		);
 
@@ -4396,14 +4516,19 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Use real swarm state from the embedded bridge when active
 		const bridge = this.session.embeddedSwarm;
+		const currentModel = this.session.model;
+		const modelCost = currentModel?.cost
+			? { input: currentModel.cost.input, output: currentModel.cost.output }
+			: undefined;
 		const overlay = new SwarmDashboardOverlay(
 			bridge
 				? {
 						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
 						graphDefinition: bridge instanceof GraphRunner ? bridge.graph : undefined,
+						modelCost,
 					}
-				: {},
+				: { modelCost },
 		);
 
 		overlay.onClose = () => this.#hideSwarmDashboard();

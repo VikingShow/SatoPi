@@ -230,7 +230,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 // ============================================================================
 
 import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../hook-system/types";
+import type { HandlerArgs, HookContext, HookEvent, HookRegistration } from "../hook-system/types";
 
 /** Helper to create a hook that records events it receives. */
 function makeRecordingHook(name: string, priority: number, events: HookEvent[], log: string[]): HookRegistration {
@@ -238,7 +238,7 @@ function makeRecordingHook(name: string, priority: number, events: HookEvent[], 
 		name,
 		priority,
 		events,
-		handler: async <K extends HookEvent>(event: K, _payload: HookPayloadMap[K], _ctx: HookContext) => {
+		handler: async ({ event }: HandlerArgs, _ctx: HookContext) => {
 			log.push(event);
 		},
 	};
@@ -469,7 +469,7 @@ describe("Hook event trigger E2E (real integration points)", () => {
 			name: "e2e-spy",
 			priority: 0,
 			events: ALL_EVENTS,
-			handler: async event => {
+			handler: async ({ event }) => {
 				fired.push(event);
 			},
 		});

@@ -204,17 +204,15 @@ export interface VotePayload {
 /**
  * Typed mapping from hook events to their expected payload shapes.
  *
- * Used by the generic {@link HookRegistration.handler} and
- * {@link HookPipeline.trigger} to provide compile-time type safety.
+ * Used by the {@link HookPipeline.trigger} and the discriminated
+ * {@link HandlerArgs} union to provide compile-time type safety.
  *
  * Usage:
  * ```ts
- * // Handler receives correctly-typed payload based on the event switch:
- * handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx) {
- *   if (event === "agent:beforeSpawn") {
- *     // payload is AgentBeforeSpawnPayload — agentId, role, task are all string
- *   }
- * }
+ * // The trigger method maps event types to their payloads:
+ * pipeline.trigger("agent:beforeSpawn", {
+ *   agentId: "a1", role: "worker", task: "do it"
+ * }, ctx);
  * ```
  */
 export type HookPayloadMap = {
@@ -294,6 +292,53 @@ export interface HookContext {
 // Registration
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// HandlerArgs — discriminated union for typed handler dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Discriminated union mapping every hook event to its typed payload.
+ *
+ * Handler functions receive this union — destructure and switch on `event`
+ * to narrow the payload type without casts:
+ * ```ts
+ * handler({ event, payload }, ctx) {
+ *   if (event === "agent:beforeSpawn") {
+ *     // payload is AgentBeforeSpawnPayload — no cast needed
+ *   }
+ * }
+ * ```
+ */
+export type HandlerArgs =
+	| { event: "workflow:beforePhase"; payload: WorkflowBeforePhasePayload }
+	| { event: "workflow:afterPhase"; payload: WorkflowAfterPhasePayload }
+	| { event: "workflow:phaseTimeout"; payload: WorkflowPhaseTimeoutPayload }
+	| { event: "agent:beforeSpawn"; payload: AgentBeforeSpawnPayload }
+	| { event: "agent:afterSpawn"; payload: AgentAfterSpawnPayload }
+	| { event: "agent:afterComplete"; payload: AgentAfterCompletePayload }
+	| { event: "agent:onError"; payload: AgentOnErrorPayload }
+	| { event: "context:beforeInjection"; payload: ContextLifecyclePayload }
+	| { event: "context:afterInjection"; payload: ContextLifecyclePayload }
+	| { event: "context:beforeCompaction"; payload: ContextLifecyclePayload }
+	| { event: "context:afterCompaction"; payload: ContextLifecyclePayload }
+	| { event: "offload:afterL1"; payload: OffloadAfterL1Payload }
+	| { event: "offload:beforeFlush"; payload: OffloadFlushPayload }
+	| { event: "offload:afterFlush"; payload: OffloadFlushPayload }
+	| { event: "comm:beforeMessage"; payload: CommPayload }
+	| { event: "comm:afterMessage"; payload: CommPayload }
+	| { event: "comm:beforeBroadcast"; payload: CommPayload }
+	| { event: "comm:afterBroadcast"; payload: CommPayload }
+	| { event: "roundtable:beforeRound"; payload: RoundtableBeforeRoundPayload }
+	| { event: "roundtable:afterRound"; payload: RoundtableAfterRoundPayload }
+	| { event: "roundtable:converged"; payload: RoundtableConvergedPayload }
+	| { event: "vote:start"; payload: VotePayload }
+	| { event: "vote:tally"; payload: VotePayload }
+	| { event: "vote:result"; payload: VotePayload };
+
+// ---------------------------------------------------------------------------
+// Registration
+// ---------------------------------------------------------------------------
+
 /**
  * A hook registration — the contract between a hook implementation
  * and the HookPipeline.
@@ -302,8 +347,15 @@ export interface HookContext {
  * restrict themselves to specific `phases`. Return `false` from the
  * handler to short-circuit remaining hooks for this trigger.
  *
- * Phase B2: the handler is generic over the event type, so payloads
- * are correctly typed based on the event being handled.
+ * The handler receives a discriminated union `{ event, payload }` — use
+ * `switch (event)` or `if (event === "...")` to narrow the payload type:
+ * ```ts
+ * handler({ event, payload }, ctx) {
+ *   if (event === "agent:beforeSpawn") {
+ *     // payload is AgentBeforeSpawnPayload
+ *   }
+ * }
+ * ```
  */
 export interface HookRegistration {
 	/** Unique hook name (used for unregister / debugging) */
@@ -315,11 +367,11 @@ export interface HookRegistration {
 	/** Optional phase filter — if set, the hook only fires during these phases */
 	readonly phases?: Chapter[];
 	/**
-	 * Hook handler — generic over the triggered event.
+	 * Hook handler — receives a discriminated `{ event, payload }` union.
 	 *
 	 * Use `switch (event)` to narrow the payload type:
 	 * ```ts
-	 * handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx) {
+	 * handler({ event, payload }, ctx) {
 	 *   switch (event) {
 	 *     case "agent:beforeSpawn":
 	 *       // payload is AgentBeforeSpawnPayload
@@ -328,14 +380,9 @@ export interface HookRegistration {
 	 * }
 	 * ```
 	 *
-	 * @param event   - The event being triggered.
-	 * @param payload - Event-specific payload (typed via HookPayloadMap).
-	 * @param ctx     - Shared service context.
+	 * @param args  - Discriminated union of `{ event, payload }`.
+	 * @param ctx   - Shared service context.
 	 * @returns `void` to continue, `false` to short-circuit remaining hooks.
 	 */
-	handler<K extends HookEvent>(
-		event: K,
-		payload: HookPayloadMap[K],
-		ctx: HookContext,
-	): Promise<undefined | undefined | boolean>;
+	handler(args: HandlerArgs, ctx: HookContext): Promise<void | undefined | boolean>;
 }

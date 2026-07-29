@@ -12,7 +12,7 @@ import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { IOffloadManager } from "../../offload/manager";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
-import type { RunManager, ScriptManager, SteeringSink } from "../core/services";
+import type { RunManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
 import type { ExperienceStore } from "../curtain/experience";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
@@ -48,7 +48,6 @@ export interface SessionServices {
 	stateTracker: StateTracker;
 	activityLogger: ActivityLogger;
 	runManager: RunManager;
-	scriptManager: ScriptManager;
 	steeringSink: SteeringSink;
 	abortController: AbortController;
 	sessionManager?: SwarmSessionManager;

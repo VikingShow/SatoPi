@@ -94,6 +94,19 @@ export interface PlanReviewOverlayCallbacks {
 	onFeedbackChange?: (feedback: string) => void;
 }
 
+/** Debate annotation data surfaced in the plan-review overlay.
+ *  Populated when plan debate ran before the overlay was shown. */
+export interface DebateAnnotations {
+	/** Whether the debate converged (similarity stabilized for N rounds). */
+	converged: boolean;
+	/** Number of rounds that ran. */
+	roundCount: number;
+	/** Convergence similarity score per round (null for round 1). */
+	similarities: (number | null)[];
+	/** Unified-diff text between draft and refined plan. */
+	diffText: string;
+}
+
 export interface PlanReviewOverlayOptions {
 	/** Prompt rendered above the options (e.g. "Plan mode - next step"). */
 	promptTitle?: string;
@@ -111,6 +124,10 @@ export interface PlanReviewOverlayOptions {
 	radioGroup?: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void };
 	/** Display label for the external-editor key, surfaced in the footer help. */
 	externalEditorLabel?: string;
+	debateAnnotations?: DebateAnnotations;
+	/** Optional cost estimate line (e.g. estimated token cost), rendered
+	 *  below the slider when present. Updated by the caller. */
+	costLine?: string;
 }
 
 /** Default trailing footer hint when the caller supplies none. */
@@ -138,6 +155,8 @@ export class PlanReviewOverlay implements Component {
 	#selectedIndex: number;
 	#slider: HookSelectorSlider | undefined;
 	#sliderIndex: number;
+	#costLine: string | undefined;
+	#debateAnnotations: DebateAnnotations | undefined;
 
 	#focus: Focus = "actions";
 	#tocCursor = 0;
@@ -185,11 +204,17 @@ export class PlanReviewOverlay implements Component {
 			this.#sliderIndex = 0;
 		}
 		this.#radioGroup = options.radioGroup;
+		this.#costLine = options.costLine;
+		this.#debateAnnotations = options.debateAnnotations;
 		this.#input = new Input();
 		this.#input.setUseTerminalCursor(false);
 		this.#input.onSubmit = value => this.#submitAnnotation(value);
-		this.#input.onEscape = () => this.#exitAnnotate();
 		this.#setSections(planContent);
+	}
+
+	/** Update the cost estimate line (e.g. when agent-count slider changes). */
+	setCostLine(costLine: string): void {
+		this.#costLine = costLine;
 	}
 
 	invalidate(): void {
@@ -643,11 +668,6 @@ export class PlanReviewOverlay implements Component {
 		this.#input.setValue("");
 	}
 
-	#exitAnnotate(): void {
-		this.#annotating = false;
-		this.#input.setValue("");
-	}
-
 	#recomputeFeedback(): void {
 		const annotated = this.#sections.filter(section => section.level >= 1 && section.annotations.length > 0);
 		if (annotated.length === 0 && this.#deleted.length === 0) {
@@ -849,6 +869,43 @@ export class PlanReviewOverlay implements Component {
 		return [theme.fg("dim", this.#buildHelp())];
 	}
 
+	/** Render a compact debate summary banner. Returns empty when no debate
+	 *  annotations were supplied. */
+	#renderDebateAnnotationLines(innerWidth: number): string[] {
+		const da = this.#debateAnnotations;
+		if (!da) return [];
+		const maxWidth = Math.max(20, innerWidth - 4);
+		const prefix = "▐ ";
+		const lines: string[] = [];
+
+		// Status line
+		const sims = da.similarities
+			.filter((s): s is number => s !== null)
+			.map(s => s.toFixed(2))
+			.join(" → ");
+		const statusIcon = da.converged ? "✓" : "⚠";
+		const statusColor = da.converged ? "success" : "warning";
+		const statusText = da.converged ? "converged" : "max rounds";
+		const statusLine = `${prefix}Debate ${statusIcon} ${statusText} after ${da.roundCount} round${da.roundCount > 1 ? "s" : ""} (similarity: ${sims})`;
+		lines.push(theme.fg(statusColor, truncateToWidth(statusLine, maxWidth)));
+
+		// Diff summary: count changed lines
+		const diffLines = da.diffText.split("\n");
+		const added = diffLines.filter(l => l.startsWith("+") && !l.startsWith("+++")).length;
+		const removed = diffLines.filter(l => l.startsWith("-") && !l.startsWith("---")).length;
+		if (added > 0 || removed > 0) {
+			const parts: string[] = [];
+			if (added > 0) parts.push(theme.fg("success", `+${added}`));
+			if (removed > 0) parts.push(theme.fg("error", `-${removed}`));
+			const diffLine = `${prefix}Refined plan: ${parts.join(" ")} lines changed`;
+			lines.push(truncateToWidth(diffLine, maxWidth));
+		} else {
+			lines.push(
+				theme.fg("muted", truncateToWidth(`${prefix}No substantive changes — plan was already strong`, maxWidth)),
+			);
+		}
+		return lines;
+	}
 	render(width: number): readonly string[] {
 		const termHeight = process.stdout.rows || 40;
 		const sidebarShown = this.#sidebarVisible(width);
@@ -857,15 +914,23 @@ export class PlanReviewOverlay implements Component {
 		const innerWidth = Math.max(1, width - 4);
 		const bodyContentWidth = sidebarShown ? splitBodyWidth(width, sidebarWidth) : innerWidth;
 
-		const sliderLines = this.#renderSliderLines();
+		const debateLines = this.#renderDebateAnnotationLines(innerWidth);
 		const radioGroupLines = this.#renderRadioGroupLines();
 		const optionLines = this.#renderOptionLines();
 		const promptLines = this.#promptTitle ? [theme.bold(theme.fg("accent", this.#promptTitle))] : [];
 		const footerLines = this.#renderFooterLines(innerWidth);
+		const sliderLines = this.#renderSliderLines();
+		const costLines = this.#costLine ? [theme.fg("dim", this.#costLine)] : [];
 
-		// Chrome rows: top border, two dividers, bottom border, plus the
 		const chrome =
-			4 + promptLines.length + sliderLines.length + radioGroupLines.length + optionLines.length + footerLines.length;
+			4 +
+			debateLines.length +
+			promptLines.length +
+			sliderLines.length +
+			costLines.length +
+			radioGroupLines.length +
+			optionLines.length +
+			footerLines.length;
 		const regionRows = Math.max(MIN_BODY_ROWS, termHeight - chrome);
 
 		const bodyLines = this.#buildBody(bodyContentWidth);
@@ -902,8 +967,12 @@ export class PlanReviewOverlay implements Component {
 			}
 			out.push(divider(width));
 		}
+		// Debate annotations banner (between body and actions)
+		for (const line of debateLines) out.push(row(line, width));
+		if (debateLines.length > 0) out.push(divider(width));
 		for (const line of promptLines) out.push(row(line, width));
 		for (const line of sliderLines) out.push(row(line, width));
+		for (const line of costLines) out.push(row(line, width));
 		for (const line of radioGroupLines) out.push(row(line, width));
 		for (let i = 0; i < optionLines.length; i++) {
 			this.#optionClickRows.set(out.length, i);

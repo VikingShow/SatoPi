@@ -57,7 +57,6 @@ export async function createSwarmSession(
 	if (sessionManager) {
 		services.stateTracker.setSessionManager(sessionManager);
 		services.activityLogger.setSessionManager(sessionManager);
-		services.scriptManager.setSessionManager?.(sessionManager);
 
 		// Seed the in-memory StateTracker from the persisted snapshot.
 		const snapshot = await SwarmSessionManager.readLatestState(swarmDir);
