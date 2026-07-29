@@ -451,7 +451,7 @@ export class WelcomeComponent implements Component {
  * SatoPi logo — meta-π (v4): 25-char wide, wider outer ring, three visual layers:
  *
  *   ring  — circle outline of π chars, thickness varies by row:
- *             arc(11π) → shoulder(3π) → side(3π)
+ *             arc(11π) → shoulder(2π) → side(2π)
  *   fill  — · chars fill ring interior, giving the disc a solid presence
  *   inner — large π: bar(9π) protrudes 1 col past each leg(3π)
  *             bar cols 8-16,  left leg cols 9-11,  right leg cols 13-15
@@ -462,12 +462,12 @@ export class WelcomeComponent implements Component {
  */
 export const PI_LOGO = [
 	"       πππππππππππ       ", //  row 0 — top arc       11π (indent 7)
-	"     πππ·········πππ     ", //  row 1 — shoulder 3π + 9· fill
-	"   πππ··πππππππππ··πππ   ", //  row 2 — 3π side + 2· + 9π bar + 2· + 3π side
-	"   πππ···πππ·πππ···πππ   ", //  row 3 — 3π side + 3· + 3π leg + · + 3π leg + 3· + 3π side
-	"   πππ···πππ·πππ···πππ   ", //  row 4
-	"   πππ···πππ·πππ···πππ   ", //  row 5
-	"     πππ·········πππ     ", //  row 6 — shoulder 3π + 9· fill
+	"     ππ···········ππ     ", //  row 1 — shoulder 2π + 11· fill
+	"    ππ··πππππππππ··ππ    ", //  row 2 — 2π side + 2· + 9π bar + 2· + 2π side
+	"   ππ····ππ···ππ····ππ   ", //  row 3 — 2π side + 4· + 2π leg + · + 2π leg + 4· + 2π side
+	"   ππ····ππ···ππ····ππ   ", //  row 4
+	"    ππ···ππ···ππ···ππ    ", //  row 5 — 2π side + 3· + 3π leg + · + 3π leg + 3· + 2π side
+	"     ππ···········ππ     ", //  row 6 — shoulder 2π + 11· fill
 	"       πππππππππππ       ", //  row 7 — bottom arc    11π (indent 7)
 ];
 
