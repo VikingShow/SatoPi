@@ -8259,6 +8259,7 @@ export class AgentSession {
 
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
+		const profileRegistry = await ProfileRegistry.load(process.cwd());
 		const bridge = new EmbeddedSwarmBridge(
 			{
 				workspace: process.cwd(),
