@@ -125,6 +125,8 @@ export interface ISwarmOrchestrator {
 	readonly currentPhase: Chapter | null;
 	readonly isRunning: boolean;
 	readonly runtime: AgentRuntime;
+	/** Whether the Stage phase has been started (confirmScript was called and succeeded). */
+	readonly stageStarted: boolean;
 }
 export type SwarmEventCallback = (event: SwarmPhaseEvent | SwarmAgentEvent) => void;
 
@@ -255,6 +257,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#lifecyclePromise: Promise<void> | null = null;
 	/** Resolver for #lifecyclePromise — set when a phase lifecycle is in flight. */
 	#lifecycleResolve: (() => void) | null = null;
+	/** Set to true when confirmScript() successfully starts the Stage phase. */
+	#stageStarted = false;
 
 	constructor(config: EmbeddedSwarmConfig, listener: SwarmEventCallback) {
 		this.#config = config;
@@ -747,6 +751,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			phase: "stage",
 			subStatus: stageEnterResult.initialUIMessage ?? "executing",
 		});
+		this.#stageStarted = true;
 
 		// Start async phase lifecycle loop (stage → curtain → idle)
 		const { promise: lifecyclePromise, resolve: lifecycleResolve } = Promise.withResolvers<void>();
@@ -826,5 +831,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 	get isRunning(): boolean {
 		return !this.#disposed && (this.#fsm?.state.running ?? false);
+	}
+	get stageStarted(): boolean {
+		return this.#stageStarted;
 	}
 }

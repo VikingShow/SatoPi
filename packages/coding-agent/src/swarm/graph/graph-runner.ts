@@ -419,6 +419,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	async confirmScript(_opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]> {
 		await this.#fsm.transition("stage", { reason: "graph execution start" });
 		this.#abortController = new AbortController();
+		this.#graphStageStarted = true;
 
 		// Build CheckpointStore adapter wrapping SwarmSessionManager.
 		const sessionManager = this.#sessionManager;
@@ -619,6 +620,11 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	}
 	get isRunning(): boolean {
 		return !this.#disposed && (this.#fsm?.state.running ?? false);
+	}
+	/** Whether confirmScript() has started Stage execution. */
+	#graphStageStarted = false;
+	get stageStarted(): boolean {
+		return this.#graphStageStarted;
 	}
 
 	get runtime(): AgentRuntime {

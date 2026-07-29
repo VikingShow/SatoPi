@@ -4939,9 +4939,9 @@ export class AgentSession {
 	}
 
 	/** `afterToolCall` hook: detect ask-tool "Launch Stage" selection.
-	 *  confirmScript() is now called inside the PlanReviewOverlay flow
-	 *  (showSwarmPlanReview), so this hook only handles legacy ask-dialog
-	 *  paths where the overlay was not shown. */
+	 *  Primary path: PlanReviewOverlay (showSwarmPlanReview) calls confirmScript()
+	 *  before this hook fires. Fallback: when PlanReviewOverlay wasn't shown
+	 *  (bridge not ready, TUI routing missed), this hook calls confirmScript(). */
 	#swarmAfterToolCall(ctx: AfterToolCallContext): void {
 		if (ctx.toolCall.name !== "ask" || ctx.isError) return;
 		const details = ctx.result.details as AskToolDetails | undefined;
@@ -4952,8 +4952,14 @@ export class AgentSession {
 		const selected = details.selectedOptions ?? details.results?.flatMap(r => r.selectedOptions) ?? [];
 		const isLegacyLaunch = selected.includes("Launch Stage");
 		if (!isLaunchIntent && !isLegacyLaunch) return;
-		// confirmScript() is called inside showSwarmPlanReview when the
-		// PlanReviewOverlay is used. This hook is a no-op for that path.
+		// Fallback path: if PlanReviewOverlay didn't handle it (bridge not ready yet,
+		// or TUI routing missed the swarm path), call confirmScript() here.
+		const bridge = this.#embeddedSwarm;
+		if (bridge && !bridge.stageStarted) {
+			bridge.confirmScript().catch(err =>
+				logger.error("Swarm confirmScript failed from afterToolCall fallback", { error: String(err) }),
+			);
+		}
 	}
 
 	#extractTtsrRuleNames(details: unknown): string[] {
