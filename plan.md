@@ -1,40 +1,31 @@
-# Plan: Refactor `packages/utils/src/logger.ts` — Split Logging & Timing
+# Plan: Split monolithic logger.ts into log-core + timing
 
 ## Overview
-`logger.ts` (673 lines) conflates three concerns: Winston-based structured logging, startup debug markers, and hierarchical performance timing with module-load graph rendering. Split it into focused modules while preserving the existing public API (`logger.*` namespace) and direct module-path imports (`@satopi/pi-utils/logger`).
+Split `packages/utils/src/logger.ts` (673 lines) into two focused modules — `log-core.ts` (Winston-based logging) and `timing.ts` (span profiling) — under a `logger/` directory, with a thin backward-compatible shim preserving the existing namespace API and direct subpath imports.
 
-## Phase 1: Extract Timing Module
-**Contract:** New `timing.ts` exports every timing-related symbol currently in `logger.ts`; `logger.ts` re-exports them unchanged. No consumer sees a difference.
+## Phase 1: Extract log-core and timing modules
+**Contract:** `logger/log-core.ts` exports logging functions; `logger/timing.ts` exports timing functions; `logger/index.ts` barrel re-exports both; `logger.ts` re-exports from `./logger/index.ts`.
 
-- [ ] **Task: Create `timing.ts` with all timing infrastructure**
-  - Files: `packages/utils/src/timing.ts`
-  - Change: Move Span interface, `time()`, `startTiming()`, `endTiming()`, `printTimings()`, `openSpanPath()`, `recordModuleLoadSpan()`, `timingModeIncludes()`, `shouldExitAfterTimings()`, `startupMarker()`, and all private helpers (durationOf, selfTimeOf, fmtMs, printSpan, printModuleLoadSummary, buildModuleTimingGraph, compareModuleNodes, renderModuleTimingNode, isParallel, spliceModuleLoadBuffer, shortenLoadPath, isModuleLoadSpan) from `logger.ts` into `timing.ts`. Also move `ModuleTimingNode` interface, module-load constants, and `LOGGED_TIMING_THRESHOLD_MS`.
-  - Acceptance: `timing.ts` compiles independently; imports from `./timing-buffer` and `node:async_hooks` / `node:util/types` are correct.
-  - Depends: none
+- [ ] **Task: Create logger/log-core.ts with Winston logging**
+  - Files: `packages/utils/src/logger/log-core.ts`
+  - Change: Extract from `logger.ts`: `ensureDir`, `jsonReplacer`, `getLogFormat`, `makeFileTransport`, `makeConsoleTransport`, `buildTransports`, `getWinstonLogger`, `setTransports`, `error`, `warn`, `info`, `debug`, `startupMarker`, plus module-level state (`logFormat`, `transportOpts`, `winstonLogger`). Imports: `winston`, `winston-daily-rotate-file`, `getLogsDir` from `../dirs`. Export all public functions and `setTransports`. Keep internal helpers private (unexported).
+  - Acceptance: File compiles; exports `error`, `warn`, `info`, `debug`, `setTransports`, `startupMarker`.
 
-- [ ] **Task: Re-export timing symbols from `logger.ts`**
-  - Files: `packages/utils/src/logger.ts`
-  - Change: Remove all moved code from `logger.ts`. Add `export * from "./timing"` so every timing export is still available under the `logger` namespace. Trim unused imports (`AsyncLocalStorage`, `isPromise`, `drainModuleLoadEvents`, `fs` used only by `ensureDir`/`startupMarker` — keep only what core logging needs).
-  - Acceptance: `bun check` passes in `packages/utils`; `import * as logger from "@satopi/pi-utils/logger"` still exposes all timing symbols.
-  - Depends: Create timing.ts
+- [ ] **Task: Create logger/timing.ts with span profiling**
+  - Files: `packages/utils/src/logger/timing.ts`
+  - Change: Extract from `logger.ts`: `Span` interface, `ModuleTimingNode` interface, all timing constants, `spanStorage`, `gRootSpan`, `gRecordTimings`, `time`, `startTiming`, `endTiming`, `printTimings`, `openSpanPath`, `shouldExitAfterTimings`, `timingModeIncludes`, `recordModuleLoadSpan`, and all internal helpers (`spliceModuleLoadBuffer`, `shortenLoadPath`, `durationOf`, `selfTimeOf`, `fmtMs`, `isModuleLoadSpan`, `printSpan`, `printModuleLoadSummary`, `buildModuleTimingGraph`, `compareModuleNodes`, `renderModuleTimingNode`, `isParallel`). Import `startupMarker` from `./log-core`, `drainModuleLoadEvents` from `../timing-buffer`, `AsyncLocalStorage` from `node:async_hooks`, `isPromise` from `node:util/types`. Export only the public API functions.
+  - Acceptance: File compiles; exports `time`, `startTiming`, `endTiming`, `printTimings`, `openSpanPath`, `shouldExitAfterTimings`, `timingModeIncludes`.
 
-- [ ] **Task: Verify tests pass after split**
-  - Files: `packages/utils/test/logger-startup.test.ts`, `packages/utils/test/logger-error-serialization.test.ts`, `packages/utils/test/logger-no-transports.test.ts`
-  - Change: Run `bun test` in `packages/utils`. Existing tests import `logger` from the barrel or `@satopi/pi-utils/logger` — they must pass without modification. If any test needs a direct `timing` import path, update it.
-  - Acceptance: All 3 logger test files pass; no regressions.
-  - Depends: Re-export from logger.ts
+- [ ] **Task: Create logger/index.ts barrel and update logger.ts shim**
+  - Files: `packages/utils/src/logger/index.ts`, `packages/utils/src/logger.ts`
+  - Change: Create `logger/index.ts` with `export * from "./log-core"` and `export * from "./timing"`. Rewrite `logger.ts` to `export * from "./logger/index"` — a thin re-export shim preserving the `@satopi/pi-utils/logger` subpath resolution. The package barrel (`src/index.ts`) line `export * as logger from "./logger"` stays unchanged.
+  - Acceptance: `import { logger } from "@satopi/pi-utils"` gives `logger.error()`, `logger.time()`, etc. `import { setTransports } from "@satopi/pi-utils/logger"` resolves. `import * as logger from "@satopi/pi-utils/logger"` gives full namespace.
 
-## Phase 2: Cleanup & Verification
-**Contract:** Cross-package consumers of `logger.time()`, `logger.error()`, etc. see zero behavior change.
+## Phase 2: Verification
+**Contract:** All existing tests pass, type check passes.
 
-- [ ] **Task: Verify cross-package consumers compile**
-  - Files: `packages/coding-agent/src/main.ts`, `packages/coding-agent/src/sdk.ts`, `packages/coding-agent/src/system-prompt.ts`, `packages/coding-agent/src/modes/interactive-mode.ts`
-  - Change: Run `bun check` across the workspace. These files import `{ logger } from "@satopi/pi-utils"` and call `logger.error()`, `logger.time()`, `logger.startTiming()`, etc. — all must resolve.
-  - Acceptance: `bun check` passes for the entire workspace; no TypeScript errors about missing exports.
-  - Depends: Re-export from logger.ts
-
-- [ ] **Task: Update CHANGELOG**
-  - Files: `packages/utils/CHANGELOG.md`
-  - Change: Add entry under `## [Unreleased]` → `### Changed` noting that `logger.ts` was split into `logging-core.ts` + `timing.ts` with backward-compatible re-exports.
-  - Acceptance: Entry exists and is under correct section.
-  - Depends: Verify cross-package consumers compile
+- [ ] **Task: Run tests and type check**
+  - Files: `packages/utils/test/logger-startup.test.ts`, `packages/utils/test/logger-no-transports.test.ts`, `packages/utils/test/logger-error-serialization.test.ts`
+  - Change: Run `bun test` in `packages/utils` and `bun check` across the workspace.
+  - Acceptance: All 3 logger tests pass. `bun check` passes workspace-wide with no new errors.
+  - Depends: Create logger/index.ts barrel and update logger.ts shim

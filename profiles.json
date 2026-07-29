@@ -1,0 +1,42 @@
+[
+  {
+    "profileId": "planner",
+    "identity": {
+      "name": "planner",
+      "archetype": "worker",
+      "description": "Agent of archetype worker",
+      "createdAt": 1785347703672
+    },
+    "expertise": {
+      "domains": [],
+      "proficiency": {},
+      "specialties": []
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785347703672
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  }
+]

@@ -8281,6 +8281,21 @@ export class AgentSession {
 			},
 		);
 
+		// Register beforeToolCall BEFORE bridge.init() — the MAIN model may
+		// start writing plan.md while init is still in-flight (it's fire-and-forget
+		// upstream). Catch plan writes early so getPlanContent() is never empty.
+		const planCapture = bridge;
+		this.agent.beforeToolCall = ctx => {
+			if (ctx.toolCall.name === "write") {
+				const args = ctx.args as { path?: string; content?: string };
+				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+					this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
+					planCapture.onPlanUpdated(args.content);
+				}
+			}
+			return undefined;
+		};
+
 		await bridge.init();
 		this.emitNotice(
 			"info",
@@ -8290,19 +8305,6 @@ export class AgentSession {
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
-
-		// Register beforeToolCall hook to capture plan.md writes → bridge.onPlanUpdated
-		this.agent.beforeToolCall = ctx => {
-			if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
-				const args = ctx.args as { path?: string; content?: string };
-				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-					this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-					this.#embeddedSwarm.onPlanUpdated(args.content);
-				}
-			}
-			return undefined;
-		};
-	}
 
 	/**
 	 * Send a prompt to the agent.
