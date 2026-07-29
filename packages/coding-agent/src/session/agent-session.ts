@@ -8198,6 +8198,25 @@ export class AgentSession {
 				timestamp,
 			});
 
+			// Register plan.md capture hook SYNCHRONOUSLY — BEFORE the
+			// fire-and-forget init. The model starts processing immediately
+			// and may write plan.md before the bridge is ready.
+			const planCapture = this.#embeddedSwarm;
+			if (!planCapture) {
+				this.agent.beforeToolCall = ctx => {
+					const bridge = this.#embeddedSwarm;
+					if (!bridge) return undefined;
+					if (ctx.toolCall.name === "write") {
+						const args = ctx.args as { path?: string; content?: string };
+						if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+							this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
+							bridge.onPlanUpdated(args.content);
+						}
+					}
+					return undefined;
+				};
+			}
+
 			// Initialize embedded swarm bridge (fire-and-forget — must not block the prompt)
 			if (!this.#embeddedSwarm) {
 				this.#initializeEmbeddedSwarm().catch(err => {

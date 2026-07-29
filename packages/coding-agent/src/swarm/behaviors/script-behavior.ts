@@ -51,37 +51,16 @@ export class ScriptBehavior implements PhaseBehavior {
 	// ==========================================================================
 
 	async enter(ctx: PhaseContext): Promise<PhaseEnterResult> {
-		// 1. Create Human ↔ Planner direct channel
-		const channel = ctx.ircBus.groupChannel("script-dialogue", ["human", "planner"], ctx.activityLogger);
-		this.#channel = channel;
-
-		// 2. Spawn the Planner agent
-		const taskPrompt = ctx.planContent ?? "";
-		const [planner] = await ctx.runtime.spawn([
-			{
-				id: "planner",
-				role: "planner",
-				roleSource: "library",
-				task: taskPrompt || "Analyze the project and create a build plan.",
-				phase: this.phase,
-			},
-		]);
-		this.#planner = planner;
-
-		// 3. If there is an initial planContent, push it as the first
-		//    human turn in the conversation history
-		if (taskPrompt) {
-			this.#conversation.push({ role: "user", content: taskPrompt });
-		}
-
-		logger.info("[ScriptBehavior] Planner spawned, waiting for output", {
-			taskLength: taskPrompt.length,
-		});
+		// The MAIN model (this conversation) IS the planner. ScriptBehavior
+		// does not spawn a separate Planner agent. Plan.md is captured via
+		// the beforeToolCall hook in agent-session.ts. checkCompletion()
+		// detects plan readiness via onPlanUpdated → #planConfirmed flag.
+		logger.info("[ScriptBehavior] Script phase started — MAIN model is the planner");
 
 		return {
-			agents: [planner],
-			channels: [channel],
-			initialUIMessage: "Planner is analyzing the project. You can chat with it here.",
+			agents: [],
+			channels: [],
+			initialUIMessage: "Script phase: the agent will research and write a plan.",
 		};
 	}
 
