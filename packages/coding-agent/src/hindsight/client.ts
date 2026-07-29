@@ -11,7 +11,7 @@
 import { isTimeoutError, withTimeoutSignal } from "../utils/fetch-timeout";
 import type { HindsightConfig } from "./config";
 
-const USER_AGENT = "stp-coding-agent";
+const USER_AGENT = "satopi-coding-agent";
 const DEFAULT_USER_AGENT = USER_AGENT;
 const HINDSIGHT_REQUEST_TIMEOUT_MS = 30_000;
 

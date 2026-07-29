@@ -12,8 +12,8 @@ interface XAICredentials {
 	baseURL: string;
 }
 
-export function stpXAIUserAgent(): string {
-	return "stp/xai";
+export function satopiXAIUserAgent(): string {
+	return "satopi/xai";
 }
 
 type XAIProvider = "xai-oauth" | "xai";

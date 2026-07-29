@@ -498,7 +498,7 @@ export class AcpAgent implements Agent {
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			agentInfo: {
-				name: "stp",
+				name: "satopi",
 				title: "SatoPi",
 				version: VERSION,
 			},

@@ -442,7 +442,7 @@ describe("ACP lazy startup", () => {
 			expect(initializeResponse).toEqual(
 				expect.objectContaining({
 					protocolVersion: 1,
-					agentInfo: expect.objectContaining({ name: "stp" }),
+					agentInfo: expect.objectContaining({ name: "satopi" }),
 				}),
 			);
 			expect(createCalls).toBe(0);

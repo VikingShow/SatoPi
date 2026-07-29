@@ -25,7 +25,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isAuthenticated, type ModelRegistry } from "../config/model-registry";
 import { settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
-import { stpXAIUserAgent, resolveXAIHttpCredentials } from "../lib/xai-http";
+import { satopiXAIUserAgent, resolveXAIHttpCredentials } from "../lib/xai-http";
 import imageGenDescription from "../prompts/tools/image-gen.md" with { type: "text" };
 import { resolveReadPath } from "./path-utils";
 
@@ -1316,7 +1316,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							headers: {
 								Authorization: `Bearer ${key}`,
 								"Content-Type": "application/json",
-								"User-Agent": stpXAIUserAgent(),
+								"User-Agent": satopiXAIUserAgent(),
 							},
 							body: JSON.stringify(xaiBody),
 							signal: requestSignal,

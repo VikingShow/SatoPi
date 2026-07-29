@@ -101,7 +101,7 @@ async function registerProvider(): Promise<void> {
 	const exporter = new OTLPTraceExporter();
 	const tracerProvider = new NodeTracerProvider({
 		resource: resourceFromAttributes({
-			"service.name": process.env.OTEL_SERVICE_NAME ?? "stp",
+			"service.name": process.env.OTEL_SERVICE_NAME ?? "satopi",
 		}),
 		spanProcessors: [new BatchSpanProcessor(exporter)],
 	});
