@@ -8,14 +8,14 @@ import {
 	type TtsrCommandArgs,
 	type TtsrScanArgs,
 	type TtsrTestArgs,
-} from "@oh-my-pi/pi-coding-agent/cli/ttsr-cli";
-import { resetSettingsForTest } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getProjectAgentDir, getProjectDir, removeSyncWithRetries, setProjectDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/cli/ttsr-cli";
+import { resetSettingsForTest } from "@satopi/pi-coding-agent/config/settings";
+import { getProjectAgentDir, getProjectDir, removeSyncWithRetries, setProjectDir } from "@satopi/pi-utils";
 
 let testTmpDir: string;
 
 beforeAll(() => {
-	testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-ttsr-tests-"));
+	testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-ttsr-tests-"));
 });
 
 afterAll(() => {

@@ -7,7 +7,7 @@
  * @module hook-system/builtins/offload-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { IOffloadManager } from "../../../offload/manager";
 import type { Chapter } from "../../core/state";
 import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
@@ -42,7 +42,7 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 		phases: ACTIVE_PHASES,
 
 		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
-		const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
+			const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
 
 			switch (event) {
 				// -----------------------------------------------------------------

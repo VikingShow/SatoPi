@@ -1,15 +1,15 @@
 /**
- * OMP extension-package sub-discovery provider.
+ * STP extension-package sub-discovery provider.
  *
  * When a user configures an extension via `extensions:` (in settings) or
  * `--extension`/`-e` (on the CLI), the docs promise that the package's
  * sibling directories — `skills/`, `hooks/pre|post/`, `tools/`, `commands/`,
- * `rules/`, `prompts/`, and `.mcp.json` — are picked up by omp's standard
- * discovery surfaces. The native `omp` provider in `builtin.ts` only walks
+ * `rules/`, `prompts/`, and `.mcp.json` — are picked up by stp's standard
+ * discovery surfaces. The native `stp` provider in `builtin.ts` only walks
  * `.stp/` and `~/.stp/agent/`, so without this provider those sub-trees are
  * silently ignored.
  *
- * Provider priority is set below the native `omp` provider (100) so an
+ * Provider priority is set below the native `stp` provider (100) so an
  * extension package never shadows the user's own `.stp/` configuration on
  * dedup.
  *
@@ -17,7 +17,7 @@
  * @see ../../docs/extension-loading.md
  */
 import * as path from "node:path";
-import { logger, parseFrontmatter, tryParseJson } from "@oh-my-pi/pi-utils";
+import { logger, parseFrontmatter, tryParseJson } from "@satopi/pi-utils";
 import { registerProvider } from "../capability";
 import { readDirEntries, readFile } from "../capability/fs";
 import { type Hook, hookCapability } from "../capability/hook";
@@ -31,8 +31,8 @@ import type { LoadContext, LoadResult } from "../capability/types";
 import { listOmpExtensionRoots, type OmpExtensionRoot } from "./extension-roots";
 import { buildRuleFromMarkdown, createSourceMeta, loadFilesFromDir, scanSkillsFromDir } from "./helpers";
 
-const PROVIDER_ID = "omp-plugins";
-const DISPLAY_NAME = "OMP Extension Packages";
+const PROVIDER_ID = "stp-plugins";
+const DISPLAY_NAME = "STP Extension Packages";
 const DESCRIPTION =
 	"Sub-discovery (skills, hooks, tools, commands, rules, prompts, .mcp.json) inside extension packages";
 const PRIORITY = 90;

@@ -5,11 +5,11 @@ import {
 	CURRENT_SESSION_VERSION,
 	type SessionHeader,
 	type SessionMessageEntry,
-} from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getTerminalId } from "@oh-my-pi/pi-tui";
-import { getAgentDir, getTerminalSessionsDir, removeWithRetries, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/session/session-entries";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { getTerminalId } from "@satopi/pi-tui";
+import { getAgentDir, getTerminalSessionsDir, removeWithRetries, setAgentDir, TempDir } from "@satopi/pi-utils";
 
 interface JsonlMessageEntry {
 	type: "message";
@@ -29,7 +29,7 @@ describe("SessionManager.forkFrom", () => {
 		const previousAgentDir = getAgentDir();
 		const previousTermSessionId = process.env.TERM_SESSION_ID;
 		setAgentDir(path.join(tempDir.path(), "agent"));
-		process.env.TERM_SESSION_ID = "omp-fork-test";
+		process.env.TERM_SESSION_ID = "stp-fork-test";
 		try {
 			const cwd = path.join(tempDir.path(), "project");
 			const sessionDir = path.join(tempDir.path(), "sessions");

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { BankScope } from "@oh-my-pi/pi-coding-agent/hindsight/bank";
+import type { BankScope } from "@satopi/pi-coding-agent/hindsight/bank";
 import {
 	type HindsightApi,
 	HindsightApi as HindsightApiCtor,
 	type MentalModelSummary,
-} from "@oh-my-pi/pi-coding-agent/hindsight/client";
+} from "@satopi/pi-coding-agent/hindsight/client";
 import {
 	diffMentalModelContent,
 	ensureMentalModels,
@@ -12,7 +12,7 @@ import {
 	MENTAL_MODEL_RENDER_BUDGET_CHARS_DEFAULT,
 	renderMentalModelsBlock,
 	resolveSeedsForScope,
-} from "@oh-my-pi/pi-coding-agent/hindsight/mental-models";
+} from "@satopi/pi-coding-agent/hindsight/mental-models";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -58,7 +58,7 @@ describe("resolveSeedsForScope", () => {
 	});
 
 	it("per-project scoping yields project-conventions but the scope carries no tags so the seed is untagged", () => {
-		const scope: BankScope = { bankId: "omp-myproj" };
+		const scope: BankScope = { bankId: "stp-myproj" };
 		const seeds = resolveSeedsForScope(scope, "per-project");
 		const projectConv = seeds.find(s => s.id === "project-conventions");
 		expect(projectConv).toBeDefined();

@@ -25,7 +25,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { GateAction, GateMode, GateSpec, GraphNode, RetrySpec, RetryStrategy } from "./types";
 
 // ============================================================================

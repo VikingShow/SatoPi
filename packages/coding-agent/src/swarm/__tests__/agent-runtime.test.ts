@@ -36,12 +36,13 @@ const makeMockSession = (agentId?: string) => ({
 	},
 	role: undefined as string | undefined,
 });
-const mockSessionFactory = async (opts?: { agentId?: string }) => ({
-	session: makeMockSession(opts?.agentId) as unknown as AgentSession,
-	extensionsResult: { extensions: [], errors: [], runtime: {} },
-	setToolUIContext: () => {},
-	eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
-} as unknown as CreateAgentSessionResult);
+const mockSessionFactory = async (opts?: { agentId?: string }) =>
+	({
+		session: makeMockSession(opts?.agentId) as unknown as AgentSession,
+		extensionsResult: { extensions: [], errors: [], runtime: {} },
+		setToolUIContext: () => {},
+		eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+	}) as unknown as CreateAgentSessionResult;
 
 const makeCompletingMockSession = (agentId?: string) => ({
 	agent: {
@@ -64,24 +65,25 @@ const makeCompletingMockSession = (agentId?: string) => ({
 	},
 	role: undefined as string | undefined,
 });
-const mockCompletingSessionFactory = async (opts?: { agentId?: string }) => ({
-	session: makeCompletingMockSession(opts?.agentId) as unknown as AgentSession,
-	extensionsResult: { extensions: [], errors: [], runtime: {} },
-	setToolUIContext: () => {},
-	eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
-} as unknown as CreateAgentSessionResult);
+const mockCompletingSessionFactory = async (opts?: { agentId?: string }) =>
+	({
+		session: makeCompletingMockSession(opts?.agentId) as unknown as AgentSession,
+		extensionsResult: { extensions: [], errors: [], runtime: {} },
+		setToolUIContext: () => {},
+		eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+	}) as unknown as CreateAgentSessionResult;
 
-import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import type { AgentMessage, AsideMessage } from "@satopi/pi-agent-core";
+import { Agent } from "@satopi/pi-agent-core";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+// Dependencies
+import type { RoleAsset, RoleAssetManager } from "../../agent/role-asset";
 import { type ResolvedRole, RoleProvider } from "../../agent/role-provider";
 import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "../../sdk";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
-// Dependencies
-import type { RoleAsset, RoleAssetManager } from "../../agent/role-asset";
 import { AgentLauncher, type LaunchContext } from "../agent-runtime/agent-launcher";
 // Module under test
 import type { AgentSpec, AgentSpecInline } from "../agent-runtime/agent-spec";
@@ -241,13 +243,13 @@ describe("RoleProvider", () => {
 			const provider = new RoleProvider(mgr);
 
 			// roleSource is "inline" but no inline field → falls through to default
-		const spec = {
-			id: "test",
-			role: "custom",
-			roleSource: "inline",
-			task: "Do something",
-			// inline is undefined
-		} as AgentSpec;
+			const spec = {
+				id: "test",
+				role: "custom",
+				roleSource: "inline",
+				task: "Do something",
+				// inline is undefined
+			} as AgentSpec;
 			const result = await provider.resolve(spec);
 			expect(result.systemPrompt).toContain("custom agent");
 		});
@@ -382,7 +384,7 @@ describe("AgentLauncher", () => {
 		// the same way createAgentSession does: options.hasIrcInterrupts
 		// becomes a () => true function on the agent.
 		const hasIrcSessionFactory = async (options?: CreateAgentSessionOptions) => {
-			options = options ?? {} as CreateAgentSessionOptions;
+			options = options ?? ({} as CreateAgentSessionOptions);
 			const rawPrompt = options.systemPrompt ?? [];
 			const systemPromptStr = typeof rawPrompt === "function" ? rawPrompt([]) : rawPrompt;
 			const systemPrompt = Array.isArray(systemPromptStr) ? systemPromptStr : [systemPromptStr];
@@ -716,14 +718,14 @@ describe("AgentRuntime", () => {
 
 			type TextContentMsg = { content: Array<{ type: string; text?: string }> };
 			const firstMsg = steering[0] as unknown as TextContentMsg | undefined;
-			const firstText = firstMsg?.content?.find((c) => c.type === "text");
+			const firstText = firstMsg?.content?.find(c => c.type === "text");
 			expect(firstText).toBeDefined();
 			expect(
 				"text" in (firstText as Record<string, unknown>) ? (firstText as Record<string, unknown>).text : undefined,
 			).toBe("First steering message");
 
 			const secondMsg = steering[1] as unknown as TextContentMsg | undefined;
-			const secondText = secondMsg?.content?.find((c) => c.type === "text");
+			const secondText = secondMsg?.content?.find(c => c.type === "text");
 			expect(secondText).toBeDefined();
 			expect(
 				"text" in (secondText as Record<string, unknown>)

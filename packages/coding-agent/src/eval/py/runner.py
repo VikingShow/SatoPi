@@ -233,7 +233,7 @@ def _drain_captured_stdout() -> None:
 def _start_capture_drain() -> None:
     if _CAPTURE_READ_FD is None:
         return
-    thread = threading.Thread(target=_drain_captured_stdout, name="omp-fd1-capture", daemon=True)
+    thread = threading.Thread(target=_drain_captured_stdout, name="stp-fd1-capture", daemon=True)
     thread.start()
 
 
@@ -1153,7 +1153,7 @@ def _start_parent_watchdog() -> None:
                 return
             time.sleep(10)
 
-    thread = threading.Thread(target=watch, name="omp-parent-watchdog", daemon=True)
+    thread = threading.Thread(target=watch, name="stp-parent-watchdog", daemon=True)
     thread.start()
 
 
@@ -1287,7 +1287,7 @@ async def _main_async() -> None:
     loop = asyncio.get_running_loop()
     _STATE.loop = loop
     queue: asyncio.Queue = asyncio.Queue()
-    reader = threading.Thread(target=_read_stdin, args=(loop, queue, stdin), name="omp-stdin-reader", daemon=True)
+    reader = threading.Thread(target=_read_stdin, args=(loop, queue, stdin), name="stp-stdin-reader", daemon=True)
     reader.start()
 
     tasks: set[asyncio.Task] = set()

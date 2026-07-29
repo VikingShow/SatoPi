@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { removeWithRetries } from "@satopi/pi-utils";
 import { collectSubSessions } from "../src/export/html";
 
 /**
@@ -36,7 +36,7 @@ describe("collectSubSessions", () => {
 	let mainFile: string;
 
 	beforeEach(async () => {
-		root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-subsessions-"));
+		root = await fs.mkdtemp(path.join(os.tmpdir(), "stp-subsessions-"));
 		mainFile = path.join(root, "main.jsonl");
 		await Bun.write(mainFile, sessionJsonl("main", ["m1"]));
 	});

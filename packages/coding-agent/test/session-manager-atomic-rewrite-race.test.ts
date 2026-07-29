@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 import {
 	MemorySessionStorage,
 	type SessionStorageWriter,
 	type WriteTextAtomicOptions,
-} from "@oh-my-pi/pi-coding-agent/session/session-storage";
-import type { SessionTitleUpdate } from "@oh-my-pi/pi-coding-agent/session/session-title-slot";
+} from "@satopi/pi-coding-agent/session/session-storage";
+import type { SessionTitleUpdate } from "@satopi/pi-coding-agent/session/session-title-slot";
 
 interface DetachableWriter extends SessionStorageWriter {
 	detach(): void;

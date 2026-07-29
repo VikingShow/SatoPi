@@ -1,11 +1,11 @@
 import * as path from "node:path";
-import { formatHashlineHeader } from "@oh-my-pi/hashline";
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import { type AstFindMatch, astGrep } from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { prompt, untilAborted } from "@oh-my-pi/pi-utils";
+import { formatHashlineHeader } from "@satopi/hashline";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@satopi/pi-agent-core";
+import type { ToolExample } from "@satopi/pi-ai";
+import { type AstFindMatch, astGrep } from "@satopi/pi-natives";
+import type { Component } from "@satopi/pi-tui";
+import { Text } from "@satopi/pi-tui";
+import { prompt, untilAborted } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { recordFileSnapshot, recordSeenLinesFromBody } from "../edit/file-snapshot-store";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";

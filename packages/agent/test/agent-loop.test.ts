@@ -4,7 +4,7 @@ import {
 	agentLoopContinue,
 	agentLoopDetailed,
 	TERMINAL_TOOL_RESULT_ABORT_REASON,
-} from "@oh-my-pi/pi-agent-core/agent-loop";
+} from "@satopi/pi-agent-core/agent-loop";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -13,15 +13,15 @@ import type {
 	AgentTool,
 	AgentToolContext,
 	ToolCallContext,
-} from "@oh-my-pi/pi-agent-core/types";
-import type { AssistantMessage, AssistantMessageEvent, Message, ToolResultMessage } from "@oh-my-pi/pi-ai";
-import { createMockModel, type MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+} from "@satopi/pi-agent-core/types";
+import type { AssistantMessage, AssistantMessageEvent, Message, ToolResultMessage } from "@satopi/pi-ai";
+import { createMockModel, type MockResponse } from "@satopi/pi-ai/providers/mock";
+import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
+import { INTENT_FIELD } from "@satopi/pi-wire";
 import { type } from "arktype";
 import { createAssistantMessage, createUserMessage } from "./helpers";
 
-declare module "@oh-my-pi/pi-agent-core/types" {
+declare module "@satopi/pi-agent-core/types" {
 	interface CustomAgentMessages {
 		advisor: {
 			role: "custom";
@@ -3010,7 +3010,7 @@ describe("agentLoop streaming snapshots", () => {
 
 describe("agentLoop kCursorExecResolved (issue #4348)", () => {
 	it("skips execute for a toolCall block marked as already run by Cursor's exec channel", async () => {
-		const { kCursorExecResolved } = await import("@oh-my-pi/pi-ai/utils/block-symbols");
+		const { kCursorExecResolved } = await import("@satopi/pi-ai/utils/block-symbols");
 
 		const toolSchema = type({ command: "string" });
 		let executeCalls = 0;
@@ -3101,7 +3101,7 @@ describe("agentLoop kCursorExecResolved (issue #4348)", () => {
 	it("still runs a normal, unmarked toolCall block in the same turn", async () => {
 		// Guards against the filter over-matching: a mixed turn where only
 		// SOME blocks are Cursor-resolved must still execute the unmarked one.
-		const { kCursorExecResolved } = await import("@oh-my-pi/pi-ai/utils/block-symbols");
+		const { kCursorExecResolved } = await import("@satopi/pi-ai/utils/block-symbols");
 
 		const toolSchema = type({ value: "string" });
 		const executed: string[] = [];

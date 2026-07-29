@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AuthBrokerClient, RemoteAuthCredentialStore, startAuthBroker } from "@oh-my-pi/pi-ai/auth-broker";
-import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai/auth-storage";
-import * as oauthUtils from "@oh-my-pi/pi-ai/registry/oauth";
-import type { OAuthCredentials } from "@oh-my-pi/pi-ai/registry/oauth/types";
-import type { UsageLimit, UsageProvider, UsageReport } from "@oh-my-pi/pi-ai/usage";
+import { AuthBrokerClient, RemoteAuthCredentialStore, startAuthBroker } from "@satopi/pi-ai/auth-broker";
+import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@satopi/pi-ai/auth-storage";
+import * as oauthUtils from "@satopi/pi-ai/registry/oauth";
+import type { OAuthCredentials } from "@satopi/pi-ai/registry/oauth/types";
+import type { UsageLimit, UsageProvider, UsageReport } from "@satopi/pi-ai/usage";
 import { removeWithRetries } from "../../utils/src/temp";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1453,36 +1453,39 @@ describe("AuthStorage codex oauth ranking", () => {
 	test.each([
 		["gpt-5.6-terra", "free", "enterprise"],
 		["gpt-5.6-terra-pro", "go", "pro"],
-	])("%s keeps a less-used %s account in ordinary ranking ahead of %s", async (modelId, lowUsagePlan, highUsagePlan) => {
-		if (!authStorage) throw new Error("test setup failed");
+	])(
+		"%s keeps a less-used %s account in ordinary ranking ahead of %s",
+		async (modelId, lowUsagePlan, highUsagePlan) => {
+			if (!authStorage) throw new Error("test setup failed");
 
-		await authStorage.set("openai-codex", [
-			{ type: "oauth", ...createCredential("acct-low-usage", "low-usage@example.com") },
-			{ type: "oauth", ...createCredential("acct-high-usage", "high-usage@example.com") },
-		]);
+			await authStorage.set("openai-codex", [
+				{ type: "oauth", ...createCredential("acct-low-usage", "low-usage@example.com") },
+				{ type: "oauth", ...createCredential("acct-high-usage", "high-usage@example.com") },
+			]);
 
-		usageByAccount.set(
-			"acct-low-usage",
-			createCodexUsageReport({
-				accountId: "acct-low-usage",
-				primary: { usedFraction: 0.01, resetInMs: 30 * 60 * 1000 },
-				secondary: { usedFraction: 0.01, resetInMs: 6 * 24 * 60 * 60 * 1000 },
-				metadata: { planType: lowUsagePlan, email: "low-usage@example.com" },
-			}),
-		);
-		usageByAccount.set(
-			"acct-high-usage",
-			createCodexUsageReport({
-				accountId: "acct-high-usage",
-				primary: { usedFraction: 0.8, resetInMs: 30 * 60 * 1000 },
-				secondary: { usedFraction: 0.8, resetInMs: 6 * 24 * 60 * 60 * 1000 },
-				metadata: { planType: highUsagePlan, email: "high-usage@example.com" },
-			}),
-		);
+			usageByAccount.set(
+				"acct-low-usage",
+				createCodexUsageReport({
+					accountId: "acct-low-usage",
+					primary: { usedFraction: 0.01, resetInMs: 30 * 60 * 1000 },
+					secondary: { usedFraction: 0.01, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+					metadata: { planType: lowUsagePlan, email: "low-usage@example.com" },
+				}),
+			);
+			usageByAccount.set(
+				"acct-high-usage",
+				createCodexUsageReport({
+					accountId: "acct-high-usage",
+					primary: { usedFraction: 0.8, resetInMs: 30 * 60 * 1000 },
+					secondary: { usedFraction: 0.8, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+					metadata: { planType: highUsagePlan, email: "high-usage@example.com" },
+				}),
+			);
 
-		const apiKey = await authStorage.getApiKey("openai-codex", undefined, { modelId });
-		expect(apiKey).toBe("api-acct-low-usage");
-	});
+			const apiKey = await authStorage.getApiKey("openai-codex", undefined, { modelId });
+			expect(apiKey).toBe("api-acct-low-usage");
+		},
+	);
 
 	test("reranks a Terra session on a Go account when it switches to Sol", async () => {
 		if (!authStorage) throw new Error("test setup failed");

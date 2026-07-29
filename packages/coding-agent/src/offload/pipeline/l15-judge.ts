@@ -10,8 +10,8 @@
  * Fallback: if LLM fails → safe defaults (no task boundary detected).
  */
 
-import { type AssistantMessage, completeSimple, type Model } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import { type AssistantMessage, completeSimple, type Model } from "@satopi/pi-ai";
+import { logger } from "@satopi/pi-utils";
 import type { ModelRegistry } from "../../config/model-registry";
 import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";

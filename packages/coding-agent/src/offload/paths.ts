@@ -12,9 +12,8 @@
  * Every offload consumer MUST use these functions.
  */
 
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils";
-
 import * as path from "node:path";
+import { getProjectAgentDir } from "@satopi/pi-utils";
 
 // ============================================================================
 // Directory helpers

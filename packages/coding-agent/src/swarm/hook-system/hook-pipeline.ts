@@ -7,7 +7,7 @@
  * @module hook-system/hook-pipeline
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 
 import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "./types";
 

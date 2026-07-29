@@ -14,10 +14,11 @@
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
-import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
-import type { Model } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage, AsideMessage } from "@satopi/pi-agent-core";
+import type { Model } from "@satopi/pi-ai";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
+import type { ResolvedRole } from "../../agent/role-provider";
 import type { IOffloadManager } from "../../offload/manager";
 import type { MmdInjector } from "../../offload/mermaid/injector";
 import { createAgentSession } from "../../sdk";
@@ -26,7 +27,6 @@ import type { Tool, ToolSession } from "../../tools";
 import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentSpec } from "./agent-spec";
-import type { ResolvedRole, RoleProvider } from "../../agent/role-provider";
 import type { AgentRuntime } from "./index";
 
 // ============================================================================

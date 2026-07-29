@@ -2,16 +2,16 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { InMemorySnapshotStore } from "@oh-my-pi/hashline";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { renderGalleryState, resolveFixture } from "@oh-my-pi/pi-coding-agent/cli/gallery-cli";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { editToolRenderer } from "@oh-my-pi/pi-coding-agent/edit/renderer";
-import { renderDiff } from "@oh-my-pi/pi-coding-agent/modes/components/diff";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import * as themeModule from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { InMemorySnapshotStore } from "@satopi/hashline";
+import type { AgentTool } from "@satopi/pi-agent-core";
+import { renderGalleryState, resolveFixture } from "@satopi/pi-coding-agent/cli/gallery-cli";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { editToolRenderer } from "@satopi/pi-coding-agent/edit/renderer";
+import { renderDiff } from "@satopi/pi-coding-agent/modes/components/diff";
+import { ToolExecutionComponent } from "@satopi/pi-coding-agent/modes/components/tool-execution";
+import * as themeModule from "@satopi/pi-coding-agent/modes/theme/theme";
+import { Text, type TUI, visibleWidth } from "@satopi/pi-tui";
+import { removeWithRetries } from "@satopi/pi-utils";
 import chalk from "chalk";
 
 beforeAll(async () => {

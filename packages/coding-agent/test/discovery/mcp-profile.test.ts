@@ -16,10 +16,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { clearCache as clearFsCache } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { getConfigRootDir, removeWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
+import { clearCache as clearFsCache } from "@satopi/pi-coding-agent/capability/fs";
+import { type MCPServer, mcpCapability } from "@satopi/pi-coding-agent/capability/mcp";
+import { loadCapability } from "@satopi/pi-coding-agent/discovery";
+import { getConfigRootDir, removeWithRetries, setAgentDir } from "@satopi/pi-utils";
 
 const originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
 const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
@@ -42,8 +42,8 @@ describe("native user-level MCP discovery follows the active profile", () => {
 
 	beforeEach(async () => {
 		originalHome = process.env.HOME;
-		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "omp-mcp-profile-home-"));
-		projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-mcp-profile-project-"));
+		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "stp-mcp-profile-home-"));
+		projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-mcp-profile-project-"));
 		process.env.HOME = tempHome;
 		vi.spyOn(os, "homedir").mockReturnValue(tempHome);
 		clearFsCache();
@@ -66,7 +66,7 @@ describe("native user-level MCP discovery follows the active profile", () => {
 
 	test("active profile loads its own user server, not the default profile's", async () => {
 		// Active profile's agent dir (stand-in for ~/.stp/profiles/<name>/agent).
-		const profileAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-mcp-profile-agent-"));
+		const profileAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-mcp-profile-agent-"));
 		setAgentDir(profileAgentDir);
 
 		// Decoy: the default profile's user file at the literal-home path the old

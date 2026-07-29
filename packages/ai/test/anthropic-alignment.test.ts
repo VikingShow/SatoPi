@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as tls from "node:tls";
-import { Effort } from "@oh-my-pi/pi-ai";
+import { Effort } from "@satopi/pi-ai";
 import {
 	applyClaudeToolPrefix,
 	buildAnthropicClientOptions,
@@ -20,8 +20,8 @@ import {
 	mapStainlessOs,
 	streamAnthropic,
 	stripClaudeToolPrefix,
-} from "@oh-my-pi/pi-ai/providers/anthropic";
-import { getEnvApiKey, streamSimple } from "@oh-my-pi/pi-ai/stream";
+} from "@satopi/pi-ai/providers/anthropic";
+import { getEnvApiKey, streamSimple } from "@satopi/pi-ai/stream";
 import type {
 	AssistantMessage,
 	Context,
@@ -30,9 +30,9 @@ import type {
 	TJsonSchema,
 	TokenTaskBudget,
 	Tool,
-} from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-ai/types";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { removeSyncWithRetries } from "@satopi/pi-utils";
 import { type as arkType } from "arktype";
 import { withEnv } from "./helpers";
 

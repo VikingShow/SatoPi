@@ -27,9 +27,9 @@
  *   6. All tasks done → spawn reporter agent → user applauds → Curtain
  */
 
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import type { SingleResult } from "@satopi/pi-coding-agent/task";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
 import type { RoleAssetManager } from "../../agent/role-asset";
@@ -548,14 +548,14 @@ export class StageController {
 						`exit code ${result.exitCode} after ${maxRetries} attempts`,
 					);
 					// v3: also fire HookPipeline error event
-		void this.#opts.hookPipeline?.trigger(
-			"agent:onError",
-			{
-				agentId: agent.id,
-				error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
-			},
-			{ phase: "stage" },
-		);
+					void this.#opts.hookPipeline?.trigger(
+						"agent:onError",
+						{
+							agentId: agent.id,
+							error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
+						},
+						{ phase: "stage" },
+					);
 					activityLogger.logBroadcast(
 						"system",
 						`${agent.id} failed: ${task.title} (exit ${result.exitCode} after ${maxRetries} attempts)`,

@@ -41,17 +41,17 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { createMockModel, type MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { BashTool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { Agent, type AgentMessage, type AgentTool } from "@satopi/pi-agent-core";
+import { createMockModel, type MockResponse } from "@satopi/pi-ai/providers/mock";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@satopi/pi-coding-agent/session/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { BashTool, type ToolSession } from "@satopi/pi-coding-agent/tools";
+import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 /** Scripted assistant turn that issues a single `bash` tool call. */
 function bashCall(command: string, callId: string): MockResponse {

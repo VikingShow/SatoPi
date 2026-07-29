@@ -10,8 +10,7 @@
  *   < 60 cols   → compact mode
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Container } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import type { AgentRef } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import type { Theme } from "../../theme/theme";
@@ -42,7 +41,7 @@ export function renderDashboard(input: DashboardInput): Component {
 	const { theme, graphView } = input;
 
 	// Graph-only mode
-	if (graphView && graphView.graph && Object.keys(graphView.graph.nodes).length > 0) {
+	if (graphView?.graph && Object.keys(graphView.graph.nodes).length > 0) {
 		return renderGraphView(graphView, theme);
 	}
 
@@ -101,9 +100,8 @@ function renderTwoColumn(input: DashboardInput, width: number): string[] {
 
 	for (let i = 0; i < Math.max(maxLeft, maxRight); i++) {
 		const left = i < maxLeft ? agentLines[i] : "";
-		const right = i < maxRight
-			? (i < commLines.length ? commLines[i] : contextLines[i - commLines.length] ?? "")
-			: "";
+		const right =
+			i < maxRight ? (i < commLines.length ? commLines[i] : (contextLines[i - commLines.length] ?? "")) : "";
 		lines.push(`${left.padEnd(leftWidth)}${spacer}${right}`);
 	}
 
@@ -122,7 +120,7 @@ function renderCompact(input: DashboardInput, _width: number): string[] {
 
 	if (agents.length > 0) {
 		for (const ref of agents) {
-			const glyph = ref.status === "running" ? "◌" : (ref.status === "idle" || ref.status === "parked") ? "✓" : "·";
+			const glyph = ref.status === "running" ? "◌" : ref.status === "idle" || ref.status === "parked" ? "✓" : "·";
 			lines.push(`  ${glyph} ${ref.displayName}`);
 		}
 	} else {

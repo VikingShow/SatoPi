@@ -9,8 +9,8 @@
  *   LLM 失败时自动降级到文本截取
  */
 
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { SingleResult } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import { L1LlmSummarizer } from "./llm-summarizer";

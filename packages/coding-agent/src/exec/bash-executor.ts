@@ -3,9 +3,9 @@
  *
  * Uses brush-core via native bindings for shell execution.
  */
-import { ExponentialYield } from "@oh-my-pi/pi-agent-core/utils/yield";
-import { executeShell, type MinimizerOptions, Shell, type ShellRunResult } from "@oh-my-pi/pi-natives";
-import { isExecutable, type ShellConfig } from "@oh-my-pi/pi-utils/procmgr";
+import { ExponentialYield } from "@satopi/pi-agent-core/utils/yield";
+import { executeShell, type MinimizerOptions, Shell, type ShellRunResult } from "@satopi/pi-natives";
+import { isExecutable, type ShellConfig } from "@satopi/pi-utils/procmgr";
 import { Settings, type ShellMinimizerSettings } from "../config/settings";
 import { OutputSink } from "../session/streaming-output";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../tools/output-meta";

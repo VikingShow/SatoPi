@@ -4,7 +4,7 @@
  * Handles `stp ssh <command>` subcommands for SSH host configuration management.
  */
 
-import { getSSHConfigPath } from "@oh-my-pi/pi-utils";
+import { getSSHConfigPath } from "@satopi/pi-utils";
 import chalk from "chalk";
 import { addSSHHost, readSSHConfigFile, removeSSHHost, type SSHHostConfig } from "../ssh/config-writer";
 

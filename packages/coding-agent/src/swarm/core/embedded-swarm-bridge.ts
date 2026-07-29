@@ -20,8 +20,8 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";

@@ -1,5 +1,5 @@
 {
-  "name": "@oh-my-pi/pi-web",
+  "name": "@satopi/pi-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",

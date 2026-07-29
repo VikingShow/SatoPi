@@ -18,7 +18,7 @@ async function runProbeScenario(options: {
 	descendantHoldsStdout?: boolean;
 	validOutput?: string;
 }): Promise<ProbeRunResult> {
-	const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gpu-probe-"));
+	const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "stp-gpu-probe-"));
 	try {
 		const binDir = path.join(tempRoot, "bin");
 		const cacheRoot = path.join(tempRoot, "cache");

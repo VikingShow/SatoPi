@@ -1,8 +1,8 @@
 /**
  * Manage swarm runs.
  */
-import { APP_NAME } from "@oh-my-pi/pi-utils";
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+import { APP_NAME } from "@satopi/pi-utils";
+import { Args, Command, Flags, renderCommandHelp } from "@satopi/pi-utils/cli";
 import { runSwarmCommand, type SwarmAction, type SwarmCommandArgs } from "../cli/swarm-cli";
 import { initTheme } from "../modes/theme/theme";
 

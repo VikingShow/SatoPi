@@ -9,8 +9,8 @@
  * `convergenceStreak` consecutive rounds, the roundtable exits early.
  */
 
-import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { IrcBus } from "@satopi/pi-coding-agent/irc/bus";
+import { logger } from "@satopi/pi-utils";
 import { jaccardSimilarity } from "../core/convergence.js";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";

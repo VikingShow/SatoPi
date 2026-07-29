@@ -31,12 +31,24 @@ export function resolveCrossBuild(value: string | undefined): CrossBuild | null 
 		case "darwin-x64":
 			return { id: value, platform: "darwin", arch: "x64", target: "bun-darwin-x64" };
 		case "linux-arm64":
-			return { id: value, platform: "linux", arch: "arm64", target: "bun-linux-arm64", rustTarget: "aarch64-unknown-linux-gnu.2.17" };
+			return {
+				id: value,
+				platform: "linux",
+				arch: "arm64",
+				target: "bun-linux-arm64",
+				rustTarget: "aarch64-unknown-linux-gnu.2.17",
+			};
 		case "linux-x64":
 			return { id: value, platform: "linux", arch: "x64", target: "bun-linux-x64-baseline" };
 		case "win32-x64":
 		case "windows-x64":
-			return { id: value, platform: "win32", arch: "x64", target: "bun-windows-x64-baseline", rustTarget: "x86_64-pc-windows-msvc" };
+			return {
+				id: value,
+				platform: "win32",
+				arch: "x64",
+				target: "bun-windows-x64-baseline",
+				rustTarget: "x86_64-pc-windows-msvc",
+			};
 		default:
 			throw new Error(`Unsupported CROSS_TARGET: ${value}`);
 	}
@@ -98,7 +110,13 @@ async function main(): Promise<void> {
 		await runCommand(
 			["bun", "run", "ci:build:native"],
 			crossBuild
-				? { ...Bun.env, CROSS_TARGET: crossBuild.rustTarget ?? "", TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch, ...(crossBuild.arch === "x64" && crossBuild.rustTarget ? { TARGET_VARIANTS: "baseline" } : {}) }
+				? {
+						...Bun.env,
+						CROSS_TARGET: crossBuild.rustTarget ?? "",
+						TARGET_PLATFORM: crossBuild.platform,
+						TARGET_ARCH: crossBuild.arch,
+						...(crossBuild.arch === "x64" && crossBuild.rustTarget ? { TARGET_VARIANTS: "baseline" } : {}),
+					}
 				: Bun.env,
 			repoRoot,
 		);

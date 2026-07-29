@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import type { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import type { LoadExtensionsResult } from "@satopi/pi-coding-agent/extensibility/extensions/types";
+import type { CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
+import * as sdkModule from "@satopi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
+import { runSubprocess } from "@satopi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@satopi/pi-coding-agent/task/types";
+import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";
 
 /**
  * Contract: when `task.maxRuntimeMs` is set, a subagent whose inference call

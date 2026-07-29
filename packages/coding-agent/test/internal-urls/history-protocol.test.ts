@@ -12,12 +12,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import { HistoryProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/history-protocol";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { CURRENT_SESSION_VERSION } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { InternalUrlRouter } from "@satopi/pi-coding-agent/internal-urls";
+import { HistoryProtocolHandler } from "@satopi/pi-coding-agent/internal-urls/history-protocol";
+import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { CURRENT_SESSION_VERSION } from "@satopi/pi-coding-agent/session/session-entries";
+import { removeWithRetries } from "@satopi/pi-utils";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "history-protocol-"));

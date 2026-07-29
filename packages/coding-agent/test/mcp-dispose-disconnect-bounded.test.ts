@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { removeSyncWithRetries, withTimeout } from "@oh-my-pi/pi-utils";
+import { removeSyncWithRetries, withTimeout } from "@satopi/pi-utils";
 import { MCPManager } from "../src/mcp/manager";
 import type { MCPStdioServerConfig } from "../src/mcp/types";
 
@@ -34,7 +34,7 @@ describe("owned-manager dispose disconnect is bounded (PR #2839)", () => {
 	let workDir: string;
 
 	beforeEach(() => {
-		workDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-mcp-dispose-"));
+		workDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-mcp-dispose-"));
 	});
 
 	afterEach(() => {

@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
-import { resolveThresholdTokens, shouldCompact } from "@oh-my-pi/pi-agent-core/compaction";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { loadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
-import { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/runner";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import type { CompactionEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getProjectAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+import { Agent } from "@satopi/pi-agent-core";
+import * as compactionModule from "@satopi/pi-agent-core/compaction";
+import { resolveThresholdTokens, shouldCompact } from "@satopi/pi-agent-core/compaction";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { loadExtensions } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
+import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import type { CompactionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { getProjectAgentDir, TempDir } from "@satopi/pi-utils";
 
 /**
  * Regression test for the auto-compaction thrash loop.

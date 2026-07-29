@@ -9,7 +9,7 @@
  *   4. afterIteration   — 将关键决策写入 mnemopi（双写）
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 
 // ============================================================================
 // Mnemopi 接口抽象（不直接依赖包，允许运行时注入）

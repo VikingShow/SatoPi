@@ -7,7 +7,7 @@
  * rendering and diff caching.
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import { framedBlock, type OutputBlockOptions } from "../../../tui/output-block";
 import type { Theme } from "../../theme/theme";
 

@@ -1,7 +1,7 @@
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Api, ApiKey, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
-import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
-import { prompt } from "@oh-my-pi/pi-utils";
+import type { ThinkingLevel } from "@satopi/pi-agent-core";
+import type { Api, ApiKey, AssistantMessage, Model } from "@satopi/pi-ai";
+import { completeSimple, validateToolCall } from "@satopi/pi-ai";
+import { prompt } from "@satopi/pi-utils";
 import { type } from "arktype";
 import summarySystemPrompt from "../../commit/prompts/summary-system.md" with { type: "text" };
 import summaryUserPrompt from "../../commit/prompts/summary-user.md" with { type: "text" };

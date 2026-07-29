@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type ContextFile, contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { initializeWithSettings, loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { __resetDirsFromEnvForTests, removeWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
+import { type ContextFile, contextFileCapability } from "@satopi/pi-coding-agent/capability/context-file";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { initializeWithSettings, loadCapability } from "@satopi/pi-coding-agent/discovery";
+import { __resetDirsFromEnvForTests, removeWithRetries, setAgentDir } from "@satopi/pi-utils";
 
 function restoreEnvValue(key: string, value: string | undefined): void {
 	if (value === undefined) {
@@ -31,11 +31,11 @@ describe("disabledExtensions runtime filtering", () => {
 		originalStpProfileEnv = process.env.STP_PROFILE;
 		originalPiProfileEnv = process.env.PI_PROFILE;
 		originalHome = process.env.HOME;
-		tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-ext-home-"));
+		tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-disabled-ext-home-"));
 		process.env.HOME = tempHomeDir;
 		vi.spyOn(os, "homedir").mockReturnValue(tempHomeDir);
 		setAgentDir(path.join(tempHomeDir, ".omp", "agent"));
-		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-ext-"));
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-disabled-ext-"));
 		await fs.mkdir(path.join(tempDir, ".omp"), { recursive: true });
 		await fs.writeFile(path.join(tempDir, ".omp", "AGENTS.md"), "# project instructions\n");
 

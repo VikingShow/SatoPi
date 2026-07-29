@@ -2,11 +2,11 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import type { FetchImpl, ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { htmlToMarkdown } from "@oh-my-pi/pi-natives";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
-import { $which, ptree, truncate } from "@oh-my-pi/pi-utils";
+import type { AgentToolResult } from "@satopi/pi-agent-core";
+import type { FetchImpl, ImageContent, TextContent } from "@satopi/pi-ai";
+import { htmlToMarkdown } from "@satopi/pi-natives";
+import { type Component, Text } from "@satopi/pi-tui";
+import { $which, ptree, truncate } from "@satopi/pi-utils";
 import { LRUCache } from "lru-cache/raw";
 import type { Settings } from "../config/settings";
 import { readEditableNotebookText } from "../edit/notebook";
@@ -862,13 +862,13 @@ async function withTempBinaryFile<T>(
 }
 
 async function renderNotebookPayload(bytes: Uint8Array, displayUrl: string): Promise<string> {
-	return withTempBinaryFile("omp-url-notebook-", ".ipynb", bytes, tempPath =>
+	return withTempBinaryFile("stp-url-notebook-", ".ipynb", bytes, tempPath =>
 		readEditableNotebookText(tempPath, displayUrl),
 	);
 }
 
 async function renderSqlitePayload(bytes: Uint8Array): Promise<string> {
-	return withTempBinaryFile("omp-url-sqlite-", ".sqlite", bytes, async tempPath => {
+	return withTempBinaryFile("stp-url-sqlite-", ".sqlite", bytes, async tempPath => {
 		let db: Database | null = null;
 		try {
 			db = new Database(tempPath, { readonly: true, strict: true });

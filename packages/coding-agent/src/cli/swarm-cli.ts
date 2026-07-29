@@ -6,7 +6,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as readline from "node:readline";
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import { getProjectDir } from "@satopi/pi-utils";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { RoleAssetManager } from "../agent/role-asset";
 import { ModelRegistry } from "../config/model-registry";

@@ -19,8 +19,8 @@ import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
 import { isPromise } from "node:util/types";
 
-import type { InMemorySnapshotStore } from "@oh-my-pi/hashline";
-import { Patch } from "@oh-my-pi/hashline";
+import type { InMemorySnapshotStore } from "@satopi/hashline";
+import { Patch } from "@satopi/hashline";
 import {
 	type AfterToolCallContext,
 	type AfterToolCallResult,
@@ -44,7 +44,7 @@ import {
 	TERMINAL_TOOL_RESULT_ABORT_REASON,
 	ThinkingLevel,
 	type ToolChoiceDirective,
-} from "@oh-my-pi/pi-agent-core";
+} from "@satopi/pi-agent-core";
 import {
 	AGGRESSIVE_SHAKE_CONFIG,
 	AUTO_HANDOFF_THRESHOLD_FOCUS,
@@ -75,14 +75,14 @@ import {
 	type SummaryOptions,
 	shouldCompact,
 	shouldUseOpenAiRemoteCompaction,
-} from "@oh-my-pi/pi-agent-core/compaction";
+} from "@satopi/pi-agent-core/compaction";
 import {
 	DEFAULT_PRUNE_CONFIG,
 	pruneSupersededToolResults,
 	pruneToolOutputs,
 	readToolSupersedeKey,
-} from "@oh-my-pi/pi-agent-core/compaction/pruning";
-import type { ProtectedToolMatcher } from "@oh-my-pi/pi-agent-core/compaction/tool-protection";
+} from "@satopi/pi-agent-core/compaction/pruning";
+import type { ProtectedToolMatcher } from "@satopi/pi-agent-core/compaction/tool-protection";
 import type {
 	AssistantMessage,
 	AssistantMessageEvent,
@@ -108,7 +108,7 @@ import type {
 	ToolChoice,
 	Usage,
 	UsageReport,
-} from "@oh-my-pi/pi-ai";
+} from "@satopi/pi-ai";
 import {
 	calculateRateLimitBackoffMs,
 	clearAnthropicFastModeFallback,
@@ -120,16 +120,16 @@ import {
 	resolveModelServiceTier,
 	serviceTierFamily,
 	streamSimple,
-} from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { resetOpenAICodexHistoryAfterCompaction } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
-import { GeminiHeaderRunDetector, isGeminiThinkingModel } from "@oh-my-pi/pi-ai/utils/thinking-loop";
-import { type RepeatedToolCallDetection, ToolCallLoopGuard } from "@oh-my-pi/pi-ai/utils/tool-call-loop-guard";
-import { isFireworksFastModelId, toFireworksBaseModelId } from "@oh-my-pi/pi-catalog/fireworks-model-id";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
-import { MacOSPowerAssertion } from "@oh-my-pi/pi-natives";
+} from "@satopi/pi-ai";
+import * as AIError from "@satopi/pi-ai/error";
+import { resetOpenAICodexHistoryAfterCompaction } from "@satopi/pi-ai/providers/openai-codex-responses";
+import { toolWireSchema } from "@satopi/pi-ai/utils/schema";
+import { GeminiHeaderRunDetector, isGeminiThinkingModel } from "@satopi/pi-ai/utils/thinking-loop";
+import { type RepeatedToolCallDetection, ToolCallLoopGuard } from "@satopi/pi-ai/utils/tool-call-loop-guard";
+import { isFireworksFastModelId, toFireworksBaseModelId } from "@satopi/pi-catalog/fireworks-model-id";
+import { getSupportedEfforts } from "@satopi/pi-catalog/model-thinking";
+import { modelsAreEqual } from "@satopi/pi-catalog/models";
+import { MacOSPowerAssertion } from "@satopi/pi-natives";
 import {
 	escapeXmlText,
 	extractHttpStatusFromError,
@@ -145,8 +145,8 @@ import {
 	relativePathWithinRoot,
 	Snowflake,
 	withTimeout,
-} from "@oh-my-pi/pi-utils";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+} from "@satopi/pi-utils";
+import * as snapcompact from "@satopi/snapcompact";
 import {
 	ADVISOR_DEFAULT_TOOL_NAMES,
 	AdviseTool,

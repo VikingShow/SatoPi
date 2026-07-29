@@ -17,7 +17,7 @@
  *     unconfigured environment silently degrades to the local store alone.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { HindsightLessonItem, SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 import type { ExperienceStore } from "./experience";

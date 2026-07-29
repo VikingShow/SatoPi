@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger as piLogger } from "@oh-my-pi/pi-utils";
+import { logger as piLogger } from "@satopi/pi-utils";
 import { type ActivityBroadcaster, type ActivityEntry, ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 

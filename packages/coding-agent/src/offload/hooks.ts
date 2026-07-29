@@ -16,8 +16,8 @@
  * loop-controller.ts 零修改。通过 runLoop({ hooks: offloadHooks }) 注入。
  */
 
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { SingleResult } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../session/session-storage";
 import type { LoopPipelineHooks, PipelineContext, PipelineResult, ReviewVerdict } from "../swarm/core/pipeline";
 import type { ExperienceStore } from "../swarm/curtain/experience";

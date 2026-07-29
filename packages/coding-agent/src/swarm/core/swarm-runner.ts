@@ -13,7 +13,7 @@
  */
 
 import * as fs from "node:fs/promises";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";

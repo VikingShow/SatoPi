@@ -7,7 +7,7 @@
  * @module hook-system/builtins/profile-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../../agent/agent-profile";
 import type {
 	AgentAfterCompletePayload,

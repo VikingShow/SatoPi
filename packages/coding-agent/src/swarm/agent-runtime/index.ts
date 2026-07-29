@@ -14,9 +14,9 @@
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
-import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage, AsideMessage } from "@satopi/pi-agent-core";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ResolvedRole, RoleProvider } from "../../agent/role-provider";
 import type { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
@@ -298,7 +298,7 @@ export class AgentRuntime {
 
 	/** The communication bus for human steering and agent messaging. */
 	get ircBus(): IrcBus {
-		return this.#ircBus!!;
+		return this.#ircBus!;
 	}
 
 	/** The context pipeline for registering additional context sources. */

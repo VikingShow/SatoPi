@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import * as evalIndex from "@oh-my-pi/pi-coding-agent/eval";
-import type { EvalToolDetails } from "@oh-my-pi/pi-coding-agent/eval/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { EvalTool } from "@oh-my-pi/pi-coding-agent/tools/eval";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import * as evalIndex from "@satopi/pi-coding-agent/eval";
+import type { EvalToolDetails } from "@satopi/pi-coding-agent/eval/types";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { EvalTool } from "@satopi/pi-coding-agent/tools/eval";
 
 function makeSession(): ToolSession {
 	return {

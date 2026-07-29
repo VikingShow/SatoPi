@@ -4,8 +4,8 @@ import {
 	type PendingExtensionRequest,
 	type RpcInputFrameDeps,
 	RpcShutdownCoordinator,
-} from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-mode";
-import type { RpcCommand, RpcResponse } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-types";
+} from "@satopi/pi-coding-agent/modes/rpc/rpc-mode";
+import type { RpcCommand, RpcResponse } from "@satopi/pi-coding-agent/modes/rpc/rpc-types";
 
 type OutputFrame = RpcResponse | object;
 

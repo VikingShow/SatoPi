@@ -6,7 +6,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getPluginsDir, getPluginsLockfile, isEnoent } from "@oh-my-pi/pi-utils";
+import { getPluginsDir, getPluginsLockfile, isEnoent } from "@satopi/pi-utils";
 import { getConfigDirPaths } from "../../config";
 import { registerPluginCacheInvalidator, resolveActiveProjectRegistryPath } from "../../discovery/helpers";
 import { installLegacyPiSpecifierShim } from "./legacy-pi-compat";
@@ -93,7 +93,7 @@ async function collectPluginsAtRoot(
 		if (!isEnoent(err)) throw err;
 	}
 
-	const lockPath = path.join(root, "omp-plugins.lock.json");
+	const lockPath = path.join(root, "stp-plugins.lock.json");
 	let runtimeConfig: PluginRuntimeConfig;
 	try {
 		runtimeConfig = normalizePluginRuntimeConfig(await Bun.file(lockPath).json());

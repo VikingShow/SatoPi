@@ -20,7 +20,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import { RoleAssetManager } from "../agent/role-asset";
 import { isProviderEnabled } from "../capability";
 import { findAllNearestProjectConfigDirs, getConfigDirs } from "../config";
@@ -110,7 +110,7 @@ export async function discoverAgents(cwd: string, home: string = os.homedir()): 
 	// `task` agent surface dedups identically to the sibling skills/hooks/tools
 	// surface in `discovery/omp-plugins.ts`. Gate on `omp-plugins` so
 	// disabledProviders suppresses the whole extension-package surface.
-	const extensionRoots = isProviderEnabled("omp-plugins")
+	const extensionRoots = isProviderEnabled("stp-plugins")
 		? await listOmpExtensionRoots({ cwd: resolvedCwd, home, repoRoot: null })
 		: [];
 	for (const root of extensionRoots) {

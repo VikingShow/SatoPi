@@ -10,7 +10,7 @@ import {
 	getProjectPluginOverridesPath,
 	isEnoent,
 	logger,
-} from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-utils";
 import { withExitGuard } from "../utils";
 import { type GitSource, parseGitUrl } from "./git-url";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "./legacy-pi-compat";
@@ -181,7 +181,7 @@ export class PluginManager {
 					pkgJsonPath,
 					JSON.stringify(
 						{
-							name: "omp-plugins",
+							name: "stp-plugins",
 							private: true,
 							dependencies: {},
 						},
@@ -294,7 +294,7 @@ export class PluginManager {
 			throw err;
 		}
 
-		const backupRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-plugin-backup-"));
+		const backupRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "stp-plugin-backup-"));
 		const backupPath = path.join(backupRoot, "package");
 		await fs.promises.cp(packagePath, backupPath, { recursive: true, verbatimSymlinks: true });
 		return { actualName, packagePath, backupRoot, backupPath };

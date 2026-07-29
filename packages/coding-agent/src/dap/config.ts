@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 // @ts-expect-error verbatimModuleSyntax conflicts with ambient const enums
-import { isRecord, logger, WhichCachePolicy } from "@oh-my-pi/pi-utils";
+import { isRecord, logger, WhichCachePolicy } from "@satopi/pi-utils";
 import { YAML } from "bun";
 import { getConfigDirPaths } from "../config";
 import { getPreloadedPluginRoots } from "../discovery/helpers";

@@ -1,9 +1,10 @@
 /**
- * @oh-my-pi/pi-web — Shared web core for SatoPi
+ * @satopi/pi-web — Shared web core for SatoPi
  */
-export { SseClient } from "./sse-client";
-export type { SseEventHandler, ConnectionHandler } from "./sse-client";
-export { getHighlighter, highlightCode } from "./shiki";
-export { fetchJson, fetchBlob, ApiError } from "./fetch-wrapper";
+
 export type { ApiErrorCategory, FetchJsonOptions } from "./fetch-wrapper";
-export type { SseEvent, ChatMessage, ChatChannel } from "./types";
+export { ApiError, fetchBlob, fetchJson } from "./fetch-wrapper";
+export { getHighlighter, highlightCode } from "./shiki";
+export type { ConnectionHandler, SseEventHandler } from "./sse-client";
+export { SseClient } from "./sse-client";
+export type { ChatChannel, ChatMessage, SseEvent } from "./types";

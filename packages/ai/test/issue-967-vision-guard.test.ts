@@ -1,16 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { convertAnthropicMessages } from "@oh-my-pi/pi-ai/providers/anthropic";
-import { convertMessages as convertGoogleMessages } from "@oh-my-pi/pi-ai/providers/google-shared";
-import { convertCodexResponsesMessages } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { convertMessages as convertOpenAICompletionsMessages } from "@oh-my-pi/pi-ai/providers/openai-completions";
-import {
-	appendResponsesToolResultMessages,
-	convertResponsesInputContent,
-} from "@oh-my-pi/pi-ai/providers/openai-shared";
-import { NON_VISION_IMAGE_PLACEHOLDER } from "@oh-my-pi/pi-ai/providers/vision-guard";
-import type { Api, AssistantMessage, Context, Model, ModelSpec, ToolResultMessage, Usage } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import type { ResolvedOpenAICompat } from "@oh-my-pi/pi-catalog/types";
+import { convertAnthropicMessages } from "@satopi/pi-ai/providers/anthropic";
+import { convertMessages as convertGoogleMessages } from "@satopi/pi-ai/providers/google-shared";
+import { convertCodexResponsesMessages } from "@satopi/pi-ai/providers/openai-codex-responses";
+import { convertMessages as convertOpenAICompletionsMessages } from "@satopi/pi-ai/providers/openai-completions";
+import { appendResponsesToolResultMessages, convertResponsesInputContent } from "@satopi/pi-ai/providers/openai-shared";
+import { NON_VISION_IMAGE_PLACEHOLDER } from "@satopi/pi-ai/providers/vision-guard";
+import type { Api, AssistantMessage, Context, Model, ModelSpec, ToolResultMessage, Usage } from "@satopi/pi-ai/types";
+import { buildModel } from "@satopi/pi-catalog/build";
+import type { ResolvedOpenAICompat } from "@satopi/pi-catalog/types";
 
 const emptyUsage: Usage = {
 	input: 0,

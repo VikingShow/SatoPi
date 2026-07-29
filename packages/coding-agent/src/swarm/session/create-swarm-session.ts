@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import { OffloadManager } from "../../offload/manager";
 import { OffloadSource } from "../context-manager/sources/offload-source";
 import { registerBuiltinHooks } from "../hook-system/register-builtins";

@@ -16,7 +16,7 @@
  * not part of the NodeBehavior interface.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "../behaviors/index";

@@ -1,10 +1,10 @@
-import type { AgentToolContext, ToolCallContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { AgentRuntime } from "../swarm/agent-runtime";
 import type { EventBus } from "../utils/event-bus";
 
-declare module "@oh-my-pi/pi-agent-core" {
+declare module "@satopi/pi-agent-core" {
 	interface AgentToolContext extends CustomToolContext {
 		ui?: ExtensionUIContext;
 		hasUI?: boolean;

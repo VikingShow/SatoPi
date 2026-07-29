@@ -7,10 +7,9 @@
  * Lifecycle: draft → proposed → approved → deprecated
  */
 
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils";
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getProjectAgentDir } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types
@@ -119,7 +118,6 @@ export interface RoleCreateInput {
 function getRolesDir(workspaceDir: string): string {
 	return path.join(getProjectAgentDir(workspaceDir), "roles");
 }
-
 
 // ============================================================================
 // RoleAssetManager

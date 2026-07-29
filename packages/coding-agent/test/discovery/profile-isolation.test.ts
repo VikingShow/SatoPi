@@ -17,11 +17,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { clearCache as clearFsCache } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type Skill, skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { type SlashCommand, slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { getConfigRootDir, removeWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
+import { clearCache as clearFsCache } from "@satopi/pi-coding-agent/capability/fs";
+import { type Skill, skillCapability } from "@satopi/pi-coding-agent/capability/skill";
+import { type SlashCommand, slashCommandCapability } from "@satopi/pi-coding-agent/capability/slash-command";
+import { loadCapability } from "@satopi/pi-coding-agent/discovery";
+import { getConfigRootDir, removeWithRetries, setAgentDir } from "@satopi/pi-utils";
 
 const originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
 const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
@@ -46,9 +46,9 @@ describe("native user-level config discovery follows the active profile", () => 
 
 	beforeEach(async () => {
 		originalHome = process.env.HOME;
-		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "omp-profile-iso-home-"));
-		projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-profile-iso-project-"));
-		profileAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-profile-iso-agent-"));
+		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "stp-profile-iso-home-"));
+		projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-profile-iso-project-"));
+		profileAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-profile-iso-agent-"));
 		process.env.HOME = tempHome;
 		vi.spyOn(os, "homedir").mockReturnValue(tempHome);
 		setAgentDir(profileAgentDir);

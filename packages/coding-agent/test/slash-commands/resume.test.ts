@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { resolveResumableSession } from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import { computeDefaultSessionDir } from "@oh-my-pi/pi-coding-agent/session/session-paths";
-import { FileSessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
-import { executeBuiltinSlashCommand } from "@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry";
-import { getConfigRootDir, setAgentDir } from "@oh-my-pi/pi-utils";
+import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
+import { resolveResumableSession } from "@satopi/pi-coding-agent/session/session-listing";
+import { computeDefaultSessionDir } from "@satopi/pi-coding-agent/session/session-paths";
+import { FileSessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
+import { executeBuiltinSlashCommand } from "@satopi/pi-coding-agent/slash-commands/builtin-registry";
+import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 
 let tempDir: string;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -15,7 +15,7 @@ const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
 const storage = new FileSessionStorage();
 
 beforeEach(async () => {
-	tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-resume-command-"));
+	tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-resume-command-"));
 	setAgentDir(path.join(tempDir, "agent"));
 });
 

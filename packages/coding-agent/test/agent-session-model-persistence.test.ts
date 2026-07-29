@@ -1,18 +1,18 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import { type Api, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { type CreateAgentSessionResult, createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { getRestorableSessionModels } from "@oh-my-pi/pi-coding-agent/session/session-context";
-import { EPHEMERAL_MODEL_CHANGE_ROLE } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { AUTO_THINKING } from "@oh-my-pi/pi-coding-agent/thinking";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent } from "@satopi/pi-agent-core";
+import { type Api, Effort, type Model } from "@satopi/pi-ai";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { type CreateAgentSessionResult, createAgentSession } from "@satopi/pi-coding-agent/sdk";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { getRestorableSessionModels } from "@satopi/pi-coding-agent/session/session-context";
+import { EPHEMERAL_MODEL_CHANGE_ROLE } from "@satopi/pi-coding-agent/session/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AUTO_THINKING } from "@satopi/pi-coding-agent/thinking";
+import { TempDir } from "@satopi/pi-utils";
 
 describe("AgentSession model persistence", () => {
 	let tempDir: TempDir;

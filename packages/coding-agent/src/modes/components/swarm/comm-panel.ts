@@ -3,7 +3,7 @@
  * `framedBlock`.  Uses the global `theme` for all colours.
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import type { Theme } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
 
@@ -23,14 +23,18 @@ export interface CommMessage {
 // ============================================================================
 
 export function renderCommPanel(messages: CommMessage[], theme: Theme): Component {
-	return swarmPanel("Comm", ({ innerWidth, theme }) => {
-		if (messages.length === 0) {
-			return [theme.fg("dim", "  No messages")];
-		}
+	return swarmPanel(
+		"Comm",
+		({ innerWidth, theme }) => {
+			if (messages.length === 0) {
+				return [theme.fg("dim", "  No messages")];
+			}
 
-		const shown = messages.slice(0, 10);
-		return shown.map(msg => formatMessageLine(msg, innerWidth, theme));
-	}, theme);
+			const shown = messages.slice(0, 10);
+			return shown.map(msg => formatMessageLine(msg, innerWidth, theme));
+		},
+		theme,
+	);
 }
 
 // ============================================================================
@@ -63,10 +67,7 @@ function formatMessageLine(msg: CommMessage, maxWidth: number, theme: Theme): st
 	const prefix = ` ${time} ${from}${to}: `;
 	const prefixLen = prefix.replace(/\x1b\[[0-9;]*m/g, "").length;
 	const bodyBudget = Math.max(5, maxWidth - prefixLen - 1);
-	const body =
-		msg.body.length > bodyBudget
-			? `${msg.body.slice(0, bodyBudget - 2)}…`
-			: msg.body;
+	const body = msg.body.length > bodyBudget ? `${msg.body.slice(0, bodyBudget - 2)}…` : msg.body;
 
 	return `${prefix}${body}`;
 }

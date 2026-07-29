@@ -7,8 +7,8 @@
  * L3 (MermaidSynthesizer) 由独立模块 `mermaid-synthesizer.ts` 处理。
  */
 
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { SingleResult } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ReviewVerdict } from "../../swarm/core/pipeline";
 import type { L2MermaidOutput, L2NewEntry, LlmMermaidSynthesizer } from "../mermaid/llm-synthesizer";
 import type { AgentOffloadEntry } from "./agent-summarizer";

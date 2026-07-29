@@ -10,7 +10,7 @@
  * the pipeline controller.
  */
 
-import type { AgentLoopConfig } from "@oh-my-pi/pi-agent-core";
+import type { AgentLoopConfig } from "@satopi/pi-agent-core";
 import type {
 	AgentDefinition,
 	AgentProgress,
@@ -18,7 +18,7 @@ import type {
 	ModelRegistry,
 	Settings,
 	SingleResult,
-} from "@oh-my-pi/pi-coding-agent";
+} from "@satopi/pi-coding-agent";
 import type { AgentRuntime } from "../agent-runtime";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";

@@ -15,8 +15,8 @@
  *   默认启用 LLM 模式生成语义化摘要，失败时自动降级到文本截取。
  */
 
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import { logger } from "@satopi/pi-utils";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import { L1LlmSummarizer } from "./llm-summarizer";

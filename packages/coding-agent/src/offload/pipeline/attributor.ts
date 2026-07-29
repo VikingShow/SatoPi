@@ -7,7 +7,7 @@
  * node_id 格式: {iter三位数}-N{序号}，如 "001-N1"
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types

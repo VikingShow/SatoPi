@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, UsageLimit, UsageReport } from "@oh-my-pi/pi-ai";
-import { type Component, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import type { AssistantMessage, UsageLimit, UsageReport } from "@satopi/pi-ai";
+import { type Component, truncateToWidth, visibleWidth } from "@satopi/pi-tui";
+import { getProjectDir } from "@satopi/pi-utils";
 import { settings } from "../../../config/settings";
 import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";

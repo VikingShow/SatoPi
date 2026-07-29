@@ -74,7 +74,7 @@ export function harborRunnerArgs(
 		}
 	}
 	if (request.prebuiltBinaries) {
-		for (const name of ["omp-linux-arm64", "omp-linux-x64"]) {
+		for (const name of ["stp-linux-arm64", "stp-linux-x64"]) {
 			const binary = path.join(REPO_ROOT, "packages", "coding-agent", "dist", name);
 			if (fs.existsSync(binary)) argv.push("--binary", binary);
 		}

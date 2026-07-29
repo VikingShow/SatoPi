@@ -20,7 +20,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ExtractedLesson, LoopRunStats } from "./extractor";
 
 // ============================================================================

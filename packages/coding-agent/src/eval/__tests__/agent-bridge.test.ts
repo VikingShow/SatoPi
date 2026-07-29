@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { TempDir } from "@satopi/pi-utils";
 import { Settings } from "../../config/settings";
 import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
@@ -983,7 +983,7 @@ describe("runEvalAgent isolation", () => {
 		await runEvalAgent({ prompt: "plain handle", handle: true }, { session: makeSession() });
 
 		const removedArtifactsDir = rmSpy.mock.calls.some(
-			([target]) => typeof target === "string" && target.includes("omp-eval-agent-"),
+			([target]) => typeof target === "string" && target.includes("stp-eval-agent-"),
 		);
 		expect(removedArtifactsDir).toBe(false);
 	});
@@ -1366,7 +1366,7 @@ describe("runEvalAgent isolation", () => {
 
 		expect(result.details.patchPath).toMatch(/\.patch$/);
 		const removedArtifactsDir = rmSpy.mock.calls.some(
-			([target]) => typeof target === "string" && target.includes("omp-eval-agent-"),
+			([target]) => typeof target === "string" && target.includes("stp-eval-agent-"),
 		);
 		expect(removedArtifactsDir).toBe(false);
 	});
@@ -1388,7 +1388,7 @@ describe("runEvalAgent isolation", () => {
 		await runEvalAgent({ prompt: "scout", isolated: true }, { session: isolatedSession() });
 
 		const removedArtifactsDir = rmSpy.mock.calls.some(
-			([target]) => typeof target === "string" && target.includes("omp-eval-agent-"),
+			([target]) => typeof target === "string" && target.includes("stp-eval-agent-"),
 		);
 		expect(removedArtifactsDir).toBe(true);
 	});
@@ -1410,7 +1410,7 @@ describe("runEvalAgent isolation", () => {
 		await runEvalAgent({ prompt: "scout", isolated: true, handle: true }, { session: isolatedSession() });
 
 		const removedArtifactsDir = rmSpy.mock.calls.some(
-			([target]) => typeof target === "string" && target.includes("omp-eval-agent-"),
+			([target]) => typeof target === "string" && target.includes("stp-eval-agent-"),
 		);
 		expect(removedArtifactsDir).toBe(false);
 	});

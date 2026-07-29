@@ -12,9 +12,9 @@
  * Callers provide the channel instance via tool context.
  */
 
-import type { AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentTool, AgentToolContext, AgentToolResult } from "@satopi/pi-agent-core";
+import type { ToolExample } from "@satopi/pi-ai";
+import { logger } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { IrcBus } from "../irc/bus";
 import { CommChannel } from "../swarm/comm-bus/comm-channel";
@@ -46,7 +46,7 @@ const roundsField = type("number").describe("number of discussion rounds (defaul
 // Context extension: expose CommChannel via tool context
 // ============================================================================
 
-declare module "@oh-my-pi/pi-agent-core" {
+declare module "@satopi/pi-agent-core" {
 	interface AgentToolContext {
 		commChannel?: CommChannel;
 		activityLogger?: ActivityLogger;

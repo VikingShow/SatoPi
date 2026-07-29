@@ -12,13 +12,13 @@
  */
 
 import * as fs from "node:fs/promises";
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import { IrcBus } from "../../irc/bus";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentSpec } from "../agent-runtime/agent-spec";
-import { IrcBus } from "../../irc/bus";
 import { type LoopSwarmConfig, parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
 import type { RunManager } from "../core/services";
 import type { Chapter, StateTracker } from "../core/state";
@@ -244,7 +244,6 @@ export class ScriptManager {
 					"system",
 					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
 				);
-
 
 				if (!this.#runtime) {
 					logger.error("[ScriptManager] AgentRuntime is required for plan debate.");

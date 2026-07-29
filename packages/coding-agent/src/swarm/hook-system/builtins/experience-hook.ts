@@ -8,10 +8,17 @@
  * @module hook-system/builtins/experience-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { ExperienceEntry, ExperienceStore } from "../../curtain/experience";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration, OffloadFlushPayload, WorkflowAfterPhasePayload } from "../types";
+import type {
+	HookContext,
+	HookEvent,
+	HookPayloadMap,
+	HookRegistration,
+	OffloadFlushPayload,
+	WorkflowAfterPhasePayload,
+} from "../types";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook

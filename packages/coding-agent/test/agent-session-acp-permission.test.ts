@@ -6,22 +6,22 @@
  * behavior they have in the TUI.
  */
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { createMockModel, type MockModelOptions } from "@oh-my-pi/pi-ai/providers/mock";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EditTool } from "@oh-my-pi/pi-coding-agent/edit";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { Agent, type AgentTool } from "@satopi/pi-agent-core";
+import { createMockModel, type MockModelOptions } from "@satopi/pi-ai/providers/mock";
+import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { type SettingPath, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { EditTool } from "@satopi/pi-coding-agent/edit";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
 import type {
 	ClientBridge,
 	ClientBridgePermissionOutcome,
 	ClientBridgePermissionToolCall,
-} from "@oh-my-pi/pi-coding-agent/session/client-bridge";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { TempDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/session/client-bridge";
+import { convertToLlm } from "@satopi/pi-coding-agent/session/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { TempDir } from "@satopi/pi-utils";
 import { type } from "arktype";
 
 // ---------------------------------------------------------------------------

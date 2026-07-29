@@ -11,11 +11,12 @@ import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { MarkEnvironment } from "../../coordination/mark-environment";
 import { IrcBus } from "../../irc/bus";
+import { OffloadManager } from "../../offload/manager";
 import { AgentRegistry } from "../../registry/agent-registry";
+import { MemorySessionStorage } from "../../session/session-storage";
 import { discoverAgents } from "../../task/discovery";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
-import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { StateTracker } from "../core/state";
 import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
@@ -26,8 +27,6 @@ import type { NodeContext } from "../graph/schema";
 import { type GraphDefinition, loadGraphDefinition } from "../graph/schema";
 import { HookPipeline } from "../hook-system/hook-pipeline";
 import { ActivityLogger } from "../infra/activity-logger";
-import { OffloadManager } from "../../offload/manager";
-import { MemorySessionStorage } from "../../session/session-storage";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 
@@ -254,7 +253,14 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Test task" },
 				{ phase: "stage", multiAgent: false, humanMode: "observer" as const },
-				{ taskDescription: "Test task", workspace: WORKSPACE, swarmDir: "/tmp", turnNumber: 0, phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
+				{
+					taskDescription: "Test task",
+					workspace: WORKSPACE,
+					swarmDir: "/tmp",
+					turnNumber: 0,
+					phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const },
+					accumulated: {},
+				},
 			);
 			expect(result).toBeDefined();
 			expect(result.injectedMessages).toBeDefined();
@@ -285,7 +291,13 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 		it("tracks persistent agent status across lifecycle", () => {
 			const registry = AgentRegistry.global();
-			registry.register({ id: "persistent-test-2", displayName: "Status Test", kind: "persistent" as const, session: null, profileId: "dev-v2" });
+			registry.register({
+				id: "persistent-test-2",
+				displayName: "Status Test",
+				kind: "persistent" as const,
+				session: null,
+				profileId: "dev-v2",
+			});
 
 			registry.setStatus("persistent-test-2", "running");
 			expect(registry.get("persistent-test-2")?.status).toBe("running");
@@ -352,7 +364,14 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Build API" },
 				{ phase: "stage", multiAgent: false, humanMode: "observer" as const },
-				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e", swarmDir: "/tmp", turnNumber: 0, phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
+				{
+					taskDescription: "Build API",
+					workspace: "/tmp/test-offload-e2e",
+					swarmDir: "/tmp",
+					turnNumber: 0,
+					phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const },
+					accumulated: {},
+				},
 			);
 
 			expect(result.systemPrompt).toContain("<offload_context>");
@@ -369,7 +388,14 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Build API" },
 				{ phase: "script", multiAgent: false, humanMode: "observer" as const },
-				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e", swarmDir: "/tmp", turnNumber: 0, phase: { phase: "script", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
+				{
+					taskDescription: "Build API",
+					workspace: "/tmp/test-offload-e2e",
+					swarmDir: "/tmp",
+					turnNumber: 0,
+					phase: { phase: "script", multiAgent: false, humanMode: "observer" as const },
+					accumulated: {},
+				},
 			);
 
 			expect(result.systemPrompt).not.toContain("<offload_context>");

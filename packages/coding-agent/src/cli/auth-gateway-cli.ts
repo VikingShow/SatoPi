@@ -23,11 +23,11 @@ import {
 	type CredentialCompletionResult,
 	completeSimple,
 	type Model,
-} from "@oh-my-pi/pi-ai";
-import { AuthBrokerClient, RemoteAuthCredentialStore, type SnapshotResponse } from "@oh-my-pi/pi-ai/auth-broker";
-import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
-import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@oh-my-pi/pi-catalog/models";
-import { getConfigRootDir, isEnoent, VERSION } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-ai";
+import { AuthBrokerClient, RemoteAuthCredentialStore, type SnapshotResponse } from "@satopi/pi-ai/auth-broker";
+import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@satopi/pi-ai/auth-gateway";
+import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@satopi/pi-catalog/models";
+import { getConfigRootDir, isEnoent, VERSION } from "@satopi/pi-utils";
 import chalk from "chalk";
 import { type AuthBrokerClientConfig, resolveAuthBrokerConfig } from "../session/auth-broker-config";
 

@@ -1,16 +1,16 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import type { AgentToolContext } from "@satopi/pi-agent-core";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import type {
 	ExtensionAskDialogQuestion,
 	ExtensionAskDialogResult,
 	ExtensionUISelectItem,
-} from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { getThemeByName, initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { AskTool, askToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/ask";
-import { ToolAbortError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
+} from "@satopi/pi-coding-agent/extensibility/extensions";
+import { getThemeByName, initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { AskTool, askToolRenderer } from "@satopi/pi-coding-agent/tools/ask";
+import { ToolAbortError } from "@satopi/pi-coding-agent/tools/tool-errors";
 import { type } from "arktype";
 
 function createSession(overrides: Partial<ToolSession> = {}): ToolSession {

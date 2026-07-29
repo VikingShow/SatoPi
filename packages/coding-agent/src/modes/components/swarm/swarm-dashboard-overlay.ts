@@ -6,12 +6,12 @@
  * Keyboard: Esc / q → close overlay.
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import type { WorkflowFsm } from "../../../swarm/core/workflow-fsm";
-import { theme as appTheme } from "../../theme/theme";
 import type { Theme } from "../../theme/theme";
+import { theme as appTheme } from "../../theme/theme";
 import type { CommMessage } from "./comm-panel";
 import type { ContextPanelState } from "./context-panel";
 import type { DashboardInput } from "./swarm-dashboard";

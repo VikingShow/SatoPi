@@ -16,10 +16,10 @@
  *       → 合并结果，steer 回父 Agent
  */
 
-import type { AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage, AgentTool } from "@satopi/pi-agent-core";
+import { Agent } from "@satopi/pi-agent-core";
+import type { Model } from "@satopi/pi-ai";
+import { logger } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types

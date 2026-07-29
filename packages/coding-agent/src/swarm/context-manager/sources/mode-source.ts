@@ -11,7 +11,7 @@
  *   - curtain, other → standalone (independent work)
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 

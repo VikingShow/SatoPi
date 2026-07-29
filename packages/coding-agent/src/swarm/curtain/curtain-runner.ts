@@ -8,8 +8,8 @@
  * After both complete, waits for user to "Applaud" before finalizing.
  */
 
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger, prompt } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger, prompt } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import { IrcBus } from "../../irc/bus";

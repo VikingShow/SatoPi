@@ -31,7 +31,7 @@
  *   5. exit() → clean up agent handles, task queue, and channel
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../comm-bus/comm-channel";
 import type { Chapter } from "../core/state";

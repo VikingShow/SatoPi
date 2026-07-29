@@ -4,8 +4,8 @@
  * Calls Z.AI's remote MCP server (`webSearchPrime`) and adapts results into
  * the unified SearchResponse shape used by the web search tool.
  */
-import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@oh-my-pi/pi-ai";
-import { isRecord } from "@oh-my-pi/pi-utils";
+import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@satopi/pi-ai";
+import { isRecord } from "@satopi/pi-utils";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { dateToAgeSeconds } from "../utils";
@@ -61,7 +61,7 @@ interface ZaiMcpPostResult {
 
 const ZAI_MCP_PROTOCOL_VERSION = "2025-03-26";
 const ZAI_MCP_CLIENT_INFO = {
-	name: "omp-coding-agent",
+	name: "stp-coding-agent",
 	version: "1.0.0",
 };
 

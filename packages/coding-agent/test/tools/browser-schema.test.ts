@@ -1,17 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeTools } from "@oh-my-pi/pi-agent-core/agent-loop";
-import type { ToolCall, TSchema } from "@oh-my-pi/pi-ai";
+import { normalizeTools } from "@satopi/pi-agent-core/agent-loop";
+import type { ToolCall, TSchema } from "@satopi/pi-ai";
 import {
 	adaptSchemaForStrict,
 	toolWireSchema,
 	validateJsonSchemaValue,
 	validateStrictSchemaEnforcement,
-} from "@oh-my-pi/pi-ai/utils/schema";
-import { validateToolCall } from "@oh-my-pi/pi-ai/utils/validation";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { type BrowserParams, BrowserTool } from "@oh-my-pi/pi-coding-agent/tools/browser";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+} from "@satopi/pi-ai/utils/schema";
+import { validateToolCall } from "@satopi/pi-ai/utils/validation";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import type { ToolSession } from "@satopi/pi-coding-agent/sdk";
+import { type BrowserParams, BrowserTool } from "@satopi/pi-coding-agent/tools/browser";
+import { INTENT_FIELD } from "@satopi/pi-wire";
 
 function makeSession(): ToolSession {
 	return {

@@ -8,7 +8,7 @@ import {
 	logger,
 	stripWindowsExtendedLengthPathPrefix,
 	workerHostEntry,
-} from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-utils";
 import type { Subprocess } from "bun";
 
 /**
@@ -262,7 +262,7 @@ interface StderrCapture {
 /** Create a file-backed stderr target that does not pin Bun's event loop. */
 function createStderrCapture(exitLabel: string): StderrCapture {
 	try {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-worker-stderr-"));
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-worker-stderr-"));
 		const fd = fs.openSync(path.join(dir, "stderr.log"), "w+");
 		const cleanupOnExit = (): void => cleanupStderrCapture({ target: fd, fd, dir, cleanupOnExit: null });
 		process.once("exit", cleanupOnExit);

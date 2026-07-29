@@ -16,12 +16,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Agent, type AgentMessage } from "@oh-my-pi/pi-agent-core";
-import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
-import type { TextContent } from "@oh-my-pi/pi-ai";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent, type AgentMessage } from "@satopi/pi-agent-core";
+import * as compactionModule from "@satopi/pi-agent-core/compaction";
+import type { TextContent } from "@satopi/pi-ai";
+import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { TempDir } from "@satopi/pi-utils";
 import { ModelRegistry } from "../src/config/model-registry";
 import { Settings } from "../src/config/settings";
 import { resolveLocalUrlToPath } from "../src/internal-urls";

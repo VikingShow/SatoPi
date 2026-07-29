@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import * as path from "node:path";
-import { registerCustomApi, unregisterCustomApis } from "@oh-my-pi/pi-ai/api-registry";
+import { registerCustomApi, unregisterCustomApis } from "@satopi/pi-ai/api-registry";
 import type {
 	Api,
 	Context,
@@ -9,28 +9,28 @@ import type {
 	RemoteCompactionConfig,
 	SimpleStreamOptions,
 	ThinkingConfig,
-} from "@oh-my-pi/pi-ai/types";
-import type { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { isVertexExpressOpenAIUrl } from "@oh-my-pi/pi-catalog/hosts";
-import { readModelCache } from "@oh-my-pi/pi-catalog/model-cache";
+} from "@satopi/pi-ai/types";
+import type { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { isVertexExpressOpenAIUrl } from "@satopi/pi-catalog/hosts";
+import { readModelCache } from "@satopi/pi-catalog/model-cache";
 import {
 	createModelManager,
 	type ModelManagerOptions,
 	type ModelRefreshStrategy,
-} from "@oh-my-pi/pi-catalog/model-manager";
-import { getBundledModels, getBundledProviders } from "@oh-my-pi/pi-catalog/models";
+} from "@satopi/pi-catalog/model-manager";
+import { getBundledModels, getBundledProviders } from "@satopi/pi-catalog/models";
 import {
 	googleAntigravityModelManagerOptions,
 	googleGeminiCliModelManagerOptions,
 	openaiCodexModelManagerOptions,
 	PROVIDER_DESCRIPTORS,
-} from "@oh-my-pi/pi-catalog/provider-models";
+} from "@satopi/pi-catalog/provider-models";
 import {
 	collapseBuiltModelVariants,
 	getVariantAliasSources,
 	resolveVariantAlias,
-} from "@oh-my-pi/pi-catalog/variant-collapse";
+} from "@satopi/pi-catalog/variant-collapse";
 
 const SPECIAL_MODEL_MANAGER_PROVIDER_IDS: readonly string[] = [
 	"google-antigravity",
@@ -61,11 +61,11 @@ const RUNTIME_DYNAMIC_MODEL_FETCH_TIMEOUT_MS = 15_000;
 const BUILT_IN_DISCOVERY_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 const BUILT_IN_DISCOVERY_NON_AUTHORITATIVE_RETRY_MS = 5 * 60 * 1000;
 
-import type { ApiKeyResolver, FetchImpl } from "@oh-my-pi/pi-ai";
-import { registerOAuthProvider, unregisterOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
-import type { OAuthCredentials, OAuthLoginCallbacks } from "@oh-my-pi/pi-ai/oauth/types";
-import { getBundledModelReferenceIndex, resolveModelReference } from "@oh-my-pi/pi-catalog/identity";
-import { isBunTestRuntime, isRecord, logger, wrapFetchForExtraCa } from "@oh-my-pi/pi-utils";
+import type { ApiKeyResolver, FetchImpl } from "@satopi/pi-ai";
+import { registerOAuthProvider, unregisterOAuthProviders } from "@satopi/pi-ai/oauth";
+import type { OAuthCredentials, OAuthLoginCallbacks } from "@satopi/pi-ai/oauth/types";
+import { getBundledModelReferenceIndex, resolveModelReference } from "@satopi/pi-catalog/identity";
+import { isBunTestRuntime, isRecord, logger, wrapFetchForExtraCa } from "@satopi/pi-utils";
 import { parseModelString, resolveProviderModelReference } from "../config/model-resolver";
 import type { AuthStorage, OAuthCredential } from "../session/auth-storage";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";

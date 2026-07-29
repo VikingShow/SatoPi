@@ -7,7 +7,7 @@
  * Uses the unified IOffloadManager interface from offload/.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { IOffloadManager } from "../../../offload/manager";
 import type { Chapter } from "../../core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";

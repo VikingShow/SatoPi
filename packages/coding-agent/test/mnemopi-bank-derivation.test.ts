@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { computeMnemopiBankScope, extendRecallWithLegacyBanks } from "@oh-my-pi/pi-coding-agent/mnemopi/config";
-import { removeWithRetries, TempDir } from "@oh-my-pi/pi-utils";
+import { computeMnemopiBankScope, extendRecallWithLegacyBanks } from "@satopi/pi-coding-agent/mnemopi/config";
+import { removeWithRetries, TempDir } from "@satopi/pi-utils";
 
 // Set up a fixture filesystem we can reuse across the two regression
 // suites — same shape as `~/.stp/memories/mnemopi/` on a real install.
@@ -60,7 +60,7 @@ describe("computeMnemopiBankScope (#2412)", () => {
 	it("returns the same per-project bank for one cwd regardless of git state", async () => {
 		const baseDir = await TempDir.create("@mnemopi-stable-bank-");
 		try {
-			const project = baseDir.join("projects", "omp-workstation");
+			const project = baseDir.join("projects", "stp-workstation");
 			await fs.mkdir(project, { recursive: true });
 			const withoutGit = computeMnemopiBankScope(undefined, project, "per-project").bank;
 

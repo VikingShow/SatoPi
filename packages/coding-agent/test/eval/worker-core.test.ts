@@ -3,13 +3,13 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { WorkerCore } from "@oh-my-pi/pi-coding-agent/eval/js/worker-core";
+import { WorkerCore } from "@satopi/pi-coding-agent/eval/js/worker-core";
 import type {
 	SessionSnapshot,
 	Transport,
 	WorkerInbound,
 	WorkerOutbound,
-} from "@oh-my-pi/pi-coding-agent/eval/js/worker-protocol";
+} from "@satopi/pi-coding-agent/eval/js/worker-protocol";
 
 interface WorkerHarness {
 	send(message: WorkerInbound): void;
@@ -404,7 +404,7 @@ console.log("survived concurrent setCwd");
 process.exit(0);
 `;
 
-		const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-same-realm-"));
+		const root = await fs.mkdtemp(path.join(os.tmpdir(), "stp-same-realm-"));
 		const probePath = path.join(root, "probe.ts");
 		try {
 			await Bun.write(probePath, probe);

@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { HistoryStorage } from "@oh-my-pi/pi-coding-agent/session/history-storage";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { HistoryStorage } from "@satopi/pi-coding-agent/session/history-storage";
+import { TempDir } from "@satopi/pi-utils";
 
 let tempDir: TempDir | null = null;
 
-async function freshStorage(prefix = "omp-history-session-"): Promise<{ storage: HistoryStorage; dbPath: string }> {
+async function freshStorage(prefix = "stp-history-session-"): Promise<{ storage: HistoryStorage; dbPath: string }> {
 	tempDir = TempDir.createSync(`@${prefix}`);
 	const dbPath = tempDir.join("history.db");
 	HistoryStorage.resetInstance();

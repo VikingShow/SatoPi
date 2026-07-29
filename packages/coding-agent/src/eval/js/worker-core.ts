@@ -1,5 +1,5 @@
 import { isMainThread } from "node:worker_threads";
-import { postmortem } from "@oh-my-pi/pi-utils";
+import { postmortem } from "@satopi/pi-utils";
 import { ToolError } from "../../tools/tool-errors";
 import { JsRuntime, type RuntimeHooks } from "./shared/runtime";
 import type {

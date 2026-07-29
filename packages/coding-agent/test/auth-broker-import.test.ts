@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai";
-import { type AuthBrokerServerHandle, startAuthBroker } from "@oh-my-pi/pi-ai/auth-broker";
-import { runAuthBrokerCommand } from "@oh-my-pi/pi-coding-agent/cli/auth-broker-cli";
-import { getAgentDbPath, removeWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
+import { AuthStorage, SqliteAuthCredentialStore } from "@satopi/pi-ai";
+import { type AuthBrokerServerHandle, startAuthBroker } from "@satopi/pi-ai/auth-broker";
+import { runAuthBrokerCommand } from "@satopi/pi-coding-agent/cli/auth-broker-cli";
+import { getAgentDbPath, removeWithRetries, setAgentDir } from "@satopi/pi-utils";
 
 const ORIGINAL_STDOUT_WRITE = process.stdout.write.bind(process.stdout);
 
@@ -25,8 +25,8 @@ describe("auth-broker import (CLIProxyAPI)", () => {
 
 	beforeEach(async () => {
 		originalAgentDir = process.env.OMP_AGENT_DIR;
-		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-agent-"));
-		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-cliproxy-"));
+		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-import-agent-"));
+		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-import-cliproxy-"));
 		setAgentDir(agentDir);
 	});
 
@@ -200,9 +200,9 @@ describe("auth-broker import (broker-routed)", () => {
 	beforeEach(async () => {
 		savedEnv.STP_AUTH_BROKER_URL = process.env.STP_AUTH_BROKER_URL;
 		savedEnv.STP_AUTH_BROKER_TOKEN = process.env.STP_AUTH_BROKER_TOKEN;
-		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-client-"));
-		brokerAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-broker-"));
-		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-cliproxy-broker-"));
+		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-import-client-"));
+		brokerAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-import-broker-"));
+		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-import-cliproxy-broker-"));
 		setAgentDir(agentDir);
 
 		brokerStore = await SqliteAuthCredentialStore.open(path.join(brokerAgentDir, "agent.db"));

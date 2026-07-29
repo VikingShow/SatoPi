@@ -1490,7 +1490,7 @@ def parse_args() -> argparse.Namespace:
     results_dir = (
         Path(args.results_dir)
         if args.results_dir
-        else tmp_root / f"omp-fixture-runs-{timestamp}"
+        else tmp_root / f"stp-fixture-runs-{timestamp}"
     )
     results_dir.mkdir(parents=True, exist_ok=True)
     workspace_root = tmp_root / f"rate-edit-tool-workspaces-{timestamp}"

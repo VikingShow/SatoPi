@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resolveUpdateMethodForTest } from "@oh-my-pi/pi-coding-agent/cli/update-cli";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+import { resolveUpdateMethodForTest } from "@satopi/pi-coding-agent/cli/update-cli";
+import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 // Issue #845: on Windows with Bun installed via Scoop, ~/.bun is a junction
 // to scoop\persist\Oven-sh.Bun\.bun. `bun pm bin -g` and the omp path that
@@ -24,7 +24,7 @@ describe("issue-845: resolveUpdateMethod follows symlinks/junctions", () => {
 	let ompPathViaLink: string;
 
 	beforeAll(() => {
-		tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omp-issue-845-"));
+		tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "stp-issue-845-"));
 		realBinDir = path.join(tmpRoot, "real", "bin");
 		fs.mkdirSync(realBinDir, { recursive: true });
 		fs.writeFileSync(path.join(realBinDir, "omp"), "#!/bin/sh\n", { mode: 0o755 });

@@ -3,14 +3,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { postmortem } from "@oh-my-pi/pi-utils";
+import { postmortem } from "@satopi/pi-utils";
 
 const postmortemModuleUrl = pathToFileURL(join(import.meta.dir, "../src/index.ts")).href;
 
 async function runPostmortemProbe(
 	source: string,
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
-	const root = await mkdtemp(join(tmpdir(), "omp-postmortem-probe-"));
+	const root = await mkdtemp(join(tmpdir(), "stp-postmortem-probe-"));
 	const probePath = join(root, "probe.ts");
 	try {
 		await Bun.write(probePath, source);

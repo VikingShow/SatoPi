@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/pi-tui",
+  "name": "@satopi/pi-tui",
   "version": "16.5.0",
   "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
   "homepage": "https://omp.sh",
@@ -37,8 +37,8 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-natives": "workspace:*",
-    "@oh-my-pi/pi-utils": "workspace:*",
+    "@satopi/pi-natives": "workspace:*",
+    "@satopi/pi-utils": "workspace:*",
     "lru-cache": "catalog:",
     "marked": "catalog:"
   },

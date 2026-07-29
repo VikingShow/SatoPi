@@ -8,7 +8,7 @@
  * @module hook-system/builtins/verification-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { VerificationHook } from "../../core/verification-hook";
 import type { HookContext, HookEvent, HookPayloadMap, HookRegistration, WorkflowBeforePhasePayload } from "../types";

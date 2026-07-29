@@ -8,7 +8,7 @@
  * Moved from swarm/agent-runtime/ to agent/ (Phase 3 — Wave 1 native swarm refactor).
  */
 
-import { logger, prompt } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@satopi/pi-utils";
 import type { AgentSpec } from "../swarm/agent-runtime/agent-spec";
 import roleFallbackPrompt from "../swarm/prompts/role-fallback.md" with { type: "text" };
 import roleProfilePrompt from "../swarm/prompts/role-profile.md" with { type: "text" };

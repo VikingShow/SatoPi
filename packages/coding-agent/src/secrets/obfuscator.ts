@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Context, ImageContent, Message, TextContent } from "@oh-my-pi/pi-ai";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import type { AssistantMessage, Context, ImageContent, Message, TextContent } from "@satopi/pi-ai";
 import type { SessionContext } from "../session/session-context";
 import { compileSecretRegex } from "./regex";
 

@@ -1,8 +1,8 @@
 /**
  * Manage bundled task agents.
  */
-import { APP_NAME } from "@oh-my-pi/pi-utils";
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+import { APP_NAME } from "@satopi/pi-utils";
+import { Args, Command, Flags, renderCommandHelp } from "@satopi/pi-utils/cli";
 import { type AgentsAction, type AgentsCommandArgs, runAgentsCommand } from "../cli/agents-cli";
 import { initTheme } from "../modes/theme/theme";
 

@@ -6,7 +6,7 @@ import {
 	Patch,
 	Patcher,
 	parsePatch,
-} from "@oh-my-pi/hashline";
+} from "@satopi/hashline";
 
 const PATH = "src/old.ts";
 const DEST = "src/new.ts";

@@ -7,27 +7,22 @@
  * compaction item as replacement history.
  */
 
-import type { Api, CodexCompactionContext, FetchImpl, Model, ProviderSessionState } from "@oh-my-pi/pi-ai";
-import { isTransientStatus, ProviderHttpError } from "@oh-my-pi/pi-ai/error";
-import { applyCodexResponsesLiteShape } from "@oh-my-pi/pi-ai/providers/openai-codex/request-transformer";
+import type { Api, CodexCompactionContext, FetchImpl, Model, ProviderSessionState } from "@satopi/pi-ai";
+import { isTransientStatus, ProviderHttpError } from "@satopi/pi-ai/error";
+import { applyCodexResponsesLiteShape } from "@satopi/pi-ai/providers/openai-codex/request-transformer";
 import {
 	createOpenAICodexCompactionRequestContext,
 	createOpenAICodexCompatibilityMetadata,
 	type OpenAICodexCompatibilityMetadata,
-} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
+} from "@satopi/pi-ai/providers/openai-codex-responses";
 import {
 	getOpenAIPromptCacheKey,
 	getOpenAIResponsesRoutingSessionId,
 	parseAzureDeploymentNameMap,
 	resolveOpenAIRequestSetup,
-} from "@oh-my-pi/pi-ai/providers/openai-shared";
-import {
-	CODEX_BASE_URL,
-	getCodexAccountId,
-	OPENAI_HEADER_VALUES,
-	OPENAI_HEADERS,
-} from "@oh-my-pi/pi-catalog/wire/codex";
-import { $env, logger, stringifyJson } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-ai/providers/openai-shared";
+import { CODEX_BASE_URL, getCodexAccountId, OPENAI_HEADER_VALUES, OPENAI_HEADERS } from "@satopi/pi-catalog/wire/codex";
+import { $env, logger, stringifyJson } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types & Configuration

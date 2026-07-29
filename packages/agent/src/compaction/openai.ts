@@ -15,14 +15,14 @@
  *   with `{ summary, shortSummary? }`.
  */
 
-import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
-import { applyCodexResponsesLiteShape } from "@oh-my-pi/pi-ai/providers/openai-codex/request-transformer";
+import { ProviderHttpError } from "@satopi/pi-ai/error";
+import { applyCodexResponsesLiteShape } from "@satopi/pi-ai/providers/openai-codex/request-transformer";
 import {
 	createOpenAICodexCompactionRequestContext,
 	createOpenAICodexCompatibilityMetadata,
-} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { parseAzureDeploymentNameMap, parseTextSignature } from "@oh-my-pi/pi-ai/providers/openai-shared";
-import { transformMessages } from "@oh-my-pi/pi-ai/providers/transform-messages";
+} from "@satopi/pi-ai/providers/openai-codex-responses";
+import { parseAzureDeploymentNameMap, parseTextSignature } from "@satopi/pi-ai/providers/openai-shared";
+import { transformMessages } from "@satopi/pi-ai/providers/transform-messages";
 import type {
 	Api,
 	AssistantMessage,
@@ -31,19 +31,14 @@ import type {
 	Message,
 	Model,
 	ProviderSessionState,
-} from "@oh-my-pi/pi-ai/types";
+} from "@satopi/pi-ai/types";
 import {
 	getOpenAIResponsesHistoryItems,
 	getOpenAIResponsesHistoryPayload,
 	normalizeResponsesToolCallId,
-} from "@oh-my-pi/pi-ai/utils";
-import {
-	CODEX_BASE_URL,
-	getCodexAccountId,
-	OPENAI_HEADER_VALUES,
-	OPENAI_HEADERS,
-} from "@oh-my-pi/pi-catalog/wire/codex";
-import { $env, logger, stringifyJson } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-ai/utils";
+import { CODEX_BASE_URL, getCodexAccountId, OPENAI_HEADER_VALUES, OPENAI_HEADERS } from "@satopi/pi-catalog/wire/codex";
+import { $env, logger, stringifyJson } from "@satopi/pi-utils";
 
 export * from "./compaction-v2-streaming";
 

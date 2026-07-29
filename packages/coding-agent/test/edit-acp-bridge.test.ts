@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { DEFAULT_FUZZY_THRESHOLD, executePatchSingle, executeReplaceSingle } from "@oh-my-pi/pi-coding-agent/edit";
-import { HashlineFilesystem } from "@oh-my-pi/pi-coding-agent/edit/hashline/filesystem";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import type { WritethroughCallback } from "@oh-my-pi/pi-coding-agent/lsp";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { ClientBridge } from "@oh-my-pi/pi-coding-agent/session/client-bridge";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { DEFAULT_FUZZY_THRESHOLD, executePatchSingle, executeReplaceSingle } from "@satopi/pi-coding-agent/edit";
+import { HashlineFilesystem } from "@satopi/pi-coding-agent/edit/hashline/filesystem";
+import { resolveLocalUrlToPath } from "@satopi/pi-coding-agent/internal-urls";
+import type { WritethroughCallback } from "@satopi/pi-coding-agent/lsp";
+import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
+import type { ClientBridge } from "@satopi/pi-coding-agent/session/client-bridge";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { removeWithRetries } from "@satopi/pi-utils";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ describe("HashlineFilesystem ACP fs routing", () => {
 
 	beforeEach(async () => {
 		resetSettingsForTest();
-		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-acp-hashline-"));
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-acp-hashline-"));
 		await Settings.init({ inMemory: true, cwd: tmpDir });
 	});
 
@@ -165,7 +165,7 @@ describe("executeReplaceSingle ACP fs routing", () => {
 
 	beforeEach(async () => {
 		resetSettingsForTest();
-		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-acp-replace-"));
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-acp-replace-"));
 		await Settings.init({ inMemory: true, cwd: tmpDir });
 	});
 
@@ -238,7 +238,7 @@ describe("executePatchSingle ACP fs routing", () => {
 
 	beforeEach(async () => {
 		resetSettingsForTest();
-		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-acp-patch-"));
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-acp-patch-"));
 		await Settings.init({ inMemory: true, cwd: tmpDir });
 	});
 

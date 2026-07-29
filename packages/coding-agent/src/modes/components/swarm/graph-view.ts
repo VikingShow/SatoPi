@@ -5,8 +5,7 @@
  * inside a system `framedBlock`.  Uses the global `theme` for all colours.
  */
 
-import { visibleWidth } from "@oh-my-pi/pi-tui";
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import type { Theme, ThemeColor } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
 
@@ -69,35 +68,38 @@ export function renderGraphView(input: GraphViewInput, theme: Theme): Component 
 	const maxWidth = input.width;
 	const nodeIds = Object.keys(input.graph.nodes ?? {});
 
-	const title = nodeIds.length > 0
-		? `Theatre Graph · ${nodeIds.length} nodes`
-		: "Theatre Graph";
+	const title = nodeIds.length > 0 ? `Theatre Graph · ${nodeIds.length} nodes` : "Theatre Graph";
 
-	return swarmPanel(title, ({ innerWidth, theme: t }) => {
-		if (maxWidth < 40) return narrowFallback(input, maxWidth, t);
-		if (nodeIds.length === 0) return [t.fg("dim", "  (no graph loaded)")];
+	return swarmPanel(
+		title,
+		({ innerWidth, theme: t }) => {
+			if (maxWidth < 40) return narrowFallback(input, maxWidth, t);
+			if (nodeIds.length === 0) return [t.fg("dim", "  (no graph loaded)")];
 
-		const depths = computeDepths(input.graph);
-		const waveGroups = groupByDepth(depths);
-		const waves = assignColumns(waveGroups, input.graph, maxWidth);
-		const totalWaves = input.totalWaves ?? waves.length;
-		const currentWave = input.currentWave ?? 0;
+			const depths = computeDepths(input.graph);
+			const waveGroups = groupByDepth(depths);
+			const waves = assignColumns(waveGroups, input.graph, maxWidth);
+			const totalWaves = input.totalWaves ?? waves.length;
+			const currentWave = input.currentWave ?? 0;
 
-		const lines: string[] = [];
+			const lines: string[] = [];
 
-		lines.push(""); // spacing after header
-		lines.push(...renderWaveBar(waves, currentWave, totalWaves, maxWidth, t));
-		lines.push("");
+			lines.push(""); // spacing after header
+			lines.push(...renderWaveBar(waves, currentWave, totalWaves, maxWidth, t));
+			lines.push("");
 
-		for (let wi = 0; wi < waves.length; wi++) {
-			lines.push(...renderWaveBoxes(waves[wi], maxWidth, t));
-			if (wi < waves.length - 1) {
-				lines.push(...renderEdgeLines(waves[wi], waves[wi + 1], input.graph.edges ?? [], maxWidth, t));
+			for (let wi = 0; wi < waves.length; wi++) {
+				lines.push(...renderWaveBoxes(waves[wi], maxWidth, t));
+				if (wi < waves.length - 1) {
+					lines.push(...renderEdgeLines(waves[wi], waves[wi + 1], input.graph.edges ?? [], maxWidth, t));
+				}
 			}
-		}
 
-		return lines;
-	}, theme, { headerMeta: buildFooterStats(input) });
+			return lines;
+		},
+		theme,
+		{ headerMeta: buildFooterStats(input) },
+	);
 }
 
 // ============================================================================
@@ -148,11 +150,7 @@ function groupByDepth(depths: Map<string, number>): string[][] {
 	return result;
 }
 
-function assignColumns(
-	waveGroups: string[][],
-	graph: GraphViewGraph,
-	maxWidth: number,
-): WaveLayout[] {
+function assignColumns(waveGroups: string[][], graph: GraphViewGraph, maxWidth: number): WaveLayout[] {
 	return waveGroups.map(group => {
 		const nodeCount = group.length;
 		const contentW = Math.min(
@@ -190,20 +188,26 @@ const STATUS_GLYPH: Record<string, string> = {
 	skipped: "⊘",
 };
 
-function statusColor(status: string, theme: Theme): ThemeColor {
+function statusColor(status: string, _theme: Theme): ThemeColor {
 	switch (status) {
-		case "completed": return "success";
-		case "running": return "accent";
-		case "waiting": return "warning";
-		case "failed": return "error";
-		case "aborted": return "error";
-		default: return "dim";
+		case "completed":
+			return "success";
+		case "running":
+			return "accent";
+		case "waiting":
+			return "warning";
+		case "failed":
+			return "error";
+		case "aborted":
+			return "error";
+		default:
+			return "dim";
 	}
 }
 
 function truncateToFit(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
-	return text.slice(0, maxLen - 1) + "…";
+	return `${text.slice(0, maxLen - 1)}…`;
 }
 
 function buildFooterStats(input: GraphViewInput): string {
@@ -251,7 +255,7 @@ function renderWaveBar(
 // Node boxes
 // ============================================================================
 
-function renderWaveBoxes(wave: WaveLayout, maxWidth: number, theme: Theme): string[] {
+function renderWaveBoxes(wave: WaveLayout, _maxWidth: number, theme: Theme): string[] {
 	const lines: string[] = [];
 
 	// Top edge
@@ -259,7 +263,7 @@ function renderWaveBoxes(wave: WaveLayout, maxWidth: number, theme: Theme): stri
 	for (const node of wave.nodes) {
 		const c = statusColor(node.status, theme);
 		const top = theme.fg(c, "┌") + theme.fg(c, "─".repeat(node.boxW - 2)) + theme.fg(c, "┐");
-		const pad = node.col - (topLine.length);
+		const pad = node.col - topLine.length;
 		topLine += " ".repeat(Math.max(0, pad)) + top;
 	}
 	lines.push(topLine);
@@ -270,8 +274,8 @@ function renderWaveBoxes(wave: WaveLayout, maxWidth: number, theme: Theme): stri
 		const c = statusColor(node.status, theme);
 		const label = truncateToFit(node.label, node.contentW);
 		const padded = label.padEnd(node.contentW);
-		const content = theme.fg(c, "│") + " " + padded + " " + theme.fg(c, "│");
-		const pad = node.col - (contentLine.length);
+		const content = `${theme.fg(c, "│")} ${padded} ${theme.fg(c, "│")}`;
+		const pad = node.col - contentLine.length;
 		contentLine += " ".repeat(Math.max(0, pad)) + content;
 	}
 	lines.push(contentLine);
@@ -281,7 +285,7 @@ function renderWaveBoxes(wave: WaveLayout, maxWidth: number, theme: Theme): stri
 	for (const node of wave.nodes) {
 		const c = statusColor(node.status, theme);
 		const bottom = theme.fg(c, "└") + theme.fg(c, "─".repeat(node.boxW - 2)) + theme.fg(c, "┘");
-		const pad = node.col - (bottomLine.length);
+		const pad = node.col - bottomLine.length;
 		bottomLine += " ".repeat(Math.max(0, pad)) + bottom;
 	}
 	lines.push(bottomLine);
@@ -297,7 +301,7 @@ function renderEdgeLines(
 	fromWave: WaveLayout,
 	toWave: WaveLayout,
 	edges: GraphViewEdge[],
-	maxWidth: number,
+	_maxWidth: number,
 	theme: Theme,
 ): string[] {
 	const lines: string[] = [];
@@ -342,7 +346,7 @@ function renderEdgeLines(
 		}
 
 		if (artifacts.length > 0) {
-			line += "  " + theme.fg("dim", artifacts.slice(0, 3).join(", "));
+			line += `  ${theme.fg("dim", artifacts.slice(0, 3).join(", "))}`;
 		}
 		lines.push(line);
 	}
@@ -354,6 +358,6 @@ function renderEdgeLines(
 // Fallbacks
 // ============================================================================
 
-function narrowFallback(_input: GraphViewInput, maxWidth: number, theme: Theme): string[] {
+function narrowFallback(_input: GraphViewInput, _maxWidth: number, theme: Theme): string[] {
 	return [theme.fg("dim", "  (terminal too narrow for graph view)")];
 }

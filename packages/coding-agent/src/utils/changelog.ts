@@ -1,4 +1,4 @@
-import { getLastChangelogVersionPath, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { getLastChangelogVersionPath, isEnoent, logger } from "@satopi/pi-utils";
 
 export interface ChangelogEntry {
 	major: number;

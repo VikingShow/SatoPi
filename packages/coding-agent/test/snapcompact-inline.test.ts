@@ -1,13 +1,13 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { Context, ImageContent, Message, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import type { Context, ImageContent, Message, TextContent, ToolResultMessage } from "@satopi/pi-ai";
+import { buildModel } from "@satopi/pi-catalog/build";
 import {
 	estimateInlineSavings,
 	planInlineSwaps,
 	type SnapcompactInlineOptions,
 	SnapcompactInlineTransformer,
-} from "@oh-my-pi/pi-coding-agent/session/snapcompact-inline";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+} from "@satopi/pi-coding-agent/session/snapcompact-inline";
+import * as snapcompact from "@satopi/snapcompact";
 
 /**
  * Token-dense deterministic word salad: each word is `w` + ≤5 digits, ~7

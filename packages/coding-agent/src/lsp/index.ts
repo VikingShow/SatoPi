@@ -6,8 +6,8 @@ import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ToolApprovalDecision,
-} from "@oh-my-pi/pi-agent-core";
-import { logger, once, prompt, untilAborted } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-agent-core";
+import { logger, once, prompt, untilAborted } from "@satopi/pi-utils";
 import type { BunFile } from "bun";
 import { type Theme, theme } from "../modes/theme/theme";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };

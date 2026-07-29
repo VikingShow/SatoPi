@@ -12,7 +12,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/bash",
 			platform: "linux",
 			homeDir: "/home/me",
@@ -24,7 +24,7 @@ describe("profile alias installer", () => {
 
 		expect(result.configPath).toBe("/home/me/.bashrc");
 		expect(result.command).toBe("omp --profile=work");
-		expect(files.get("/home/me/.bashrc")).toContain("omp-work() {");
+		expect(files.get("/home/me/.bashrc")).toContain("stp-work() {");
 		expect(files.get("/home/me/.bashrc")).toContain('command omp --profile=work "$@"');
 	});
 
@@ -63,7 +63,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/zsh",
 			platform: "darwin",
 			homeDir: "/Users/me",
@@ -80,7 +80,7 @@ describe("profile alias installer", () => {
 		});
 
 		expect(result.command).toBe("bun /repo/packages/coding-agent/src/cli.ts --profile=work");
-		expect(files.get("/Users/me/.zshrc")).toContain("omp-work() {");
+		expect(files.get("/Users/me/.zshrc")).toContain("stp-work() {");
 		expect(files.get("/Users/me/.zshrc")).toContain(
 			`command bun '/repo/packages/coding-agent/src/cli.ts' --profile=work "$@"`,
 		);
@@ -91,7 +91,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/zsh",
 			platform: "darwin",
 			homeDir: "/Users/me",
@@ -103,7 +103,7 @@ describe("profile alias installer", () => {
 		});
 
 		expect(result.configPath).toBe("/Users/me/.config/zsh/.zshrc");
-		expect(files.get(result.configPath)).toContain("omp-work() {");
+		expect(files.get(result.configPath)).toContain("stp-work() {");
 	});
 
 	it("writes a fish function that forwards argv", async () => {
@@ -111,7 +111,7 @@ describe("profile alias installer", () => {
 
 		await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/opt/homebrew/bin/fish",
 			platform: "darwin",
 			homeDir: "/Users/me",
@@ -132,7 +132,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/usr/bin/fish",
 			platform: "linux",
 			homeDir: "/home/me",
@@ -152,7 +152,7 @@ describe("profile alias installer", () => {
 
 		await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "pwsh.exe",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
@@ -173,7 +173,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
 			env: {
@@ -197,7 +197,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
 			env: {
@@ -225,7 +225,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
 			env: { POWERSHELL_DISTRIBUTION_CHANNEL: "MSI:Windows 10 Pro" },
@@ -256,7 +256,7 @@ describe("profile alias installer", () => {
 
 		await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/zsh",
 			platform: "darwin",
 			homeDir: "/home/me",
@@ -278,14 +278,14 @@ describe("profile alias installer", () => {
 		// was interrupted or hand-edited. Appending a fresh block would let the
 		// *next* install splice from the stale start through the new end, deleting
 		// the user config in between. Refuse and preserve the file untouched.
-		const original = ["# >>> omp profile alias: omp-work >>>", "omp-work() {", "export SECRET=keepme"].join("\n");
+		const original = ["# >>> omp profile alias: omp-work >>>", "stp-work() {", "export SECRET=keepme"].join("\n");
 		const files = new Map<string, string>([["/home/me/.zshrc", original]]);
 		let wrote = false;
 
 		await expect(
 			installProfileAlias({
 				profile: "work",
-				aliasName: "omp-work",
+				aliasName: "stp-work",
 				shellPath: "/bin/zsh",
 				platform: "darwin",
 				homeDir: "/home/me",
@@ -336,7 +336,7 @@ describe("profile alias installer", () => {
 		await expect(
 			installProfileAlias({
 				profile: "work",
-				aliasName: "omp-work",
+				aliasName: "stp-work",
 				shellPath: "/bin/sh",
 				platform: "linux",
 				homeDir: "/home/me",
@@ -364,7 +364,7 @@ describe("profile alias installer", () => {
 		await expect(
 			installProfileAlias({
 				profile: "work'; touch /tmp/pwn; #",
-				aliasName: "omp-work",
+				aliasName: "stp-work",
 				shellPath: "/bin/bash",
 				platform: "linux",
 				homeDir: "/home/me",
@@ -382,7 +382,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/bash",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
@@ -403,7 +403,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/zsh",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
@@ -423,7 +423,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/fish",
 			platform: "win32",
 			homeDir: "C:\\Users\\me",
@@ -443,7 +443,7 @@ describe("profile alias installer", () => {
 
 		const result = await installProfileAlias({
 			profile: "work",
-			aliasName: "omp-work",
+			aliasName: "stp-work",
 			shellPath: "/bin/bash",
 			platform: "win32",
 			homeDir: "\\\\server\\share\\me",

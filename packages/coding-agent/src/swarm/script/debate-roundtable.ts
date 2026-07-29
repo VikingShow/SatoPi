@@ -11,9 +11,9 @@
  * findingsSimilarity).
  */
 
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task";
-import { logger, prompt } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import type { SingleResult } from "@satopi/pi-coding-agent/task";
+import { logger, prompt } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentToolRestriction } from "../core/schema";

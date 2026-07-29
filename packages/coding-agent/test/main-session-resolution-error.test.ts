@@ -6,10 +6,10 @@
  * `[Uncaught Exception]`.
  */
 import { describe, expect, it, vi } from "bun:test";
-import type { Args } from "@oh-my-pi/pi-coding-agent/cli/args";
-import type { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createSessionManager, SessionResolutionError, writeStartupNotice } from "@oh-my-pi/pi-coding-agent/main";
-import * as sessionListingModule from "@oh-my-pi/pi-coding-agent/session/session-listing";
+import type { Args } from "@satopi/pi-coding-agent/cli/args";
+import type { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { createSessionManager, SessionResolutionError, writeStartupNotice } from "@satopi/pi-coding-agent/main";
+import * as sessionListingModule from "@satopi/pi-coding-agent/session/session-listing";
 
 function buildResumeArgs(resume: string): Args {
 	return {

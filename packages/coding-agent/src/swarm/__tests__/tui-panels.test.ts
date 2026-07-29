@@ -23,8 +23,13 @@ const stripAnsi = (s: string) => (s ?? "").replace(ANSI_RE, "");
 
 function makeSwarmState(overrides: Partial<SwarmState> = {}): SwarmState {
 	return {
-		name: "test-swarm", status: "running", mode: "loop",
-		iteration: 0, targetCount: 4, agents: {}, startedAt: Date.now(),
+		name: "test-swarm",
+		status: "running",
+		mode: "loop",
+		iteration: 0,
+		targetCount: 4,
+		agents: {},
+		startedAt: Date.now(),
 		...overrides,
 	};
 }
@@ -49,7 +54,15 @@ describe("renderAgentPanel", () => {
 	it("shows agent names from swarm agents", () => {
 		const state = makeSwarmState({
 			agents: {
-				"agent-1": { name: "agent-1", status: "running", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
+				"agent-1": {
+					name: "agent-1",
+					status: "running",
+					iteration: 0,
+					wave: 0,
+					praiseCount: 0,
+					criticismCount: 0,
+					conflictCount: 0,
+				},
 			},
 		});
 		const lines = renderAgentPanel([], state, theme).render(72);
@@ -59,7 +72,15 @@ describe("renderAgentPanel", () => {
 	it("has header 'Agents'", () => {
 		const state = makeSwarmState({
 			agents: {
-				"agent-1": { name: "agent-1", status: "running", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
+				"agent-1": {
+					name: "agent-1",
+					status: "running",
+					iteration: 0,
+					wave: 0,
+					praiseCount: 0,
+					criticismCount: 0,
+					conflictCount: 0,
+				},
 			},
 		});
 		const lines = renderAgentPanel([], state, theme).render(72);
@@ -69,7 +90,15 @@ describe("renderAgentPanel", () => {
 	it("shows all agents regardless of kind", () => {
 		const state = makeSwarmState({
 			agents: {
-				"agent-1": { name: "agent-1", status: "completed", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
+				"agent-1": {
+					name: "agent-1",
+					status: "completed",
+					iteration: 0,
+					wave: 0,
+					praiseCount: 0,
+					criticismCount: 0,
+					conflictCount: 0,
+				},
 			},
 		});
 		const lines = renderAgentPanel([], state, theme).render(72);
@@ -83,7 +112,11 @@ describe("renderAgentPanel", () => {
 
 describe("renderCommPanel", () => {
 	const makeMsg = (overrides: Partial<CommMessage> = {}): CommMessage => ({
-		timestamp: Date.now(), from: "human", to: "planner", body: "test", ...overrides,
+		timestamp: Date.now(),
+		from: "human",
+		to: "planner",
+		body: "test",
+		...overrides,
 	});
 
 	it("shows 'No messages' when empty", () => {
@@ -106,7 +139,13 @@ describe("renderCommPanel", () => {
 
 describe("renderContextPanel", () => {
 	const makeCtx = (overrides: Partial<ContextPanelState> = {}): ContextPanelState => ({
-		sources: [], l1PendingCount: 0, l2LastFlushSeconds: 0, l3Nodes: 0, l3Edges: 0, agents: [], ...overrides,
+		sources: [],
+		l1PendingCount: 0,
+		l2LastFlushSeconds: 0,
+		l3Nodes: 0,
+		l3Edges: 0,
+		agents: [],
+		...overrides,
 	});
 
 	it("shows source names", () => {

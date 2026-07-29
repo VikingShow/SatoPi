@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/pi-agent-core",
+  "name": "@satopi/pi-agent-core",
   "version": "16.5.0",
   "description": "General-purpose agent with transport abstraction, state management, and attachment support",
   "homepage": "https://omp.sh",
@@ -35,12 +35,12 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-ai": "workspace:*",
-    "@oh-my-pi/pi-catalog": "workspace:*",
-    "@oh-my-pi/pi-natives": "workspace:*",
-    "@oh-my-pi/pi-utils": "workspace:*",
-    "@oh-my-pi/pi-wire": "workspace:*",
-    "@oh-my-pi/snapcompact": "workspace:*",
+    "@satopi/pi-ai": "workspace:*",
+    "@satopi/pi-catalog": "workspace:*",
+    "@satopi/pi-natives": "workspace:*",
+    "@satopi/pi-utils": "workspace:*",
+    "@satopi/pi-wire": "workspace:*",
+    "@satopi/snapcompact": "workspace:*",
     "@opentelemetry/api": "catalog:"
   },
   "devDependencies": {

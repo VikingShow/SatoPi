@@ -4,11 +4,11 @@ import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ToolApprovalDecision,
-} from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { prompt, sanitizeText } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-agent-core";
+import type { ToolExample } from "@satopi/pi-ai";
+import type { Component } from "@satopi/pi-tui";
+import { Text } from "@satopi/pi-tui";
+import { prompt, sanitizeText } from "@satopi/pi-utils";
 import { type } from "arktype";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { daemonClientForProject } from "../launch/client";

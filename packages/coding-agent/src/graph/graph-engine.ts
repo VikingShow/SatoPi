@@ -10,7 +10,7 @@
  * isolation.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { CheckpointStore } from "./checkpoint";
 import type { NodeRunner, SchedulerNodeInfo } from "./graph-executor";
 import { WaveScheduler } from "./graph-executor";

@@ -1,11 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
-import type { OAuthLoginCallbacks, OAuthProviderId } from "@oh-my-pi/pi-ai/oauth/types";
-import { SignInTab } from "@oh-my-pi/pi-coding-agent/modes/setup-wizard/scenes/sign-in";
-import type { SetupSceneHost } from "@oh-my-pi/pi-coding-agent/modes/setup-wizard/scenes/types";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import * as clipboard from "@oh-my-pi/pi-coding-agent/utils/clipboard";
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { AuthStorage } from "@satopi/pi-ai";
+import type { OAuthLoginCallbacks, OAuthProviderId } from "@satopi/pi-ai/oauth/types";
+import { SignInTab } from "@satopi/pi-coding-agent/modes/setup-wizard/scenes/sign-in";
+import type { SetupSceneHost } from "@satopi/pi-coding-agent/modes/setup-wizard/scenes/types";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import * as clipboard from "@satopi/pi-coding-agent/utils/clipboard";
+import type { Component } from "@satopi/pi-tui";
 
 beforeAll(async () => {
 	await initTheme();

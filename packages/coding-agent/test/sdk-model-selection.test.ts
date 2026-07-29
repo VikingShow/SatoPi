@@ -2,16 +2,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Effort, type FetchImpl } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { writeModelCache } from "@oh-my-pi/pi-catalog/model-cache";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry, type ProviderConfigInput } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAgentSession, type ExtensionFactory } from "@oh-my-pi/pi-coding-agent/sdk";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { Effort, type FetchImpl } from "@satopi/pi-ai";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { writeModelCache } from "@satopi/pi-catalog/model-cache";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { ModelRegistry, type ProviderConfigInput } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { createAgentSession, type ExtensionFactory } from "@satopi/pi-coding-agent/sdk";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("createAgentSession deferred model pattern resolution", () => {
 	let tempDir: string;

@@ -7,9 +7,16 @@
  * @module hook-system/builtins/stigmergy-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { MarkEnvironment } from "../../../coordination";
-import type { AgentAfterCompletePayload, AgentOnErrorPayload, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
+import type {
+	AgentAfterCompletePayload,
+	AgentOnErrorPayload,
+	HookContext,
+	HookEvent,
+	HookPayloadMap,
+	HookRegistration,
+} from "../types";
 import { resolveAgentId } from "../utils";
 
 /**

@@ -10,7 +10,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentToolContext } from "@satopi/pi-agent-core";
 import type { AgentSession } from "../../session/agent-session";
 
 // ============================================================================

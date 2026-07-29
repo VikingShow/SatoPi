@@ -2,8 +2,8 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as natives from "@oh-my-pi/pi-natives";
-import { getWorktreeDir, logger, Snowflake } from "@oh-my-pi/pi-utils";
+import * as natives from "@satopi/pi-natives";
+import { getWorktreeDir, logger, Snowflake } from "@satopi/pi-utils";
 import * as git from "../utils/git";
 import * as jj from "../utils/jj";
 import { mapWithConcurrencyLimit } from "./parallel";
@@ -846,7 +846,7 @@ export async function mergeTaskBranches(
 
 		// Stash dirty working tree so cherry-pick can operate on a clean HEAD.
 		// Without this, cherry-pick refuses to run when uncommitted changes exist.
-		const didStash = await git.stash.push(repoRoot, "omp-task-merge");
+		const didStash = await git.stash.push(repoRoot, "stp-task-merge");
 
 		let conflictResult: MergeBranchResult | undefined;
 

@@ -19,9 +19,9 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { AgentRuntime } from "../agent-runtime";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { ExperienceStore } from "../curtain/experience";
-import type { AgentRuntime } from "../agent-runtime";
 import { getPlanArchiveDir, getSessionPlanPath } from "./plan-paths";
 
 // ============================================================================
@@ -262,8 +262,8 @@ export async function listArchivedPlans(workspace: string): Promise<string[]> {
 // Plan Debate (Agent Debate)
 // ============================================================================
 
-import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import { DebateRoundtable } from "./debate-roundtable";
 
 export interface PlanDebateResult {

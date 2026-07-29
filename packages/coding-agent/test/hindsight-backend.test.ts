@@ -8,12 +8,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { hindsightBackend, reloadMentalModelsForSession } from "@oh-my-pi/pi-coding-agent/hindsight/backend";
-import { HindsightApi } from "@oh-my-pi/pi-coding-agent/hindsight/client";
-import type { HindsightSessionState } from "@oh-my-pi/pi-coding-agent/hindsight/state";
-import type { AgentSessionEventListener } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { hindsightBackend, reloadMentalModelsForSession } from "@satopi/pi-coding-agent/hindsight/backend";
+import { HindsightApi } from "@satopi/pi-coding-agent/hindsight/client";
+import type { HindsightSessionState } from "@satopi/pi-coding-agent/hindsight/state";
+import type { AgentSessionEventListener } from "@satopi/pi-coding-agent/session/agent-session";
 
 interface FakeSessionDeps {
 	sessionId: string | null;
@@ -614,7 +614,7 @@ describe("hindsightBackend live bank routing", () => {
 
 		const next = session.getHindsightSessionState();
 		expect(next).toBeDefined();
-		expect(next?.bankId).toBe("omp-proj");
+		expect(next?.bankId).toBe("stp-proj");
 		expect(next).not.toBe(initial);
 	});
 
@@ -682,13 +682,13 @@ describe("hindsightBackend live bank routing", () => {
 		expect(next).not.toBe(initial);
 		// With scoping=per-project the base falls back to the default ("omp"),
 		// so the reset bank id picks up the project suffix from cwd.
-		expect(next?.bankId).toBe("omp-_NEW_XenGameKit");
+		expect(next?.bankId).toBe("stp-_NEW_XenGameKit");
 
 		next!.enqueueRetain("post-reset fact", "reset routing");
 		await next!.flushRetainQueue();
 
 		expect(retainBatchSpy).toHaveBeenCalledTimes(1);
-		expect(retainBatchSpy.mock.calls[0][0]).toBe("omp-_NEW_XenGameKit");
+		expect(retainBatchSpy.mock.calls[0][0]).toBe("stp-_NEW_XenGameKit");
 	});
 
 	// Companion case: when `hindsight.scoping` is `global`, clearing the

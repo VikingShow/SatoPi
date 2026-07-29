@@ -11,7 +11,7 @@
  * This source is optional — if no client is provided, it produces no context.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { MnemopiClient } from "../../infra/mnemopi-adapter";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";

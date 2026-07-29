@@ -15,7 +15,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "@oh-my-pi/pi-tui";
+} from "@satopi/pi-tui";
 import type {
 	ExtensionAskDialogQuestion,
 	ExtensionAskDialogResultItem,

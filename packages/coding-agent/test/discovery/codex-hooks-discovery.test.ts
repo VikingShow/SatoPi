@@ -11,10 +11,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type Hook, hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { initializeWithSettings, loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { type Hook, hookCapability } from "@satopi/pi-coding-agent/capability/hook";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { initializeWithSettings, loadCapability } from "@satopi/pi-coding-agent/discovery";
+import { removeWithRetries } from "@satopi/pi-utils";
 
 describe("codex hook discovery", () => {
 	let tempHome = "";
@@ -24,8 +24,8 @@ describe("codex hook discovery", () => {
 	beforeEach(async () => {
 		resetSettingsForTest();
 		originalHome = process.env.HOME;
-		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "omp-codex-hooks-home-"));
-		tempCwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-codex-hooks-cwd-"));
+		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "stp-codex-hooks-home-"));
+		tempCwd = await fs.mkdtemp(path.join(os.tmpdir(), "stp-codex-hooks-cwd-"));
 		process.env.HOME = tempHome;
 		vi.spyOn(os, "homedir").mockReturnValue(tempHome);
 		const settings = await Settings.init({ inMemory: true, cwd: tempCwd });

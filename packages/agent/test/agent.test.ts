@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { Agent, type AgentEvent, type AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { type SimpleStreamOptions, z } from "@oh-my-pi/pi-ai";
-import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
+import { Agent, type AgentEvent, type AgentTool, ThinkingLevel } from "@satopi/pi-agent-core";
+import { type SimpleStreamOptions, z } from "@satopi/pi-ai";
+import { createMockModel } from "@satopi/pi-ai/providers/mock";
+import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
 import { createAssistantMessage } from "./helpers";
 
 describe("Agent", () => {

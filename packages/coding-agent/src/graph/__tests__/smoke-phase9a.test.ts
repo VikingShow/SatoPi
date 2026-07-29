@@ -10,28 +10,19 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import type { TextContent } from "@satopi/pi-ai";
+import { TempDir } from "@satopi/pi-utils";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
+import { parseInternalUrl } from "../../internal-urls/parse";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
 import { buildExecutionWaves } from "../../swarm/core/dag";
+import type { CheckpointStore } from "../checkpoint";
+import type { NodeExecutionContext } from "../graph-engine";
 import { GraphEngine } from "../graph-engine";
-import type {
-	CheckpointStore,
-} from "../checkpoint";
-import type {
-	NodeExecutionContext,
-} from "../graph-engine";
-import type {
-	GraphDefinition,
-	GraphRunState,
-	NodeExecutionOutput,
-	NodeResult,
-} from "../types";
-import type { TextContent } from "@oh-my-pi/pi-ai";
-import { parseInternalUrl } from "../../internal-urls/parse";
+import type { GraphDefinition, GraphRunState, NodeExecutionOutput, NodeResult } from "../types";
 
 // ============================================================================
 // 1. agent_invoke smoke test — mock pattern mirrors existing E2E tests
@@ -195,9 +186,9 @@ describe("Phase 9A: Smoke Tests", () => {
 			});
 
 			const handler = new AgentProtocolHandler();
-			await expect(
-				handler.resolve(parseInternalUrl("agent://nonexistent-xyz")),
-			).rejects.toThrow(/Not found: nonexistent-xyz/);
+			await expect(handler.resolve(parseInternalUrl("agent://nonexistent-xyz"))).rejects.toThrow(
+				/Not found: nonexistent-xyz/,
+			);
 		});
 	});
 

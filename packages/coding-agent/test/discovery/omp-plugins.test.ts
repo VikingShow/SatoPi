@@ -16,25 +16,25 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getCapability } from "@oh-my-pi/pi-coding-agent/capability";
-import { clearCache } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import { mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { promptCapability } from "@oh-my-pi/pi-coding-agent/capability/prompt";
-import { ruleCapability } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { toolCapability } from "@oh-my-pi/pi-coding-agent/capability/tool";
-import type { LoadContext, Provider } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { getCapability } from "@satopi/pi-coding-agent/capability";
+import { clearCache } from "@satopi/pi-coding-agent/capability/fs";
+import { hookCapability } from "@satopi/pi-coding-agent/capability/hook";
+import { mcpCapability } from "@satopi/pi-coding-agent/capability/mcp";
+import { promptCapability } from "@satopi/pi-coding-agent/capability/prompt";
+import { ruleCapability } from "@satopi/pi-coding-agent/capability/rule";
+import { skillCapability } from "@satopi/pi-coding-agent/capability/skill";
+import { slashCommandCapability } from "@satopi/pi-coding-agent/capability/slash-command";
+import { toolCapability } from "@satopi/pi-coding-agent/capability/tool";
+import type { LoadContext, Provider } from "@satopi/pi-coding-agent/capability/types";
 // Register all discovery providers as a side effect.
-import "@oh-my-pi/pi-coding-agent/discovery";
+import "@satopi/pi-coding-agent/discovery";
 import {
 	clearOmpExtensionCliRoots,
 	injectOmpExtensionCliRoots,
-} from "@oh-my-pi/pi-coding-agent/discovery/extension-roots";
-import { getConfigRootDir, removeSyncWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/discovery/extension-roots";
+import { getConfigRootDir, removeSyncWithRetries, setAgentDir } from "@satopi/pi-utils";
 
-const PROVIDER_ID = "omp-plugins";
+const PROVIDER_ID = "stp-plugins";
 
 let tempDir: string;
 let home: string;
@@ -88,7 +88,7 @@ function buildExtensionPackage(packageDir: string): void {
 beforeEach(() => {
 	clearCache();
 	clearOmpExtensionCliRoots();
-	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-plugins-"));
+	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-plugins-"));
 	home = path.join(tempDir, "home");
 	project = path.join(tempDir, "project");
 	ext = path.join(tempDir, "my-extension");
@@ -198,7 +198,7 @@ test("installed plugins under `<plugins>/node_modules/` are surfaced (e.g. via `
 	fs.cpSync(ext, installed, { recursive: true });
 	writeFile(
 		path.join(pluginsDir, "package.json"),
-		JSON.stringify({ name: "omp-plugins", dependencies: { "my-installed-ext": "1.0.0" } }),
+		JSON.stringify({ name: "stp-plugins", dependencies: { "my-installed-ext": "1.0.0" } }),
 	);
 	// Plugin's own package.json must carry an `omp`/`pi` manifest for the
 	// loader to recognise it; the buildExtensionPackage fixture already wrote
@@ -215,7 +215,7 @@ test("project-scoped installed plugins surface project-level sub-discovery", asy
 	fs.mkdirSync(installed, { recursive: true });
 	fs.cpSync(ext, installed, { recursive: true });
 	writeFile(
-		path.join(pluginsDir, "omp-plugins.lock.json"),
+		path.join(pluginsDir, "stp-plugins.lock.json"),
 		JSON.stringify({
 			plugins: { "my-project-ext": { version: "1.0.0", enabled: true, enabledFeatures: null } },
 			settings: {},
@@ -237,10 +237,10 @@ test("disabled installed plugins do not contribute sub-discovery", async () => {
 	fs.cpSync(ext, installed, { recursive: true });
 	writeFile(
 		path.join(pluginsDir, "package.json"),
-		JSON.stringify({ name: "omp-plugins", dependencies: { "my-disabled-ext": "1.0.0" } }),
+		JSON.stringify({ name: "stp-plugins", dependencies: { "my-disabled-ext": "1.0.0" } }),
 	);
 	writeFile(
-		path.join(pluginsDir, "omp-plugins.lock.json"),
+		path.join(pluginsDir, "stp-plugins.lock.json"),
 		JSON.stringify({ plugins: { "my-disabled-ext": { enabled: false } }, settings: {} }),
 	);
 
@@ -263,7 +263,7 @@ test("linked plugins (only in lockfile, not in package.json#dependencies) are su
 	// Intentionally NO `<plugins>/package.json` — matches a fresh `plugin link`
 	// against a setup that has never run `plugin install`.
 	writeFile(
-		path.join(pluginsDir, "omp-plugins.lock.json"),
+		path.join(pluginsDir, "stp-plugins.lock.json"),
 		JSON.stringify({
 			plugins: { "my-linked-ext": { version: "1.0.0", enabled: true, enabledFeatures: null } },
 			settings: {},

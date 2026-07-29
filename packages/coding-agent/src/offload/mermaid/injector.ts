@@ -8,7 +8,7 @@
  * 不解析 Mermaid AST，用简单正则字符串匹配过滤。
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types

@@ -2,14 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, type AgentTool, type AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { Agent, type AgentTool, type AgentToolContext } from "@satopi/pi-agent-core";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import type { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { type } from "arktype";
 
 const BASE_SETTINGS = {

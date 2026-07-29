@@ -4,8 +4,8 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { gunzipSync } from "node:zlib";
-import { runGcCommand } from "@oh-my-pi/pi-coding-agent/cli/gc-cli";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { runGcCommand } from "@satopi/pi-coding-agent/cli/gc-cli";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import {
 	getAgentDir,
 	getBlobsDir,
@@ -13,7 +13,7 @@ import {
 	getSessionsDir,
 	setAgentDir,
 	setProjectDir,
-} from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-utils";
 import { runCli } from "../src/cli";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
@@ -27,7 +27,7 @@ const originalExitCode = process.exitCode;
 
 beforeEach(async () => {
 	settingsState = beginSettingsTest();
-	root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gc-"));
+	root = await fs.mkdtemp(path.join(os.tmpdir(), "stp-gc-"));
 	writes = [];
 	stderrWrites = [];
 	process.exitCode = 0;

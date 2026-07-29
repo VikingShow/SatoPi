@@ -8,18 +8,18 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { type Api, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { AutocompleteProvider } from "@oh-my-pi/pi-tui";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent, type AgentTool } from "@satopi/pi-agent-core";
+import { type Api, Effort, type Model } from "@satopi/pi-ai";
+import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import type { PromptTemplate } from "@satopi/pi-coding-agent/config/prompt-templates";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AutocompleteProvider } from "@satopi/pi-tui";
+import { TempDir } from "@satopi/pi-utils";
 import { type } from "arktype";
 
 function makeTool(name: string): AgentTool {

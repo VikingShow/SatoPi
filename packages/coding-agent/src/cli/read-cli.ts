@@ -5,7 +5,7 @@
  * prints the resulting content blocks exactly as the model would receive them
  * (including truncation/limit notices appended by the meta-notice wrapper).
  */
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import { getProjectDir } from "@satopi/pi-utils";
 import chalk from "chalk";
 import { Settings } from "../config/settings";
 import type { ToolSession } from "../tools";
@@ -37,7 +37,7 @@ export async function runReadCommand(cmd: ReadCommandArgs): Promise<void> {
 	const tool = wrapToolWithMetaNotice(new ReadTool(session));
 
 	try {
-		const result = await tool.execute("omp-read", { path: cmd.path });
+		const result = await tool.execute("stp-read", { path: cmd.path });
 
 		for (const block of result.content) {
 			if (block.type === "text") {

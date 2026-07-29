@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
+import { InternalUrlRouter } from "@satopi/pi-coding-agent/internal-urls";
 
 describe("StpProtocolHandler", () => {
 	it("treats stp://docs as the documentation root", async () => {

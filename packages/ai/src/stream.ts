@@ -3,19 +3,19 @@ import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
-import { isOfficialAnthropicApiUrl } from "@oh-my-pi/pi-catalog/compat/anthropic";
-import type { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { isVertexExpressOpenAIUrl, isVertexRawPredictUrl } from "@oh-my-pi/pi-catalog/hosts";
+import { isOfficialAnthropicApiUrl } from "@satopi/pi-catalog/compat/anthropic";
+import type { Effort } from "@satopi/pi-catalog/effort";
+import { isVertexExpressOpenAIUrl, isVertexRawPredictUrl } from "@satopi/pi-catalog/hosts";
 import {
 	mapEffortToAnthropicAdaptiveEffort,
 	mapEffortToGoogleThinkingLevel,
 	minimumSupportedEffort,
 	requireSupportedEffort,
 	resolveWireModelId,
-} from "@oh-my-pi/pi-catalog/model-thinking";
-import { CATALOG_PROVIDERS, type ProviderCatalogEntry } from "@oh-my-pi/pi-catalog/provider-models";
-import { CODEX_BASE_URL } from "@oh-my-pi/pi-catalog/wire/codex";
-import { $env, $pickenv, getConfigRootDir, isEnoent, logger, withExtraCaFetch } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-catalog/model-thinking";
+import { CATALOG_PROVIDERS, type ProviderCatalogEntry } from "@satopi/pi-catalog/provider-models";
+import { CODEX_BASE_URL } from "@satopi/pi-catalog/wire/codex";
+import { $env, $pickenv, getConfigRootDir, isEnoent, logger, withExtraCaFetch } from "@satopi/pi-utils";
 import { getCustomApi } from "./api-registry";
 import { AUTH_RETRY_STEPS, isApiKeyResolver, resolveRetryKey } from "./auth-retry";
 import * as AIError from "./error";

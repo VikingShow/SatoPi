@@ -7,8 +7,8 @@ import {
 	isSqliteBusyError,
 	SqliteAuthCredentialStore,
 	type StoredAuthCredential,
-} from "@oh-my-pi/pi-ai";
-import { AsyncDrain, getAgentDbPath, getStatsDbPath, isRecord, logger } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-ai";
+import { AsyncDrain, getAgentDbPath, getStatsDbPath, isRecord, logger } from "@satopi/pi-utils";
 import type { RawSettings as Settings } from "../config/settings";
 
 /** Row shape for settings table queries */
@@ -124,7 +124,7 @@ const instances = new Map<string, AgentStorage>();
 
 /**
  * Unified SQLite storage for agent settings, model usage, and auth credentials.
- * Delegates auth credential operations to AuthCredentialStore from @oh-my-pi/pi-ai.
+ * Delegates auth credential operations to AuthCredentialStore from @satopi/pi-ai.
  * Uses singleton pattern per database path; access via AgentStorage.open().
  */
 export class AgentStorage {

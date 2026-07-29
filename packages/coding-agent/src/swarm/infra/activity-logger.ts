@@ -12,7 +12,7 @@
  * route events to the correct SSE subscribers.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ReviewVerdict } from "../core/pipeline";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 

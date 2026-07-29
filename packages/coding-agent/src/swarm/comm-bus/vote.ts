@@ -6,8 +6,8 @@
  * tallies votes expressed as `VOTE: <candidate-id>`.
  */
 
-import type { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { IrcBus } from "@satopi/pi-coding-agent/irc/bus";
+import { logger } from "@satopi/pi-utils";
 import type { HookPipeline } from "../hook-system/hook-pipeline";
 import type { HookContext } from "../hook-system/types";
 

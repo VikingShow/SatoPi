@@ -1,16 +1,16 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as os from "node:os";
-import * as capability from "@oh-my-pi/pi-coding-agent/capability";
-import type { SSHHost } from "@oh-my-pi/pi-coding-agent/capability/ssh";
-import type { CapabilityResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { parseInternalUrl } from "@oh-my-pi/pi-coding-agent/internal-urls/parse";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
-import { SshProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/ssh-protocol";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
-import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
-import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
+import * as capability from "@satopi/pi-coding-agent/capability";
+import type { SSHHost } from "@satopi/pi-coding-agent/capability/ssh";
+import type { CapabilityResult } from "@satopi/pi-coding-agent/capability/types";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { parseInternalUrl } from "@satopi/pi-coding-agent/internal-urls/parse";
+import { InternalUrlRouter } from "@satopi/pi-coding-agent/internal-urls/router";
+import { SshProtocolHandler } from "@satopi/pi-coding-agent/internal-urls/ssh-protocol";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { GrepTool } from "@satopi/pi-coding-agent/tools/grep";
+import { ReadTool } from "@satopi/pi-coding-agent/tools/read";
+import { WriteTool } from "@satopi/pi-coding-agent/tools/write";
 
 // Live integration against `ssh localhost`. Skips automatically where key-based
 // localhost SSH is unavailable (CI without sshd). Capability lookup is mocked
@@ -228,8 +228,8 @@ describe.skipIf(!SSH_OK)("ssh:// through the real read/grep/write tools (localho
 		expect(result.details?.files).toContain(`ssh://localhost${TMP}/read.txt`);
 		// The pure-virtual RE2 probe's scratch dir must never leak into text or metadata.
 		const detailsJson = JSON.stringify(result.details ?? {});
-		expect(out).not.toContain("omp-search-probe");
-		expect(detailsJson).not.toContain("omp-search-probe");
+		expect(out).not.toContain("stp-search-probe");
+		expect(detailsJson).not.toContain("stp-search-probe");
 	});
 
 	it("WriteTool round-trips a remote file byte-exact", async () => {

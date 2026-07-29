@@ -4,7 +4,7 @@
  * resolveActiveProjectRegistryPath: walk-up, .git fallback, null return, canonical path.
  * listClaudePluginRoots: project entries shadow user entries for same plugin ID.
  *
- * Note: helpers.ts imports @oh-my-pi/pi-natives (Rust addon via glob).
+ * Note: helpers.ts imports @satopi/pi-natives (Rust addon via glob).
  * This file imports from helpers.ts directly — the native addon IS present in the
  * test environment (verified: `bun run import-helpers.ts` succeeds).
  */
@@ -16,15 +16,15 @@ import {
 	clearClaudePluginRootsCache,
 	listClaudePluginRoots,
 	resolveActiveProjectRegistryPath,
-} from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import type { InstalledPluginEntry } from "@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace";
+} from "@satopi/pi-coding-agent/discovery/helpers";
+import type { InstalledPluginEntry } from "@satopi/pi-coding-agent/extensibility/plugins/marketplace";
 import {
 	addInstalledPlugin,
 	buildPluginId,
 	readInstalledPluginsRegistry,
 	writeInstalledPluginsRegistry,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/extensibility/plugins/marketplace";
+import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ describe("resolveActiveProjectRegistryPath", () => {
 	let tmpDir: string;
 
 	beforeEach(() => {
-		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-proj-scope-"));
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-proj-scope-"));
 	});
 
 	afterEach(() => {
@@ -100,7 +100,7 @@ describe("resolveActiveProjectRegistryPath", () => {
 	it("does not treat ~/.git as a project root (pass-2 home-dir guard)", async () => {
 		// Simulate a dotfiles repo managed with a bare-git technique: ~/.git exists.
 		// resolveActiveProjectRegistryPath must NOT return ~/.stp/.../installed_plugins.json.
-		const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-proj-scope-home-"));
+		const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-proj-scope-home-"));
 		vi.spyOn(os, "homedir").mockReturnValue(homeDir);
 		const fakeHomeGit = path.join(homeDir, ".git");
 		await fs.promises.mkdir(fakeHomeGit, { recursive: true });
@@ -141,8 +141,8 @@ describe("listClaudePluginRoots — project shadows user", () => {
 	let projectRegPath: string;
 
 	beforeEach(() => {
-		tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "omp-shadow-home-"));
-		tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "omp-shadow-proj-"));
+		tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "stp-shadow-home-"));
+		tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "stp-shadow-proj-"));
 
 		// Create .stp/ in project so resolveActiveProjectRegistryPath finds it.
 		fs.mkdirSync(path.join(tmpProject, ".omp", "plugins"), { recursive: true });

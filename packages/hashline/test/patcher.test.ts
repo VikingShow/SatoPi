@@ -12,7 +12,7 @@ import {
 	NodeFilesystem,
 	Patch,
 	Patcher,
-} from "@oh-my-pi/hashline";
+} from "@satopi/hashline";
 
 const PATH = "a.ts";
 

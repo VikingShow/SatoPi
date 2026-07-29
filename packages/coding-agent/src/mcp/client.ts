@@ -5,7 +5,7 @@
  */
 import * as path from "node:path";
 import * as url from "node:url";
-import { getProjectDir, logger, withTimeout } from "@oh-my-pi/pi-utils";
+import { getProjectDir, logger, withTimeout } from "@satopi/pi-utils";
 import { describeMCPTimeout, isMCPTimeoutEnabled, resolveMCPTimeoutMs } from "./timeout";
 import { createHttpTransport } from "./transports/http";
 import { createSseTransport } from "./transports/sse";
@@ -43,7 +43,7 @@ const PROTOCOL_VERSION = "2025-03-26";
 
 /** Client info sent during initialization */
 const CLIENT_INFO = {
-	name: "omp-coding-agent",
+	name: "stp-coding-agent",
 	version: "1.0.0",
 };
 

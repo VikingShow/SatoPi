@@ -7,7 +7,7 @@
  * in AgentSession's private methods so they can access its internals directly.
  */
 
-import { shouldCompact } from "@oh-my-pi/pi-agent-core/compaction";
+import { shouldCompact } from "@satopi/pi-agent-core/compaction";
 
 export { shouldCompact };
 

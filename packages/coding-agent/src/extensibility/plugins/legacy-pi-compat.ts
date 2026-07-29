@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import { isBuiltin } from "node:module";
 import * as path from "node:path";
 import * as url from "node:url";
-import { isCompiledBinary, stripWindowsExtendedLengthPathPrefix } from "@oh-my-pi/pi-utils";
+import { isCompiledBinary, stripWindowsExtendedLengthPathPrefix } from "@satopi/pi-utils";
 import { registerPluginCacheInvalidator } from "../../discovery/helpers";
 
 const IS_COMPILED_BINARY = isCompiledBinary();
@@ -23,8 +23,8 @@ const IS_COMPILED_BINARY = isCompiledBinary();
 // or duplicate key list exists on disk. Runtime extension loading stays lazy —
 // the virtual module is evaluated only when an extension requests a host
 // package — but the compiler still sees every possible edge at build time.
-const BUNDLED_VIRTUAL_SCHEME = "omp-legacy-pi-bundled:";
-const BUNDLED_VIRTUAL_NAMESPACE = "omp-legacy-pi-bundled";
+const BUNDLED_VIRTUAL_SCHEME = "stp-legacy-pi-bundled:";
+const BUNDLED_VIRTUAL_NAMESPACE = "stp-legacy-pi-bundled";
 const BUNDLED_MODULES_GLOBAL = "__ompLegacyPiBundledModules";
 const TYPEBOX_BUNDLED_MODULE_KEY = "typebox";
 
@@ -47,7 +47,7 @@ function ensureBundledModulesLoaded(): Promise<BundledModules> {
 		return Promise.reject(new Error("omp:legacy-pi-shim: bundled modules are only available in compiled mode"));
 	}
 	if (!bundledModulesPromise) {
-		bundledModulesPromise = import("omp-legacy-pi-modules").then(module => {
+		bundledModulesPromise = import("stp-legacy-pi-modules").then(module => {
 			Reflect.set(globalThis, BUNDLED_MODULES_GLOBAL, module.BUNDLED_PI_MODULES);
 			return module.BUNDLED_PI_MODULES;
 		});
@@ -216,7 +216,7 @@ const TYPEBOX_SPECIFIER_FILTER = /^(?:@sinclair\/typebox|typebox)$/;
  *
  * `bundle-dist.ts` defines `process.env.PI_BUNDLED="true"`; after bundling,
  * `import.meta.dir` points at `<package>/dist`. Do not resolve the package via
- * bare `@oh-my-pi/pi-coding-agent` here: from a global install Bun can pick an
+ * bare `@satopi/pi-coding-agent` here: from a global install Bun can pick an
  * older cache entry, recreating mixed-runtime plugin loading.
  */
 export function __computeBundledSelfPackageRoot(metaDir: string, pathImpl: typeof path = path): string {
@@ -283,7 +283,7 @@ const TYPEBOX_SHIM_PATH = __resolveTypeBoxShimPath(IS_COMPILED_BINARY, sourceShi
 // longer satisfies those imports. The override below redirects only the bare
 // pi-ai package root onto a sibling shim that re-exports the canonical surface
 // plus the borrowed `Type` runtime from the Zod-backed TypeBox shim. Subpath
-// imports such as `@oh-my-pi/pi-ai/oauth` continue to resolve directly
+// imports such as `@satopi/pi-ai/oauth` continue to resolve directly
 // against the bundled pi-ai package.
 const LEGACY_PI_AI_SHIM_PATH = IS_COMPILED_BINARY
 	? bundledModuleVirtualSpecifier(`${CANONICAL_PI_SCOPE}/pi-ai`)
@@ -307,7 +307,7 @@ const LEGACY_PI_CODING_AGENT_SHIM_PATH = IS_COMPILED_BINARY
 // to route extensions onto the in-process module instance — in dev /
 // source-link / installed-package mode the canonical specifier resolves
 // cleanly through `Bun.resolveSync` and hardcoding a source-tree path would
-// miss installs where the bundled packages live at `node_modules/@oh-my-pi/pi-*`.
+// miss installs where the bundled packages live at `node_modules/@satopi/pi-*`.
 //
 // Compiled-binary entries are `omp-legacy-pi-bundled:<key>` specifiers handed
 // to the synthetic onLoad in `installLegacyPiSpecifierShim()` — bunfs paths
@@ -410,7 +410,7 @@ function getResolvedSpecifier(specifier: string): string {
 }
 
 /**
- * Resolve a canonical `@oh-my-pi/*` specifier to a filesystem path, preferring
+ * Resolve a canonical `@satopi/*` specifier to a filesystem path, preferring
  * a bundled compat shim when one is registered for the package root.
  *
  * Falls back to `getResolvedSpecifier` (which may throw under compiled binary
@@ -1389,7 +1389,7 @@ function resolveLegacyPiSpecifier(args: { path: string; importer: string }): { p
 		return undefined;
 	}
 
-	// Primary: resolve the canonical @oh-my-pi/* specifier from the host binary
+	// Primary: resolve the canonical @satopi/* specifier from the host binary
 	// location. Works in dev mode and in source-link installs.
 	try {
 		return { path: resolveCanonicalPiSpecifier(remappedSpecifier) };

@@ -10,7 +10,7 @@
  */
 
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../session/session-storage";
 import { getAgentDataDir, getOffloadPath } from "./paths";
 

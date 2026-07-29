@@ -8,18 +8,12 @@
  * Frame lifecycle: CALL → STREAMING → SETTLED → DISMISSED (5s after settled).
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
-import {
-	agentTypeBadge,
-	appendAgentStats,
-	formatTaskId,
-	getStatusIcon,
-	renderAgentResult,
-} from "../task/render";
+import { agentTypeBadge, appendAgentStats, formatTaskId, getStatusIcon } from "../task/render";
 import type { AgentProgress, SingleResult } from "../task/types";
-import { formatDuration, formatStatusIcon, previewLine } from "../tools/render-utils";
+import { formatStatusIcon, previewLine } from "../tools/render-utils";
 import { framedBlock, renderStatusLine } from "../tui";
 
 // ============================================================================
@@ -53,11 +47,7 @@ type AgentInvokeRenderOptions = RenderResultOptions & {
 // renderCall
 // ============================================================================
 
-export function renderCall(
-	args: AgentInvokeParams,
-	_options: AgentInvokeRenderOptions,
-	theme: Theme,
-): Component {
+export function renderCall(args: AgentInvokeParams, _options: AgentInvokeRenderOptions, theme: Theme): Component {
 	const profileId = args.profileId?.trim() ?? "";
 	const description = args.task?.trim();
 
@@ -65,9 +55,7 @@ export function renderCall(
 		const sections: Array<{ label?: string; lines: readonly string[]; separator?: boolean }> = [];
 
 		// Profile info line
-		const profileLine = profileId
-			? `${theme.fg("accent", profileId)}`
-			: theme.fg("dim", "(unknown profile)");
+		const profileLine = profileId ? `${theme.fg("accent", profileId)}` : theme.fg("dim", "(unknown profile)");
 		sections.push({ lines: [`  ${profileLine}`] });
 
 		// Task assignment (if any)
@@ -193,9 +181,10 @@ export function renderResult(
 				if (yieldItems.length > 0) {
 					lines.push(`  ${theme.fg("dim", "── yield ──")}`);
 					for (const item of yieldItems.slice(0, 3)) {
-						const preview = typeof item.data === "string"
-							? previewLine(item.data, width - 4)
-							: JSON.stringify(item.data).slice(0, width - 4);
+						const preview =
+							typeof item.data === "string"
+								? previewLine(item.data, width - 4)
+								: JSON.stringify(item.data).slice(0, width - 4);
 						lines.push(`  ${theme.fg("dim", preview)}`);
 					}
 				}

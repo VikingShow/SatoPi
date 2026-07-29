@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { ResolvedRoleModel } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { SelectorController } from "@satopi/pi-coding-agent/modes/controllers/selector-controller";
+import { getThemeByName, setThemeInstance } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
+import type { ResolvedRoleModel } from "@satopi/pi-coding-agent/session/agent-session";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
 let settingsState: SettingsTestState | undefined;

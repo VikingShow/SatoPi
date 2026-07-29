@@ -20,9 +20,9 @@
  * never blocked on the network and never throws.
  */
 import { Database } from "bun:sqlite";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { FetchImpl } from "@oh-my-pi/pi-ai";
-import { $env, $flag, APP_NAME, getAutoQaDbDir, getInstallId, logger, VERSION } from "@oh-my-pi/pi-utils";
+import type { AgentTool } from "@satopi/pi-agent-core";
+import type { FetchImpl } from "@satopi/pi-ai";
+import { $env, $flag, APP_NAME, getAutoQaDbDir, getInstallId, logger, VERSION } from "@satopi/pi-utils";
 import { type } from "arktype";
 import type { Settings } from "..";
 import type { ToolSession } from "./index";

@@ -13,7 +13,7 @@
  * (timeout, network, unconfigured) yields an empty fragment.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { SwarmHindsightClient } from "../../infra/hindsight-adapter";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";

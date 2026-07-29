@@ -13,8 +13,8 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, UserMessage } from "@oh-my-pi/pi-ai";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import type { UserMessage } from "@satopi/pi-ai";
 import {
 	type AgentSpecLike,
 	type AssembledContext,

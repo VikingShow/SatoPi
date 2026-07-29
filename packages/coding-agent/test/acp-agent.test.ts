@@ -17,27 +17,27 @@ import {
 	zPromptResponse,
 	zSessionNotification,
 } from "@agentclientprotocol/sdk/dist/schema/zod.gen.js";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
+import type { Model } from "@satopi/pi-ai";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { resolveLocalUrlToPath } from "@satopi/pi-coding-agent/internal-urls";
 import {
 	ACP_BOOTSTRAP_RACE_GUARD_MS,
 	AcpAgent,
 	createAcpExtensionUiContext,
-} from "@oh-my-pi/pi-coding-agent/modes/acp/acp-agent";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { SILENT_ABORT_MARKER } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS } from "@oh-my-pi/pi-coding-agent/stt/models";
+} from "@satopi/pi-coding-agent/modes/acp/acp-agent";
+import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS } from "@satopi/pi-coding-agent/stt/models";
 import {
 	DEFAULT_TTS_LOCAL_MODEL_KEY,
 	DEFAULT_TTS_VOICE,
 	TTS_LOCAL_MODELS,
 	TTS_LOCAL_VOICE_OPTIONS,
-} from "@oh-my-pi/pi-coding-agent/tts/models";
-import { getConfigRootDir, setAgentDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/tts/models";
+import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 import type { z } from "zod/v4";
 
 /**
@@ -443,7 +443,7 @@ afterEach(async () => {
 async function createHarness(
 	options: { elicitationHandler?: (req: CreateElicitationRequest) => Promise<CreateElicitationResponse> } = {},
 ): Promise<AgentHarness> {
-	const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-acp-test-"));
+	const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "stp-acp-test-"));
 	cleanupRoots.push(root);
 	const agentDir = path.join(root, "agent");
 	const cwdA = path.join(root, "cwd-a");

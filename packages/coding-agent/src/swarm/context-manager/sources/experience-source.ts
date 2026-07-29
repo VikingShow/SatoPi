@@ -9,7 +9,7 @@
  * formats them as user messages injected into the conversation history.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { ExperienceStore } from "../../curtain/experience";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";

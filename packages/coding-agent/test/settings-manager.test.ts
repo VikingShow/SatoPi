@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Effort } from "@oh-my-pi/pi-ai";
-import { clearCustomApis } from "@oh-my-pi/pi-ai/api-registry";
-import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
-import { __providerInFlightForTesting, streamSimple } from "@oh-my-pi/pi-ai/stream";
-import type { Context } from "@oh-my-pi/pi-ai/types";
+import { Effort } from "@satopi/pi-ai";
+import { clearCustomApis } from "@satopi/pi-ai/api-registry";
+import { createMockModel, registerMockApi } from "@satopi/pi-ai/providers/mock";
+import { __providerInFlightForTesting, streamSimple } from "@satopi/pi-ai/stream";
+import type { Context } from "@satopi/pi-ai/types";
 import {
 	getDefault,
 	getEnumValues,
@@ -14,9 +14,9 @@ import {
 	resetSettingsForTest,
 	type SettingPath,
 	Settings,
-} from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentStorage } from "@oh-my-pi/pi-coding-agent/session/agent-storage";
-import { getProjectAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/config/settings";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import { getProjectAgentDir, TempDir } from "@satopi/pi-utils";
 import { YAML } from "bun";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 

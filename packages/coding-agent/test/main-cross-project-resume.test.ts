@@ -12,14 +12,14 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { Args } from "@oh-my-pi/pi-coding-agent/cli/args";
-import type { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createSessionManager } from "@oh-my-pi/pi-coding-agent/main";
-import type { SessionHeader } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import type { SessionInfo } from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import * as sessionListingModule from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import type { Args } from "@satopi/pi-coding-agent/cli/args";
+import type { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { createSessionManager } from "@satopi/pi-coding-agent/main";
+import type { SessionHeader } from "@satopi/pi-coding-agent/session/session-entries";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
+import * as sessionListingModule from "@satopi/pi-coding-agent/session/session-listing";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 
 function buildArgs(resume: string, sessionDir?: string): Args {
 	return {
@@ -58,7 +58,7 @@ describe("createSessionManager — cross-project --resume cancellation (#1668)",
 	let existingProject: string;
 
 	beforeEach(async () => {
-		existingProject = await fsp.mkdtemp(path.join(os.tmpdir(), "omp-xproj-"));
+		existingProject = await fsp.mkdtemp(path.join(os.tmpdir(), "stp-xproj-"));
 	});
 
 	afterEach(async () => {
@@ -99,7 +99,7 @@ describe("createSessionManager — cross-project --resume relocation (moved work
 	let missingProject: string;
 
 	beforeEach(async () => {
-		missingRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "omp-moved-xproj-"));
+		missingRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "stp-moved-xproj-"));
 		missingProject = path.join(missingRoot, "worktree-gone");
 	});
 

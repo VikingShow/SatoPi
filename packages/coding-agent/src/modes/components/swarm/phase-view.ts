@@ -8,6 +8,7 @@
 
 import type { Chapter, SwarmState, TodoItem } from "../../../swarm/core/state";
 import type { Theme } from "../../theme/theme";
+
 // ============================================================================
 // Constants
 // ============================================================================

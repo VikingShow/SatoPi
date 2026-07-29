@@ -2,15 +2,15 @@ import { afterEach, describe, expect, it, spyOn, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ReviewCommand } from "@oh-my-pi/pi-coding-agent/extensibility/custom-commands/bundled/review";
-import type { CustomCommandAPI } from "@oh-my-pi/pi-coding-agent/extensibility/custom-commands/types";
-import type { HookCommandContext } from "@oh-my-pi/pi-coding-agent/extensibility/hooks/types";
-import type { SessionEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import type { PrDiffPayload, ViewLookupResult } from "@oh-my-pi/pi-coding-agent/tools/gh";
-import * as gh from "@oh-my-pi/pi-coding-agent/tools/gh";
-import * as git from "@oh-my-pi/pi-coding-agent/utils/git";
-import * as jj from "@oh-my-pi/pi-coding-agent/utils/jj";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { ReviewCommand } from "@satopi/pi-coding-agent/extensibility/custom-commands/bundled/review";
+import type { CustomCommandAPI } from "@satopi/pi-coding-agent/extensibility/custom-commands/types";
+import type { HookCommandContext } from "@satopi/pi-coding-agent/extensibility/hooks/types";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import type { PrDiffPayload, ViewLookupResult } from "@satopi/pi-coding-agent/tools/gh";
+import * as gh from "@satopi/pi-coding-agent/tools/gh";
+import * as git from "@satopi/pi-coding-agent/utils/git";
+import * as jj from "@satopi/pi-coding-agent/utils/jj";
+import { removeWithRetries } from "@satopi/pi-utils";
 
 const SAMPLE_JJ_DIFF = `diff --git a/src/workspace.ts b/src/workspace.ts
 --- a/src/workspace.ts
@@ -93,7 +93,7 @@ describe("ReviewCommand", () => {
 	});
 
 	async function createTempDir(): Promise<string> {
-		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-review-command-"));
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-review-command-"));
 		return tmpDir;
 	}
 

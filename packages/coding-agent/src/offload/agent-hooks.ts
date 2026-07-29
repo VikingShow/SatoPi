@@ -11,8 +11,8 @@
  * + MmdInjector 全部不变，仅替换输入端为 AgentMessage[]。
  */
 
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../session/session-storage";
 import type { ExperienceStore } from "../swarm/curtain/experience";
 import type { ExtractedLesson } from "../swarm/curtain/extractor";

@@ -7,10 +7,10 @@
  * without sharing state with an interactive TUI session.
  *
  * Gracefully degrades: returns null when Mnemopi is not configured
- * or the @oh-my-pi/pi-mnemopi package is unavailable.
+ * or the @satopi/pi-mnemopi package is unavailable.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Settings } from "../../config/settings";
 import { loadMnemopiConfig } from "../../mnemopi/config";
 import { loadMnemopi, loadMnemopiCore } from "../../mnemopi/state";
@@ -19,7 +19,7 @@ import type { MnemopiClient } from "./mnemopi-adapter";
 /**
  * Create a MnemopiClient for a swarm session.
  *
- * Lazily loads @oh-my-pi/pi-mnemopi to keep it off the module graph
+ * Lazily loads @satopi/pi-mnemopi to keep it off the module graph
  * for sessions that never touch the memory backend.
  *
  * @param settings  Agent settings (from which MnemopiConfig is read).
@@ -49,7 +49,14 @@ export async function createSwarmMnemopiClient(settings: Settings, workspace: st
 			async recall(query: string, topK = 5) {
 				try {
 					const results = await mnemopi.recall(query, topK);
-					return (results as Array<{ content: string; source?: string | null; score: number; timestamp?: string | null }>).map((r) => ({
+					return (
+						results as Array<{
+							content: string;
+							source?: string | null;
+							score: number;
+							timestamp?: string | null;
+						}>
+					).map(r => ({
 						content: r.content,
 						source: r.source ?? null,
 						score: r.score,

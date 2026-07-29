@@ -19,8 +19,8 @@ import {
 	type ModelsDevModel,
 	opencodeGoModelManagerOptions,
 	opencodeZenModelManagerOptions,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { FetchImpl } from "@oh-my-pi/pi-catalog/types";
+} from "@satopi/pi-catalog/provider-models/openai-compat";
+import type { FetchImpl } from "@satopi/pi-catalog/types";
 
 const OPENCODE_ZEN_BASE = "https://opencode.ai/zen/v1";
 const OPENCODE_GO_BASE = "https://opencode.ai/zen/go/v1";
@@ -38,23 +38,23 @@ describe("opencode-zen/-go resolver routes MiniMax M3 to openai-completions (iss
 	const npmAnthropic: ModelsDevModel = { provider: { npm: "@ai-sdk/anthropic" }, tool_call: true };
 
 	describe("opencode-zen", () => {
-		test.each([
-			["minimax-m3"],
-			["minimax-m3-free"],
-		])("%s resolves to openai-completions on /v1/chat/completions", modelId => {
-			const resolved = zenDescriptor?.resolveApi?.(modelId, npmAnthropic);
-			expect(resolved).toEqual({ api: "openai-completions", baseUrl: OPENCODE_ZEN_BASE });
-		});
+		test.each([["minimax-m3"], ["minimax-m3-free"]])(
+			"%s resolves to openai-completions on /v1/chat/completions",
+			modelId => {
+				const resolved = zenDescriptor?.resolveApi?.(modelId, npmAnthropic);
+				expect(resolved).toEqual({ api: "openai-completions", baseUrl: OPENCODE_ZEN_BASE });
+			},
+		);
 	});
 
 	describe("opencode-go", () => {
-		test.each([
-			["minimax-m3"],
-			["minimax-m3-free"],
-		])("%s resolves to openai-completions on /v1/chat/completions", modelId => {
-			const resolved = goDescriptor?.resolveApi?.(modelId, npmAnthropic);
-			expect(resolved).toEqual({ api: "openai-completions", baseUrl: OPENCODE_GO_BASE });
-		});
+		test.each([["minimax-m3"], ["minimax-m3-free"]])(
+			"%s resolves to openai-completions on /v1/chat/completions",
+			modelId => {
+				const resolved = goDescriptor?.resolveApi?.(modelId, npmAnthropic);
+				expect(resolved).toEqual({ api: "openai-completions", baseUrl: OPENCODE_GO_BASE });
+			},
+		);
 	});
 
 	test("opencode-zen /v1/models refresh routes a freshly-discovered M3 to openai-completions", async () => {

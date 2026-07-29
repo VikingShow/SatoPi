@@ -5,7 +5,7 @@
  * 过滤噪声（低分条目），并根据 Cloner ReviewVerdict 检测任务边界。
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ReviewVerdict } from "../../swarm/core/pipeline";
 
 // ============================================================================

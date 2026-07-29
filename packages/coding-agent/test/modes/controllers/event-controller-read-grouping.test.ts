@@ -13,14 +13,14 @@
  * one-entry block).
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ReadToolGroupComponent } from "@oh-my-pi/pi-coding-agent/modes/components/read-tool-group";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { Container } from "@oh-my-pi/pi-tui";
+import type { AssistantMessage } from "@satopi/pi-ai";
+import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
+import { ReadToolGroupComponent } from "@satopi/pi-coding-agent/modes/components/read-tool-group";
+import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import { Container } from "@satopi/pi-tui";
 
 beforeAll(async () => {
 	await initTheme(false, undefined, undefined, "dark", "light");

@@ -15,8 +15,8 @@
  * 3. 回调失败不崩溃 Stage — 所有内部操作自行容错
  */
 
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { SingleResult } from "@satopi/pi-coding-agent";
+import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
 import type { MarkEnvironment } from "../../coordination";

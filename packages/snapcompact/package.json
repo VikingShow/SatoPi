@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/snapcompact",
+  "name": "@satopi/snapcompact",
   "version": "16.5.0",
   "description": "Bitmap-frame context compression for vision-capable LLMs",
   "homepage": "https://omp.sh",
@@ -31,10 +31,10 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-ai": "workspace:*",
-    "@oh-my-pi/pi-natives": "workspace:*",
-    "@oh-my-pi/pi-utils": "workspace:*",
-    "@oh-my-pi/pi-wire": "workspace:*"
+    "@satopi/pi-ai": "workspace:*",
+    "@satopi/pi-natives": "workspace:*",
+    "@satopi/pi-utils": "workspace:*",
+    "@satopi/pi-wire": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:"

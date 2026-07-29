@@ -82,7 +82,7 @@ export const opencodeGoUsageProvider: UsageProvider = {
 			notes: ["OMP-observed spend only; OpenCode usage outside OMP is not included."],
 			metadata: {
 				planType: "OpenCode Go",
-				source: "omp-observed-request-costs",
+				source: "stp-observed-request-costs",
 			},
 		};
 	},

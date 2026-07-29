@@ -168,7 +168,7 @@ async function collectTargets(): Promise<{ names: string[]; repoFromManifest: st
 		// own published package and needs its own trusted-publisher link.
 		if (pkg.kind === "native") {
 			for (const target of LEAF_TARGETS) {
-				const leaf = `@oh-my-pi/pi-natives-${target.tag}`;
+				const leaf = `@satopi/pi-natives-${target.tag}`;
 				if (!seen.has(leaf)) {
 					seen.add(leaf);
 					names.push(leaf);
@@ -246,7 +246,7 @@ async function waitForPackageExists(name: string): Promise<boolean> {
 }
 
 function nativeLeafName(tag: string): string {
-	return `@oh-my-pi/pi-natives-${tag}`;
+	return `@satopi/pi-natives-${tag}`;
 }
 
 function nativeLeafTargetForPackage(name: string): NativeLeafTarget | null {
@@ -264,7 +264,7 @@ function placeholderManifest(name: string, target: NativeLeafTarget, repo: strin
 	return {
 		name,
 		version: PLACEHOLDER_VERSION,
-		description: `Placeholder for the ${target.tag} native addon of @oh-my-pi/pi-natives. The real binary is published during release.`,
+		description: `Placeholder for the ${target.tag} native addon of @satopi/pi-natives. The real binary is published during release.`,
 		license: "MIT",
 		os: [target.os],
 		cpu: [target.cpu],
@@ -286,7 +286,7 @@ function placeholderReadme(name: string, target: NativeLeafTarget): string {
 	return [
 		`# ${name}`,
 		"",
-		`Placeholder package reserving the npm name for the \`${target.tag}\` native addon of \`@oh-my-pi/pi-natives\`.`,
+		`Placeholder package reserving the npm name for the \`${target.tag}\` native addon of \`@satopi/pi-natives\`.`,
 		"",
 		`This \`${PLACEHOLDER_VERSION}\` release ships no binary. The real, versioned platform addon is generated during release and installed as an optional dependency of the core package.`,
 		"",
@@ -294,7 +294,7 @@ function placeholderReadme(name: string, target: NativeLeafTarget): string {
 }
 
 async function publishNativeLeafPlaceholder(name: string, target: NativeLeafTarget, repo: string): Promise<boolean> {
-	const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-native-placeholder-"));
+	const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-native-placeholder-"));
 	try {
 		await Bun.write(
 			path.join(tmpDir, "package.json"),

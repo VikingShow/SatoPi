@@ -5,10 +5,10 @@
  */
 
 import path from "node:path";
-import type { AgentEvent, AgentIdentity, AgentLoopConfig, AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
-import { recordHandoff, resolveTelemetry } from "@oh-my-pi/pi-agent-core";
-import type { Api, Model, ServiceTierByFamily, Usage } from "@oh-my-pi/pi-ai";
-import { logger, popLoopPhase, prompt, pushLoopPhase, untilAborted } from "@oh-my-pi/pi-utils";
+import type { AgentEvent, AgentIdentity, AgentLoopConfig, AgentTelemetryConfig } from "@satopi/pi-agent-core";
+import { recordHandoff, resolveTelemetry } from "@satopi/pi-agent-core";
+import type { Api, Model, ServiceTierByFamily, Usage } from "@satopi/pi-ai";
+import { logger, popLoopPhase, prompt, pushLoopPhase, untilAborted } from "@satopi/pi-utils";
 import type { Rule } from "../capability/rule";
 import { ModelRegistry } from "../config/model-registry";
 import {

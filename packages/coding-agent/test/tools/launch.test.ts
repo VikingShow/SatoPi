@@ -51,8 +51,8 @@ afterEach(async () => {
 
 describe("daemon broker", () => {
 	it("shares PTY output and input across project clients", async () => {
-		const projectDir = await tempDir("omp-daemon-project-");
-		const runtimeDir = await tempDir("omp-daemon-runtime-");
+		const projectDir = await tempDir("stp-daemon-project-");
+		const runtimeDir = await tempDir("stp-daemon-runtime-");
 		const scriptPath = path.join(projectDir, "service.ts");
 		await Bun.write(
 			scriptPath,
@@ -134,8 +134,8 @@ setInterval(() => {}, 1000);
 	}, 20_000);
 
 	it("stops non-persistent daemons after the last project omp exits", async () => {
-		const projectDir = await tempDir("omp-daemon-exit-project-");
-		const runtimeDir = await tempDir("omp-daemon-exit-runtime-");
+		const projectDir = await tempDir("stp-daemon-exit-project-");
+		const runtimeDir = await tempDir("stp-daemon-exit-runtime-");
 		const scriptPath = path.join(projectDir, "service.ts");
 		await Bun.write(scriptPath, `process.stdout.write("READY\\n"); setInterval(() => {}, 1000);\n`);
 		const presence = await registerDaemonProjectPresence(projectDir, runtimeDir);
@@ -192,8 +192,8 @@ setInterval(() => {}, 1000);
 	}, 20_000);
 
 	it("keeps detached daemons alive through broker replacement", async () => {
-		const projectDir = await tempDir("omp-daemon-detached-project-");
-		const runtimeDir = await tempDir("omp-daemon-detached-runtime-");
+		const projectDir = await tempDir("stp-daemon-detached-project-");
+		const runtimeDir = await tempDir("stp-daemon-detached-runtime-");
 		const scriptPath = path.join(projectDir, "service.ts");
 		await Bun.write(scriptPath, `process.stdout.write("READY\\n"); setInterval(() => {}, 1000);\n`);
 		const first = await createDaemonBrokerClient(projectDir, { runtimeDir, idleGraceMs: 5_000 });
@@ -264,8 +264,8 @@ setInterval(() => {}, 1000);
 	// used to report "Ready: <match>" AND "Readiness timed out" with no hint of
 	// which condition failed. The snapshot now names the unmet condition(s).
 	it("names the unmet readiness condition when start times out", async () => {
-		const projectDir = await tempDir("omp-daemon-ready-project-");
-		const runtimeDir = await tempDir("omp-daemon-ready-runtime-");
+		const projectDir = await tempDir("stp-daemon-ready-project-");
+		const runtimeDir = await tempDir("stp-daemon-ready-runtime-");
 		const scriptPath = path.join(projectDir, "service.ts");
 		await Bun.write(scriptPath, `process.stdout.write("LISTENING\\n"); setInterval(() => {}, 1000);\n`);
 		// Reserve an ephemeral port and release it so nothing accepts connections there.

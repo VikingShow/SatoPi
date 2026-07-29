@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { listSessions } from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { MemorySessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
+import { getBundledModel } from "@satopi/pi-catalog/models";
+import { listSessions } from "@satopi/pi-coding-agent/session/session-listing";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { MemorySessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
 
 class CountingMemorySessionStorage extends MemorySessionStorage {
 	writeTextSyncCalls = 0;
@@ -88,7 +88,7 @@ describe("large session memory guards", () => {
 	});
 
 	it("streams large session files and keeps only the latest compaction summary", async () => {
-		const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "omp-large-session-"));
+		const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "stp-large-session-"));
 		tempDirs.push(tempDir);
 		const sessionFile = path.join(tempDir, "large.jsonl");
 		const oldSummary = `old-${"x".repeat(5 * 1024 * 1024)}`;
@@ -178,7 +178,7 @@ describe("large session memory guards", () => {
 	});
 
 	it("only elides loaded compactions on the active branch", async () => {
-		const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "omp-branch-load-"));
+		const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "stp-branch-load-"));
 		tempDirs.push(tempDir);
 		const sessionFile = path.join(tempDir, "branched.jsonl");
 		const branchASummary = `branch-a-${"x".repeat(1024)}`;

@@ -10,11 +10,11 @@
 import { constants as fsConstants, type Stats } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getAgentDir, isEnoent } from "@oh-my-pi/pi-utils";
+import { getAgentDir, isEnoent } from "@satopi/pi-utils";
 import { YAML } from "bun";
 
 /** Provider id stamped on discovered managed skills (distinguishes them from authored). */
-export const MANAGED_SKILLS_PROVIDER_ID = "omp-managed";
+export const MANAGED_SKILLS_PROVIDER_ID = "stp-managed";
 
 /** Hard cap on a managed SKILL.md body to keep generated skills bounded. */
 export const MAX_MANAGED_SKILL_BYTES = 64_000;

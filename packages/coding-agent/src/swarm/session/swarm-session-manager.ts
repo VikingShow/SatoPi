@@ -42,8 +42,8 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { logger } from "@oh-my-pi/pi-utils";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../../session/session-storage";
 import type { AgentState, Chapter, SwarmState } from "../core/state";
 import type { ActivityEntry } from "../infra/activity-logger";

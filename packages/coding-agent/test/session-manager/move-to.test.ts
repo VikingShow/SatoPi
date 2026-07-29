@@ -3,11 +3,11 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { SessionHeader } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { stripOuterDoubleQuotes } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
-import { getConfigRootDir, setAgentDir } from "@oh-my-pi/pi-utils";
+import type { SessionHeader } from "@satopi/pi-coding-agent/session/session-entries";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { stripOuterDoubleQuotes } from "@satopi/pi-coding-agent/tools/path-utils";
+import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 
 // -- helpers ----------------------------------------------------------------
 
@@ -67,7 +67,7 @@ describe("SessionManager.moveTo", () => {
 	const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
 
 	beforeEach(async () => {
-		testAgentDir = await fsp.mkdtemp(path.join(os.tmpdir(), "omp-move-test-"));
+		testAgentDir = await fsp.mkdtemp(path.join(os.tmpdir(), "stp-move-test-"));
 		setAgentDir(testAgentDir);
 		cwdA = path.join(testAgentDir, "cwd-a");
 		cwdB = path.join(testAgentDir, "cwd-b");

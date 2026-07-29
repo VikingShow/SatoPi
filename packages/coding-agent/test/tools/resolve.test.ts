@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ResolveTool, resolveToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/resolve";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { getThemeByName } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { ResolveTool, resolveToolRenderer } from "@satopi/pi-coding-agent/tools/resolve";
+import { sanitizeText } from "@satopi/pi-utils";
 
 function createSession(handler?: (input: unknown) => Promise<unknown>, clearPendingInvokers?: () => void): ToolSession {
 	return {

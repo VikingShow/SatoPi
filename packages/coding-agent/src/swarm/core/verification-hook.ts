@@ -10,7 +10,7 @@
  * of entering the Curtain pipeline.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================

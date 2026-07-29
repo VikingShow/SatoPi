@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { applyResolvedSystemPromptInputs, submitInteractiveInput } from "@oh-my-pi/pi-coding-agent/main";
-import type { SubmittedUserInput } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { CreateAgentSessionOptions } from "@oh-my-pi/pi-coding-agent/sdk";
-import { discoverTitleSystemPromptFile } from "@oh-my-pi/pi-coding-agent/system-prompt";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { applyResolvedSystemPromptInputs, submitInteractiveInput } from "@satopi/pi-coding-agent/main";
+import type { SubmittedUserInput } from "@satopi/pi-coding-agent/modes/types";
+import type { CreateAgentSessionOptions } from "@satopi/pi-coding-agent/sdk";
+import { discoverTitleSystemPromptFile } from "@satopi/pi-coding-agent/system-prompt";
+import { removeWithRetries } from "@satopi/pi-utils";
 
 const cleanupDirs: string[] = [];
 
@@ -26,7 +26,7 @@ function createInput(overrides: Partial<SubmittedUserInput> = {}): SubmittedUser
 
 describe("discoverTitleSystemPromptFile", () => {
 	it("discovers TITLE_SYSTEM.md from the project omp config directory", async () => {
-		const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-title-system-"));
+		const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "stp-title-system-"));
 		cleanupDirs.push(projectDir);
 		const configDir = path.join(projectDir, ".omp");
 		await fs.mkdir(configDir, { recursive: true });

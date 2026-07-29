@@ -1,11 +1,9 @@
-import { padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import { padding, truncateToWidth, visibleWidth } from "@satopi/pi-tui";
 import { gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
 import { theme } from "../../theme/theme";
 
 export const SETUP_SPLASH_MS = 2600;
 export const SETUP_TICK_MS = 33;
-
-
 
 const SKIP_HINT = "press enter to skip";
 

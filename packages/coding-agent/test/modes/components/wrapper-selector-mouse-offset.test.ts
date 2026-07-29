@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { Effort } from "@oh-my-pi/pi-ai";
-import { PluginSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/plugin-selector";
-import { QueueModeSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/queue-mode-selector";
-import { ThemeSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/theme-selector";
-import { ThinkingSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/thinking-selector";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { SgrMouseEvent } from "@oh-my-pi/pi-tui";
+import { Effort } from "@satopi/pi-ai";
+import { PluginSelectorComponent } from "@satopi/pi-coding-agent/modes/components/plugin-selector";
+import { QueueModeSelectorComponent } from "@satopi/pi-coding-agent/modes/components/queue-mode-selector";
+import { ThemeSelectorComponent } from "@satopi/pi-coding-agent/modes/components/theme-selector";
+import { ThinkingSelectorComponent } from "@satopi/pi-coding-agent/modes/components/thinking-selector";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { SgrMouseEvent } from "@satopi/pi-tui";
 
 beforeAll(async () => {
 	await initTheme();

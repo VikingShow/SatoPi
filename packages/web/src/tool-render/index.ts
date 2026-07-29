@@ -1,8 +1,16 @@
 /**
- * @oh-my-pi/pi-web/tool-render — Shared tool-call visualization primitives.
+ * @satopi/pi-web/tool-render — Shared tool-call visualization primitives.
  */
-export { Badge, Badges, PathText, CodeBlock, Output, DiffBlock, Note, Row, InvalidArg } from "./parts";
+
 export type { Tone } from "./parts";
-export { ToolCard } from "./ToolCard";
+export { Badge, Badges, CodeBlock, DiffBlock, InvalidArg, Note, Output, PathText, Row } from "./parts";
 export type { ToolCardProps } from "./ToolCard";
-export type { ToolRenderProps, ToolRenderer, ToolRenderHost, ToolResultLike, ToolResultText, ToolResultBlock } from "./types";
+export { ToolCard } from "./ToolCard";
+export type {
+	ToolRenderer,
+	ToolRenderHost,
+	ToolRenderProps,
+	ToolResultBlock,
+	ToolResultLike,
+	ToolResultText,
+} from "./types";

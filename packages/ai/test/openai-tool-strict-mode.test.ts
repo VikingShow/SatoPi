@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { streamOpenAICompletions } from "@oh-my-pi/pi-ai/providers/openai-completions";
-import { streamOpenAIResponses } from "@oh-my-pi/pi-ai/providers/openai-responses";
+import { streamOpenAICompletions } from "@satopi/pi-ai/providers/openai-completions";
+import { streamOpenAIResponses } from "@satopi/pi-ai/providers/openai-responses";
 import type {
 	Context,
 	FetchImpl,
@@ -9,9 +9,9 @@ import type {
 	OpenAICompat,
 	ProviderSessionState,
 	Tool,
-} from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+} from "@satopi/pi-ai/types";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { getBundledModel } from "@satopi/pi-catalog/models";
 import { type } from "arktype";
 
 const testTool: Tool = {

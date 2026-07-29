@@ -5,9 +5,9 @@ import * as path from "node:path";
 import {
 	resolvePluginExtensionPaths,
 	resolvePluginToolPaths,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/loader";
-import type { InstalledPlugin, PluginManifest } from "@oh-my-pi/pi-coding-agent/extensibility/plugins/types";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/extensibility/plugins/loader";
+import type { InstalledPlugin, PluginManifest } from "@satopi/pi-coding-agent/extensibility/plugins/types";
+import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 function makePlugin(pluginPath: string, manifest: PluginManifest): InstalledPlugin {
 	return {
@@ -22,7 +22,7 @@ function makePlugin(pluginPath: string, manifest: PluginManifest): InstalledPlug
 
 describe("plugin manifest path resolution", () => {
 	it("resolves a directory tools entry to its index, not the omp.extensions modules", () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-manifest-paths-"));
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-manifest-paths-"));
 		try {
 			// The package declares both extensions and a directory-based tool entry.
 			// `omp.extensions` and the sub-extension scan are extensions-specific and

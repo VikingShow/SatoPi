@@ -11,7 +11,7 @@
  * are logged and swallowed. A remote outage must never block or crash the loop.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { Settings } from "../../config/settings";
 import { type BankScope, computeBankScope, ensureBankExists } from "../../hindsight/bank";
 import { createHindsightClient, type HindsightApi, type MemoryItemInput } from "../../hindsight/client";

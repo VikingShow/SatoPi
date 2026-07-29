@@ -18,7 +18,7 @@
  *     ScriptBehavior/StageBehavior/CurtainBehavior implementations
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentSpec } from "../agent-runtime/agent-spec";

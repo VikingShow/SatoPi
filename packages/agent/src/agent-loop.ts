@@ -17,16 +17,16 @@ import {
 	type TSchema,
 	toolWireSchema,
 	validateToolArguments,
-} from "@oh-my-pi/pi-ai";
+} from "@satopi/pi-ai";
 import {
 	type Dialect,
 	encodeInbandToolHistory,
 	renderInbandToolPrompt,
 	renderToolExamples,
 	wrapInbandToolStream,
-} from "@oh-my-pi/pi-ai/dialect";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
+} from "@satopi/pi-ai/dialect";
+import * as AIError from "@satopi/pi-ai/error";
+import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@satopi/pi-ai/utils/block-symbols";
 import {
 	createHarmonyAuditEvent,
 	detectHarmonyLeakInAssistantMessage,
@@ -36,10 +36,10 @@ import {
 	isHarmonyLeakMitigationTarget,
 	recoverHarmonyToolCall,
 	signalListLabel,
-} from "@oh-my-pi/pi-ai/utils/harmony-leak";
-import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
-import { sanitizeText, structuredCloneJSON } from "@oh-my-pi/pi-utils";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+} from "@satopi/pi-ai/utils/harmony-leak";
+import { preferredDialect } from "@satopi/pi-catalog/identity";
+import { sanitizeText, structuredCloneJSON } from "@satopi/pi-utils";
+import { INTENT_FIELD } from "@satopi/pi-wire";
 import { agentPauseGate } from "./pause";
 import { type AgentRunCoverage, type AgentRunSummary, ToolCallBlockedError } from "./run-collector";
 import {

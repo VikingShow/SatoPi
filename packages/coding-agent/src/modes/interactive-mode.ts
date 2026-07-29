@@ -11,10 +11,10 @@ import {
 	type AgentToolResult,
 	EventLoopKeepalive,
 	ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
-import type { CompactionOutcome } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@oh-my-pi/pi-ai";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+} from "@satopi/pi-agent-core";
+import type { CompactionOutcome } from "@satopi/pi-agent-core/compaction";
+import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@satopi/pi-ai";
+import { modelsAreEqual } from "@satopi/pi-catalog/models";
 import type {
 	AutocompleteProvider,
 	Component,
@@ -23,7 +23,7 @@ import type {
 	NativeScrollbackLiveRegion,
 	OverlayHandle,
 	SlashCommand,
-} from "@oh-my-pi/pi-tui";
+} from "@satopi/pi-tui";
 import {
 	Container,
 	clearRenderCache,
@@ -37,8 +37,8 @@ import {
 	Text,
 	TUI,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { isInsideTerminalMultiplexer } from "@oh-my-pi/pi-tui/terminal-capabilities";
+} from "@satopi/pi-tui";
+import { isInsideTerminalMultiplexer } from "@satopi/pi-tui/terminal-capabilities";
 import {
 	APP_NAME,
 	adjustHsv,
@@ -50,7 +50,7 @@ import {
 	postmortem,
 	prompt,
 	setProjectDir,
-} from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-utils";
 import chalk from "chalk";
 import { reset as resetCapabilities } from "../capability";
 import type { CollabGuestLink } from "../collab/guest";
@@ -92,7 +92,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -166,7 +166,11 @@ import {
 	parseLoopLimitArgs,
 } from "./loop-limit";
 import { OAuthManualInputManager } from "./oauth-manual-input";
-import { countRunningPersistentAgents, countRunningSubagentBadgeAgents, getRunningSubagentBadgeRegistry } from "./running-subagent-badge";
+import {
+	countRunningPersistentAgents,
+	countRunningSubagentBadgeAgents,
+	getRunningSubagentBadgeRegistry,
+} from "./running-subagent-badge";
 import {
 	type ObservableSession,
 	type SessionObserverChangeKind,
@@ -360,17 +364,13 @@ function renderAgentHud(title: string, titleColor: ThemeColor, rows: string[]): 
 	return ["", theme.bold(theme.fg(titleColor, title)), ...rows.map(line => ` ${line}`)];
 }
 
-
 /**
  * Subagent-only HUD block — accent "Subagents" header. Only lists detached
  * task subagents; persistent agents (sentinel `persist-` id prefix) are excluded.
  */
 export function renderSubagentHudLines(sessions: ObservableSession[], columns: number): string[] {
 	const running = sessions.filter(
-		session =>
-			session.kind === "subagent" &&
-			session.status === "active" &&
-			session.detached === true,
+		session => session.kind === "subagent" && session.status === "active" && session.detached === true,
 	);
 	if (running.length === 0) return [];
 

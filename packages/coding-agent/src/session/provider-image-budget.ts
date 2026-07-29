@@ -6,8 +6,8 @@ import type {
 	TextContent,
 	ToolResultMessage,
 	UserMessage,
-} from "@oh-my-pi/pi-ai";
-import { providerImageBudget } from "@oh-my-pi/snapcompact";
+} from "@satopi/pi-ai";
+import { providerImageBudget } from "@satopi/snapcompact";
 
 const TOOL_RESULT_IMAGE_OMISSION: TextContent = {
 	type: "text",

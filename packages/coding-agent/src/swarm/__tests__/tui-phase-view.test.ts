@@ -21,9 +21,15 @@ const stripAnsi = (s: string) => (s ?? "").replace(ANSI_RE, "");
 
 function makeState(overrides: Partial<SwarmState> = {}): SwarmState {
 	return {
-		name: "test-swarm", status: "running", mode: "loop", iteration: 0,
-		targetCount: 3, agents: {}, startedAt: Date.now() - 60_000,
-		phase: "script", ...overrides,
+		name: "test-swarm",
+		status: "running",
+		mode: "loop",
+		iteration: 0,
+		targetCount: 3,
+		agents: {},
+		startedAt: Date.now() - 60_000,
+		phase: "script",
+		...overrides,
 	} as SwarmState;
 }
 
@@ -61,8 +67,8 @@ describe("renderPhaseView", () => {
 		const state = makeState({
 			phase: "stage",
 			todos: [
-			{ id: "1", title: "a", status: "completed" as const },
-			{ id: "2", title: "b", status: "pending" as const },
+				{ id: "1", title: "a", status: "completed" as const },
+				{ id: "2", title: "b", status: "pending" as const },
 			],
 		});
 		const lines = renderPhaseView(state, theme);

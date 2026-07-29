@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
-import type { AgentMessage, AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
-import type { TUI } from "@oh-my-pi/pi-tui";
+import type { AgentMessage, AgentTelemetryConfig } from "@satopi/pi-agent-core";
+import type { TUI } from "@satopi/pi-tui";
 import { type } from "arktype";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";

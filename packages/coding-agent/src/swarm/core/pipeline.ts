@@ -6,7 +6,7 @@
  * - Waves execute sequentially (wave N+1 starts after wave N completes)
  * - For pipeline mode, iterations repeat the full DAG execution
  */
-import type { AgentSource, ModelRegistry, Settings, SingleResult } from "@oh-my-pi/pi-coding-agent";
+import type { AgentSource, ModelRegistry, Settings, SingleResult } from "@satopi/pi-coding-agent";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
 import type { AgentSpec } from "../agent-runtime/agent-spec";

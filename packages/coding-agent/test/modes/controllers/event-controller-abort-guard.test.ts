@@ -13,12 +13,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { TERMINAL } from "@oh-my-pi/pi-tui";
+import type { AssistantMessage } from "@satopi/pi-ai";
+import { resetSettingsForTest, Settings, settings } from "@satopi/pi-coding-agent/config/settings";
+import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
+import { TERMINAL } from "@satopi/pi-tui";
 
 beforeAll(() => {
 	initTheme();
@@ -26,7 +26,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
 	resetSettingsForTest();
-	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-abortguard-"));
+	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-abortguard-"));
 	await Settings.init({ inMemory: true, cwd: tempDir });
 });
 

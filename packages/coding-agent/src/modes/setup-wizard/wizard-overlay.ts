@@ -7,8 +7,8 @@ import {
 	type SgrMouseEvent,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { APP_NAME } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-tui";
+import { APP_NAME } from "@satopi/pi-utils";
 import { gradientLogo, PI_LOGO } from "../components/welcome";
 import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
@@ -148,18 +148,18 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 		const height = Math.max(1, this.ctx.ui.terminal.rows);
 		let lines: string[];
 		switch (this.#phase) {
-		case "splash":
-			lines = renderSetupSplash(safeWidth, height, performance.now() - this.#phaseStartedAt);
-			break;
-		case "scene":
-			lines = this.#renderScene(safeWidth, height);
-			break;
-		case "outro":
-			lines = renderSetupOutro(safeWidth, height, performance.now() - this.#phaseStartedAt);
-			break;
-		case "done":
-			lines = [];
-			break;
+			case "splash":
+				lines = renderSetupSplash(safeWidth, height, performance.now() - this.#phaseStartedAt);
+				break;
+			case "scene":
+				lines = this.#renderScene(safeWidth, height);
+				break;
+			case "outro":
+				lines = renderSetupOutro(safeWidth, height, performance.now() - this.#phaseStartedAt);
+				break;
+			case "done":
+				lines = [];
+				break;
 		}
 		return this.#fitToScreen(lines, safeWidth, height);
 	}

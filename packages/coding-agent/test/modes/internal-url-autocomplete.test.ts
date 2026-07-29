@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as capability from "@oh-my-pi/pi-coding-agent/capability";
-import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { resetActiveRulesForTests, setActiveRules } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import type { SSHHost } from "@oh-my-pi/pi-coding-agent/capability/ssh";
-import type { CapabilityResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import { resetActiveSkillsForTests, setActiveSkills } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
+import * as capability from "@satopi/pi-coding-agent/capability";
+import type { Rule } from "@satopi/pi-coding-agent/capability/rule";
+import { resetActiveRulesForTests, setActiveRules } from "@satopi/pi-coding-agent/capability/rule";
+import type { SSHHost } from "@satopi/pi-coding-agent/capability/ssh";
+import type { CapabilityResult } from "@satopi/pi-coding-agent/capability/types";
+import type { Skill } from "@satopi/pi-coding-agent/extensibility/skills";
+import { resetActiveSkillsForTests, setActiveSkills } from "@satopi/pi-coding-agent/extensibility/skills";
+import { InternalUrlRouter } from "@satopi/pi-coding-agent/internal-urls/router";
 import {
 	applyInternalUrlCompletion,
 	extractInternalUrlContext,
 	getInternalUrlSuggestions,
 	isInternalUrlPrefix,
-} from "@oh-my-pi/pi-coding-agent/modes/internal-url-autocomplete";
-import { PromptActionAutocompleteProvider } from "@oh-my-pi/pi-coding-agent/modes/prompt-action-autocomplete";
+} from "@satopi/pi-coding-agent/modes/internal-url-autocomplete";
+import { PromptActionAutocompleteProvider } from "@satopi/pi-coding-agent/modes/prompt-action-autocomplete";
 
 function skill(name: string, description = ""): Skill {
 	return { name, description, filePath: `/skills/${name}/SKILL.md`, baseDir: `/skills/${name}`, source: "test" };

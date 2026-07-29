@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { BrowserTool } from "@oh-my-pi/pi-coding-agent/tools/browser";
-import { ensureChromiumExecutable } from "@oh-my-pi/pi-coding-agent/tools/browser/launch";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import type { ToolSession } from "@satopi/pi-coding-agent/sdk";
+import { BrowserTool } from "@satopi/pi-coding-agent/tools/browser";
+import { ensureChromiumExecutable } from "@satopi/pi-coding-agent/tools/browser/launch";
 
 function makeSession(): ToolSession {
 	return {

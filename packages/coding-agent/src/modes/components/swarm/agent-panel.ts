@@ -4,7 +4,7 @@
  * the shared `swarmPanel` wrapper and uses the global `theme` for all colours.
  */
 
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@satopi/pi-tui";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import { formatStatusIcon } from "../../../tools/render-utils";
@@ -21,7 +21,7 @@ const STATUS_ICON: Record<string, ToolUIStatus> = {
 	failed: "error",
 	aborted: "aborted",
 	running: "running",
-	idle: "done",       // parked / idle — use the check glyph
+	idle: "done", // parked / idle — use the check glyph
 	parked: "done",
 	pending: "pending",
 };
@@ -60,67 +60,68 @@ export function renderAgentPanel(
 ): Component {
 	const title = "Agents";
 
-	return swarmPanel(title, ({ innerWidth, theme }) => {
-		if (agents.length === 0 && !swarmState?.agents) {
-			return [theme.fg("dim", "  No agents")];
-		}
+	return swarmPanel(
+		title,
+		({ innerWidth, theme }) => {
+			if (agents.length === 0 && !swarmState?.agents) {
+				return [theme.fg("dim", "  No agents")];
+			}
 
-		const lines: string[] = [];
+			const lines: string[] = [];
 
-		const agentList = agents.length > 0 ? agents : buildAgentRefsFromSwarm(swarmState);
+			const agentList = agents.length > 0 ? agents : buildAgentRefsFromSwarm(swarmState);
 
-		if (agentList.length === 0) {
-			lines.push(theme.fg("dim", "  No agents"));
-		} else {
-			const sorted = [...agentList].sort((a, b) => {
-				const aRole = a.role ?? swarmState?.agents[a.id]?.role;
-				const bRole = b.role ?? swarmState?.agents[b.id]?.role;
-				if (aRole === "reviewer" && bRole !== "reviewer") return -1;
-				if (bRole === "reviewer" && aRole !== "reviewer") return 1;
-				return a.displayName.localeCompare(b.displayName);
+			if (agentList.length === 0) {
+				lines.push(theme.fg("dim", "  No agents"));
+			} else {
+				const sorted = [...agentList].sort((a, b) => {
+					const aRole = a.role ?? swarmState?.agents[a.id]?.role;
+					const bRole = b.role ?? swarmState?.agents[b.id]?.role;
+					if (aRole === "reviewer" && bRole !== "reviewer") return -1;
+					if (bRole === "reviewer" && aRole !== "reviewer") return 1;
+					return a.displayName.localeCompare(b.displayName);
+				});
+
+				const maxAgentLines = 20;
+				const shown = sorted.slice(0, maxAgentLines);
+				for (const ref of shown) {
+					const swarmAgent = swarmState?.agents[ref.id];
+					lines.push(formatAgentLine(ref, swarmAgent, innerWidth, theme));
+				}
+				if (sorted.length > maxAgentLines) {
+					lines.push(theme.fg("dim", `  ... and ${sorted.length - maxAgentLines} more agents`));
+				}
+			}
+
+			// Reviewer footer
+			const reviewer = agentList.find(ref => {
+				const role = ref.role ?? swarmState?.agents[ref.id]?.role;
+				return role === "reviewer";
 			});
-
-			const maxAgentLines = 20;
-			const shown = sorted.slice(0, maxAgentLines);
-			for (const ref of shown) {
-				const swarmAgent = swarmState?.agents[ref.id];
-				lines.push(formatAgentLine(ref, swarmAgent, innerWidth, theme));
+			if (reviewer) {
+				const verdict = swarmState?.reviewVerdict;
+				let footer = ` 👑 reviewer: ${reviewer.displayName}`;
+				if (verdict) {
+					const footerLen = footer.replace(/\x1b\[[0-9;]*m/g, "").length;
+					const verdictMax = Math.max(5, innerWidth - (footerLen + 12));
+					const display = verdict.length > verdictMax ? `${verdict.slice(0, verdictMax - 3)}...` : verdict;
+					footer += `  ·  review: "${display}"`;
+				}
+				lines.push("");
+				lines.push(footer);
 			}
-			if (sorted.length > maxAgentLines) {
-				lines.push(theme.fg("dim", `  ... and ${sorted.length - maxAgentLines} more agents`));
-			}
-		}
 
-		// Reviewer footer
-		const reviewer = agentList.find(ref => {
-			const role = ref.role ?? swarmState?.agents[ref.id]?.role;
-			return role === "reviewer";
-		});
-		if (reviewer) {
-			const verdict = swarmState?.reviewVerdict;
-			let footer = ` 👑 reviewer: ${reviewer.displayName}`;
-			if (verdict) {
-				const footerLen = footer.replace(/\x1b\[[0-9;]*m/g, "").length;
-				const verdictMax = Math.max(5, innerWidth - (footerLen + 12));
-				const display = verdict.length > verdictMax ? `${verdict.slice(0, verdictMax - 3)}...` : verdict;
-				footer += `  ·  review: "${display}"`;
-			}
-			lines.push("");
-			lines.push(footer);
-		}
-
-		return lines;
-	}, theme);
+			return lines;
+		},
+		theme,
+	);
 }
 
 /**
  * Legacy convenience: reads from `AgentRegistry.global()` so callers don't
  * need to thread the registry reference themselves.
  */
-export function renderAgentPanelFromGlobalRegistry(
-	swarmState: SwarmState | null | undefined,
-	theme: Theme,
-): Component {
+export function renderAgentPanelFromGlobalRegistry(swarmState: SwarmState | null | undefined, theme: Theme): Component {
 	return renderAgentPanel(AgentRegistry.global().list(), swarmState, theme);
 }
 

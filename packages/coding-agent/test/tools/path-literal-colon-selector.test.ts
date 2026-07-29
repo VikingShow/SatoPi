@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import {
 	probeLiteralPathExists,
 	splitPathAndSel,
 	splitPathAndSelPreferringLiteral,
-} from "@oh-my-pi/pi-coding-agent/tools/path-utils";
-import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/tools/path-utils";
+import { ReadTool } from "@satopi/pi-coding-agent/tools/read";
+import { removeWithRetries } from "@satopi/pi-utils";
 import { GrepTool } from "../../src/tools/grep";
 
 function getText(result: { content: Array<{ type: string; text?: string }> }): string {

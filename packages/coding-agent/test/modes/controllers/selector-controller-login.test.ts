@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
-import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { SelectorController } from "@satopi/pi-coding-agent/modes/controllers/selector-controller";
+import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
+import type { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
 
 interface RenderableBlock {
 	render(width: number): string[];

@@ -4,7 +4,7 @@
  * Handles `stp setup` for onboarding and `stp setup <component>` for optional dependencies.
  */
 import * as path from "node:path";
-import { $which, APP_NAME, getProjectDir, getPythonEnvDir } from "@oh-my-pi/pi-utils";
+import { $which, APP_NAME, getProjectDir, getPythonEnvDir } from "@satopi/pi-utils";
 import { $ } from "bun";
 import chalk from "chalk";
 import { Settings, settings } from "../config/settings";

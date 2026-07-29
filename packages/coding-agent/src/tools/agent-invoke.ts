@@ -5,14 +5,13 @@
  * Supports inline progress streaming via session.subscribe().
  */
 
-import type { AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentTool, AgentToolContext, AgentToolResult } from "@satopi/pi-agent-core";
 import { type } from "arktype";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
 import { createAgentSession } from "../sdk";
-import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type AgentProgress, type SingleResult } from "../task/types";
+import type { AgentSession } from "../session/agent-session";
+import { type AgentProgress, type SingleResult, TASK_SUBAGENT_LIFECYCLE_CHANNEL } from "../task/types";
 
 const agentInvokeSchema = type({
 	profileId: type("string").describe("Profile ID of the persistent agent to invoke"),
@@ -35,8 +34,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 	label: "Invoke Agent",
 	summary: "Call a persistent agent by profileId",
 	parameters: agentInvokeSchema,
-	description:
-		"Call a persistent agent by its profile ID. Spawns a new session or steers an existing idle one.",
+	description: "Call a persistent agent by its profile ID. Spawns a new session or steers an existing idle one.",
 
 	async execute(
 		this: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails>,
@@ -175,7 +173,11 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 		} catch (err) {
 			unsub();
 			const msg = err instanceof Error ? err.message : String(err);
-			try { ProfileRegistry.global().recordTaskCompleted(profileId, false); } catch { /* best-effort */ }
+			try {
+				ProfileRegistry.global().recordTaskCompleted(profileId, false);
+			} catch {
+				/* best-effort */
+			}
 			eventBus?.emit(TASK_SUBAGENT_LIFECYCLE_CHANNEL, {
 				id: agentId,
 				agent: profileId,

@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { normalizeProfileName } from "@oh-my-pi/pi-utils/dirs";
+import { normalizeProfileName } from "@satopi/pi-utils/dirs";
 
 export type ProfileAliasShell = "bash" | "zsh" | "fish" | "powershell" | "pwsh";
 
@@ -254,7 +254,7 @@ function resolveShellConfigPath(
 			// a hard-coded ~/.config would be silently ignored when the user relocates
 			// their XDG config root, leaving the alias unsourced after a restart.
 			const configHome = env.XDG_CONFIG_HOME ? toPosix(env.XDG_CONFIG_HOME) : posixJoinUnc(posixHome, ".config");
-			return posixJoinUnc(configHome, "fish", "conf.d", "omp-profiles.fish");
+			return posixJoinUnc(configHome, "fish", "conf.d", "stp-profiles.fish");
 		}
 		case "pwsh":
 			return platform === "win32"

@@ -10,8 +10,8 @@
  * Design follows the TencentDB L3 compact context pattern.
  */
 
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { estimateTokens } from "@oh-my-pi/pi-agent-core/compaction";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import { estimateTokens } from "@satopi/pi-agent-core/compaction";
 
 // ============================================================================
 // Types

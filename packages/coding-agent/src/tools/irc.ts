@@ -9,10 +9,10 @@
  * drains pending messages; `list` shows every addressable peer.
  */
 
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
-import { formatAge, formatDuration, prompt } from "@oh-my-pi/pi-utils";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@satopi/pi-agent-core";
+import type { ToolExample } from "@satopi/pi-ai";
+import { type Component, Text } from "@satopi/pi-tui";
+import { formatAge, formatDuration, prompt } from "@satopi/pi-utils";
 import { type } from "arktype";
 import type { Settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";

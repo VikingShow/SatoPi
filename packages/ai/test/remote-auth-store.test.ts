@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AuthStorage, REMOTE_REFRESH_SENTINEL, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai";
+import { AuthStorage, REMOTE_REFRESH_SENTINEL, SqliteAuthCredentialStore } from "@satopi/pi-ai";
 import {
 	AuthBrokerClient,
 	type AuthBrokerServerHandle,
@@ -11,10 +11,10 @@ import {
 	RemoteAuthCredentialStore,
 	type SnapshotResponse,
 	startAuthBroker,
-} from "@oh-my-pi/pi-ai/auth-broker";
-import { snapshotResponseSchema } from "@oh-my-pi/pi-ai/auth-broker/wire-schemas";
-import * as oauthUtils from "@oh-my-pi/pi-ai/registry/oauth";
-import type { UsageLimit, UsageReport } from "@oh-my-pi/pi-ai/usage";
+} from "@satopi/pi-ai/auth-broker";
+import { snapshotResponseSchema } from "@satopi/pi-ai/auth-broker/wire-schemas";
+import * as oauthUtils from "@satopi/pi-ai/registry/oauth";
+import type { UsageLimit, UsageReport } from "@satopi/pi-ai/usage";
 import { type } from "arktype";
 import { removeWithRetries } from "../../utils/src/temp";
 

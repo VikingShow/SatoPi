@@ -13,16 +13,16 @@ const arkSessionNotification = type({
 	},
 });
 
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { AcpAgent } from "@oh-my-pi/pi-coding-agent/modes/acp/acp-agent";
+import type { Model } from "@satopi/pi-ai";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { AcpAgent } from "@satopi/pi-coding-agent/modes/acp/acp-agent";
 import {
 	buildToolCallStartUpdate,
 	mapAgentSessionEventToAcpSessionUpdates,
 	normalizeReplayToolArguments,
-} from "@oh-my-pi/pi-coding-agent/modes/acp/acp-event-mapper";
-import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/modes/acp/acp-event-mapper";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 import { expectAcpStructure, expectAcpStructureRejects } from "./helpers/acp-schema";
 
 function makeAssistantMessage(text: string) {
@@ -759,7 +759,7 @@ describe("ACP event mapper", () => {
 	});
 
 	it("replays assistant tool_use input through the ACP dispatcher without wrapping", async () => {
-		const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-acp-replay-contract-"));
+		const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "stp-acp-replay-contract-"));
 		const cwd = path.join(root, "cwd");
 		const sessionDir = path.join(root, "sessions");
 		const initialSessionDir = path.join(root, "initial-session");

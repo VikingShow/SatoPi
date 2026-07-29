@@ -8,9 +8,16 @@
  * @module hook-system/builtins/mnemopi-hook
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@satopi/pi-utils";
 import type { SwarmMnemopiAdapter } from "../../infra/mnemopi-adapter";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration, AgentBeforeSpawnPayload, AgentAfterCompletePayload } from "../types";
+import type {
+	AgentAfterCompletePayload,
+	AgentBeforeSpawnPayload,
+	HookContext,
+	HookEvent,
+	HookPayloadMap,
+	HookRegistration,
+} from "../types";
 
 /**
  * Create a mnemopi memory hook.
@@ -35,52 +42,52 @@ export function createMnemopiHook(adapter: SwarmMnemopiAdapter): HookRegistratio
 				// -----------------------------------------------------------------
 				// agent:beforeSpawn — recall historical context
 				// -----------------------------------------------------------------
-			case "agent:beforeSpawn": {
-				// Narrow payload for TS: switch on event doesn't narrow generic K.
-				const p = payload as unknown as AgentBeforeSpawnPayload;
-				const planSummary = p.planSummary ?? "";
-				const taskSummary = p.taskSummary ?? "";
+				case "agent:beforeSpawn": {
+					// Narrow payload for TS: switch on event doesn't narrow generic K.
+					const p = payload as unknown as AgentBeforeSpawnPayload;
+					const planSummary = p.planSummary ?? "";
+					const taskSummary = p.taskSummary ?? "";
 
-				try {
-					const recallResult = await adapter.recallForIteration(planSummary, taskSummary);
-					logger.debug("[MnemopiHook] Recall completed", {
-						agentId: p.agentId,
-						hasResults: !!recallResult,
-					});
-				} catch (err: unknown) {
-					logger.warn("[MnemopiHook] Recall failed — continuing", {
-						agentId: p.agentId,
-						error: err instanceof Error ? err.message : String(err),
-					});
+					try {
+						const recallResult = await adapter.recallForIteration(planSummary, taskSummary);
+						logger.debug("[MnemopiHook] Recall completed", {
+							agentId: p.agentId,
+							hasResults: !!recallResult,
+						});
+					} catch (err: unknown) {
+						logger.warn("[MnemopiHook] Recall failed — continuing", {
+							agentId: p.agentId,
+							error: err instanceof Error ? err.message : String(err),
+						});
+					}
+					return;
 				}
-				return;
-			}
 
 				// -----------------------------------------------------------------
 				// agent:afterComplete — store iteration results
 				// -----------------------------------------------------------------
-			case "agent:afterComplete": {
-				// Narrow payload for TS: switch on event doesn't narrow generic K.
-				const p = payload as unknown as AgentAfterCompletePayload;
-				if (!p.summary) {
+				case "agent:afterComplete": {
+					// Narrow payload for TS: switch on event doesn't narrow generic K.
+					const p = payload as unknown as AgentAfterCompletePayload;
+					if (!p.summary) {
+						return;
+					}
+					const summary: string = p.summary;
+					const score: number = p.score ?? 0;
+
+					try {
+						await adapter.storeAfterIteration(summary, score);
+						logger.debug("[MnemopiHook] Iteration stored", {
+							agentId: p.agentId,
+						});
+					} catch (err: unknown) {
+						logger.warn("[MnemopiHook] Store failed — continuing", {
+							agentId: p.agentId,
+							error: err instanceof Error ? err.message : String(err),
+						});
+					}
 					return;
 				}
-				const summary: string = p.summary;
-				const score: number = p.score ?? 0;
-
-				try {
-					await adapter.storeAfterIteration(summary, score);
-					logger.debug("[MnemopiHook] Iteration stored", {
-						agentId: p.agentId,
-					});
-				} catch (err: unknown) {
-					logger.warn("[MnemopiHook] Store failed — continuing", {
-						agentId: p.agentId,
-						error: err instanceof Error ? err.message : String(err),
-					});
-				}
-				return;
-			}
 
 				default:
 					return;

@@ -5,9 +5,9 @@
  *   agent_fork({ reason: "Task too complex", count: 3 })
  */
 
-import type { Agent, AgentTool, AgentToolContext, AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { Agent, AgentTool, AgentToolContext, AgentToolResult } from "@satopi/pi-agent-core";
+import type { ToolExample } from "@satopi/pi-ai";
+import { logger } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { AgentForkManager, type ForkResult } from "../agent/agent-fork-manager";
 
@@ -15,7 +15,7 @@ import { AgentForkManager, type ForkResult } from "../agent/agent-fork-manager";
 // Context extension
 // ============================================================================
 
-declare module "@oh-my-pi/pi-agent-core" {
+declare module "@satopi/pi-agent-core" {
 	interface AgentToolContext {
 		/** Parent agent instance (for fork context) */
 		parentAgent?: Agent;

@@ -1,8 +1,8 @@
 /**
  * Tool wrappers for extensions.
  */
-import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent, Static, TextContent, TSchema } from "@oh-my-pi/pi-ai";
+import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@satopi/pi-agent-core";
+import type { ImageContent, Static, TextContent, TSchema } from "@satopi/pi-ai";
 import type { Theme } from "../../modes/theme/theme";
 import { normalizeToolEventInput, resolveToolEventInput } from "../tool-event-input";
 import { applyToolProxy } from "../tool-proxy";

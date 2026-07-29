@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AuthStorage, type completeSimple, type ImageContent, type Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { InspectImageTool } from "@oh-my-pi/pi-coding-agent/tools/inspect-image";
-import { inspectImageToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/inspect-image-renderer";
-import { toolRenderers } from "@oh-my-pi/pi-coding-agent/tools/renderers";
-import { removeSyncWithRetries, sanitizeText } from "@oh-my-pi/pi-utils";
+import { AuthStorage, type completeSimple, type ImageContent, type Model } from "@satopi/pi-ai";
+import { buildModel } from "@satopi/pi-catalog/build";
+import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
+import { getThemeByName } from "@satopi/pi-coding-agent/modes/theme/theme";
+import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
+import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@satopi/pi-coding-agent/tools";
+import { InspectImageTool } from "@satopi/pi-coding-agent/tools/inspect-image";
+import { inspectImageToolRenderer } from "@satopi/pi-coding-agent/tools/inspect-image-renderer";
+import { toolRenderers } from "@satopi/pi-coding-agent/tools/renderers";
+import { removeSyncWithRetries, sanitizeText } from "@satopi/pi-utils";
 import { type } from "arktype";
 
 const TINY_PNG_BASE64 =
@@ -125,7 +125,7 @@ describe("InspectImageTool", () => {
 	let testDir: string;
 
 	beforeEach(() => {
-		testDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-inspect-image-"));
+		testDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-inspect-image-"));
 	});
 
 	afterEach(() => {

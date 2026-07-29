@@ -5,9 +5,9 @@
  * - `stp -p "prompt"` - text output
  * - `stp --mode json "prompt"` - JSON event stream
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent } from "@oh-my-pi/pi-ai";
-import { logger, sanitizeText } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@satopi/pi-agent-core";
+import type { AssistantMessage, ImageContent } from "@satopi/pi-ai";
+import { logger, sanitizeText } from "@satopi/pi-utils";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import { isSilentAbort } from "../session/messages";
 import { flushTelemetryExport } from "../telemetry-export";

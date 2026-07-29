@@ -6,9 +6,9 @@ import {
 	classifySource,
 	fetchMarketplace,
 	parseMarketplaceCatalog,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace";
-import * as git from "@oh-my-pi/pi-coding-agent/utils/git";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@satopi/pi-coding-agent/extensibility/plugins/marketplace";
+import * as git from "@satopi/pi-coding-agent/utils/git";
+import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 // Fixture lives at test/marketplace/fixtures/valid-marketplace/
 const FIXTURE_DIR = path.join(import.meta.dir, "fixtures", "valid-marketplace");
@@ -153,7 +153,7 @@ describe("fetchMarketplace", () => {
 	let tmpDir: string;
 
 	beforeEach(() => {
-		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-fetcher-test-"));
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "stp-fetcher-test-"));
 	});
 
 	afterEach(() => {
@@ -182,18 +182,18 @@ describe("fetchMarketplace", () => {
 	});
 
 	it("loads catalog from .omp-plugin/marketplace.json when present", async () => {
-		const root = path.join(tmpDir, "omp-only");
+		const root = path.join(tmpDir, "stp-only");
 		fs.mkdirSync(path.join(root, ".omp-plugin"), { recursive: true });
 		const catalog = {
-			name: "omp-only-marketplace",
+			name: "stp-only-marketplace",
 			owner: { name: "Test" },
-			plugins: [{ name: "omp-plugin", source: "./plugins/omp-plugin", description: "x" }],
+			plugins: [{ name: "stp-plugin", source: "./plugins/omp-plugin", description: "x" }],
 		};
 		fs.writeFileSync(path.join(root, ".omp-plugin", "marketplace.json"), JSON.stringify(catalog));
 
 		const result = await fetchMarketplace(root, tmpDir);
-		expect(result.catalog.name).toBe("omp-only-marketplace");
-		expect(result.catalog.plugins[0].name).toBe("omp-plugin");
+		expect(result.catalog.name).toBe("stp-only-marketplace");
+		expect(result.catalog.plugins[0].name).toBe("stp-plugin");
 	});
 
 	it("prefers .omp-plugin/marketplace.json over .claude-plugin/marketplace.json when both exist", async () => {

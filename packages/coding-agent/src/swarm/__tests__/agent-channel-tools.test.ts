@@ -11,8 +11,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import type { TextContent } from "@oh-my-pi/pi-ai";
+import type { AgentToolContext } from "@satopi/pi-agent-core";
+import type { TextContent } from "@satopi/pi-ai";
 import { IrcBus } from "../../irc/bus";
 import {
 	AgentBroadcastTool,
