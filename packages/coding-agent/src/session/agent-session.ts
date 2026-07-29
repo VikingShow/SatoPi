@@ -8305,6 +8305,7 @@ export class AgentSession {
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
+	}
 
 	/**
 	 * Send a prompt to the agent.
