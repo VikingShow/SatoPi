@@ -10,11 +10,11 @@ const COPILOT_PREMIUM_MULTIPLIERS: Record<string, number> = {
 };
 
 import * as path from "node:path";
-import { discoverAuthStorage } from "@oh-my-pi/pi-ai/auth-broker/discover";
-import type { OAuthAccess } from "@oh-my-pi/pi-ai/auth-storage";
-import type { OAuthProvider } from "@oh-my-pi/pi-ai/oauth/types";
-import { getGitLabDuoModels } from "@oh-my-pi/pi-ai/providers/gitlab-duo";
-import { $env } from "@oh-my-pi/pi-utils";
+import { discoverAuthStorage } from "@satopi/pi-ai/auth-broker/discover";
+import type { OAuthAccess } from "@satopi/pi-ai/auth-storage";
+import type { OAuthProvider } from "@satopi/pi-ai/oauth/types";
+import { getGitLabDuoModels } from "@satopi/pi-ai/providers/gitlab-duo";
+import { $env } from "@satopi/pi-utils";
 import { ANTIGRAVITY_PRIMARY_ENDPOINT, fetchAntigravityDiscoveryModels } from "../src/discovery/antigravity";
 import { fetchCodexModels } from "../src/discovery/codex";
 import { buildGitLabDuoWorkflowFallbackModel } from "../src/discovery/gitlab-duo-workflow";
