@@ -431,6 +431,7 @@ export class Editor implements Component, Focusable {
 	// Paste tracking for large pastes
 	#pastes: Map<number, string> = new Map();
 	#pasteCounter: number = 0;
+	#submitting = false;
 
 	/** Optional pattern matching atomic placeholder tokens (e.g. `[Image #1, 800x600]` or
 	 *  `[Paste #2, +30 lines]`) that the editor treats as indivisible: a backspace or forward-delete
@@ -2005,6 +2006,8 @@ export class Editor implements Component, Focusable {
 	}
 
 	#submitValue(): void {
+		if (this.#submitting) return;
+		this.#submitting = true;
 		this.#resetKillSequence();
 
 		const result = this.#expandPasteMarkers(this.#state.lines.join("\n")).trim();
@@ -2017,7 +2020,12 @@ export class Editor implements Component, Focusable {
 		this.#undoStack.length = 0;
 
 		if (this.onChange) this.onChange("");
-		if (this.onSubmit) this.onSubmit(result);
+		const maybePromise = this.onSubmit?.(result);
+		if (maybePromise instanceof Promise) {
+			maybePromise.finally(() => { this.#submitting = false; });
+		} else {
+			this.#submitting = false;
+		}
 	}
 
 	/** Resolve the compiled, global copy of `atomicTokenPattern`, rebuilt only when the source changes. */
