@@ -9,16 +9,20 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.target.name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.target.os }}
     strategy:
       fail-fast: false
       matrix:
         target:
-          - { name: linux-x64, rustTarget: "" }
-          - { name: linux-arm64, rustTarget: "aarch64-unknown-linux-gnu.2.17" }
-          - { name: darwin-x64, rustTarget: "x86_64-apple-darwin" }
-          - { name: darwin-arm64, rustTarget: "aarch64-apple-darwin" }
-          - { name: windows-x64, rustTarget: "x86_64-pc-windows-msvc" }
+          - { name: linux-x64, os: ubuntu-latest, rustTarget: "" }
+          - { name: linux-arm64, os: ubuntu-latest, rustTarget: "aarch64-unknown-linux-gnu.2.17" }
+          # Darwin targets run on macOS runners so the Rust native addon
+          # builds natively — no cargo-zigbuild cross-compilation needed.
+          # This avoids the onig_sys → libobjc linking failures that break
+          # Linux→Darwin cross-compilation.
+          - { name: darwin-x64, os: macos-15-intel, rustTarget: "" }
+          - { name: darwin-arm64, os: macos-14, rustTarget: "" }
+          - { name: windows-x64, os: ubuntu-latest, rustTarget: "x86_64-pc-windows-msvc" }
 
     env:
       CROSS_TARGET: ${{ matrix.target.name }}
@@ -45,7 +49,8 @@ jobs:
           toolchain: nightly-2026-04-29
           targets: ${{ steps.rust.outputs.bare_target }}
 
-      - name: Install system deps
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential

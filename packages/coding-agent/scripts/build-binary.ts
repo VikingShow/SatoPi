@@ -23,10 +23,13 @@ export function resolveCrossBuild(value: string | undefined): CrossBuild | null 
 		case undefined:
 		case "":
 			return null;
+		// Darwin targets are built on macOS runners, so Rust compiles natively.
+		// No rustTarget — avoid the onig_sys → libobjc linking failures that
+		// break cargo-zigbuild Linux→Darwin cross-compilation.
 		case "darwin-arm64":
-			return { id: value, platform: "darwin", arch: "arm64", target: "bun-darwin-arm64", rustTarget: "aarch64-apple-darwin" };
+			return { id: value, platform: "darwin", arch: "arm64", target: "bun-darwin-arm64" };
 		case "darwin-x64":
-			return { id: value, platform: "darwin", arch: "x64", target: "bun-darwin-x64", rustTarget: "x86_64-apple-darwin" };
+			return { id: value, platform: "darwin", arch: "x64", target: "bun-darwin-x64" };
 		case "linux-arm64":
 			return { id: value, platform: "linux", arch: "arm64", target: "bun-linux-arm64", rustTarget: "aarch64-unknown-linux-gnu.2.17" };
 		case "linux-x64":
