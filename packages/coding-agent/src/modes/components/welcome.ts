@@ -448,27 +448,27 @@ export class WelcomeComponent implements Component {
 }
 
 /**
- * SatoPi logo — meta-π (v3): 19-char wide, three visual layers:
+ * SatoPi logo — meta-π (v4): 25-char wide, wider outer ring, three visual layers:
  *
  *   ring  — circle outline of π chars, thickness varies by row:
- *             arc(9π) → shoulder(3π) → side(2π)
+ *             arc(11π) → shoulder(3π) → side(3π)
  *   fill  — · chars fill ring interior, giving the disc a solid presence
  *   inner — large π: bar(9π) protrudes 1 col past each leg(3π)
- *             bar cols 5-13,  left leg cols 6-8,  right leg cols 10-12
+ *             bar cols 8-16,  left leg cols 9-11,  right leg cols 13-15
  *
  * Gradient: forest green → leaf green → GOLD PEAK → fresh green → teal.
  * The gold stop creates a diagonal golden-glow band through the green —
  * the "golden ring of emergent wisdom" shining through the Bodhi leaf.
  */
 export const PI_LOGO = [
-	"     πππππππππ     ", //  row 0 — top arc       9π (indent 5)
-	"   πππ·······πππ   ", //  row 1 — shoulder 3π + 7· fill
-	"  ππ·πππππππππ·ππ  ", //  row 2 — 2π side + 9π bar (extends past legs)
-	"  ππ··πππ·πππ··ππ  ", //  row 3 — 2π side + 3π legs + · fill
-	"  ππ··πππ·πππ··ππ  ", //  row 4
-	"  ππ··πππ·πππ··ππ  ", //  row 5
-	"   πππ·······πππ   ", //  row 6 — shoulder 3π + 7· fill
-	"     πππππππππ     ", //  row 7 — bottom arc    9π (indent 5)
+	"       πππππππππππ       ", //  row 0 — top arc       11π (indent 7)
+	"     πππ·········πππ     ", //  row 1 — shoulder 3π + 9· fill
+	"   πππ··πππππππππ··πππ   ", //  row 2 — 3π side + 2· + 9π bar + 2· + 3π side
+	"   πππ···πππ·πππ···πππ   ", //  row 3 — 3π side + 3· + 3π leg + · + 3π leg + 3· + 3π side
+	"   πππ···πππ·πππ···πππ   ", //  row 4
+	"   πππ···πππ·πππ···πππ   ", //  row 5
+	"     πππ·········πππ     ", //  row 6 — shoulder 3π + 9· fill
+	"       πππππππππππ       ", //  row 7 — bottom arc    11π (indent 7)
 ];
 
 /** Multi-stop palette — forest green → leaf green → GOLD PEAK → fresh green → teal.
