@@ -59,7 +59,7 @@ const SIDEBAR_MIN_HEADINGS = 2;
 const SIDEBAR_MIN_TOTAL_WIDTH = 64;
 const SIDEBAR_MIN_BODY_WIDTH = 40;
 
-type Focus = "toc" | "body" | "actions";
+type Focus = "toc" | "body" | "actions" | "radioGroup";
 
 interface OverlaySection {
 	level: number;
@@ -106,6 +106,9 @@ export interface PlanReviewOverlayOptions {
 	initialIndex?: number;
 	/** Optional model-tier slider rendered between the plan body and options. */
 	slider?: HookSelectorSlider;
+	/** Optional agent-type radio group (S/P-agent selection). Renders as
+	 *  ●/○ single-select between the slider and action options. */
+	radioGroup?: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void };
 	/** Display label for the external-editor key, surfaced in the footer help. */
 	externalEditorLabel?: string;
 }
@@ -130,6 +133,8 @@ export class PlanReviewOverlay implements Component {
 	#helpSuffix: string;
 	#externalEditorLabel: string | undefined;
 	#promptTitle: string | undefined;
+	#radioGroup: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void } | undefined;
+
 	#selectedIndex: number;
 	#slider: HookSelectorSlider | undefined;
 	#sliderIndex: number;
@@ -179,6 +184,7 @@ export class PlanReviewOverlay implements Component {
 		} else {
 			this.#sliderIndex = 0;
 		}
+		this.#radioGroup = options.radioGroup;
 		this.#input = new Input();
 		this.#input.setUseTerminalCursor(false);
 		this.#input.onSubmit = value => this.#submitAnnotation(value);
@@ -326,6 +332,9 @@ export class PlanReviewOverlay implements Component {
 			case "toc":
 				this.#handleToc(keyData);
 				return;
+			case "radioGroup":
+				this.#handleRadioGroup(keyData);
+				return;
 		}
 	}
 
@@ -382,10 +391,13 @@ export class PlanReviewOverlay implements Component {
 	#setHoveredOption(index: number | undefined): void {
 		this.#hoveredOption = index !== undefined && !this.#disabled.has(index) ? index : undefined;
 	}
-
 	#cycleRegion(direction: number): void {
 		// Sidebar is skipped from the cycle when it is not shown.
 		const regions: Focus[] = this.#sidebarShown ? ["toc", "body", "actions"] : ["body", "actions"];
+		if (this.#radioGroup) {
+			const idx = regions.indexOf("actions");
+			regions.splice(idx, 0, "radioGroup");
+		}
 		const current = regions.indexOf(this.#focus);
 		const base = current < 0 ? regions.length - 1 : current;
 		this.#setFocus(regions[(base + direction + regions.length) % regions.length]!);
@@ -411,7 +423,8 @@ export class PlanReviewOverlay implements Component {
 			return;
 		}
 		if (matchesSelectUp(data) || data === "k") {
-			if (this.#selectedIndex === this.#firstEnabledIndex()) this.#setFocus("body");
+			if (this.#selectedIndex === this.#firstEnabledIndex())
+				this.#setFocus(this.#radioGroup ? "radioGroup" : "body");
 			else this.#moveSelection(-1);
 			return;
 		}
@@ -424,6 +437,39 @@ export class PlanReviewOverlay implements Component {
 			return;
 		}
 		this.#handleBodyScroll(data);
+	}
+
+	#handleRadioGroup(data: string): void {
+		const rg = this.#radioGroup;
+		if (!rg) return;
+		if (matchesSelectUp(data) || data === "k") {
+			if (rg.selectedIndex > 0) {
+				rg.selectedIndex--;
+				rg.onChange?.(rg.selectedIndex);
+			}
+			return;
+		}
+		if (matchesSelectDown(data) || data === "j") {
+			if (rg.selectedIndex < rg.labels.length - 1) {
+				rg.selectedIndex++;
+				rg.onChange?.(rg.selectedIndex);
+			}
+			return;
+		}
+		if (
+			matchesKey(data, "enter") ||
+			matchesKey(data, "return") ||
+			data === "\n" ||
+			matchesKey(data, "right") ||
+			data === "l"
+		) {
+			this.#setFocus("actions");
+			return;
+		}
+		if (matchesKey(data, "left") || data === "h") {
+			this.#setFocus("body");
+			return;
+		}
 	}
 
 	#handleBody(data: string): void {
@@ -646,6 +692,18 @@ export class PlanReviewOverlay implements Component {
 		return [trackLine, `  ${theme.fg("dim", "↳")} ${theme.fg("muted", detail)}`];
 	}
 
+	#renderRadioGroupLines(): string[] {
+		const rg = this.#radioGroup;
+		if (!rg || rg.labels.length === 0) return [];
+		const active = this.#focus === "radioGroup";
+		return rg.labels.map((label, i) => {
+			const selected = i === rg.selectedIndex;
+			const bullet = selected ? theme.fg(active ? "accent" : "muted", "●") : theme.fg("dim", "○");
+			const text = selected && active ? theme.fg("accent", label) : theme.fg("muted", label);
+			return ` ${bullet} ${text}`;
+		});
+	}
+
 	#renderOptionLines(): string[] {
 		const active = this.#focus === "actions";
 		return this.#options.map((label, i) => {
@@ -681,6 +739,9 @@ export class PlanReviewOverlay implements Component {
 				break;
 			case "body":
 				parts.push("↑↓ scroll", "⇧ faster", "pgup/pgdn", "g/G ends");
+				break;
+			case "radioGroup":
+				parts.push("↑↓ switch", "→ confirm");
 				break;
 		}
 		if (this.callbacks.onCopyPlan) parts.push("c copy");
@@ -797,13 +858,14 @@ export class PlanReviewOverlay implements Component {
 		const bodyContentWidth = sidebarShown ? splitBodyWidth(width, sidebarWidth) : innerWidth;
 
 		const sliderLines = this.#renderSliderLines();
+		const radioGroupLines = this.#renderRadioGroupLines();
 		const optionLines = this.#renderOptionLines();
 		const promptLines = this.#promptTitle ? [theme.bold(theme.fg("accent", this.#promptTitle))] : [];
 		const footerLines = this.#renderFooterLines(innerWidth);
 
 		// Chrome rows: top border, two dividers, bottom border, plus the
-		// prompt/slider/option/footer rows between them.
-		const chrome = 4 + promptLines.length + sliderLines.length + optionLines.length + footerLines.length;
+		const chrome =
+			4 + promptLines.length + sliderLines.length + radioGroupLines.length + optionLines.length + footerLines.length;
 		const regionRows = Math.max(MIN_BODY_ROWS, termHeight - chrome);
 
 		const bodyLines = this.#buildBody(bodyContentWidth);
@@ -842,6 +904,7 @@ export class PlanReviewOverlay implements Component {
 		}
 		for (const line of promptLines) out.push(row(line, width));
 		for (const line of sliderLines) out.push(row(line, width));
+		for (const line of radioGroupLines) out.push(row(line, width));
 		for (let i = 0; i < optionLines.length; i++) {
 			this.#optionClickRows.set(out.length, i);
 			out.push(row(optionLines[i]!, width));

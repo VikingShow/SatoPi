@@ -1,70 +1,61 @@
-# Plan: ~/.omp → ~/.stp 配置目录安全迁移
+# Plan: EmbeddedSwarmBridge 完整接入 + TUI 统一
 
 ## Overview
-代码层已部分迁移至 `.stp`（`dirs.ts` 中 `CONFIG_DIR_NAME = ".stp"`），但 Rust crash handler、JS natives loader、多个脚本和测试仍硬编码 `.omp`，且磁盘上实际数据都在 `~/.omp`，`~/.stp` 仅有骨架。需完成代码层对齐 + 数据层自动迁移。
+修复 EmbeddedSwarmBridge 的胶水代码阻断，在 plan 确认阶段加入 S/P-agent 选择和推荐数量滑块，将 Stage/Curtain 进度接入主 TUI 现有 HUD（直接复用 `renderSubagentHudLines`），无需新增函数或改面板风格。
 
-## Phase 1: 修复代码层的 split-brain（Rust + JS natives）
-**Contract:** 所有路径解析层统一使用 `.stp`，通过 `PI_CONFIG_DIR` 可覆盖。
+## Phase 1: Bridge 胶水代码 — plan.md 写入监听 + 确认触发
+**Contract:** `agent-session.ts` 中新增 plan-write hook 和 agent_ask hook，驱动 `EmbeddedSwarmBridge.onPlanUpdated()` 和 `confirmScript()`。
 
-- [ ] **Task: Rust crash_handler.rs 对齐 .stp**
-  - Files: `crates/pi-natives/src/crash_handler.rs`
-  - Change: 将 `DEFAULT_CONFIG_DIR` 从 `".omp"` 改为 `".stp"`（line 49），`APP_NAME` 从 `"omp"` 改为 `"stp"`（line 55）。保留 `PI_CONFIG_DIR` 环境变量读取逻辑，确保 TS 侧的 override 也生效。同时将 crash log 写入路径中的 `omp-crash.log` 改为 `stp-crash.log`。
-  - Acceptance: Rust 侧所有默认路径指向 `.stp`。`cargo check` 通过。
+- [ ] **Task: 监听 write 工具写入 plan.md 并通知 bridge**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`
+  - Change: 在 `#createMagicKeywordNotices` 中（约 8165 行），`#initializeEmbeddedSwarm()` 之后，注册 `beforeToolCall` hook：当 `toolName === "write"` 且 path 匹配 `plan.md` 时，调用 `bridge.onPlanUpdated(content)`。取 content 从 tool args 的 `content` 字段。
+  - Acceptance: agent 调用 `write("plan.md", ...)` 后，bridge 的 `isPlanReady()` 返回 true，FSM 状态可观测到变化。
   - Depends: none
 
-- [ ] **Task: JS natives loader 对齐 .stp**
-  - Files: `packages/natives/native/loader-state.js`
-  - Change: `getNativesDir()` 中的 `path.join(os.homedir(), ".omp", "natives")` 改为 `path.join(os.homedir(), ".stp", "natives")`（约 line 56）。同时将 `XDG_DATA_HOME` 下的 `omp` 子目录改为 `stp`。
-  - Acceptance: natives loader 从 `.stp/natives` 加载 addon，不再引用 `.omp`。
-  - Depends: none
+- [ ] **Task: 监听 agent_ask 返回 "Launch Stage" 并触发 confirmScript**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`
+  - Change: 注册 `afterToolCall` hook：当 `toolName === "ask"` 且返回结果匹配 `"Launch Stage"` 时，调用 `bridge.confirmScript()`。同时从 ask 参数中提取 S/P-agent 选择和 agent count 传入。
+  - Acceptance: 用户选择 Launch Stage 后，FSM 转换到 stage，TUI 状态栏显示 swarm 进度。
+  - Depends: "监听 write 工具写入 plan.md 并通知 bridge"
 
-- [ ] **Task: 移除 omp-extension-roots.ts 中的硬编码 .omp**
-  - Files: `packages/coding-agent/src/discovery/omp-extension-roots.ts`
-  - Change: line 85 的 `path.join(ctx.cwd, ".omp")` 改为使用 `CONFIG_DIR_NAME`（即 `.stp`），去掉硬编码。引入 `CONFIG_DIR_NAME` from `@oh-my-pi/pi-utils`。
-  - Acceptance: 项目级 config 路径不再硬编码 `.omp`。`bun check` 通过。
-  - Depends: none
+## Phase 2: Plan 确认 TUI — S/P-agent 选择 + 推荐数量滑块
+**Contract:** `PlanReviewOverlay` 扩展 radioGroup 字段，复用已有 slider 机制。
 
-## Phase 2: 数据层自动迁移（~/.omp → ~/.stp）
-**Contract:** 启动时若 `~/.stp` 不存在或为空且有 `~/.omp` 数据，自动迁移。
+- [ ] **Task: 在 showPlanReview 中增加 S/P-agent 选择项**
+  - Files: `packages/coding-agent/src/modes/components/plan-review-overlay.ts`, `packages/coding-agent/src/modes/interactive-mode.ts`
+  - Change: `PlanReviewOverlayOptions` 新增 `radioGroup?: { labels: string[]; selectedIndex: number }` 字段，渲染为 `●`/`○` 单选组（位于 plan 内容和 action buttons 之间）。swarm 路径传入 `["Swift agents (task)", "Persistent agents (agent_invoke)"]`，默认 0。
+  - Acceptance: plan 确认页显示 agent 类型单选组，上下键切换，选中项实心圆点。
+  - Depends: Phase 1
 
-- [ ] **Task: 在 dirs.ts 中实现 auto-migrate 逻辑**
-  - Files: `packages/utils/src/dirs.ts`
-  - Change: 在 `getBaseConfigRoot()` 调用后（或首次路径解析时），增加一个 `migrateOmpToStp()` 函数：(1) 检查 `~/.omp` 是否存在且 `~/.stp` 不存在/为空；(2) 若需要迁移，尝试 symlink `~/.omp` → `~/.stp`（首选）；若 symlink 失败则 copy（fallback）；(3) 若 `PI_CONFIG_DIR` 已设置则跳过迁移；(4) 迁移成功后写一个 `~/.stp/.migrated-from-omp` 标记文件；(5) 所有 I/O 错误不崩溃，仅 logger.warn。
-  - Acceptance: 新安装中 `~/.stp` 自动指向 `~/.omp` 数据。已有 `~/.stp` 的用户不受影响。
-  - Depends: none
+- [ ] **Task: 复用 slider 实现推荐 agent 数量选择**
+  - Files: `packages/coding-agent/src/modes/components/plan-review-overlay.ts`, `packages/coding-agent/src/modes/interactive-mode.ts`
+  - Change: 利用已有的 `HookSelectorSlider` 字段。swarm 路径从 `TaskComplexityAnalyzer.analyze()` 获取推荐值，构建 segments `[推荐-2, 推荐-1, 推荐, 推荐+1, 推荐+2]`，传入 slider。渲染在 radioGroup 和 action buttons 之间。
+  - Acceptance: slider 显示推荐值，可 ←→ 调整，与现有 model-tier slider 外观一致。
+  - Depends: "在 showPlanReview 中增加 S/P-agent 选择项"
 
-- [ ] **Task: 兼容性：agent/ 子目录读取时 fallback 到 .omp**
-  - Files: `packages/utils/src/dirs.ts`
-  - Change: `DirResolver` 的 `agentSubdir` 和 `rootSubdir` 在 `~/.stp/<subdir>` 不存在时，fallback 检查 `~/.omp/<subdir>` 是否存在（仅当 `.stp` 与 `.omp` 非同一路径时）。这覆盖了 agent.db、models.db、sessions/、blobs/、rules/ 等所有子目录。不阻塞启动——fallback 失败时静默返回 `.stp` 路径。
-  - Acceptance: 迁移前的 agent 数据持续可访问。无需手动 `PI_CONFIG_DIR=.omp`。
-  - Depends: none
+- [ ] **Task: confirmScript 传递用户选择的 agent 类型和数量**
+  - Files: `packages/coding-agent/src/session/agent-session.ts`
+  - Change: `afterToolCall` hook 解析 ask 返回的完整 payload，提取 agentType 和 agentCount，传入 `bridge.confirmScript({ agentType, agentCount })`。bridge 存入 `#loopConfig` 传给 StageController。
+  - Acceptance: StageController 使用用户指定的数量和类型启动 agent。
+  - Depends: "在 showPlanReview 中增加 S/P-agent 选择项", "监听 agent_ask 返回 Launch Stage 并触发 confirmScript"
 
-## Phase 3: 清理残留引用（scripts、tests、docs）
-**Contract:** 项目代码中不再有误导性的 `.omp` 硬编码。
+## Phase 3: Stage/Curtain 实时进度接入主 TUI HUD
+**Contract:** 直接复用 `renderSubagentHudLines()`（已有 P-agent `thinkingMedium`/S-agent `accent` 颜色区分），无新函数。
 
-- [ ] **Task: 更新 scripts/ 中的 .omp 硬编码**
-  - Files: `scripts/session-stats/audit.ts`, `scripts/session-stats/analyze.py`, `scripts/install.ps1`
-  - Change: `audit.ts:47,49` — `~/.omp/agent/sessions` → 使用 `getAgentDir()` 或 `~/.stp/agent/sessions`；`analyze.py:25` — `Path.home() / ".omp" / "stats.db"` → `.stp`；`install.ps1:105` — `.omp` → `.stp`。
-  - Acceptance: 所有 scripts/ 中的 `.omp` 硬编码替换为 `.stp` 或动态解析。
-  - Depends: Phase 1 全部完成
+- [ ] **Task: Stage 进度注入 status bar**
+  - Files: `packages/coding-agent/src/modes/interactive-mode.ts`, `packages/coding-agent/src/modes/components/status-line.ts`
+  - Change: `StatusLineComponent` 新增 `swarmStatus?: string`。bridge FSM 进入 stage 时，通过 `fsm.onChange` 更新 `swarmStatus = "🐝 Stage · Wave ${n}/${total}"`。Curtain 时显示 `"🐝 Curtain"`。
+  - Acceptance: 编辑器上方 status bar 实时显示 stage/curtain 进度。
+  - Depends: Phase 1
 
-- [ ] **Task: 更新 tests 中的 .omp 引用**
-  - Files: `packages/coding-agent/test/markit-converters.test.ts`, `packages/ai/test/helpers/index.ts`, `crates/pi-natives/src/fd.rs`
-  - Change: 测试中的 `PI_CONFIG_DIR=".omp"` 改为 `".stp"`，`~/.omp/auth-gateway.token` 改为 `~/.stp/auth-gateway.token`，`.omp/skills/opt/scripts` → `.stp/skills/opt/scripts`。
-  - Acceptance: `bun test` 相关测试通过。
-  - Depends: Phase 1 全部完成
+- [ ] **Task: Swarm agent 状态接入 renderSubagentHudLines**
+  - Files: `packages/coding-agent/src/modes/interactive-mode.ts`
+  - Change: `renderSubagentHudLines` 已从 `ObserverRegistry` 读取 session 列表，已区分 `isPersistent`（`thinkingMedium` 色 vs `accent` 色）。无需改动该函数。在 Stage 执行期间，swarm-launched agent 通过 `AgentRuntime.spawn()` 创建 session 后自动注册到 `AgentRegistry` → `ObserverRegistry`，HUD 自动更新。
+  - Acceptance: Stage 启动后，主 TUI 的 "Agents" HUD 自动显示 swarm worker，P-agent 用 `thinkingMedium` 色，S-agent 用 `accent` 色，与现有 subagent HUD 完全一致。
+  - Depends: Phase 1
 
-- [ ] **Task: 更新 Dockerfile 和 infra 中的 .omp 引用**
-  - Files: `Dockerfile.robomp`, `infra/`（如有）
-  - Change: `Dockerfile.robomp:66-67` 的 `.omp/agent` → `.stp/agent`。
-  - Acceptance: Docker 构建中路径指向 `.stp`。
-  - Depends: Phase 1 全部完成
-
-## Phase 4: 验证
-**Contract:** 全链路验证迁移无数据丢失。
-
-- [ ] **Task: 端到端迁移验证**
-  - Files: `packages/utils/src/dirs.ts`, `packages/utils/test/`
-  - Change: 编写测试：(1) 创建 temp `~/.omp` 含 agent.db + sessions，启动 → `~/.stp` 为 symlink 到 `~/.omp`；(2) `PI_CONFIG_DIR=.omp` 时迁移跳过；(3) 已有 `~/.stp` 时不触发迁移。运行全量 `bun test packages/utils/test/`。
-  - Acceptance: 迁移逻辑的 3 个场景通过测试。`bun check` 零新错误。
-  - Depends: Phase 2 全部完成
+- [ ] **Task: Curtain 摘要输出到聊天区**
+  - Files: `packages/coding-agent/src/modes/interactive-mode.ts`
+  - Change: bridge FSM 进入 curtain 后，监听 `CurtainRunner` reporter 完成事件。将摘要以系统消息追加到聊天区（`theme.fg("accent", title)` + `theme.fg("muted", body)`）。
+  - Acceptance: Curtain 完成后聊天区自动显示交付总结。
+  - Depends: Phase 1

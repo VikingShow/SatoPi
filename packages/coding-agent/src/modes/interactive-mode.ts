@@ -108,7 +108,9 @@ import type { ShakeMode } from "../session/shake-types";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
+import type { LoopSwarmConfig } from "../swarm/core/schema";
 import { GraphRunner } from "../swarm/graph/graph-runner";
+import { TaskComplexityAnalyzer } from "../swarm/script/task-analyzer";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -2573,7 +2575,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			onFeedbackChange?: (feedback: string) => void;
 			initialIndex?: number;
 		},
-		extra?: { slider?: HookSelectorSlider },
+		extra?: { slider?: HookSelectorSlider; radioGroup?: { labels: string[]; selectedIndex: number } },
 	): Promise<string | undefined> {
 		this.#hidePlanReview();
 		const { promise, resolve } = Promise.withResolvers<string | undefined>();
@@ -2594,6 +2596,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				helpText: dialogOptions?.helpText,
 				initialIndex: dialogOptions?.initialIndex,
 				slider: extra?.slider,
+				radioGroup: extra?.radioGroup,
 				externalEditorLabel: this.keybindings.getDisplayString("app.editor.external") || undefined,
 			},
 			{
@@ -3468,7 +3471,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		const defaultTierIndex = cycle ? cycle.models.findIndex(entry => entry.role === "default") : -1;
 		const startTierIndex = defaultTierIndex >= 0 ? defaultTierIndex : (cycle?.currentIndex ?? 0);
 		let selectedTierIndex = startTierIndex;
-		const slider: HookSelectorSlider | undefined =
+		let selectedAgentCount = 0;
+		let slider: HookSelectorSlider | undefined =
 			cycle && cycle.models.length > 1
 				? {
 						caption: "continue with",
@@ -3482,6 +3486,50 @@ export class InteractiveMode implements InteractiveModeContext {
 						},
 					}
 				: undefined;
+
+		// For swarm plans, replace the model-tier slider with an agent-count slider
+		// powered by TaskComplexityAnalyzer. The slider shows recommended count ±2,
+		// clamped to ≥1, and defaults to the recommended value.
+		const swarmBridge = this.session.embeddedSwarm;
+		if (swarmBridge) {
+			selectedAgentCount = 0;
+			const maxWorkers = (this.session.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4;
+			const maxRounds = (this.session.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3;
+			const loopConfig: LoopSwarmConfig = {
+				maxIterations: maxRounds,
+				autoRetry: true,
+				humanEscalation: true,
+				enableDeliberation: false,
+				agents: {
+					initial: maxWorkers,
+					min: 1,
+					max: maxWorkers,
+					auto: false,
+					maxRounds: maxRounds,
+					roundsConvergenceThreshold: 2,
+				},
+				debate: { enabled: false, maxRounds: 2 },
+				planDebate: { enabled: false, agentCount: 2, maxRounds: 2, convergenceThreshold: 2 },
+				convergenceThreshold: 2,
+				iterationTimeoutMs: 300_000,
+			};
+			const rec = await new TaskComplexityAnalyzer().analyze(planContent, loopConfig);
+			const count = Math.max(1, rec.agents);
+			// Build segments [rec-2, rec-1, rec, rec+1, rec+2], clamped to ≥1
+			const segments = [count - 2, count - 1, count, count + 1, count + 2]
+				.filter(n => n >= 1)
+				.map(n => ({ label: String(n) }));
+			selectedAgentCount = count;
+			const recIndex = segments.findIndex(s => Number(s.label) === count);
+			slider = {
+				caption: "agents",
+				segments,
+				index: Math.max(0, recIndex),
+				onChange: index => {
+					selectedAgentCount = Number(segments[index]!.label);
+				},
+			};
+		}
 		// The overlay now owns the dynamic, focus-aware help line; the caller only
 		// supplies the trailing cancel hint.
 		const helpText = "esc cancel";
@@ -3507,7 +3555,12 @@ export class InteractiveMode implements InteractiveModeContext {
 				},
 				disabledIndices: keepContextDisabled ? [PLAN_KEEP_CONTEXT_OPTION_INDEX] : undefined,
 			},
-			{ slider },
+			{
+				slider,
+				radioGroup: swarmBridge
+					? { labels: ["Swift agents (task)", "Persistent agents (agent_invoke)"], selectedIndex: 0 }
+					: undefined,
+			},
 		);
 
 		if (choice === "Approve and execute" || choice === "Approve and compact context" || choice === keepContextLabel) {

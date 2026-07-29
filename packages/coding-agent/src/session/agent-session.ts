@@ -329,6 +329,7 @@ import {
 	selectDiscoverableToolNamesByServer,
 } from "../tool-discovery/tool-index";
 import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../tools/approval";
+import type { AskToolDetails } from "../tools/ask";
 import { assertEditableFile } from "../tools/auto-generated-guard";
 import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
 import { normalizeToolNames } from "../tools/builtin-names";
@@ -4909,6 +4910,7 @@ export class AgentSession {
 			this.#synchronouslyTerminatedYieldToolCallIds.add(ctx.toolCall.id);
 			this.agent.abort(TERMINAL_TOOL_RESULT_ABORT_REASON);
 		}
+		this.#swarmAfterToolCall(ctx);
 		return this.#ttsrAfterToolCall(ctx);
 	}
 
@@ -4934,6 +4936,19 @@ export class AgentSession {
 		return {
 			content: [{ type: "text", text: reminder }, ...ctx.result.content],
 		};
+	}
+
+	/** `afterToolCall` hook: detect ask-tool "Launch Stage" selection → confirm script. */
+	#swarmAfterToolCall(ctx: AfterToolCallContext): void {
+		if (ctx.toolCall.name !== "ask" || ctx.isError) return;
+		const details = ctx.result.details as AskToolDetails | undefined;
+		if (!details) return;
+		const selected = details.selectedOptions ?? details.results?.flatMap(r => r.selectedOptions) ?? [];
+		if (!selected.includes("Launch Stage")) return;
+		// Fire-and-forget: confirmScript is async but we don't block the hook on it.
+		this.#embeddedSwarm
+			?.confirmScript()
+			.catch(err => logger.error("Swarm confirmScript failed from ask hook", { error: String(err) }));
 	}
 
 	#extractTtsrRuleNames(details: unknown): string[] {
@@ -8212,6 +8227,16 @@ export class AgentSession {
 			this.setToolContextAgentRuntime(bridge.runtime);
 			this.#embeddedSwarm = bridge;
 			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
+			// Register beforeToolCall hook to capture plan.md writes → bridge.onPlanUpdated
+			this.agent.beforeToolCall = ctx => {
+				if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
+					const args = ctx.args as { path?: string; content?: string };
+					if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+						this.#embeddedSwarm.onPlanUpdated(args.content);
+					}
+				}
+				return undefined;
+			};
 			return;
 		}
 
@@ -8238,6 +8263,17 @@ export class AgentSession {
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
+
+		// Register beforeToolCall hook to capture plan.md writes → bridge.onPlanUpdated
+		this.agent.beforeToolCall = ctx => {
+			if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
+				const args = ctx.args as { path?: string; content?: string };
+				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+					this.#embeddedSwarm.onPlanUpdated(args.content);
+				}
+			}
+			return undefined;
+		};
 	}
 
 	/**
