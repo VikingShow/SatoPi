@@ -464,9 +464,9 @@ export const PI_LOGO = [
 	"       πππππππππππ       ", //  row 0 — top arc       11π (indent 7)
 	"     ππ···········ππ     ", //  row 1 — shoulder 2π + 11· fill
 	"    ππ··πππππππππ··ππ    ", //  row 2 — 2π side + 2· + 9π bar + 2· + 2π side
-	"   ππ····ππ···ππ····ππ   ", //  row 3 — 2π side + 4· + 2π leg + · + 2π leg + 4· + 2π side
+	"   ππ·····ππ·ππ·····ππ   ", //  row 3 — 2π side + 4· + 2π leg + · + 2π leg + 4· + 2π side
 	"   ππ····ππ···ππ····ππ   ", //  row 4
-	"    ππ···ππ···ππ···ππ    ", //  row 5 — 2π side + 3· + 3π leg + · + 3π leg + 3· + 2π side
+	"    ππ··ππ·····ππ··ππ    ", //  row 5 — 2π side + 3· + 3π leg + · + 3π leg + 3· + 2π side
 	"     ππ···········ππ     ", //  row 6 — shoulder 2π + 11· fill
 	"       πππππππππππ       ", //  row 7 — bottom arc    11π (indent 7)
 ];
