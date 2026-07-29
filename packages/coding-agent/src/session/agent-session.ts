@@ -12236,6 +12236,13 @@ export class AgentSession {
 			return false;
 		}
 
+		// Swarm Stage active — subagents are executing the plan. Do not nag the
+		// orchestrating model about incomplete todos; it would confuse the model
+		// into inline execution that races with the dispatched Stage workers.
+		if (this.#embeddedSwarm?.stageStarted) {
+			return false;
+		}
+
 		// Suppress within a self-continuation chain: if the agent's last turn was driven by a
 		// prior reminder (and the agent took no tool-level action since), do not re-ping.
 		// The agent has already acknowledged; further escalation just wastes context and
