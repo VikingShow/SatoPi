@@ -18,6 +18,7 @@ import { discoverAgents } from "../../task/discovery";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
+import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StateTracker } from "../core/state";
 import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
 import { ExperienceStore } from "../curtain/experience";
@@ -361,6 +362,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			await mgr.summarizeL1("agent-1", "Completed auth module refactoring");
 
 			const pipeline = new ContextPipeline();
+			pipeline.register(new OffloadSource(mgr));
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Build API" },
 				{ phase: "stage", multiAgent: false, humanMode: "observer" as const },
