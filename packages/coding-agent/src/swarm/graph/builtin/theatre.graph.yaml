@@ -30,7 +30,7 @@ graph:
         - write
         - edit
         - todo
-        - agent_ask
+        - ask
         - web_search
         - bash
       outputs:

@@ -113,6 +113,12 @@ export interface LoopSwarmConfig {
 		 * aborted and marked as CRASHED. Default 5 min. 0 = no limit.
 		 */
 		agentTimeoutMs?: number;
+		/**
+		 * Agent tooling approach for spawned agents.
+		 * "swift" = single-turn swift agent, "persistent" = long-lived persistent agent.
+		 * When unset, the runtime default applies.
+		 */
+		type?: "swift" | "persistent";
 	};
 	/** Agent deliberation (debate) configuration. */
 	debate: {
@@ -351,6 +357,7 @@ export function resolveLoopConfig(raw: Record<string, unknown>): LoopSwarmConfig
 			roundsConvergenceThreshold: (agentsRaw.rounds_convergence_threshold as number) ?? 3,
 			roundtablePrompt: agentsRaw.roundtable_prompt as string | undefined,
 			agentTimeoutMs: agentsRaw.agent_timeout_ms as number | undefined,
+			type: agentsRaw.type as "swift" | "persistent" | undefined,
 		},
 		debate: {
 			enabled: ((raw.debate as Record<string, unknown>)?.enabled as boolean) ?? true,

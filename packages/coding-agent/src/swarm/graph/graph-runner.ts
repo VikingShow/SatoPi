@@ -290,7 +290,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		// GraphRunner drives agent count from graph definition.
 	}
 
-	async confirmScript(): Promise<string[]> {
+	async confirmScript(_opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]> {
 		await this.#fsm.transition("stage", { reason: "graph execution start" });
 		this.#abortController = new AbortController();
 

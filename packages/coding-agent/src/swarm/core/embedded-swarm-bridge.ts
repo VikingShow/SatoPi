@@ -97,7 +97,7 @@ export interface ISwarmOrchestrator {
 	init(): Promise<void>;
 	dispose(): Promise<void>;
 	onPlanUpdated(content: string): void;
-	confirmScript(): Promise<string[]>;
+	confirmScript(opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]>;
 	setAgentConfig(opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void;
 	steer(message: string): Promise<void>;
 	applaud(): void;
@@ -131,6 +131,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#markEnv?: MarkEnvironment;
 	#planContent = "";
 	#planReady = false;
+	#agentType: "swift" | "persistent" | undefined = undefined;
 	#listener: SwarmEventCallback;
 	#abortController: AbortController | null = null;
 	#loopConfig: LoopSwarmConfig;
@@ -260,6 +261,9 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		const hasHeadings = /^#{1,3}\s+/m.test(content);
 		const minLength = content.trim().length >= 200;
 		this.#planReady = hasHeadings && minLength;
+		if (this.#planReady) {
+			this.#listener({ phase: "script", subStatus: "plan ready for review" });
+		}
 	}
 
 	/** Get the current plan content. */
@@ -277,13 +281,16 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		if (opts.agentCount !== undefined && opts.agentCount >= 1) {
 			this.#loopConfig.agents.initial = opts.agentCount;
 		}
+		if (opts.agentType !== undefined) {
+			this.#agentType = opts.agentType;
+		}
 	}
 
 	/**
 	 * Validate the plan & transition to Stage.
 	 * Returns validation errors as string[], or empty if valid.
 	 */
-	async confirmScript(): Promise<string[]> {
+	async confirmScript(opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]> {
 		const planPath = getSessionPlanPath(this.#config.swarmDir);
 
 		// Re-read plan from disk
@@ -305,6 +312,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 		this.#planContent = planContent;
 		this.#planReady = true;
+		// Apply agent config from caller before starting stage
+		if (opts) this.setAgentConfig(opts);
 
 		// Transition: script → script-confirm
 		const confirmResult = await this.#fsm.transition("script-confirm", {
@@ -391,6 +400,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			hookPipeline: this.#hookPipeline,
 			fsm: this.#fsm,
 			ircBus: this.#runtime.ircBus,
+			agentTooling: this.#agentType,
 		});
 
 		try {

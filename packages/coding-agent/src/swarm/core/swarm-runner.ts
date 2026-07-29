@@ -284,7 +284,7 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 	 * Validate the plan and prepare for Stage execution.
 	 * In CLI mode this returns any issues found with the plan.
 	 */
-	async confirmScript(): Promise<string[]> {
+	async confirmScript(_opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]> {
 		const issues: string[] = [];
 		try {
 			const planPath = getSessionPlanPath(this.#stateTracker.swarmDir);

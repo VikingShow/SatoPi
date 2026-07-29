@@ -35,6 +35,13 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 	summary: "Call a persistent agent by profileId",
 	parameters: agentInvokeSchema,
 	description: "Call a persistent agent by its profile ID. Spawns a new session or steers an existing idle one.",
+	strict: true as const,
+	loadMode: "discoverable" as const,
+	formatApprovalDetails: (args: unknown): string[] => {
+		const p = args as AgentInvokeParams;
+		return [`Profile: ${p.profileId}`, `Task: ${p.task}`];
+	},
+	concurrency: "shared" as const,
 
 	async execute(
 		this: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails>,

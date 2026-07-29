@@ -37,6 +37,7 @@ function makeMockSession(overrides?: Record<string, unknown>) {
 	return {
 		prompt: mock().mockResolvedValue(true),
 		wait: mock().mockResolvedValue({ output: "Task completed", exitCode: 0 }),
+		subscribe: mock().mockReturnValue(() => {}),
 		...overrides,
 	};
 }
@@ -63,22 +64,7 @@ afterEach(() => {
 // ============================================================================
 // Tests
 // ============================================================================
-
 describe("agent_invoke E2E", () => {
-	describe("hidden behavior", () => {
-		it("is hidden when no profiles are registered", () => {
-			expect(agentInvokeTool.hidden).toBe(true);
-		});
-
-		it("is visible when profiles exist", () => {
-			ProfileRegistry.global().createProfile({
-				profileId: "testProfile",
-				name: "Test Agent",
-				archetype: "worker",
-			});
-			expect(agentInvokeTool.hidden).toBe(false);
-		});
-	});
 
 	describe("agent_invoke creates new persistent session", () => {
 		it("calls createAgentSession with correct options and waits for completion", async () => {
@@ -108,6 +94,7 @@ describe("agent_invoke E2E", () => {
 				agentKind: "persistent",
 				persistentProfileId: "testProfile",
 				agentId: "persist-testProfile",
+				agentDisplayName: "persist-testProfile",
 				autoApprove: true,
 				hasUI: false,
 				hasIrcInterrupts: true,

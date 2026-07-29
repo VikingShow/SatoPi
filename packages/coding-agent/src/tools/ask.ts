@@ -111,6 +111,8 @@ export interface AskToolDetails {
 	chatRedirect?: boolean;
 	/** Questions surfaced when chatRedirect is true. */
 	questions?: string[];
+	/** Agent configuration for swarm stage launch. */
+	agentConfig?: { type?: string; count?: number };
 }
 
 interface AskOption {

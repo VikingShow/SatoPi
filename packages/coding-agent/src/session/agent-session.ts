@@ -4945,9 +4945,11 @@ export class AgentSession {
 		if (!details) return;
 		const selected = details.selectedOptions ?? details.results?.flatMap(r => r.selectedOptions) ?? [];
 		if (!selected.includes("Launch Stage")) return;
+		const agentType = details.agentConfig?.type;
+		const agentCount = details.agentConfig?.count;
 		// Fire-and-forget: confirmScript is async but we don't block the hook on it.
 		this.#embeddedSwarm
-			?.confirmScript()
+			?.confirmScript(agentType || agentCount ? { agentType: agentType as "swift" | "persistent" | undefined, agentCount } : undefined)
 			.catch(err => logger.error("Swarm confirmScript failed from ask hook", { error: String(err) }));
 	}
 

@@ -2575,7 +2575,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			onFeedbackChange?: (feedback: string) => void;
 			initialIndex?: number;
 		},
-		extra?: { slider?: HookSelectorSlider; radioGroup?: { labels: string[]; selectedIndex: number } },
+		extra?: { slider?: HookSelectorSlider; radioGroup?: { labels: string[]; selectedIndex: number; onChange?: (index: number) => void } },
 	): Promise<string | undefined> {
 		this.#hidePlanReview();
 		const { promise, resolve } = Promise.withResolvers<string | undefined>();
@@ -3472,6 +3472,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const startTierIndex = defaultTierIndex >= 0 ? defaultTierIndex : (cycle?.currentIndex ?? 0);
 		let selectedTierIndex = startTierIndex;
 		let selectedAgentCount = 0;
+		let selectedAgentType: "swift" | "persistent" = "swift";
 		let slider: HookSelectorSlider | undefined =
 			cycle && cycle.models.length > 1
 				? {
@@ -3558,12 +3559,21 @@ export class InteractiveMode implements InteractiveModeContext {
 			{
 				slider,
 				radioGroup: swarmBridge
-					? { labels: ["Swift agents (task)", "Persistent agents (agent_invoke)"], selectedIndex: 0 }
+					? {
+							labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
+							selectedIndex: 0,
+							onChange: index => {
+								selectedAgentType = index === 0 ? "swift" : "persistent";
+							},
+						}
 					: undefined,
 			},
 		);
 
 		if (choice === "Approve and execute" || choice === "Approve and compact context" || choice === keepContextLabel) {
+			if (swarmBridge) {
+				swarmBridge.setAgentConfig({ agentType: selectedAgentType, agentCount: selectedAgentCount });
+			}
 			try {
 				// Prefer in-overlay edits (already in memory) over a disk re-read. The
 				// overlay mirrors edits as they happen, and approval awaits one final

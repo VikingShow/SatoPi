@@ -86,6 +86,8 @@ export interface StageOptions {
 	agentIds?: string[];
 	/** User-specified agent count (overrides complexity analyzer). */
 	agentCount?: number;
+	/** Agent tooling strategy for spawned agents ("swift" or "persistent"). */
+	agentTooling?: "swift" | "persistent";
 	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
 	callbacks?: StageCallbacks;
 	/** v3: Unified hook pipeline for lifecycle events. */
@@ -247,7 +249,7 @@ export class StageController {
 	 * Run the full Stage phase: select agents → assign roles → execute tasks → report.
 	 */
 	async run(): Promise<StageResult> {
-		const { planContent, loopConfig, stateTracker, activityLogger, signal } = this.#opts;
+		const { planContent, loopConfig, stateTracker, activityLogger, signal, agentTooling } = this.#opts;
 		const errors: string[] = [];
 
 		// ── Phase: stage ─────────────────────────────────────────────────────────
@@ -485,6 +487,10 @@ export class StageController {
 
 				// Unified path — AgentRuntime.spawn() is the only execution path.
 				// Legacy streamAgentOutput path removed (Phase A4).
+				// TODO(agent-tooling): When agentTooling === "swift", inject swift-specific
+				// tools (quick-turn, task-scoped); when "persistent", inject long-lived agent
+				// tools (streaming, stateful sessions). The tool list divergence point is here,
+				// before the AgentSpec is passed to AgentRuntime.spawn().
 				const [handle] = await this.#runtime.spawn([
 					{
 						id: agent.id,
