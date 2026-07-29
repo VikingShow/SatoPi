@@ -140,3 +140,57 @@
   - Change: 为 `assembleAgentRuntime()` 添加测试：验证可选依赖（experienceStore/mnemopiClient 等）的四种组合（全有/全无/部分有）。为 `createTaskQueueFromPlan()` 添加测试：正常 plan、空 plan、格式错误 plan、单任务 plan、多任务 DAG plan
   - Acceptance: 两个工厂函数的测试覆盖核心路径和边界情况
   - Depends: —
+
+## Phase 7: Script→Plan 统一 + TUI 补齐
+**Contract:** 消除 swarm Script phase 与 orchestrate plan-review 的代码重复，补齐 roundtable/debate 的 TUI 渲染
+
+- [ ] **Task: 统一 Script phase 使用 PlanReviewOverlay**
+  - Files: `packages/coding-agent/src/modes/components/plan-review-overlay.ts`, `packages/coding-agent/src/modes/interactive-mode.ts`, `packages/coding-agent/src/swarm/script/script-manager.ts`
+  - Change: swarm Script phase 的 plan review 当前通过 ask 工具弹出简单选项。替换为完整的 PlanReviewOverlay（TOC、section 编辑、annotation、agent-count slider），与 orchestrate 流程共享同一组件。ScriptManager 中的内联 plan 渲染逻辑删除
+  - Acceptance: swarm Script phase 的 plan review 体验与 orchestrate 一致，共享 PlanReviewOverlay；ScriptManager 减少 ~100 行重复 plan 渲染代码
+  - Depends: —
+
+- [ ] **Task: 创建 Roundtable TUI 组件**
+  - Files: `packages/coding-agent/src/modes/components/swarm/roundtable-view.ts`（新建）, `packages/coding-agent/src/modes/components/swarm/swarm-dashboard.ts`
+  - Change: 新建 RoundtableView 组件，结构化渲染辩论/roundtable 过程：participant list（角色+立场摘要）、round counter（当前轮/总轮数）、convergence meter（Jaccard similarity 进度条）、position history（每轮各 agent 的立场摘要）。集成到 swarm dashboard 的 comm panel 区域。使用 swarmPanel 边框风格保持系统一致性
+  - Acceptance: `/swarm` dashboard 在角色分配 roundtable 或 plan debate 期间显示结构化辩论视图，非纯文本消息列表
+  - Depends: —
+
+- [ ] **Task: 添加 Task 级进度面板到 Dashboard**
+  - Files: `packages/coding-agent/src/modes/components/swarm/task-panel.ts`（新建）, `packages/coding-agent/src/modes/components/swarm/swarm-dashboard.ts`
+  - Change: 新建 TaskPanel 组件，渲染 per-task 状态表：task ID、status icon（pending/claimed/running/done/blocked）、assigned agent、duration。底部显示 wave 完成百分比和 DAG 依赖简化图（`A → B → C` 表示法）。集成到 dashboard 双栏布局（agent panel 下方）
+  - Acceptance: swarm dashboard 中可看到每个任务的实时状态和 wave 进度
+  - Depends: —
+
+- [ ] **Task: 删除 ScriptManager 遗留代码**
+  - Files: `packages/coding-agent/src/swarm/script/script-manager.ts`, `packages/coding-agent/src/swarm/script/index.ts`
+  - Change: ScriptManager（~500 行）功能已被 ScriptBehavior（~250 行）+ EmbeddedSwarmBridge 覆盖。迁移 ScriptManager 的独有逻辑（debate、plan poll）到 ScriptBehavior，删除 ScriptManager
+  - Acceptance: ScriptManager 类被删除，所有引用迁移到 ScriptBehavior；`bun check` 通过
+  - Depends: 统一 Script phase 使用 PlanReviewOverlay, 接线 PhaseBehavior 到 orchestrator
+
+- [ ] **Task: 添加 Cost 估算显示**
+  - Files: `packages/coding-agent/src/modes/components/swarm/cost-panel.ts`（新建）, `packages/coding-agent/src/modes/components/swarm/swarm-dashboard.ts`
+  - Change: 新建 CostPanel 组件，从 StateTracker 读取累计 token 用量，根据当前 model pricing 估算成本。显示在 dashboard 底部状态行。PlanReviewOverlay 的 agent-count slider 旁显示预估成本
+  - Acceptance: swarm dashboard 底部显示估算 token 用量和成本；plan review 时 agent count 调整实时更新预估
+  - Depends: —
+
+## Phase 8: 深层优化（跨系统协调）
+**Contract:** 修复跨 phase/跨模式的遗漏问题，提升整体一致性
+
+- [ ] **Task: Swarm Dashboard 内嵌 Plan 内容视图**
+  - Files: `packages/coding-agent/src/modes/components/swarm/plan-view.ts`（新建）, `packages/coding-agent/src/modes/components/swarm/swarm-dashboard.ts`
+  - Change: 新建 PlanView 组件，在 dashboard 中渲染 plan.md 的结构化摘要（phase 标题 + task 列表），复用 PlanReviewOverlay 的 section parser（plan-toc.ts）。当前 dashboard 只显示 phase/agent/comm/context——plan 内容完全不可见
+  - Acceptance: swarm dashboard 中可查看当前 plan 的 phase/task 结构
+  - Depends: —
+
+- [ ] **Task: Phase 进度条添加过渡动画和里程碑标记**
+  - Files: `packages/coding-agent/src/modes/components/swarm/phase-view.ts`
+  - Change: 当前 phase-view 是静态 8-phase 图标列表。改进：(1) 当前 phase 闪烁/脉冲效果（通过 TUI 的 invalidate 机制）(2) 已完成 phase 用 ✓ 标记 (3) 当前 phase 显示 elapsed duration (4) 宽度自适应时折叠已完成 phase 为省略号
+  - Acceptance: phase 过渡有视觉反馈；长时间运行的 phase 显示 elapsed time
+  - Depends: —
+
+- [ ] **Task: Debate roundtable 结果回流到 PlanReviewOverlay**
+  - Files: `packages/coding-agent/src/swarm/core/embedded-swarm-bridge.ts`, `packages/coding-agent/src/swarm/script/debate-roundtable.ts`
+  - Change: 当 plan debate 启用并完成时，不仅自动覆盖 plan.md，还将 debate 摘要（每轮的关键分歧点、最终 convergence score、refined plan diff）注入 PlanReviewOverlay 的 annotation 区域，让用户看到辩论产出
+  - Acceptance: plan debate 后用户在 plan review 中看到辩论摘要和变更 diff
+  - Depends: 统一 Script phase 使用 PlanReviewOverlay, 创建 Roundtable TUI 组件
