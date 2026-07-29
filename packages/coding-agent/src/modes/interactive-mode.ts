@@ -2675,8 +2675,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		if (choice === "Launch Stage") {
 			swarmBridge.setAgentConfig({ agentType: selectedAgentType, agentCount: selectedAgentCount });
 			const errors = await swarmBridge.confirmScript();
-			for (const error of errors) {
-				this.showError(error);
+			if (errors.length > 0) {
+				for (const error of errors) {
+					this.showError(error);
+				}
+				return undefined;
 			}
 		}
 
