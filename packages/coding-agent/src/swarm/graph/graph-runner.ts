@@ -285,6 +285,11 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// ISwarmOrchestrator — confirmScript delegates to GraphEngine
 	// =========================================================================
 
+	/** Set agent type and count from plan review confirmation TUI. */
+	setAgentConfig(_opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void {
+		// GraphRunner drives agent count from graph definition.
+	}
+
 	async confirmScript(): Promise<string[]> {
 		await this.#fsm.transition("stage", { reason: "graph execution start" });
 		this.#abortController = new AbortController();

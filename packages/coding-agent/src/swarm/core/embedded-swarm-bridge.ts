@@ -98,6 +98,7 @@ export interface ISwarmOrchestrator {
 	dispose(): Promise<void>;
 	onPlanUpdated(content: string): void;
 	confirmScript(): Promise<string[]>;
+	setAgentConfig(opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void;
 	steer(message: string): Promise<void>;
 	applaud(): void;
 	pauseStage(): Promise<void>;
@@ -267,6 +268,13 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	/** Is the plan ready? (has content and meets minimum structure). */
 	isPlanReady(): boolean {
 		return this.#planReady;
+	}
+
+	/** Set agent type and count from plan review confirmation TUI. */
+	setAgentConfig(opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void {
+		if (opts.agentCount !== undefined && opts.agentCount >= 1) {
+			this.#loopConfig.agents.initial = opts.agentCount;
+		}
 	}
 
 	/**

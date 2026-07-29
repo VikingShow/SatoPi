@@ -298,6 +298,11 @@ export class SwarmRunner implements RunManager, ISwarmOrchestrator {
 		return issues;
 	}
 
+	/** Set agent type and count from plan review confirmation TUI. */
+	setAgentConfig(_opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void {
+		// CLI-mode swarm runner uses its own agent count, not the TUI.
+	}
+
 	/** Route a human steering message to Stage workers. */
 	async steer(message: string): Promise<void> {
 		if (this.#runtime?.ircBus) {
