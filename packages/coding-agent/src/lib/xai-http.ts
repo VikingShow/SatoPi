@@ -12,8 +12,8 @@ interface XAICredentials {
 	baseURL: string;
 }
 
-export function ohMyPiXAIUserAgent(): string {
-	return "oh-my-pi/xai";
+export function stpXAIUserAgent(): string {
+	return "stp/xai";
 }
 
 type XAIProvider = "xai-oauth" | "xai";
