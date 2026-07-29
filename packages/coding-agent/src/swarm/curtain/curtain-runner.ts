@@ -15,6 +15,7 @@ import type { RoleAssetManager } from "../../agent/role-asset";
 import { IrcBus } from "../../irc/bus";
 import { enqueueMemoryConsolidation } from "../../memories";
 import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import {
@@ -191,7 +192,7 @@ export async function runCurtainPipeline(
 	// Trigger memory consolidation so experience DB → memory_summary.md sync
 	// happens inline rather than only on next startup.
 	try {
-		enqueueMemoryConsolidation?.();
+		enqueueMemoryConsolidation(stateTracker.swarmDir, workspace);
 	} catch {
 		// Non-critical — consolidation runs on startup independently
 	}
@@ -298,7 +299,7 @@ async function runReporterAgent(
 				roleSource: roleAssetManager ? "library" : "inline",
 				inline: !roleAssetManager ? { systemPrompt, tools: ["read", "grep", "glob"] } : undefined,
 				task: reportTask,
-			},
+			} as AgentSpec,
 		]);
 
 		const output = await handle.wait();

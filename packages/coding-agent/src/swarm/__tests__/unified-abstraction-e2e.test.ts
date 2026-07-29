@@ -48,7 +48,7 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 			ircBus: IrcBus.global(),
 			spawn: async () => [],
 			contextPipeline,
-		} as NodeBehaviorFactoryConfig["runtime"],
+		} as unknown as NodeBehaviorFactoryConfig["runtime"],
 		fsm,
 		hookPipeline,
 		contextPipeline,
@@ -153,13 +153,13 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const ctx = {
 				node: { id: "n1", label: "N", description: "D", role: "dev", tools: [], type: "custom", dependsOn: [] },
 				workspace: WORKSPACE,
-				modelRegistry: {} as NodeContext["modelRegistry"],
-				settings: {} as NodeContext["settings"],
+				modelRegistry: {} as unknown as NodeContext["modelRegistry"],
+				settings: {} as unknown as NodeContext["settings"],
 				upstreamOutputs: {},
 				experience: "",
 				signal: new AbortController().signal,
 				runtime: config.runtime,
-			} as NodeContext;
+			} as unknown as NodeContext;
 
 			for (const type of ["script", "stage", "curtain", undefined] as const) {
 				const behavior = selectNodeBehavior(type, config);
@@ -253,8 +253,8 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Test task" },
-				{ phase: "stage", chapter: "stage" },
-				{ taskDescription: "Test task", workspace: WORKSPACE },
+				{ phase: "stage", multiAgent: false, humanMode: "observer" as const },
+				{ taskDescription: "Test task", workspace: WORKSPACE, swarmDir: "/tmp", turnNumber: 0, phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
 			);
 			expect(result).toBeDefined();
 			expect(result.injectedMessages).toBeDefined();
@@ -271,6 +271,8 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const ref = registry.register({
 				id: "persistent-test-1",
 				displayName: "Test Persistent",
+				kind: "persistent" as const,
+				session: null,
 				profileId: "architect-v1",
 				role: "architect",
 			});
@@ -283,7 +285,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 		it("tracks persistent agent status across lifecycle", () => {
 			const registry = AgentRegistry.global();
-			registry.register({ id: "persistent-test-2", displayName: "Status Test", profileId: "dev-v2" });
+			registry.register({ id: "persistent-test-2", displayName: "Status Test", kind: "persistent" as const, session: null, profileId: "dev-v2" });
 
 			registry.setStatus("persistent-test-2", "running");
 			expect(registry.get("persistent-test-2")?.status).toBe("running");
@@ -301,13 +303,13 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const ctx = {
 				node: { id: "test", label: "T", description: "D", role: "dev", tools: [], type: "custom", dependsOn: [] },
 				workspace: WORKSPACE,
-				modelRegistry: {} as NodeContext["modelRegistry"],
-				settings: {} as NodeContext["settings"],
+				modelRegistry: {} as unknown as NodeContext["modelRegistry"],
+				settings: {} as unknown as NodeContext["settings"],
 				upstreamOutputs: {},
 				experience: "",
 				signal: new AbortController().signal,
 				runtime: config.runtime,
-			} as NodeContext;
+			} as unknown as NodeContext;
 
 			const behavior = selectNodeBehavior("custom", config);
 			const prepared = await behavior.prepare(ctx);
@@ -347,12 +349,10 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			await mgr.summarizeL1("agent-1", "Completed auth module refactoring");
 
 			const pipeline = new ContextPipeline();
-			pipeline.register(new OffloadSource(mgr));
-
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Build API" },
-				{ phase: "stage", chapter: "stage" },
-				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e" },
+				{ phase: "stage", multiAgent: false, humanMode: "observer" as const },
+				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e", swarmDir: "/tmp", turnNumber: 0, phase: { phase: "stage", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
 			);
 
 			expect(result.systemPrompt).toContain("<offload_context>");
@@ -366,12 +366,10 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			await mgr.summarizeL1("agent-1", "Completed auth module refactoring");
 
 			const pipeline = new ContextPipeline();
-			pipeline.register(new OffloadSource(mgr));
-
 			const result = await pipeline.assemble(
 				{ id: "agent-1", role: "dev", task: "Build API" },
-				{ phase: "script", chapter: "script" },
-				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e" },
+				{ phase: "script", multiAgent: false, humanMode: "observer" as const },
+				{ taskDescription: "Build API", workspace: "/tmp/test-offload-e2e", swarmDir: "/tmp", turnNumber: 0, phase: { phase: "script", multiAgent: false, humanMode: "observer" as const }, accumulated: {} },
 			);
 
 			expect(result.systemPrompt).not.toContain("<offload_context>");

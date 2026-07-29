@@ -2217,7 +2217,7 @@ export async function initTheme(
 	lightTheme?: string,
 ): Promise<void> {
 	autoDetectedTheme = true;
-	autoDarkTheme = darkTheme ?? "dark";
+	autoDarkTheme = darkTheme ?? "satopi";
 	autoLightTheme = lightTheme ?? "light";
 	const name = getDefaultTheme();
 	currentThemeName = name;

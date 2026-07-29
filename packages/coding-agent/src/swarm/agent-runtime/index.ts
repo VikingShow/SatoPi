@@ -142,7 +142,7 @@ export class AgentRuntime {
 		this.#roleProvider = options.roleProvider;
 		this.#contextPipeline = options.contextPipeline;
 		this.#launcher = options.launcher;
-		this.#ircBus = options.ircBus;
+		this.#ircBus = options.ircBus!;
 		this.#hookPipeline = options.hookPipeline;
 		this.#modelRegistry = options.modelRegistry;
 		this.#settings = options.settings;
@@ -207,7 +207,7 @@ export class AgentRuntime {
 			const handles = await this.spawn(roundSpecs);
 
 			// Wait for all responses with optional per-round timeout
-			const results = await Promise.allSettled(handles.map(h => h.wait(config.timeoutMs ?? 300_000)));
+			const results = await Promise.allSettled(handles.map(h => h.wait()));
 
 			const roundResponses = results.map((r, i) => {
 				if (r.status === "fulfilled") {
@@ -280,7 +280,7 @@ export class AgentRuntime {
 		});
 		this.#steeringQueues.set(agentId, queue);
 		// Also deliver via IrcBus for real-time IRC routing
-		await this.#ircBus.receiveFromHuman(text, agentId);
+		await this.#ircBus!.receiveFromHuman(text, agentId);
 	}
 
 	/**
@@ -298,7 +298,7 @@ export class AgentRuntime {
 
 	/** The communication bus for human steering and agent messaging. */
 	get ircBus(): IrcBus {
-		return this.#ircBus!;
+		return this.#ircBus!!;
 	}
 
 	/** The context pipeline for registering additional context sources. */

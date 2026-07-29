@@ -580,14 +580,14 @@ describe("Hook event trigger E2E (real integration points)", () => {
 			phase: "idle",
 			allowedFrom: ["script"],
 			allowedTo: ["script"],
-			capabilities: {},
+			capabilities: { multiAgent: false, roundtable: false, vote: false, offload: false, compaction: false, humanMode: "none" },
 			defaultTimeoutMs: 0,
 		};
 		const scriptDef: PhaseDefinition = {
 			phase: "script",
 			allowedFrom: ["idle"],
 			allowedTo: ["idle"],
-			capabilities: {},
+			capabilities: { multiAgent: true, roundtable: true, vote: false, offload: false, compaction: false, humanMode: "none" },
 			defaultTimeoutMs: 100,
 			timedTransitionTarget: "idle",
 		};

@@ -20,12 +20,18 @@ import { buildExecutionWaves } from "../../swarm/core/dag";
 import { GraphEngine } from "../graph-engine";
 import type {
 	CheckpointStore,
+} from "../checkpoint";
+import type {
+	NodeExecutionContext,
+} from "../graph-engine";
+import type {
 	GraphDefinition,
 	GraphRunState,
-	NodeExecutionContext,
 	NodeExecutionOutput,
 	NodeResult,
 } from "../types";
+import type { TextContent } from "@oh-my-pi/pi-ai";
+import { parseInternalUrl } from "../../internal-urls/parse";
 
 // ============================================================================
 // 1. agent_invoke smoke test — mock pattern mirrors existing E2E tests
@@ -78,7 +84,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			const result = await agentInvokeTool.execute("call-1", { profileId: "smoke-worker", task: "Run smoke test" });
 
 			expect(result.isError).toBe(false);
-			expect(result.content[0].text).toContain("Smoke test task completed successfully");
+			expect((result.content[0] as TextContent).text).toContain("Smoke test task completed successfully");
 			expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
 			expect(session.prompt).toHaveBeenCalledWith("Run smoke test");
 		});
@@ -98,7 +104,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			const result = await agentInvokeTool.execute("call-2", { profileId: "steer-worker", task: "Steer me" });
 
 			expect(result.isError).toBe(false);
-			expect(result.content[0].text).toContain("Steered task done");
+			expect((result.content[0] as TextContent).text).toContain("Steered task done");
 			expect(mockCreateAgentSession).not.toHaveBeenCalled();
 			expect(session.prompt).toHaveBeenCalledWith("Steer me");
 		});
@@ -110,7 +116,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			const result = await agentInvokeTool.execute("call-3", { profileId: "fail-worker", task: "Will fail" });
 
 			expect(result.isError).toBe(true);
-			expect(result.content[0].text).toContain("Connection refused");
+			expect((result.content[0] as TextContent).text).toContain("Connection refused");
 		});
 	});
 
@@ -150,15 +156,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			});
 
 			const handler = new AgentProtocolHandler();
-			const resource = await handler.resolve({
-				href: `agent://${outputId}`,
-				scheme: "agent",
-				hostname: outputId,
-				rawHost: outputId,
-				pathname: "/",
-				searchParams: new URLSearchParams(),
-				isImmutable: false,
-			});
+			const resource = await handler.resolve(parseInternalUrl(`agent://${outputId}`));
 
 			expect(resource.content).toBe(content);
 			expect(resource.contentType).toBe("text/markdown");
@@ -178,15 +176,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			});
 
 			const handler = new AgentProtocolHandler();
-			const resource = await handler.resolve({
-				href: "agent://SmokeJson/data",
-				scheme: "agent",
-				hostname: "SmokeJson",
-				rawHost: "SmokeJson",
-				pathname: "/data",
-				searchParams: new URLSearchParams(),
-				isImmutable: false,
-			});
+			const resource = await handler.resolve(parseInternalUrl("agent://SmokeJson/data"));
 
 			const parsed = JSON.parse(resource.content);
 			expect(parsed.count).toBe(42);
@@ -206,15 +196,7 @@ describe("Phase 9A: Smoke Tests", () => {
 
 			const handler = new AgentProtocolHandler();
 			await expect(
-				handler.resolve({
-					href: "agent://nonexistent-xyz",
-					scheme: "agent",
-					hostname: "nonexistent-xyz",
-					rawHost: "nonexistent-xyz",
-					pathname: "/",
-					searchParams: new URLSearchParams(),
-					isImmutable: false,
-				}),
+				handler.resolve(parseInternalUrl("agent://nonexistent-xyz")),
 			).rejects.toThrow(/Not found: nonexistent-xyz/);
 		});
 	});

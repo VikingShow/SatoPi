@@ -46,10 +46,10 @@ export async function createSwarmMnemopiClient(settings: Settings, workspace: st
 		} as ConstructorParameters<typeof Mnemopi>[0]);
 
 		return {
-			async recall(query: string, topK: number = 5) {
+			async recall(query: string, topK = 5) {
 				try {
-					const results = mnemopi.recallSync(query, { limit: topK });
-					return results.map(r => ({
+					const results = await mnemopi.recall(query, topK);
+					return (results as Array<{ content: string; source?: string | null; score: number; timestamp?: string | null }>).map((r) => ({
 						content: r.content,
 						source: r.source ?? null,
 						score: r.score,

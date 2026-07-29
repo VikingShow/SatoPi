@@ -140,7 +140,6 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
-import { renderAgentPanel } from "./components/swarm/agent-panel";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -1994,18 +1993,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	 */
 	#renderSubagentList(): void {
 		this.subagentContainer.clear();
-		const agentRefs = AgentRegistry.global().list();
-		if (agentRefs.length > 1) {
-			// Multi-agent: show the rich agent panel from AgentRegistry
-			const lines = renderAgentPanel(agentRefs, undefined, theme).render(this.ui.terminal.columns);
-			if (lines.length === 0) return;
-			this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
-		} else {
-			// Single agent: show the simple subagent HUD (detached tasks + persistent)
-			const lines = renderSubagentHudLines(this.#observerRegistry.getSessions(), this.ui.terminal.columns);
-			if (lines.length === 0) return;
-			this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
-		}
+		const lines = renderSubagentHudLines(this.#observerRegistry.getSessions(), this.ui.terminal.columns);
+		if (lines.length === 0) return;
+		this.subagentContainer.addChild(new Text(lines.join("\n"), 1, 0));
 	}
 
 	async #loadTodoList(): Promise<void> {

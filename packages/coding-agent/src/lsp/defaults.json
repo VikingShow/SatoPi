@@ -59,6 +59,9 @@
 		"rootMarkers": ["package.json", "tsconfig.json", "jsconfig.json"],
 		"initOptions": {
 			"hostInfo": "omp-coding-agent",
+			"tsserver": {
+				"path": "/root/.bun/install/cache/typescript@5.9.3@@@1/lib/tsserver.js"
+			},
 			"preferences": {
 				"includeInlayParameterNameHints": "all",
 				"includeInlayVariableTypeHints": true,

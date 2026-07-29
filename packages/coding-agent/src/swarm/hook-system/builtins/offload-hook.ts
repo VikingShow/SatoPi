@@ -42,7 +42,7 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 		phases: ACTIVE_PHASES,
 
 		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
-			const agentId = resolveAgentId(payload, ctx);
+		const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
 
 			switch (event) {
 				// -----------------------------------------------------------------

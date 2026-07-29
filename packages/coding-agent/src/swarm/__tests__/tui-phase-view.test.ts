@@ -61,8 +61,8 @@ describe("renderPhaseView", () => {
 		const state = makeState({
 			phase: "stage",
 			todos: [
-				{ id: "1", content: "a", status: "done" as const, phase: "" },
-				{ id: "2", content: "b", status: "pending" as const, phase: "" },
+			{ id: "1", title: "a", status: "completed" as const },
+			{ id: "2", title: "b", status: "pending" as const },
 			],
 		});
 		const lines = renderPhaseView(state, theme);

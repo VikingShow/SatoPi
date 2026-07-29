@@ -58,7 +58,7 @@ export function renderAgentPanel(
 	swarmState: SwarmState | null | undefined,
 	theme: Theme,
 ): Component {
-	const title = "Persistent Agents";
+	const title = "Agents";
 
 	return swarmPanel(title, ({ innerWidth, theme }) => {
 		if (agents.length === 0 && !swarmState?.agents) {
@@ -67,9 +67,7 @@ export function renderAgentPanel(
 
 		const lines: string[] = [];
 
-		// Only persistent agents belong in this panel.
-		const agentList = (agents.length > 0 ? agents : buildAgentRefsFromSwarm(swarmState))
-			.filter(ref => ref.kind === "persistent");
+		const agentList = agents.length > 0 ? agents : buildAgentRefsFromSwarm(swarmState);
 
 		if (agentList.length === 0) {
 			lines.push(theme.fg("dim", "  No agents"));
@@ -265,8 +263,8 @@ function buildAgentRefsFromSwarm(swarmState: SwarmState | null | undefined): Age
 	return Object.entries(swarmState.agents).map(([id, agent]) => ({
 		id,
 		displayName: id,
-		kind: "persistent" as const,
 		status: (agent.status as AgentRef["status"]) ?? "idle",
+		kind: "sub" as const,
 		session: null,
 		sessionFile: null,
 		createdAt: agent.startedAt ?? 0,

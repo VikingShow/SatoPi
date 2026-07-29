@@ -8,7 +8,7 @@
  * containing identity, credit score, expertise, and violation history.
  */
 
-import type { ProfileRegistry } from "../../agent/agent-profile";
+import type { ProfileRegistry } from "../../../agent/agent-profile";
 import type { Chapter } from "../../core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 

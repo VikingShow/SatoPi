@@ -11,6 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentSession } from "../../session/agent-session";
 
 // ============================================================================
 // Mock createAgentSession at module level before anything imports it
@@ -222,7 +223,7 @@ describe("agent_invoke E2E", () => {
 				displayName: "persist-existingProfile",
 				kind: "persistent",
 				profileId: "existingProfile",
-				session: mockSession,
+				session: mockSession as unknown as AgentSession,
 				status: "idle",
 			});
 

@@ -14,7 +14,7 @@ import { logger } from "@oh-my-pi/pi-utils";
 import type { CheckpointStore } from "./checkpoint";
 import type { NodeRunner, SchedulerNodeInfo } from "./graph-executor";
 import { WaveScheduler } from "./graph-executor";
-import type { GraphDefinition, NodeExecutionOutput, NodeResult } from "./types";
+import type { GraphDefinition, NodeExecutionOutput, NodeResult, NodeStatus } from "./types";
 
 // ============================================================================
 // NodeExecutor — per-node execution contract
@@ -303,7 +303,7 @@ export class GraphEngine {
 		completedNodeIds: Set<string>,
 		currentWave: number,
 	): void {
-		const nodes: Record<string, { nodeId: string; status: string }> = {};
+		const nodes: Record<string, { nodeId: string; status: NodeStatus }> = {};
 		for (const nodeId of Object.keys(this.#graph.nodes)) {
 			nodes[nodeId] = {
 				nodeId,

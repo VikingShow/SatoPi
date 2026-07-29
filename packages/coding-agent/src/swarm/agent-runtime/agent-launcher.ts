@@ -26,7 +26,8 @@ import type { Tool, ToolSession } from "../../tools";
 import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentSpec } from "./agent-spec";
-import type { ResolvedRole } from "./role-provider";
+import type { ResolvedRole, RoleProvider } from "../../agent/role-provider";
+import type { AgentRuntime } from "./index";
 
 // ============================================================================
 // Types

@@ -24,8 +24,8 @@ import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 type ThemeMode = "curated" | "all";
 
 const CURATED_ITEMS: readonly SelectItem[] = [
-	{ value: "auto", label: "Match terminal", description: "Titanium in dark terminals, Light in light terminals" },
-	{ value: "theme:titanium", label: "Titanium", description: "Default dark theme" },
+	{ value: "auto", label: "Match terminal", description: "Satopi in dark terminals, Light in light terminals" },
+	{ value: "theme:satopi", label: "Satopi", description: "Default dark theme" },
 	{ value: "theme:light", label: "Light", description: "Default light theme" },
 	{ value: "colorblind", label: "Colorblind colors", description: "Adjust red/green contrast" },
 	{ value: "ansi", label: "ANSI-safe", description: "ASCII glyphs with the dark terminal theme" },
@@ -183,7 +183,7 @@ class ThemeSceneController implements SetupSceneController {
 
 	#currentCuratedIndex(): number {
 		const current = getCurrentThemeName();
-		if (current === "titanium") return 1;
+		if (current === "satopi") return 1;
 		if (current === "light") return 2;
 		return 0;
 	}
@@ -230,7 +230,7 @@ class ThemeSceneController implements SetupSceneController {
 
 	async #commit(value: string): Promise<void> {
 		if (value === "auto") {
-			this.host.ctx.settings.set("theme.dark", "titanium");
+			this.host.ctx.settings.set("theme.dark", "satopi");
 			this.host.ctx.settings.set("theme.light", "light");
 			await this.#applyPreviewPresentation(this.#originalSymbolPreset, this.#originalColorBlindMode);
 			enableAutoTheme();

@@ -21,6 +21,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { ExperienceStore } from "../curtain/experience";
+import type { AgentRuntime } from "../agent-runtime";
 import { getPlanArchiveDir, getSessionPlanPath } from "./plan-paths";
 
 // ============================================================================
@@ -291,6 +292,7 @@ export async function runPlanDebate(
 	swarmDir: string,
 	workspace: string,
 	loopConfig: LoopSwarmConfig,
+	runtime: AgentRuntime,
 	modelRegistry?: ModelRegistry,
 	settings?: Settings,
 	signal?: AbortSignal,
@@ -306,6 +308,7 @@ export async function runPlanDebate(
 		maxRounds: debateConfig.maxRounds,
 		convergenceThreshold: debateConfig.convergenceThreshold,
 		toolRestriction: loopConfig.agentRestrictions?.reviewer ?? loopConfig.agentRestrictions?.["*"],
+		runtime,
 	});
 
 	logger.info("Starting plan debate", {

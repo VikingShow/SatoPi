@@ -31,7 +31,7 @@ import "@oh-my-pi/pi-coding-agent/discovery";
 import {
 	clearOmpExtensionCliRoots,
 	injectOmpExtensionCliRoots,
-} from "@oh-my-pi/pi-coding-agent/discovery/omp-extension-roots";
+} from "@oh-my-pi/pi-coding-agent/discovery/extension-roots";
 import { getConfigRootDir, removeSyncWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
 
 const PROVIDER_ID = "omp-plugins";

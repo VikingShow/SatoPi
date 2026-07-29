@@ -11,7 +11,7 @@
 import { logger } from "@oh-my-pi/pi-utils";
 import type { Chapter } from "../../core/state";
 import type { VerificationHook } from "../../core/verification-hook";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
+import type { HookContext, HookEvent, HookPayloadMap, HookRegistration, WorkflowBeforePhasePayload } from "../types";
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook
@@ -49,7 +49,8 @@ export function createVerificationHook(verification: VerificationHook): HookRegi
 			}
 
 			// payload is WorkflowBeforePhasePayload — commands is string[] | undefined
-			const commands = payload.commands ?? [];
+			const p = payload as unknown as WorkflowBeforePhasePayload;
+			const commands = p.commands ?? [];
 
 			if (commands.length === 0) {
 				logger.debug("[VerificationHook] No verification commands to run");

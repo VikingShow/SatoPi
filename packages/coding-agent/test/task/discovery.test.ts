@@ -7,7 +7,7 @@ import { clearCache as clearFsCache } from "@oh-my-pi/pi-coding-agent/capability
 import {
 	clearOmpExtensionCliRoots,
 	injectOmpExtensionCliRoots,
-} from "@oh-my-pi/pi-coding-agent/discovery/omp-extension-roots";
+} from "@oh-my-pi/pi-coding-agent/discovery/extension-roots";
 import { discoverAgents } from "@oh-my-pi/pi-coding-agent/task/discovery";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
 

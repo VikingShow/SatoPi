@@ -56,17 +56,17 @@ describe("renderAgentPanel", () => {
 		expect(stripAnsi(lines.join("\n"))).toContain("agent-1");
 	});
 
-	it("has header 'Persistent Agents'", () => {
+	it("has header 'Agents'", () => {
 		const state = makeSwarmState({
 			agents: {
 				"agent-1": { name: "agent-1", status: "running", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },
 			},
 		});
 		const lines = renderAgentPanel([], state, theme).render(72);
-		expect(stripAnsi(lines[0])).toContain("Persistent Agents");
+		expect(stripAnsi(lines[0])).toContain("Agents");
 	});
 
-	it("filters to persistent-only agents (swarm agents have kind=persistent in fallback)", () => {
+	it("shows all agents regardless of kind", () => {
 		const state = makeSwarmState({
 			agents: {
 				"agent-1": { name: "agent-1", status: "completed", iteration: 0, wave: 0, praiseCount: 0, criticismCount: 0, conflictCount: 0 },

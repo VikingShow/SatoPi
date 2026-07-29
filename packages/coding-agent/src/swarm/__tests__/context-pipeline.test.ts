@@ -460,10 +460,14 @@ describe("ContextPipeline", () => {
 		// Injected messages are prepended in source priority order (0, then 1),
 		// followed by the original conversation
 		expect(result).toHaveLength(4);
-		expect((result[0] as UserMessage).content).toBe("EXP: prior session summary");
-		expect((result[1] as UserMessage).content).toBe("MMD: current plan state");
-		expect((result[2] as UserMessage).content).toBe("Hello, agent");
-		expect((result[3] as AssistantMessage).content).toBe("Hi! How can I help?");
+		const msg0 = result[0] as unknown as { content: string };
+		const msg1 = result[1] as unknown as { content: string };
+		const msg2 = result[2] as unknown as { content: string };
+		const msg3 = result[3] as unknown as { content: string };
+		expect(msg0.content).toBe("EXP: prior session summary");
+		expect(msg1.content).toBe("MMD: current plan state");
+		expect(msg2.content).toBe("Hello, agent");
+		expect(msg3.content).toBe("Hi! How can I help?");
 	});
 
 	test("pipeline transform merges correctly with SDK-style default transform", async () => {
@@ -551,11 +555,12 @@ describe("ContextPipeline", () => {
 		// original conversation at the end. With compactWindow=8000 and only
 		// 3 small messages, nothing is compacted away — all messages survive.
 		expect(result.length).toBeGreaterThanOrEqual(3);
-		expect((result[0] as UserMessage).content).toBe("CORE: system instructions");
+		const msg0 = result[0] as unknown as { content: string };
+		expect(msg0.content).toBe("CORE: system instructions");
 
 		// Both SDK mark env and original conversation must be present
 		const contents = result.map(m => {
-			if (typeof m.content === "string") return m.content;
+			if (m && typeof m === "object" && "content" in m && typeof m.content === "string") return m.content;
 			return "";
 		});
 		expect(contents).toContain("SDK: mark env context");

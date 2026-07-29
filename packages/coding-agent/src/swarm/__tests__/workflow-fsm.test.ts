@@ -21,9 +21,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
+import { WorkflowFsm, PHASES } from "../core/workflow-fsm";
 import * as path from "node:path";
 import { StateTracker } from "../core/state";
-import { type Chapter, PHASES, WorkflowFsm } from "../core/workflow-fsm";
+import { type Chapter } from "../core/state";
 import { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================

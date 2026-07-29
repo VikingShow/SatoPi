@@ -92,6 +92,11 @@ export class AgentRegistry {
 		return AgentRegistry.#global;
 	}
 
+	/** Reset the global singleton — for test isolation only. */
+	static resetGlobalForTests(): void {
+		AgentRegistry.#global = undefined;
+	}
+
 	readonly #refs = new Map<string, AgentRef>();
 	readonly #listeners = new Set<RegistryListener>();
 

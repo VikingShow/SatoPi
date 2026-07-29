@@ -90,12 +90,9 @@ export class DebateRoundtable {
 	#runtime: AgentRuntime;
 
 	constructor(config: DebateRoundtableConfig) {
-		this.#config = {
-			agentCount: config.agentCount,
-			maxRounds: config.maxRounds,
-			convergenceThreshold: config.convergenceThreshold,
-		};
-		this.#toolRestriction = config.toolRestriction;
+		const { toolRestriction, ...requiredConfig } = config;
+		this.#config = requiredConfig;
+		this.#toolRestriction = toolRestriction;
 		this.#runtime = config.runtime;
 	}
 

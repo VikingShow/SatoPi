@@ -234,12 +234,12 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 		// GraphRunner handles its own YAML parsing (graph.yaml format)
 		def = {
 			name: path.basename(yamlPath, path.extname(yamlPath)),
-			description: "",
-			version: 1,
+			workspace: cwd,
 			mode: "loop",
 			targetCount: 0,
 			agents: new Map(),
-			loopConfig: null,
+			agentOrder: [],
+			loopConfig: undefined,
 		};
 	} else {
 		try {

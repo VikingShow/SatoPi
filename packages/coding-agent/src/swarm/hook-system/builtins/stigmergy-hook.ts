@@ -9,7 +9,7 @@
 
 import { logger } from "@oh-my-pi/pi-utils";
 import type { MarkEnvironment } from "../../../coordination";
-import type { HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
+import type { AgentAfterCompletePayload, AgentOnErrorPayload, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 
 /**
@@ -29,7 +29,7 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 		events: ["agent:afterComplete", "agent:onError", "context:afterCompaction"],
 
 		async handler<K extends HookEvent>(event: K, payload: HookPayloadMap[K], ctx: HookContext): Promise<void> {
-			const agentId = resolveAgentId(payload, ctx);
+			const agentId = resolveAgentId(payload as unknown as { agentId?: unknown }, ctx);
 
 			switch (event) {
 				// -----------------------------------------------------------------
@@ -41,8 +41,9 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 						return;
 					}
 					// payload is AgentAfterCompletePayload
-					const artifactPath = payload.artifactPath;
-					const message = payload.message ?? `Agent ${agentId} completed task`;
+					const p = payload as unknown as AgentAfterCompletePayload;
+					const artifactPath = p.artifactPath;
+					const message = p.message ?? `Agent ${agentId} completed task`;
 
 					markEnv.placeMark({
 						markId: generateMarkId(agentId, "artifact"),
@@ -63,8 +64,8 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 						logger.warn("[StigmergyHook] agent:onError missing agentId");
 						return;
 					}
-					// payload is AgentOnErrorPayload — error is always a string
-					const errorMessage = payload.error;
+					const p = payload as unknown as AgentOnErrorPayload;
+					const errorMessage = p.error;
 
 					markEnv.placeMark({
 						markId: generateMarkId(agentId, "warning"),

@@ -418,7 +418,7 @@ describe("resolveAgentId", () => {
 	});
 
 	it("returns undefined when both payload and ctx agentId are numbers", () => {
-		const result = resolveAgentId({ agentId: 123 }, { agentId: 456 });
+		const result = resolveAgentId({ agentId: 123 }, { agentId: 456 } as unknown as HookContext);
 		expect(result).toBeUndefined();
 	});
 

@@ -16,8 +16,9 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
-import { IrcBus } from "../../irc/bus";
 import type { AgentRuntime } from "../agent-runtime";
+import type { AgentSpec } from "../agent-runtime/agent-spec";
+import { IrcBus } from "../../irc/bus";
 import { type LoopSwarmConfig, parseSwarmYaml, validateSwarmDefinition } from "../core/schema";
 import type { RunManager } from "../core/services";
 import type { Chapter, StateTracker } from "../core/state";
@@ -244,11 +245,17 @@ export class ScriptManager {
 					`${loopConfig.planDebate.agentCount} agents will debate over ${loopConfig.planDebate.maxRounds} rounds.`,
 				);
 
+
+				if (!this.#runtime) {
+					logger.error("[ScriptManager] AgentRuntime is required for plan debate.");
+					return;
+				}
 				const result = await runPlanDebate(
 					draftPlan,
 					this.#swarmDir,
 					this.#workspace,
 					loopConfig,
+					this.#runtime,
 					this.#modelRegistry,
 					this.#settings,
 				);
@@ -326,7 +333,7 @@ export class ScriptManager {
 			}
 
 			// v3 path — use AgentRuntime.spawn() for full AgentLoopConfig access
-			const [planner] = await this.#runtime.spawn([
+			const [planner] = await this.#runtime!.spawn([
 				{
 					id: this.#selectedAgentId ?? "planner",
 					role: "planner",
@@ -339,7 +346,7 @@ export class ScriptManager {
 						: undefined,
 					task: taskText,
 					modelPreference: "smartest",
-				},
+				} as AgentSpec,
 			]);
 
 			const result = await planner.wait();

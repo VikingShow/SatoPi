@@ -33,7 +33,7 @@ import { ActivityLogger } from "../infra/activity-logger";
 import { DebateRoundtable } from "../script/debate-roundtable";
 import { getSessionPlanPath } from "../script/plan-paths";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
-import { createStageController, type StageResult } from "../stage/stage-controller";
+import { createStageController, type StageController, type StageResult } from "../stage/stage-controller";
 import { createOrchestratorRuntime } from "./assembler";
 import type { LoopSwarmConfig } from "./schema";
 import { type Chapter, StateTracker, type SwarmState } from "./state";

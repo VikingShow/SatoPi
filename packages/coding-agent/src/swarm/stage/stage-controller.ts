@@ -82,7 +82,6 @@ export interface StageOptions {
 	signal?: AbortSignal;
 	profileRegistry: ProfileRegistry;
 	roleAssetManager: RoleAssetManager;
-	ircBus?: IrcBus;
 	/** Pre-selected agent IDs (skip selection algorithm). */
 	agentIds?: string[];
 	/** User-specified agent count (overrides complexity analyzer). */
@@ -176,7 +175,7 @@ export async function assignAgentRoles(
 		ircBus.groupChannel(
 			"role-negotiation",
 			candidates.map(c => c.agentId),
-			activityLogger,
+			activityLogger as ActivityLogger,
 		);
 	}
 
@@ -227,9 +226,9 @@ export function createTaskQueueFromPlan(planContent: string): TaskQueueSetup {
 			dependsOn: [],
 			estimatedMinutes: 60,
 			assignedRole: "developer",
-		});
+		} as unknown as Task);
 	}
-	return { queue: new TaskQueue(tasks), tasks };
+	return { queue: new TaskQueue(tasks as Task[]), tasks: tasks as unknown as Task[] };
 }
 export class StageController {
 	readonly #opts: StageOptions;
@@ -416,12 +415,11 @@ export class StageController {
 	// ────────────────────────────────────────────────────────────────────────
 
 	async #assignRoles(agents: ScoredAgent[]): Promise<Array<{ id: string; role: string }>> {
-		const { planContent, roleAssetManager, activityLogger, commBus, ircBus } = this.#opts;
+		const { planContent, roleAssetManager, activityLogger, ircBus } = this.#opts;
 		return assignAgentRoles(agents, {
 			planContent,
 			roleAssetManager,
 			activityLogger,
-			commBus,
 			ircBus,
 		});
 	}
@@ -550,15 +548,14 @@ export class StageController {
 						`exit code ${result.exitCode} after ${maxRetries} attempts`,
 					);
 					// v3: also fire HookPipeline error event
-					void this.#opts.hookPipeline?.trigger(
-						"agent:onError",
-						{
-							agentId: agent.id,
-							taskId: task.id,
-							error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
-						},
-						{ phase: "stage" },
-					);
+		void this.#opts.hookPipeline?.trigger(
+			"agent:onError",
+			{
+				agentId: agent.id,
+				error: `exit code ${result.exitCode} after ${maxRetries} attempts`,
+			},
+			{ phase: "stage" },
+		);
 					activityLogger.logBroadcast(
 						"system",
 						`${agent.id} failed: ${task.title} (exit ${result.exitCode} after ${maxRetries} attempts)`,

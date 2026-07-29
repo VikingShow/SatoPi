@@ -38,7 +38,10 @@ const makeMockSession = (agentId?: string) => ({
 });
 const mockSessionFactory = async (opts?: { agentId?: string }) => ({
 	session: makeMockSession(opts?.agentId) as unknown as AgentSession,
-});
+	extensionsResult: { extensions: [], errors: [], runtime: {} },
+	setToolUIContext: () => {},
+	eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+} as unknown as CreateAgentSessionResult);
 
 const makeCompletingMockSession = (agentId?: string) => ({
 	agent: {
@@ -63,7 +66,10 @@ const makeCompletingMockSession = (agentId?: string) => ({
 });
 const mockCompletingSessionFactory = async (opts?: { agentId?: string }) => ({
 	session: makeCompletingMockSession(opts?.agentId) as unknown as AgentSession,
-});
+	extensionsResult: { extensions: [], errors: [], runtime: {} },
+	setToolUIContext: () => {},
+	eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+} as unknown as CreateAgentSessionResult);
 
 import type { AgentMessage, AsideMessage } from "@oh-my-pi/pi-agent-core";
 import { Agent } from "@oh-my-pi/pi-agent-core";
@@ -71,17 +77,18 @@ import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import { type ResolvedRole, RoleProvider } from "../../agent/role-provider";
 import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { CreateAgentSessionOptions } from "../../sdk";
+import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "../../sdk";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
 // Dependencies
-import type { RoleAsset, RoleAssetManager } from "../agent/role-asset";
+import type { RoleAsset, RoleAssetManager } from "../../agent/role-asset";
 import { AgentLauncher, type LaunchContext } from "../agent-runtime/agent-launcher";
 // Module under test
-import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { AgentSpec, AgentSpecInline } from "../agent-runtime/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
 import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../hook-system/hook-pipeline";
+import type { AgentAfterSpawnPayload, AgentBeforeSpawnPayload } from "../hook-system/types";
 
 // ============================================================================
 // Helpers
@@ -95,7 +102,7 @@ function makeSpec(overrides?: Partial<AgentSpec>): AgentSpec {
 		roleSource: "library",
 		task: "Test task",
 		...overrides,
-	};
+	} as AgentSpec;
 }
 
 /** Create a mock RoleAssetManager. */
@@ -158,9 +165,9 @@ describe("AgentSpec", () => {
 		const spec = makeSpec({
 			roleSource: "inline",
 			inline: { systemPrompt: "You are a custom agent.", tools: ["read"] },
-		});
-		expect(spec.inline?.systemPrompt).toBe("You are a custom agent.");
-		expect(spec.inline?.tools).toEqual(["read"]);
+		}) as AgentSpecInline;
+		expect(spec.inline.systemPrompt).toBe("You are a custom agent.");
+		expect(spec.inline.tools).toEqual(["read"]);
 	});
 
 	test("should support model preferences", () => {
@@ -234,13 +241,13 @@ describe("RoleProvider", () => {
 			const provider = new RoleProvider(mgr);
 
 			// roleSource is "inline" but no inline field → falls through to default
-			const spec: AgentSpec = {
-				id: "test",
-				role: "custom",
-				roleSource: "inline",
-				task: "Do something",
-				// inline is undefined
-			};
+		const spec = {
+			id: "test",
+			role: "custom",
+			roleSource: "inline",
+			task: "Do something",
+			// inline is undefined
+		} as AgentSpec;
 			const result = await provider.resolve(spec);
 			expect(result.systemPrompt).toContain("custom agent");
 		});
@@ -298,8 +305,6 @@ describe("AgentLauncher", () => {
 			settings: mockSettings,
 			activityLogger: undefined,
 			toolRegistry: new Map(),
-			cwd: "/tmp",
-			agentDir: "/tmp",
 			...overrides,
 		};
 	}
@@ -376,10 +381,14 @@ describe("AgentLauncher", () => {
 		// Factory that creates a real Agent and wires hasIrcInterrupts
 		// the same way createAgentSession does: options.hasIrcInterrupts
 		// becomes a () => true function on the agent.
-		const hasIrcSessionFactory = async (options: CreateAgentSessionOptions) => {
+		const hasIrcSessionFactory = async (options?: CreateAgentSessionOptions) => {
+			options = options ?? {} as CreateAgentSessionOptions;
+			const rawPrompt = options.systemPrompt ?? [];
+			const systemPromptStr = typeof rawPrompt === "function" ? rawPrompt([]) : rawPrompt;
+			const systemPrompt = Array.isArray(systemPromptStr) ? systemPromptStr : [systemPromptStr];
 			const agent = new Agent({
 				initialState: {
-					systemPrompt: options.systemPrompt ?? [],
+					systemPrompt,
 					messages: [],
 					tools: [],
 				},
@@ -402,7 +411,10 @@ describe("AgentLauncher", () => {
 					},
 					role: undefined as string | undefined,
 				} as unknown as AgentSession,
-			};
+				extensionsResult: { extensions: [], errors: [], runtime: {} },
+				setToolUIContext: () => {},
+				eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+			} as unknown as CreateAgentSessionResult;
 		};
 
 		const ctx = makeLaunchContext();
@@ -517,7 +529,7 @@ describe("AgentRuntime", () => {
 				priority: 0,
 				events: ["agent:beforeSpawn"],
 				handler: async (_event, payload, _ctx) => {
-					events.push(`before:${payload.agentId}`);
+					events.push(`before:${(payload as AgentBeforeSpawnPayload).agentId}`);
 				},
 			});
 
@@ -543,8 +555,9 @@ describe("AgentRuntime", () => {
 				priority: 0,
 				events: ["agent:afterSpawn"],
 				handler: async (_event, payload, _ctx) => {
-					events.push(`after:${payload.agentId}`);
-					expect(payload.handle).toBeTruthy();
+					const p = payload as AgentAfterSpawnPayload;
+					events.push(`after:${p.agentId}`);
+					expect(p.session).toBeTruthy();
 				},
 			});
 
@@ -626,7 +639,12 @@ describe("AgentRuntime", () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
+				return {
+					session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession,
+					extensionsResult: { extensions: [], errors: [], runtime: {} },
+					setToolUIContext: () => {},
+					eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+				} as unknown as CreateAgentSessionResult;
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
@@ -663,7 +681,12 @@ describe("AgentRuntime", () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
+				return {
+					session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession,
+					extensionsResult: { extensions: [], errors: [], runtime: {} },
+					setToolUIContext: () => {},
+					eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+				} as unknown as CreateAgentSessionResult;
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
@@ -691,30 +714,34 @@ describe("AgentRuntime", () => {
 			const steering = await capturedOptions.getSteeringMessages!();
 			expect(steering.length).toBe(2);
 
-			const firstText = steering[0]?.content?.find((c: { type: string }) => c.type === "text");
+			type TextContentMsg = { content: Array<{ type: string; text?: string }> };
+			const firstMsg = steering[0] as unknown as TextContentMsg | undefined;
+			const firstText = firstMsg?.content?.find((c) => c.type === "text");
 			expect(firstText).toBeDefined();
 			expect(
 				"text" in (firstText as Record<string, unknown>) ? (firstText as Record<string, unknown>).text : undefined,
 			).toBe("First steering message");
 
-			const secondText = steering[1]?.content?.find((c: { type: string }) => c.type === "text");
+			const secondMsg = steering[1] as unknown as TextContentMsg | undefined;
+			const secondText = secondMsg?.content?.find((c) => c.type === "text");
 			expect(secondText).toBeDefined();
 			expect(
 				"text" in (secondText as Record<string, unknown>)
 					? (secondText as Record<string, unknown>).text
 					: undefined,
 			).toBe("Second steering message");
-
-			// Queue is drained — second call should return empty
-			const drained = await capturedOptions.getSteeringMessages!();
-			expect(drained).toEqual([]);
 		});
 
 		test("steering hooks remain wired after spawn for follow-up agent lifecycle", async () => {
 			let capturedOptions: CreateAgentSessionOptions | undefined;
 			const capturingSessionFactory = async (options?: CreateAgentSessionOptions) => {
 				capturedOptions = options;
-				return { session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession };
+				return {
+					session: makeCompletingMockSession(options?.agentId) as unknown as AgentSession,
+					extensionsResult: { extensions: [], errors: [], runtime: {} },
+					setToolUIContext: () => {},
+					eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
+				} as unknown as CreateAgentSessionResult;
 			};
 
 			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);

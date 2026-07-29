@@ -42,7 +42,7 @@ function testScene(id: string, minVersion: number, shouldRun?: () => boolean): S
 }
 
 afterEach(async () => {
-	await initTheme(false, "unicode", false, "titanium", "light");
+	await initTheme(false, "unicode", false, "satopi", "light");
 });
 
 describe("setup wizard scene selection", () => {
@@ -198,7 +198,7 @@ describe("setup wizard mouse routing", () => {
 	});
 
 	it("routes hit-tested mouse events at scene-local coordinates to scenes with routeMouse", async () => {
-		await initTheme(false, "unicode", false, "titanium", "light");
+		await initTheme(false, "unicode", false, "satopi", "light");
 		const routed: { kind: string; line: number; col: number }[] = [];
 		const keys: string[] = [];
 		const scene: SetupScene = {
@@ -260,7 +260,7 @@ describe("setup wizard mouse routing", () => {
 
 describe("setup wizard theme previews", () => {
 	it("restores the selected glyph preset after previewing ANSI-safe mode", async () => {
-		await initTheme(false, "nerd", false, "titanium", "light");
+		await initTheme(false, "nerd", false, "satopi", "light");
 		const settings = Settings.isolated({ symbolPreset: "nerd", colorBlindMode: false });
 		const setupScene = ALL_SCENES.find(scene => scene.id === "theme");
 		expect(setupScene).toBeDefined();
@@ -293,7 +293,7 @@ describe("setup wizard theme previews", () => {
 
 describe("setup wizard glyph scene", () => {
 	it("lists Nerd Font first and commits the chosen preset", async () => {
-		await initTheme(false, "unicode", false, "titanium", "light");
+		await initTheme(false, "unicode", false, "satopi", "light");
 		const settings = Settings.isolated();
 		const scene = ALL_SCENES.find(s => s.id === "glyph-mode");
 		expect(scene).toBeDefined();
