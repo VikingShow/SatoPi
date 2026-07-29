@@ -28,6 +28,7 @@ import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
+import { IrcBus } from "../../irc/bus";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
 import { CurtainBehavior } from "../behaviors/curtain-behavior";
@@ -339,6 +340,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			experienceStore: this.#experienceStore,
 			profileRegistry,
 			activeMmd: this.#config.activeMmd,
+			ircBus: IrcBus.global(),
 		});
 		this.#hookPipeline = orch.hookPipeline;
 		this.#markEnv = orch.markEnvironment;
