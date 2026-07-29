@@ -1,15 +1,19 @@
 /**
  * Role Asset Library — YAML-based role definitions for SatoPi workers.
  *
- * Each role is a standalone .role.yaml file at `.stp/roles/{role-id}.role.yaml`.
- * Roles define system prompts, tool permissions, metadata, and approval lifecycle.
+ * Roles are stored at two levels:
+ *   Project: {cwd}/.stp/roles/{role-id}.role.yaml  (project-specific, git-committable)
+ *   User:    ~/.stp/agent/roles/{role-id}.role.yaml (built-in seeds + personal roles)
+ *
+ * Project-level takes precedence over user-level. Built-in roles are seeded
+ * once into the user-level directory on first use.
  *
  * Lifecycle: draft → proposed → approved → deprecated
  */
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getProjectAgentDir } from "@satopi/pi-utils";
+import { getAgentDir, getProjectAgentDir } from "@satopi/pi-utils";
 
 // ============================================================================
 // Types
@@ -112,11 +116,15 @@ export interface RoleCreateInput {
 }
 
 // ============================================================================
-// Constants
+// Path helpers
 // ============================================================================
 
-function getRolesDir(workspaceDir: string): string {
+function getProjectRolesDir(workspaceDir: string): string {
 	return path.join(getProjectAgentDir(workspaceDir), "roles");
+}
+
+function getUserRolesDir(): string {
+	return path.join(getAgentDir(), "roles");
 }
 
 // ============================================================================
@@ -124,51 +132,50 @@ function getRolesDir(workspaceDir: string): string {
 // ============================================================================
 
 export class RoleAssetManager {
-	readonly #rolesDir: string;
-	readonly #legacyRolesDir: string;
+	readonly #projectRolesDir: string;
+	readonly #userRolesDir: string;
 
 	constructor(workspaceDir: string) {
-		this.#rolesDir = getRolesDir(workspaceDir);
-		this.#legacyRolesDir = path.join(workspaceDir, "roles");
+		this.#projectRolesDir = getProjectRolesDir(workspaceDir);
+		this.#userRolesDir = getUserRolesDir();
 	}
 
-	/** Ensure the roles directory exists. */
+	/** Ensure the roles directories exist. */
 	async init(): Promise<void> {
-		await fs.mkdir(this.#rolesDir, { recursive: true });
-		await fs.mkdir(this.#legacyRolesDir, { recursive: true });
+		await fs.mkdir(this.#projectRolesDir, { recursive: true });
+		await fs.mkdir(this.#userRolesDir, { recursive: true });
 	}
 
 	get rolesDir(): string {
-		return this.#rolesDir;
+		return this.#projectRolesDir;
 	}
 
 	// ========================================================================
 	// Read
 	// ========================================================================
 
-	/** Get a single role by ID. Returns null if not found. */
+	/** Get a single role by ID. Tries project-level first, then user-level. Returns null if not found. */
 	async get(id: string): Promise<RoleAsset | null> {
-		// Try primary location first
-		const filePath = this.#rolePath(id);
+		const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+		// 1. Project-level
 		try {
-			const content = await fs.readFile(filePath, "utf-8");
+			const content = await fs.readFile(path.join(this.#projectRolesDir, `${safe}.role.yaml`), "utf-8");
+			return Bun.YAML.parse(content) as RoleAsset;
+		} catch { /* not found at project level */ }
+		// 2. User-level fallback
+		try {
+			const content = await fs.readFile(path.join(this.#userRolesDir, `${safe}.role.yaml`), "utf-8");
 			return Bun.YAML.parse(content) as RoleAsset;
 		} catch {
-			// Fall back to legacy roles/ directory
-			const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
-			const legacyPath = path.join(this.#legacyRolesDir, `${safe}.role.yaml`);
-			try {
-				const content = await fs.readFile(legacyPath, "utf-8");
-				return Bun.YAML.parse(content) as RoleAsset;
-			} catch {
-				return null;
-			}
+			return null;
 		}
 	}
 
-	/** List all roles, optionally filtered by status. */
+	/** List all roles, optionally filtered by status. Seeds built-in roles on first call. Reads project-level first, then user-level. */
 	async list(statusFilter?: RoleStatus): Promise<RoleAssetSummary[]> {
 		await this.init();
+		// Seed built-in roles into user-level dir on first use (idempotent).
+		await this.seedIfEmpty();
 
 		const seen = new Set<string>();
 		const roles: RoleAssetSummary[] = [];
@@ -207,8 +214,10 @@ export class RoleAssetManager {
 				});
 		};
 
-		await collectFrom(this.#rolesDir);
-		await collectFrom(this.#legacyRolesDir);
+		// Project-level first (takes precedence via `seen` dedup)
+		await collectFrom(this.#projectRolesDir);
+		// User-level fallback
+		await collectFrom(this.#userRolesDir);
 
 		return roles;
 	}
@@ -375,32 +384,49 @@ export class RoleAssetManager {
 	// Seed data
 	// ========================================================================
 
-	/** Seed the roles directory with built-in role assets if it's empty. */
+	/** Seed the user-level roles directory with built-in role assets if it's empty. Idempotent — returns 0 when already seeded. */
 	async seedIfEmpty(): Promise<number> {
-		await this.init();
-
 		let entries: string[];
 		try {
-			entries = await fs.readdir(this.#rolesDir);
+			entries = await fs.readdir(this.#userRolesDir);
 		} catch {
 			entries = [];
 		}
 
 		const existingRoles = entries.filter(e => e.endsWith(".role.yaml"));
-
 		if (existingRoles.length > 0) return 0; // Already seeded
 
 		const seeds = getBuiltInRoles();
+		const now = new Date().toISOString();
 		let count = 0;
 
 		for (const seed of seeds) {
+			const safe = seed.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+			const filePath = path.join(this.#userRolesDir, `${safe}.role.yaml`);
 			try {
-				await this.create(seed);
-				await this.approve(seed.id);
-				count++;
-			} catch {
-				// Skip if already exists
-			}
+				await fs.access(filePath);
+				continue; // Already exists — skip
+			} catch { /* doesn't exist yet */ }
+
+			const role: RoleAsset = {
+				id: seed.id,
+				name: seed.name,
+				description: seed.description,
+				version: 1,
+				author: seed.author ?? "swarm",
+				status: "approved", // Built-in roles are pre-approved
+				prompts: seed.prompts,
+				tools: seed.tools,
+				tags: seed.tags,
+				skills: seed.skills,
+				mcp_servers: seed.mcp_servers,
+				created_at: now,
+				updated_at: now,
+				usage_count: 0,
+				success_rate: 1.0,
+			};
+			await fs.writeFile(filePath, serializeRoleYaml(role), "utf-8");
+			count++;
 		}
 
 		return count;
@@ -413,7 +439,7 @@ export class RoleAssetManager {
 	#rolePath(id: string): string {
 		// Sanitize ID: allow only alphanumeric, hyphens, underscores
 		const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
-		return path.join(this.#rolesDir, `${safe}.role.yaml`);
+		return path.join(this.#projectRolesDir, `${safe}.role.yaml`);
 	}
 }
 

@@ -248,16 +248,18 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 	// ── Script Phase ───────────────────────────────────────────────────────
 
-	/** Called by agent-session when the agent writes/updates plan.md. */
+	/** Called by agent-session when the agent writes/updates plan.md. Persists to disk at the swarm session path so confirmScript() can read it. */
 	onPlanUpdated(content: string): void {
 		this.#planContent = content;
+		const planPath = getSessionPlanPath(this.#config.swarmDir);
+		// Fire-and-forget persist — the file may not exist yet if this is the
+		// first write during the Script phase, so ensure parent dirs exist.
+		fs.mkdir(path.dirname(planPath), { recursive: true })
+			.then(() => fs.writeFile(planPath, content, "utf-8"))
+			.catch(err => logger.warn("[EmbeddedSwarmBridge] Failed to persist plan.md", { error: String(err) }));
 		const hasHeadings = /^#{1,3}\s+/m.test(content);
 		const minLength = content.trim().length >= 200;
 		this.#planReady = hasHeadings && minLength;
-		if (this.#planReady) {
-			this.#listener({ phase: "script", subStatus: "plan ready for review" });
-			logger.info("[EmbeddedSwarmBridge] Plan ready", { length: content.length });
-		}
 	}
 
 	/** Get the current plan content. */
