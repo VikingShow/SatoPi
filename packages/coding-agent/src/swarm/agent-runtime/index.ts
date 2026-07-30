@@ -156,6 +156,7 @@ export class AgentRuntime {
 		this.#launcher = options.launcher;
 		this.#ircBus = options.ircBus!;
 		this.#hookPipeline = options.hookPipeline;
+		this.#settings = options.settings;
 		this.#modelRegistry = options.modelRegistry;
 		this.#toolRegistry = options.toolRegistry;
 		this.#sessionFactory = options.sessionFactory;
@@ -485,11 +486,13 @@ export class AgentRuntime {
 
 		// 12.5 Inject structured todo phases from plan.md (if provided)
 		if (spec.todoPhases && spec.todoPhases.length > 0) {
-			session.setTodoPhases(spec.todoPhases.map(p => ({
-				title: p.title,
-				files: p.files,
-				dependsOn: p.dependsOn,
-			})));
+			session.setTodoPhases([{
+				name: spec.role ?? "Execution",
+				tasks: spec.todoPhases.map(p => ({
+					content: p.title,
+					status: "pending" as const,
+				})),
+			}]);
 		}
 
 		// 13. Register agent in the runtime-level CommChannel

@@ -265,9 +265,11 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 				autoApplaud: true,
 			},
 			event => {
-				if (event.phase) phase = event.phase;
-				if (event.subStatus) {
-					process.stderr.write(`[${event.phase}] ${event.subStatus}\n`);
+				if ('phase' in event) {
+					phase = event.phase;
+					if (event.subStatus) {
+						process.stderr.write(`[${event.phase}] ${event.subStatus}\n`);
+					}
 				}
 			},
 		);

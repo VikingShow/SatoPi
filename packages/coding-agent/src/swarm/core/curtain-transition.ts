@@ -53,6 +53,7 @@ export function buildStageResultFromGraphRun(
 		errors: graphRunResult.executionErrors,
 		agents: graphRunResult.agentsList,
 		taskProgress: { total: graphRunResult.totalNodes, completed: graphRunResult.completedCount },
+		degradedMode: [],
 	};
 }
 

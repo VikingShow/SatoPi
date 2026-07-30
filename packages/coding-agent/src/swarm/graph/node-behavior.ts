@@ -231,7 +231,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 			case "compile-check": {
 				const cmd = gate.command ?? "bun check";
 				try {
-					const proc = Bun.spawn({ cmd: "/bin/sh", args: ["-c", cmd], stdio: ["ignore", "pipe", "pipe"] });
+					const proc = Bun.spawn(["/bin/sh", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
 					const exitCode = await proc.exited;
 					const stderr = await new Response(proc.stderr).text();
 					if (exitCode !== 0) {
@@ -245,7 +245,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 			case "test": {
 				const cmd = gate.command ?? "bun test";
 				try {
-					const proc = Bun.spawn({ cmd: "/bin/sh", args: ["-c", cmd], stdio: ["ignore", "pipe", "pipe"] });
+					const proc = Bun.spawn(["/bin/sh", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
 					const exitCode = await proc.exited;
 					const stderr = await new Response(proc.stderr).text();
 					if (exitCode !== 0) {
@@ -257,13 +257,13 @@ export class CustomNodeBehavior implements NodeBehavior {
 				break;
 			}
 			case "lsp":
-				logger.trace("[CustomNodeBehavior] LSP gate: not yet wired");
+				logger.debug("[CustomNodeBehavior] LSP gate: not yet wired");
 				break;
 			case "human-review":
 				// Handled below via mode check.
 				break;
 			case "script":
-				logger.trace("[CustomNodeBehavior] Script gate: not yet wired");
+				logger.debug("[CustomNodeBehavior] Script gate: not yet wired");
 				break;
 		}
 

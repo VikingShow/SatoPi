@@ -8291,7 +8291,7 @@ export class AgentSession {
 				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
 			},
 			event => {
-				if (event.phase === "script") {
+				if ('phase' in event && event.phase === "script") {
 					const taskInfo = event.progress?.totalTasks
 						? ` (${event.progress.totalTasks} task${event.progress.totalTasks === 1 ? "" : "s"} outlined)`
 						: "";

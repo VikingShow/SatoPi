@@ -23,6 +23,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
+import type { AssistantMessage } from "@satopi/pi-ai";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
@@ -432,10 +433,14 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		for (const agent of agents) {
 			const unsub = agent.subscribe(event => {
 				if (event.type === "agent_end") {
+					const lastAssistant = [...event.messages]
+						.reverse()
+						.find((message): message is AssistantMessage => message.role === "assistant");
+					const stopReason: string | undefined = lastAssistant?.stopReason;
 					const status =
-						event.stopReason === "aborted"
+						stopReason === "aborted"
 							? "aborted"
-							: event.stopReason === "error" || event.stopReason === "max_turns"
+							: stopReason === "error" || stopReason === "max_turns"
 								? "failed"
 								: "completed";
 					const ctx = this.#buildPhaseContext();

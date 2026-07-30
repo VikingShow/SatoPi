@@ -18,6 +18,7 @@
 
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
+import type { AssistantMessage } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
@@ -226,10 +227,14 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		for (const agent of agents) {
 			const unsub = agent.subscribe(event => {
 				if (event.type === "agent_end") {
+					const lastAssistant = [...event.messages]
+						.reverse()
+						.find((message): message is AssistantMessage => message.role === "assistant");
+					const stopReason: string | undefined = lastAssistant?.stopReason;
 					const status =
-						event.stopReason === "aborted"
+						stopReason === "aborted"
 							? "aborted"
-							: event.stopReason === "error" || event.stopReason === "max_turns"
+							: stopReason === "error" || stopReason === "max_turns"
 								? "failed"
 								: "completed";
 					const ctx = this.#buildPhaseContext();
