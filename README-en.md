@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Satori a team of Pi</strong> — Multi-agent swarm orchestration with roundtable debate.
-  &nbsp;·&nbsp; <a href="README-zh.md">中文</a>
+  &nbsp;·&nbsp; <a href="README.md">中文</a>
 </p>
 
 <p align="center">

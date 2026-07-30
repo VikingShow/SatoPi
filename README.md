@@ -4,6 +4,7 @@
 
 <p align="center">
   <strong>Satori a team of Pi</strong> — 多 Agent 群体协作系统，圆桌辩论驱动。
+  &nbsp;·&nbsp; <a href="README-en.md">English</a>
 </p>
 
 <p align="center">
