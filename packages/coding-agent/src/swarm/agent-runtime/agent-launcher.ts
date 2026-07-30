@@ -192,7 +192,9 @@ export class AgentLauncher {
 		});
 
 		const { session } = await this.#sessionFactory({
-			// 4. Create AgentSession (replaces new Agent — gets yield/skills/MCP/IRC/streaming for free)
+			// 4. Create persistent AgentSession (same path as agent_invoke)
+			agentKind: "persistent",
+			persistentProfileId: spec.id,
 			model,
 			systemPrompt: [systemPrompt],
 			toolNames,

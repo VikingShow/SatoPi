@@ -122,6 +122,7 @@ export class IrcBus {
 	readonly #registry: AgentRegistry;
 	// ── CommBus-migrated fields ──
 	readonly #channels = new Map<string, CommChannel>();
+	#defaultChannel: CommChannel | undefined;
 	#activityLogger: ActivityLogger | undefined;
 	#hookPipeline: HookPipeline | undefined;
 	readonly #lifecycle: () => AgentLifecycleManager;
@@ -133,6 +134,7 @@ export class IrcBus {
 		// Lazy: the lifecycle global self-constructs against the global registry,
 		// so only touch it when a parked recipient actually needs reviving.
 		this.#lifecycle = () => lifecycle ?? AgentLifecycleManager.global();
+		this.#setupAutoMembership();
 	}
 
 	/**
@@ -433,6 +435,36 @@ export class IrcBus {
 			});
 		}
 		await this.#hookPipeline?.trigger("comm:afterMessage", { from: "human", to: target, message: text }, hookCtx);
+	}
+
+	// ── Default channel auto-membership ──
+
+	#setupAutoMembership(): void {
+		this.#registry.onChange(() => {
+			const channel = this.#defaultChannel;
+			if (!channel) return;
+			const currentIds = new Set(channel.members);
+			const activeIds = new Set(
+				this.#registry.list()
+					.filter(ref => ref.status === 'running')
+					.map(ref => ref.id)
+			);
+			// Add new
+			for (const id of activeIds) {
+				if (!currentIds.has(id)) channel.addMember(id);
+			}
+			// Remove gone
+			for (const id of currentIds) {
+				if (!activeIds.has(id)) channel.removeMember(id);
+			}
+		});
+	}
+
+	getDefaultChannel(): CommChannel {
+		if (!this.#defaultChannel) {
+			this.#defaultChannel = new CommChannel(this, [], []);
+		}
+		return this.#defaultChannel;
 	}
 
 	// ── CommBus-migrated: channels ──

@@ -8,9 +8,9 @@
  * 1. Hook triggers (agent:beforeSpawn / agent:afterSpawn)
  * 2. Role resolution (RoleProvider)
  * 3. Context assembly (ContextPipeline)
- * 4. AgentLoopConfig assembly (transformContext, getSteeringMessages, etc.)
- * 5. Agent launch (AgentLauncher)
- *
+ * 4. AgentLoopConfig assembly (model, system prompt, tools, transformContext)
+ * 5. Persistent agent session creation via createAgentSession (native agent_invoke path)
+ * 6. AgentRegistry registration for TUI/status bar/IRC visibility
  * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
  */
 
@@ -23,6 +23,7 @@ import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
 import { CommChannel } from "../../comm";
+import { createAgentSession } from "../../sdk";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
@@ -282,8 +283,12 @@ export class AgentRuntime {
 	 * 2. RoleProvider.resolve(spec)
 	 * 3. ContextPipeline.assemble(spec, phase, base)
 	 * 4. Build AgentLoopConfig hooks from CommChannel-backed queues
-	 * 5. AgentLauncher.launch(launchContext)
-	 * 6. HookPipeline.trigger("agent:afterSpawn")
+	 * 5. Resolve model, build system prompt, resolve tools
+	 * 6. createAgentSession({ agentKind: "persistent", ... }) — native persistent agent path
+	 * 7. Register in AgentRegistry.global() for TUI/status bar/IRC visibility
+	 * 8. Wire AgentRuntime, aside messages, role, CommChannel
+	 * 9. HookPipeline.trigger("agent:afterSpawn")
+	 * 10. session.prompt(spec.task) — blocks until completion
 	 */
 	async #spawnOne(spec: AgentSpec): Promise<AgentSession> {
 		const agentId = spec.id;
@@ -366,62 +371,123 @@ export class AgentRuntime {
 			},
 		};
 
-		// 4.5 Register persistent agent in global AgentRegistry
-		if (spec.profileId) {
+		// 5. Resolve model (model resolution previously in AgentLauncher)
+		const availableModels = this.#modelRegistry.getAvailable();
+		const model =
+			spec.modelPreference === "smartest"
+				? availableModels
+						.slice()
+						.sort(
+							(a, b) =>
+								(typeof b.contextWindow === "number" ? b.contextWindow : 0) -
+								(typeof a.contextWindow === "number" ? a.contextWindow : 0),
+						)[0] ?? availableModels[0]
+				: availableModels[0];
+		if (!model) {
+			throw new Error(`[AgentRuntime] No available model for agent "${spec.id}"`);
+		}
+
+		// 6. Build system prompt (previously in AgentLauncher.#buildSystemPrompt)
+		const promptParts: string[] = [];
+		if (resolvedRole.systemPrompt) {
+			promptParts.push(resolvedRole.systemPrompt);
+		}
+		if (resolvedRole.guidelines.length > 0) {
+			promptParts.push("\n## Guidelines");
+			for (const g of resolvedRole.guidelines) {
+				promptParts.push(`- ${g}`);
+			}
+		}
+		if (assembledContext.systemPrompt) {
+			promptParts.push(`\n${assembledContext.systemPrompt}`);
+		}
+		const systemPrompt = promptParts.join("\n");
+
+		// 7. Resolve tool names (merging role + context + spec-injected tools)
+		const toolSet = new Set<string>();
+		for (const t of resolvedRole.tools) toolSet.add(t);
+		for (const t of assembledContext.tools) toolSet.add(t);
+		for (const t of spec.tools ?? []) toolSet.add(t);
+		const toolNames = [...toolSet];
+
+		// 8. Build transformContext from ContextPipeline (SP-7)
+		const transformCtx = this.#contextPipeline.toTransformContext(assembledContext, {});
+
+		// 9. Create persistent agent session via createAgentSession (same path as agent_invoke)
+		let session: AgentSession;
+		try {
+			const result = await createAgentSession({
+				agentKind: "persistent",
+				persistentProfileId: spec.id,
+				model,
+				systemPrompt: [systemPrompt],
+				toolNames,
+				modelRegistry: this.#modelRegistry,
+				agentId: spec.id,
+				agentDisplayName: spec.id,
+				settings: this.#settings,
+				transformContext: transformCtx,
+				disableExtensionDiscovery: true,
+				enableMCP: false,
+				enableLsp: false,
+				hasUI: false,
+				autoApprove: true,
+				hasIrcInterrupts: true,
+				getSteeringMessages: hookProviders.getSteeringMessages,
+				getFollowUpMessages: hookProviders.getFollowUpMessages,
+			});
+			session = result.session;
+
+			// Register in global AgentRegistry for TUI/status bar/IRC visibility
 			AgentRegistry.global().register({
 				id: spec.id,
 				displayName: spec.id,
-				kind: "persistent",
-				parentId: "Main",
-				session: null,
-				sessionFile: null,
-				profileId: spec.profileId,
+				kind: "persistent" as const,
+				profileId: spec.id,
 				role: spec.role,
+				session,
+				parentId: "Main",
+				sessionFile: null,
 			});
-		}
-
-		// 5. Build launch context and launch
-		const launchContext: LaunchContext = {
-			spec,
-			resolvedRole,
-			assembledContext,
-			hookProviders,
-			modelRegistry: this.#modelRegistry,
-			settings: this.#settings,
-			activityLogger: this.#activityLogger,
-			toolRegistry: this.#toolRegistry,
-			agentRuntime: this,
-			pipeline: this.#contextPipeline,
-		};
-
-		let session: AgentSession;
-		try {
-			session = await this.#launcher.launch(launchContext);
-
-			// 5.5 Store session for persistent agent steering/reuse
-			if (spec.profileId) {
-				AgentRegistry.global().setHandle(spec.id, session);
-			}
 		} catch (err) {
-			logger.error("[AgentRuntime] Agent launch failed", {
+			logger.error("[AgentRuntime] Agent session creation failed", {
 				agentId,
 				error: err instanceof Error ? err.message : String(err),
 			});
 			throw err;
 		}
 
-		// 5.6 Register agent in the runtime-level CommChannel
+		// 10. Wire AgentRuntime into the session's tool context (agent_invoke / spawn / steer)
+		session.setToolContextAgentRuntime(this);
+
+		// 11. Wire aside message provider (system notifications from CommBus)
+		if (hookProviders.getAsideMessages) {
+			session.agent.setAsideMessageProvider(hookProviders.getAsideMessages);
+		}
+
+		// 12. Set agent identity on the session for swarm tracking
+		session.role = spec.role;
+
+		// 13. Register agent in the runtime-level CommChannel
 		this.#commChannel.addMember(agentId);
 
-		// 6. After-spawn hook
+		// 14. After-spawn hook
 		await this.#hookPipeline.trigger(
 			"agent:afterSpawn",
 			{ agentId, role: spec.role, session },
 			{ agentId, phase: spec.phase ?? "stage" },
 		);
 
-		// 6.5 Persistent agent lifecycle: status is tracked by AgentSession.status
-		//     and surfaced via AgentRegistry — no explicit wiring needed.
+		// 15. Start the agent — prompt() blocks until the agent completes
+		try {
+			await session.prompt(spec.task);
+		} catch (err) {
+			logger.error("[AgentRuntime] Agent prompt failed", {
+				agentId,
+				error: err instanceof Error ? err.message : String(err),
+			});
+			throw err;
+		}
 
 		return session;
 	}
