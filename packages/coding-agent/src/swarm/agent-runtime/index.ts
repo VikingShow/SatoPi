@@ -148,7 +148,6 @@ export class AgentRuntime {
 	constructor(options: AgentRuntimeOptions) {
 		this.#roleProvider = options.roleProvider;
 		this.#contextPipeline = options.contextPipeline;
-		this.#launcher = options.launcher;
 		this.#ircBus = options.ircBus!;
 		this.#hookPipeline = options.hookPipeline;
 		this.#settings = options.settings;
@@ -351,6 +350,7 @@ export class AgentRuntime {
 		}
 
 		// 4. Build AgentLoopConfig hook providers from CommChannel-backed queues
+		const hookProviders = {
 			getAsideMessages: async () => {
 				const queue = this.#asideQueues.get(agentId);
 				if (!queue || queue.length === 0) return [];
