@@ -144,6 +144,7 @@ import type { HookSelectorComponent, HookSelectorSlider } from "./components/hoo
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
+import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -552,6 +553,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
+	#swarmSidebar?: SwarmSidebar;
+	#swarmSidebarHandle?: OverlayHandle;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
@@ -4545,7 +4548,28 @@ export class InteractiveMode implements InteractiveModeContext {
 			margin: 0,
 			fullscreen: true,
 		});
-		this.ui.setFocus(overlay);
+
+	}
+	showSwarmSidebar(): void {
+		if (this.#swarmSidebarHandle) {
+			this.#swarmSidebarHandle.hide();
+			this.#swarmSidebarHandle = undefined;
+			this.#swarmSidebar = undefined;
+			this.ui.requestRender();
+			return;
+		}
+		const sidebar = new SwarmSidebar({
+			onSelectAgent: (_agentId: string) => {},
+			onClose: () => this.showSwarmSidebar(),
+			onRequestRender: () => this.ui.requestRender(),
+		}, theme);
+		this.#swarmSidebar = sidebar;
+		this.#swarmSidebarHandle = this.ui.showOverlay(sidebar, {
+			width: "35%",
+			anchor: "left-center",
+			margin: 1,
+		});
+		this.ui.setFocus(sidebar);
 		this.ui.requestRender();
 	}
 
