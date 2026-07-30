@@ -37,6 +37,7 @@ import { StageBehavior } from "../../graph/behaviors/stage-behavior";
 import { ExperienceStore } from "../../experience/experience";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
+import { OffloadManager } from "../../offload/manager";
 import { DebateRoundtable, type DebateRoundtableResult } from "../script/debate-roundtable";
 import { getSessionPlanPath } from "../script/plan-paths";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
@@ -237,6 +238,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#runtime!: AgentRuntime;
 	/** Stigmergic MarkEnvironment from orchestrator runtime. */
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
+	#offloadManager?: OffloadManager;
 	#markEnv?: MarkEnvironment;
 	#planContent = "";
 	#planReady = false;
@@ -301,6 +303,10 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		// 2. Create SwarmSessionManager for persistence
 		this.#sessionManager = await SwarmSessionManager.create(swarmDir);
 
+		// 2.5 Create OffloadManager for L1→L3 context offload
+		const offloadManager = new OffloadManager(workspace, swarmName, "swarm", this.#sessionManager.storage);
+		this.#offloadManager = offloadManager;
+
 		// 3. Create StateTracker
 		const swarmName = path.basename(swarmDir);
 
@@ -344,6 +350,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 			profileRegistry,
 			activeMmd: this.#config.activeMmd,
 			ircBus: IrcBus.global(),
+			offloadManager,
 		});
 		this.#hookPipeline = orch.hookPipeline;
 		this.#markEnv = orch.markEnvironment;
