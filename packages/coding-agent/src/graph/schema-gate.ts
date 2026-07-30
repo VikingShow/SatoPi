@@ -15,8 +15,8 @@ export type {
 	RetryOnFailure,
 	RetrySpec,
 	RetryStrategy,
-} from "../../graph/types";
-export { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "../../graph/types";
+} from "./types";
+export { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "./types";
 
 import type {
 	GateMode,
@@ -27,8 +27,8 @@ import type {
 	RetryOnFailure,
 	RetrySpec,
 	RetryStrategy,
-} from "../../graph/types";
-import { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "../../graph/types";
+} from "./types";
+import { VALID_GATE_MODES, VALID_GATE_TYPES, VALID_ON_FAILURE, VALID_RETRY_STRATEGIES } from "./types";
 
 // ============================================================================
 // Normalisation helpers

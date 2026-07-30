@@ -6,7 +6,7 @@
  * dependencies, and structural correctness before execution.
  */
 
-import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { AgentSpec } from "../../graph/agent-spec";
 import { detectCycles } from "../core/dag";
 import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 

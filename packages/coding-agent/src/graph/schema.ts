@@ -6,12 +6,12 @@
  * dependencies, and structural correctness before execution.
  */
 
-import type { AgentSpec } from "../agent-runtime/agent-spec";
-import { detectCycles } from "../core/dag";
+import type { AgentSpec } from "./agent-spec";
+import { detectCycles } from "../swarm/core/dag";
 import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 
 // Re-export all graph types from the canonical location.
-export * from "../../graph/types";
+export * from "./types";
 
 // Local imports needed for runtime function signatures and NodeBehavior.
 import type {
@@ -30,8 +30,8 @@ import type {
 	RawGateSpec,
 	RawRetrySpec,
 	Strategy,
-} from "../../graph/types";
-import { VALID_GATE_MODES, VALID_GATE_TYPES } from "../../graph/types";
+} from "./types";
+import { VALID_GATE_MODES, VALID_GATE_TYPES } from "./types";
 
 /**
  * Pluggable behavior contract for a single Theatre Graph node.

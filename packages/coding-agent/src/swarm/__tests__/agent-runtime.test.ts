@@ -86,7 +86,7 @@ import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
 import { AgentLauncher, type LaunchContext } from "../agent-runtime/agent-launcher";
 // Module under test
-import type { AgentSpec, AgentSpecInline } from "../agent-runtime/agent-spec";
+import type { AgentSpec, AgentSpecInline } from "../../graph/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
 import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../../hooks/hook-pipeline";

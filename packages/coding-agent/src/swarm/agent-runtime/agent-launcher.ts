@@ -26,7 +26,7 @@ import type { AgentSession } from "../../session/agent-session";
 import type { Tool, ToolSession } from "../../tools";
 import type { AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
-import type { AgentSpec } from "./agent-spec";
+import type { AgentSpec } from "../../graph/agent-spec";
 import type { AgentRuntime } from "./index";
 
 // ============================================================================

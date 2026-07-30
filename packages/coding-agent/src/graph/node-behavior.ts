@@ -21,7 +21,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../swarm/agent-runtime";
-import type { AgentSpec } from "../swarm/agent-runtime/agent-spec";
+import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";

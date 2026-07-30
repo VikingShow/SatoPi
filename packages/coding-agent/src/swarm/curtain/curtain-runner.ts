@@ -15,7 +15,7 @@ import type { RoleAssetManager } from "../../agent/role-asset";
 import { IrcBus } from "../../irc/bus";
 import { enqueueMemoryConsolidation } from "../../memories";
 import type { AgentRuntime } from "../agent-runtime";
-import type { AgentSpec } from "../agent-runtime/agent-spec";
+import type { AgentSpec } from "../../graph/agent-spec";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import {

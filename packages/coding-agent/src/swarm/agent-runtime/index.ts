@@ -28,7 +28,7 @@ import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-ma
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { AgentLauncher, LaunchContext } from "./agent-launcher";
-import type { AgentSpec } from "./agent-spec";
+import type { AgentSpec } from "../../graph/agent-spec";
 
 // ============================================================================
 // Types
