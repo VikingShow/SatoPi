@@ -79,18 +79,33 @@ export class StageBehavior implements PhaseBehavior {
 
 	async enter(ctx: PhaseContext): Promise<PhaseEnterResult> {
 		// 1. Parse plan → task assignments
-		const rawTasks = TaskQueue.parseFromPlan(ctx.planContent ?? "");
-		this.#taskQueue = new TaskQueue(rawTasks);
+		const allTasks = TaskQueue.parseFromPlan(ctx.planContent ?? "");
+
+		// Filter out planner tasks: Script phase (MAIN model) already handled planning.
+		// There is no need to spawn a separate planner agent in Stage.
+		const execTasks = allTasks.filter(t => t.assignedRole !== "planner");
+
+		// Edge case: if ALL tasks were planner, remap them to implementer to avoid
+		// a zero-agent stage.
+		const tasks =
+			execTasks.length > 0
+				? execTasks
+				: allTasks.map(t => ({ ...t, assignedRole: "implementer" as const }));
+
+		this.#taskQueue = new TaskQueue(tasks);
 
 		logger.info("[StageBehavior] Parsed tasks from plan", {
-			taskCount: rawTasks.length,
-			taskIds: rawTasks.map(t => t.id),
+			taskCount: allTasks.length,
+			plannerTasksSkipped: allTasks.length - execTasks.length,
+			execTaskCount: tasks.length,
+			taskIds: tasks.map(t => t.id),
 		});
 
 		// 2. Determine agent IDs and roles from tasks
-		//    Each unique assignedRole gets one agent (with role defaulting to "worker")
+		//    Each unique assignedRole gets one agent (with role defaulting to "worker").
+		//    Planner tasks have already been filtered out above.
 		const roleSet = new Set<string>();
-		for (const task of rawTasks) {
+		for (const task of tasks) {
 			roleSet.add(task.assignedRole);
 		}
 
@@ -122,7 +137,7 @@ export class StageBehavior implements PhaseBehavior {
 		// 5. Spawn all worker agents in parallel
 		const specs = roles.map((role, i) => {
 			// Find a task assigned to this role as the initial task
-			const roleTasks = rawTasks.filter(t => t.assignedRole === role);
+			const roleTasks = tasks.filter(t => t.assignedRole === role);
 			const initialTask =
 				roleTasks.length > 0 ? roleTasks.map(t => t.title).join("; ") : "Execute build tasks as assigned";
 
@@ -158,7 +173,7 @@ export class StageBehavior implements PhaseBehavior {
 		return {
 			agents: sessions,
 			channels: [channel],
-			initialUIMessage: `Stage started with ${sessions.length} workers on ${rawTasks.length} tasks.`,
+			initialUIMessage: `Stage started with ${sessions.length} workers on ${tasks.length} tasks.`,
 		};
 	}
 

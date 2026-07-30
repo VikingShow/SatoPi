@@ -35,6 +35,8 @@ import type { EventBus } from "../utils/event-bus";
 import { WebSearchTool } from "../web/search";
 import type { WorkspaceTree } from "../workspace-tree";
 import { agentInvokeTool } from "./agent-invoke";
+import { AgentForkTool } from "./agent-fork-tool";
+import { AgentBroadcastTool, AgentPeersTool, AgentQueryAllTool, AgentQueryMajorityTool, AgentRoundtableTool } from "./agent-channel-tools";
 import { AskTool } from "./ask";
 import { AstEditTool } from "./ast-edit";
 import { AstGrepTool } from "./ast-grep";
@@ -484,6 +486,12 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	learn: LearnTool.createIf,
 	manage_skill: ManageSkillTool.createIf,
 	agent_invoke: () => agentInvokeTool,
+	agent_fork: () => new AgentForkTool(),
+	agent_broadcast: s => new AgentBroadcastTool(),
+	agent_query_all: s => new AgentQueryAllTool(),
+	agent_query_majority: s => new AgentQueryMajorityTool(),
+	agent_roundtable: s => new AgentRoundtableTool(),
+	agent_peers: s => new AgentPeersTool(),
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
@@ -639,6 +647,7 @@ export async function createTools(
 			return ["hindsight", "mnemopi"].includes(session.settings.get("memory.backend") ?? "");
 		}
 		if (name === "manage_skill") return session.settings.get("autolearn.enabled") && (session.taskDepth ?? 0) === 0;
+		if (name === "agent_fork") return true;
 		if (name === "learn") {
 			return (
 				session.settings.get("autolearn.enabled") &&
@@ -648,6 +657,16 @@ export async function createTools(
 		}
 		if (name === "task") {
 			return canSpawnAtDepth(session.settings.get("task.maxRecursionDepth") ?? 2, session.taskDepth ?? 0);
+		}
+		// Swarm agent channel tools: always allowed (graceful degradation when no swarm)
+		if (
+			name === "agent_broadcast" ||
+			name === "agent_query_all" ||
+			name === "agent_query_majority" ||
+			name === "agent_roundtable" ||
+			name === "agent_peers"
+		) {
+			return true;
 		}
 		return true;
 	};

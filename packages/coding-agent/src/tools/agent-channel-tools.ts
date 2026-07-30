@@ -57,12 +57,8 @@ declare module "@satopi/pi-agent-core" {
 function resolveChannel(context?: AgentToolContext): CommChannel | undefined {
 	if (context?.commChannel) return context.commChannel;
 
-	// Fallback: create a minimal channel from global IrcBus
-	const bus = IrcBus.global();
-	if (!bus) return undefined;
-
-	// Use an empty channel — the tool will populate as needed
-	return new CommChannel(bus, [], []);
+	// Fallback: use the default channel from the global IrcBus
+	return IrcBus.global()?.getDefaultChannel();
 }
 
 // ============================================================================

@@ -12,10 +12,8 @@
  *   steer()          → forwards to current PhaseBehavior.handleHumanMessage
  *   applaud()        → forwards to CurtainBehavior (dismiss / applaud)
  *   dispose()        → tears down all services, exits current behavior
- *
- * Phase transitions are driven by behavior.checkCompletion() polling:
- *   ScriptBehavior → StageBehavior → CurtainBehavior → idle
- *
+ * Phase transitions are event-driven: agent completion events trigger
+ * immediate checkCompletion(). A 5s polling safety net guards edge cases.
  * ## Integration
  *   agent-session.ts  → creates bridge on magic keyword, calls init()
  *   interactive-mode.ts → reads bridge state for dashboard, status line
@@ -258,6 +256,8 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#lifecyclePromise: Promise<void> | null = null;
 	/** Resolver for #lifecyclePromise — set when a phase lifecycle is in flight. */
 	#lifecycleResolve: (() => void) | null = null;
+	/** Resolver for the poll timer — triggered immediately when an agent event signals phase completion. */
+	#pollResolve: (() => void) | null = null;
 	/** Set to true when confirmScript() successfully starts the Stage phase. */
 	#stageStarted = false;
 
@@ -370,6 +370,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#disposed = true;
 		this.#abortController?.abort();
 		this.#applaudResolve?.();
+		this.#pollResolve?.();
 		// Wait for active lifecycle to settle
 		if (this.#lifecyclePromise) {
 			try {
@@ -438,7 +439,18 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 					const ctx = this.#buildPhaseContext();
 					this.#currentBehavior
 						?.handleAgentEvent({ agentId: agent.id, status, result: event }, ctx)
-						.catch(err => logger.error("handleAgentEvent failed", { error: String(err) }));
+						.catch(err => logger.error("handleAgentEvent failed", { error: String(err) }))
+						.then(() => {
+							// Event-driven transition: check completion immediately
+							if (this.#currentBehavior && this.#pollResolve) {
+								this.#currentBehavior
+									.checkCompletion(this.#buildPhaseContext())
+									.then(completion => {
+										if (completion) this.#pollResolve?.();
+									})
+									.catch(() => {});
+							}
+						});
 				}
 			});
 			this.#agentUnsubscribes.push(unsub);
@@ -451,14 +463,16 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#agentUnsubscribes = [];
 	}
 
-	// ── Phase lifecycle runner ─────────────────────────────────────────────
-
 	/**
 	 * Run the full phase lifecycle loop starting from a given behavior.
 	 *
-	 * Polls checkCompletion() every 750ms. When a phase completes, transitions
-	 * the FSM, exits the old behavior, enters the next, and continues.
-	 * Resolves the stored lifecycle promise when idle is reached.
+	 * Primary path: agent events (via #wireAgentEvents) trigger immediate
+	 * checkCompletion() after handleAgentEvent(). The polling timer is a
+	 * 5s safety net for edge cases where an event might be missed.
+	 *
+	 * When a phase completes, transitions the FSM, exits the old behavior,
+	 * enters the next, and continues. Resolves the stored lifecycle promise
+	 * when idle is reached.
 	 */
 	async #runPhaseLifecycle(startBehavior: PhaseBehavior, ctx: PhaseContext): Promise<void> {
 		let behavior = startBehavior;
@@ -466,8 +480,14 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 
 		while (!this.#disposed) {
 			const { promise: pollPromise, resolve: pollResolve } = Promise.withResolvers<void>();
-			const timer = setTimeout(pollResolve, 750);
-			await pollPromise;
+			const timer = setTimeout(pollResolve, 5000);
+			// Store resolver so agent event handlers can trigger immediate transition
+			this.#pollResolve = pollResolve;
+			try {
+				await pollPromise;
+			} finally {
+				this.#pollResolve = null;
+			}
 			clearTimeout(timer);
 
 			if (this.#disposed) return;
