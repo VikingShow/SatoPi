@@ -1,37 +1,26 @@
+/**
+ * CrewManager — Lifecycle manager for agent group chats (crews).
+ *
+ * Each crew wraps a CommChannel for messaging and persists state as
+ * JSON files in `crewsDir`.  Supports create, join, leave, dispose,
+ * and restore-from-disk workflows.
+ */
+
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { logger } from "@satopi/pi-utils";
+import { logger, Snowflake } from "@satopi/pi-utils";
 import { CommChannel } from "../comm/comm-channel";
 import type { IrcBus } from "../irc/bus";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 
-/**
- * CrewManager — Manages persistent agent group chats (crews).
- *
- * A Crew is a named subset of agents with a shared CommChannel.
- * Crews are persisted to disk and survive swarm restarts.
- * Human is auto-added as observer when a crew is created by an agent.
- *
- * ## Persistence
- *   Crew metadata: {swarm-dir}/crews/{crew-id}.json
- *   Crew transcript: {swarm-dir}/crews/{crew-id}.jsonl
- *
- * ## Lifecycle
- *   createCrew(name, members) → crewId
- *   addMember(crewId, agentId) → join notification
- *   removeMember(crewId, agentId) → leave notification
- *   getCrew(crewId) → crew state + channel
- *   listCrews() → all crew summaries
-
-
 // ============================================================================
-// Types
+// Public types
 // ============================================================================
 
 export interface CrewMember {
 	agentId: string;
-	joinedAt: number;
+	role: "member" | "observer";
 }
 
 export interface CrewState {
@@ -39,15 +28,12 @@ export interface CrewState {
 	name: string;
 	members: CrewMember[];
 	createdAt: number;
-	/** Whether this crew was created by an agent (auto-adds human as observer). */
-	agentCreated: boolean;
 }
 
 export interface CrewSummary {
 	id: string;
 	name: string;
 	memberCount: number;
-	createdAt: number;
 }
 
 // ============================================================================
@@ -57,10 +43,10 @@ export interface CrewSummary {
 export class CrewManager {
 	readonly #crewsDir: string;
 	readonly #ircBus: IrcBus;
-	readonly #hookPipeline?: HookPipeline;
-	readonly #activityLogger?: ActivityLogger;
-	readonly #channels = new Map<string, CommChannel>();
-	readonly #states = new Map<string, CrewState>();
+	readonly #hookPipeline: HookPipeline | undefined;
+	readonly #activityLogger: ActivityLogger | undefined;
+
+	readonly #crews = new Map<string, { state: CrewState; channel: CommChannel }>();
 
 	constructor(
 		crewsDir: string,
@@ -73,197 +59,159 @@ export class CrewManager {
 		this.#activityLogger = opts?.activityLogger;
 	}
 
-	// ==========================================================================
-	// Persistence
-	// ==========================================================================
-
-	private crewPath(crewId: string): string {
-		return path.join(this.#crewsDir, `${crewId}.json`);
-	}
-
-	private transcriptPath(crewId: string): string {
-		return path.join(this.#crewsDir, `${crewId}.jsonl`);
-	}
-
-	async #saveState(crewId: string): Promise<void> {
-		const state = this.#states.get(crewId);
-		if (!state) return;
-		await fs.mkdir(this.#crewsDir, { recursive: true });
-		await fs.writeFile(this.crewPath(crewId), JSON.stringify(state, null, 2), "utf-8");
-	}
-
-	async #loadState(crewId: string): Promise<CrewState | null> {
-		try {
-			const raw = await fs.readFile(this.crewPath(crewId), "utf-8");
-			return JSON.parse(raw) as CrewState;
-		} catch {
-			return null;
-		}
-	}
-
-	// ==========================================================================
+	// ========================================================================
 	// Public API
-	// ==========================================================================
+	// ========================================================================
 
-	/**
-	 * Create a new crew.
-	 *
-	 * @param name Human-readable crew name.
-	 * @param memberIds Initial agent members.
-	 * @param agentCreated Whether this crew was created by an agent (default false).
-	 *   When true, human is auto-added as observer.
-	 * @returns The crew ID.
-	 */
-	async createCrew(name: string, memberIds: string[], agentCreated = false): Promise<string> {
-		const crewId = `crew-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-		const now = Date.now();
+	/** Create a new crew.  Human is always added as observer. */
+	async createCrew(name: string, members: string[], agentCreated?: boolean): Promise<string> {
+		const crewId = Snowflake.generate();
+
+		const crewMembers: CrewMember[] = [];
+		for (const agentId of members) {
+			crewMembers.push({ agentId, role: "member" });
+		}
+		// Ensure human is not duplicated
+		if (!crewMembers.some(m => m.agentId === "human")) {
+			crewMembers.push({ agentId: "human", role: "observer" });
+		}
 
 		const state: CrewState = {
 			id: crewId,
 			name,
-			members: memberIds.map(id => ({ agentId: id, joinedAt: now })),
-			createdAt: now,
-			agentCreated,
+			members: crewMembers,
+			createdAt: Date.now(),
 		};
 
-		const observers = agentCreated ? ["human"] : [];
 		const channel = new CommChannel(
 			this.#ircBus,
-			memberIds,
-			observers,
+			crewMembers.filter(m => m.role === "member").map(m => m.agentId),
+			crewMembers.filter(m => m.role === "observer").map(m => m.agentId),
 			this.#activityLogger,
 			this.#hookPipeline,
 		);
 
-		this.#states.set(crewId, state);
-		this.#channels.set(crewId, channel);
-		await this.#saveState(crewId);
+		this.#crews.set(crewId, { state, channel });
 
-		logger.info("[CrewManager] Crew created", { crewId, name, memberCount: memberIds.length, agentCreated });
+		// Persist
+		await this.#save(crewId, state);
+
+		if (agentCreated) {
+			logger.info("[CrewManager] Agent-created crew", { crewId, name, memberCount: members.length });
+		} else {
+			logger.info("[CrewManager] Crew created", { crewId, name, memberCount: members.length });
+		}
+
 		return crewId;
 	}
 
-	/**
-	 * Add a member to an existing crew.
-	 * Broadcasts a join notification to all members.
-	 */
+	/** Add an agent as a member. */
 	async addMember(crewId: string, agentId: string): Promise<void> {
-		const state = this.#states.get(crewId);
-		const channel = this.#channels.get(crewId);
-		if (!state || !channel) {
-			throw new Error(`Crew "${crewId}" not found`);
+		const entry = this.#crews.get(crewId);
+		if (!entry) throw new Error(`Crew "${crewId}" not found`);
+
+		if (!entry.state.members.some(m => m.agentId === agentId)) {
+			entry.state.members.push({ agentId, role: "member" });
+			entry.channel.addMember(agentId);
+			await this.#save(crewId, entry.state);
 		}
-
-		if (state.members.some(m => m.agentId === agentId)) {
-			return; // Already a member
-		}
-
-		state.members.push({ agentId, joinedAt: Date.now() });
-		channel.addMember(agentId);
-		await this.#saveState(crewId);
-
-		logger.info("[CrewManager] Member added", { crewId, agentId });
 	}
 
-	/**
-	 * Remove a member from a crew.
-	 * Broadcasts a leave notification to remaining members.
-	 */
+	/** Remove an agent from a crew. */
 	async removeMember(crewId: string, agentId: string): Promise<void> {
-		const state = this.#states.get(crewId);
-		const channel = this.#channels.get(crewId);
-		if (!state || !channel) {
-			throw new Error(`Crew "${crewId}" not found`);
-		}
+		const entry = this.#crews.get(crewId);
+		if (!entry) throw new Error(`Crew "${crewId}" not found`);
 
-		state.members = state.members.filter(m => m.agentId !== agentId);
-		channel.removeMember(agentId);
-		await this.#saveState(crewId);
-
-		logger.info("[CrewManager] Member removed", { crewId, agentId });
+		entry.state.members = entry.state.members.filter(m => m.agentId !== agentId);
+		entry.channel.removeMember(agentId);
+		await this.#save(crewId, entry.state);
 	}
 
-	/**
-	 * Get a crew's state and its CommChannel.
-	 * Returns undefined if the crew doesn't exist.
-	 */
+	/** Look up a crew by id. */
 	getCrew(crewId: string): { state: CrewState; channel: CommChannel } | undefined {
-		const state = this.#states.get(crewId);
-		const channel = this.#channels.get(crewId);
-		if (!state || !channel) return undefined;
-		return { state, channel };
+		return this.#crews.get(crewId);
 	}
 
-	/**
-	 * List all crew summaries (for TUI sidebar).
-	 */
+	/** List all active crews. */
 	listCrews(): CrewSummary[] {
-		return [...this.#states.values()].map(s => ({
-			id: s.id,
-			name: s.name,
-			memberCount: s.members.length,
-			createdAt: s.createdAt,
-		}));
+		const summaries: CrewSummary[] = [];
+		for (const [id, entry] of this.#crews) {
+			summaries.push({
+				id,
+				name: entry.state.name,
+				memberCount: entry.state.members.length,
+			});
+		}
+		return summaries;
 	}
 
-	/**
-	 * Dispose a crew — persist final transcript, clean up channel, remove from memory.
-	 */
+	/** Dispose a single crew and delete its persisted state. */
 	async disposeCrew(crewId: string): Promise<void> {
-		const channel = this.#channels.get(crewId);
-		if (channel) {
-			// Fire-and-forget broadcast final message
-			channel.send("system", "[System] Crew has been disbanded.").catch(() => {});
-			this.#channels.delete(crewId);
-		}
-		this.#states.delete(crewId);
-
-		// Clean up persisted state
+		this.#crews.delete(crewId);
 		try {
-			await fs.unlink(this.crewPath(crewId));
+			await fs.unlink(this.#statePath(crewId));
 		} catch {
-			// File may not exist
+			// File may not exist — that's fine.
 		}
-
-		logger.info("[CrewManager] Crew disposed", { crewId });
 	}
 
-	/**
-	 * Restore crews from disk (called on swarm restart).
-	 */
+	/** Restore all crews from disk. */
 	async restore(): Promise<void> {
 		try {
 			await fs.mkdir(this.#crewsDir, { recursive: true });
-			const files = await fs.readdir(this.#crewsDir);
+			const entries = await fs.readdir(this.#crewsDir, { withFileTypes: true });
+			const files = entries.filter(e => e.isFile() && e.name.endsWith(".json"));
+
 			for (const file of files) {
-				if (!file.endsWith(".json")) continue;
-				const crewId = file.replace(".json", "");
-				const state = await this.#loadState(crewId);
-				if (!state) continue;
+				try {
+					const raw = await fs.readFile(path.join(this.#crewsDir, file.name), "utf-8");
+					const state: CrewState = JSON.parse(raw);
 
-				const observers = state.agentCreated ? ["human"] : [];
-				const channel = new CommChannel(
-					this.#ircBus,
-					state.members.map(m => m.agentId),
-					observers,
-					this.#activityLogger,
-					this.#hookPipeline,
-				);
+					if (!state.id || !state.members) continue; // skip corrupt
 
-				this.#states.set(crewId, state);
-				this.#channels.set(crewId, channel);
+					const channel = new CommChannel(
+						this.#ircBus,
+						state.members.filter(m => m.role === "member").map(m => m.agentId),
+						state.members.filter(m => m.role === "observer").map(m => m.agentId),
+						this.#activityLogger,
+						this.#hookPipeline,
+					);
+
+					this.#crews.set(state.id, { state, channel });
+				} catch {
+					logger.warn("[CrewManager] Failed to restore crew file", { file: file.name });
+				}
 			}
-			logger.info("[CrewManager] Restored crews", { count: this.#states.size });
+
+			logger.info("[CrewManager] Restored crews", { count: this.#crews.size });
 		} catch (err) {
-			logger.warn("[CrewManager] Failed to restore crews", { error: String(err) });
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+				logger.warn("[CrewManager] Failed to read crews directory", { error: String(err) });
+			}
 		}
 	}
 
-	/**
-	 * Dispose all crews.
-	 */
+	/** Dispose all crews and remove persisted state files. */
 	async disposeAll(): Promise<void> {
-		const ids = [...this.#states.keys()];
-		await Promise.all(ids.map(id => this.disposeCrew(id)));
+		for (const crewId of [...this.#crews.keys()]) {
+			await this.disposeCrew(crewId);
+		}
+	}
+
+	// ========================================================================
+	// Internals
+	// ========================================================================
+
+	#statePath(crewId: string): string {
+		return path.join(this.#crewsDir, `${crewId}.json`);
+	}
+
+	async #save(crewId: string, state: CrewState): Promise<void> {
+		try {
+			await fs.mkdir(this.#crewsDir, { recursive: true });
+			await fs.writeFile(this.#statePath(crewId), JSON.stringify(state, null, 2), "utf-8");
+		} catch (err) {
+			logger.warn("[CrewManager] Failed to persist crew state", { crewId, error: String(err) });
+		}
 	}
 }
