@@ -439,7 +439,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 			if (!node.gate) {
 				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-				return { nodeId, success: behaviorResult.success, error: behaviorResult.error };
+				return { nodeId, success: behaviorResult.success, output: behaviorResult.output, artifacts: behaviorResult.artifacts, error: behaviorResult.error };
 			}
 
 			let lastGateResult = await this.#gateController.runGate(
@@ -452,7 +452,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				const action = await this.#gateController.handleGateFailure(node, lastGateResult, attempt);
 				if (action.type === "continue") {
 					await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-					return { nodeId, success: true };
+					return { nodeId, success: true, output: behaviorResult.output, artifacts: behaviorResult.artifacts };
 				}
 				if (action.type === "block") {
 					await this.#stateTracker.updateAgent(nodeId, { status: "failed", error: action.reason });
@@ -470,7 +470,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			}
 			if (lastGateResult.passed) {
 				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-				return { nodeId, success: true };
+				return { nodeId, success: true, output: behaviorResult.output, artifacts: behaviorResult.artifacts };
 			}
 			return { nodeId, success: false, error: lastGateResult.errors.join("; ") };
 		} catch (err) {

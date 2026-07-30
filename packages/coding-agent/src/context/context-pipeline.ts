@@ -225,11 +225,16 @@ export class ContextPipeline {
 	 */
 	toTransformContext(
 		assembled: AssembledContext,
-		opts?: { compactWindow?: number; agentId?: string },
+		opts?: {
+			compactWindow?: number;
+			agentId?: string;
+			offloadManager?: { getOffloadSummaries(): Promise<Map<string, string>> };
+		},
 	): Exclude<AgentLoopConfig["transformContext"], undefined> {
 		const injected = assembled.injectedMessages;
 		const hookPipeline = this.#hookPipeline;
 		const agentId = opts?.agentId;
+		const offloadManager = opts?.offloadManager;
 		return async (messages: AgentMessage[], _signal?: AbortSignal): Promise<AgentMessage[]> => {
 			// Hook: context:beforeInjection
 			if (hookPipeline) {
@@ -253,7 +258,8 @@ export class ContextPipeline {
 					await hookPipeline.trigger("context:beforeCompaction", { agentId }, ctx);
 				}
 
-				const compacted = compactContext(result, new Map(), {
+				const summaries = offloadManager ? await offloadManager.getOffloadSummaries() : new Map();
+				const compacted = compactContext(result, summaries, {
 					...DEFAULT_COMPACT_CONFIG,
 					contextWindow: opts.compactWindow,
 				});

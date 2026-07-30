@@ -14,7 +14,7 @@ import { logger } from "@satopi/pi-utils";
 import type { CheckpointStore } from "./checkpoint";
 import type { NodeRunner, SchedulerNodeInfo } from "./graph-executor";
 import { WaveScheduler } from "./graph-executor";
-import type { GraphDefinition, NodeExecutionOutput, NodeResult, NodeStatus } from "./types";
+import type { GraphDefinition, GraphEdge, NodeExecutionOutput, NodeResult, NodeStatus } from "./types";
 
 // ============================================================================
 // NodeExecutor — per-node execution contract
@@ -93,22 +93,76 @@ export interface GraphRunResult {
 // Helpers
 // ============================================================================
 
+/** Simple glob matcher: supports trailing wildcard (e.g. "*.ts") and exact match. */
+function matchGlob(pattern: string, candidate: string): boolean {
+	// Exact match
+	if (!pattern.includes("*")) return pattern === candidate;
+	// Suffix match: "*.ext" → candidate ends with ".ext"
+	if (pattern.startsWith("*.") && !pattern.slice(2).includes("*")) {
+		return candidate.endsWith(pattern.slice(1));
+	}
+	// Prefix match: "prefix*"
+	if (pattern.endsWith("*") && !pattern.slice(0, -1).includes("*")) {
+		return candidate.startsWith(pattern.slice(0, -1));
+	}
+	// Fallback: exact match
+	return pattern === candidate;
+}
+
 /**
  * Build upstream-output map from a node's dependency list and
  * the accumulated results of already-executed nodes.
+ *
+ * Artifact filtering: for each (from → to) edge with `artifacts` defined,
+ * only artifact paths matching at least one glob pattern are passed through.
+ * When no edge exists or the edge has no artifact filter, all artifacts pass.
+ * When an upstream node produced `output` text but no explicit `artifacts`,
+ * a synthetic `"output.txt"` artifact is injected so downstream nodes can
+ * always reference upstream text output.
  */
 function buildUpstreamOutputs(
 	dependsOn: string[] | undefined,
 	resultsMap: Map<string, NodeResult>,
+	edges: GraphEdge[] | undefined,
+	targetNodeId: string,
 ): Record<string, NodeExecutionOutput> {
 	if (!dependsOn || dependsOn.length === 0) return {};
+
+	// Index edges by (from → to) for O(1) lookup per dependency.
+	const edgeMap = new Map<string, GraphEdge>();
+	if (edges) {
+		for (const edge of edges) {
+			edgeMap.set(`${edge.from}→${edge.to}`, edge);
+		}
+	}
+
 	const outputs: Record<string, NodeExecutionOutput> = {};
 	for (const depId of dependsOn) {
 		const result = resultsMap.get(depId);
 		if (!result) continue;
+
+		// Determine artifact paths: use explicit artifacts, or fall back to
+		// a synthetic "output.txt" when the node produced text output.
+		let artifactPaths: string[];
+		if (result.artifacts && result.artifacts.length > 0) {
+			artifactPaths = result.artifacts;
+		} else if (result.output) {
+			artifactPaths = ["output.txt"];
+		} else {
+			artifactPaths = [];
+		}
+
+		// Filter by edge artifact globs.
+		const edge = edgeMap.get(`${depId}→${targetNodeId}`);
+		if (edge?.artifacts && edge.artifacts.length > 0) {
+			artifactPaths = artifactPaths.filter((p) =>
+				edge.artifacts!.some((pattern) => matchGlob(pattern, p)),
+			);
+		}
+
 		outputs[depId] = {
 			nodeId: depId,
-			artifacts: [],
+			artifacts: artifactPaths,
 			summary: result.output ?? result.error ?? "",
 			result: result.output ?? "",
 		};
@@ -214,7 +268,6 @@ export class GraphEngine {
 			// WaveScheduler throws when a hard failure aborts the wave.
 			// Node-level errors are already captured by onNodeComplete;
 			// only add the abort when no individual errors were recorded
-			// (e.g. a wave abort from a scheduler-level edge case).
 			if (executionErrors.length === 0) {
 				const message = err instanceof Error ? err.message : String(err);
 				executionErrors.push(message);
@@ -268,7 +321,7 @@ export class GraphEngine {
 			if (!node) return { nodeId, success: false, error: `Unknown node: ${nodeId}` };
 
 			// Build upstream outputs from already-executed dependencies.
-			const upstreamOutputs = buildUpstreamOutputs(node.depends_on, nodeResults);
+			const upstreamOutputs = buildUpstreamOutputs(node.depends_on, nodeResults, graph.edges, nodeId);
 
 			const execCtx: NodeExecutionContext = { upstreamOutputs, signal };
 

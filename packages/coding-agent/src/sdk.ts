@@ -2780,7 +2780,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					// Apply L3 compact context (fusion with SatoPi compaction)
 					if (effectiveOffloadManager && options.contextWindow) {
 						try {
-							const compacted = compactContext(result, new Map(), {
+							const summaries = await effectiveOffloadManager.getOffloadSummaries();
+							const compacted = compactContext(result, summaries, {
 								...DEFAULT_COMPACT_CONFIG,
 								contextWindow: options.contextWindow,
 							});
