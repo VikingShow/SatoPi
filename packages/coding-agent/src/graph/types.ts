@@ -13,7 +13,7 @@ import type { Settings } from "../config/settings";
 import type { AgentRegistry } from "../registry/agent-registry";
 import type { AgentRuntime } from "../swarm/agent-runtime";
 import type { StateTracker } from "../swarm/core/state";
-import type { ActivityLogger } from "../swarm/infra/activity-logger";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Gate discriminated unions

@@ -530,9 +530,9 @@
       "types": "./src/stt/*.ts",
       "import": "./src/stt/*.ts"
     },
-    "./swarm/activity-logger": {
-      "types": "./src/swarm/infra/activity-logger.ts",
-      "import": "./src/swarm/infra/activity-logger.ts"
+    "./infra/activity-logger": {
+      "types": "./src/infra/activity-logger.ts",
+      "import": "./src/infra/activity-logger.ts"
     },
     "./swarm/task-analyzer": {
       "types": "./src/swarm/script/task-analyzer.ts",

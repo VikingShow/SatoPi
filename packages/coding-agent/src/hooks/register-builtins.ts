@@ -11,12 +11,12 @@
  * benefit from the hooks they do have.
  */
 
-import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { MarkEnvironment } from "../../coordination";
-import type { IOffloadManager } from "../../offload/manager";
-import type { VerificationHook } from "../core/verification-hook";
-import type { ExperienceStore } from "../curtain/experience";
-import type { SwarmMnemopiAdapter } from "../infra/mnemopi-adapter";
+import type { ProfileRegistry } from "../agent/agent-profile";
+import type { MarkEnvironment } from "../coordination";
+import type { IOffloadManager } from "../offload/manager";
+import type { VerificationHook } from "../swarm/core/verification-hook";
+import type { ExperienceStore } from "../experience/experience";
+import type { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
 import { createExperienceHook } from "./builtins/experience-hook";
 import { createMnemopiHook } from "./builtins/mnemopi-hook";
 import { createOffloadHook } from "./builtins/offload-hook";

@@ -11,9 +11,9 @@
 
 import type { IrcBus } from "@satopi/pi-coding-agent/irc/bus";
 import { logger } from "@satopi/pi-utils";
-import { jaccardSimilarity } from "../core/convergence.js";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext } from "../hook-system/types";
+import { jaccardSimilarity } from "../swarm/core/convergence";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 
 // ============================================================================
 // Types

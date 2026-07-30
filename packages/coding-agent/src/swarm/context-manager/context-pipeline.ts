@@ -15,8 +15,8 @@ import type { AgentLoopConfig, AgentMessage } from "@satopi/pi-agent-core";
 import { logger } from "@satopi/pi-utils";
 import { compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
 import type { Chapter } from "../core/state";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext } from "../hook-system/types";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HookContext } from "../../hooks/types";
 
 // ============================================================================
 // Types

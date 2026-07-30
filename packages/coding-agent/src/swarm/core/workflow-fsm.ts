@@ -26,9 +26,9 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext } from "../hook-system/types";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HookContext } from "../../hooks/types";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { Chapter, StateTracker } from "./state";
 
 // ============================================================================

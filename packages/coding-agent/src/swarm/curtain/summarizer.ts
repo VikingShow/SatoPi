@@ -9,7 +9,7 @@
  * (manual substitution, not full Handlebars — no external deps needed).
  */
 
-import type { ExtractionResult } from "./extractor";
+import type { ExtractionResult } from "../../experience/extractor";
 
 // ============================================================================
 // Types

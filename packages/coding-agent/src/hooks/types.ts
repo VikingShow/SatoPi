@@ -12,7 +12,7 @@
  * @module hook-system/types
  */
 
-import type { Chapter } from "../core/state";
+import type { Chapter } from "../types/chapter";
 
 // ---------------------------------------------------------------------------
 // Event Taxonomy — all lifecycle events the pipeline can respond to

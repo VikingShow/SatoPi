@@ -12,7 +12,7 @@
  *   - Review verdicts (alignment issues, safety flags)
  */
 
-import type { StageResult } from "../stage/stage-controller";
+import type { StageResult } from "../swarm/stage/stage-controller";
 
 // ============================================================================
 // Types

@@ -13,8 +13,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ReviewVerdict } from "../core/pipeline-types";
-import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import type { ReviewVerdict } from "../types/pipeline-types";
+import type { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
 // ============================================================================
 // Types (imported from shared module; re-exported for backward compat)
@@ -24,9 +24,9 @@ export type {
 	ActivityBroadcaster,
 	ActivityEntry,
 	ActivityEventType,
-} from "../../session/activity-types";
+} from "../session/activity-types";
 
-import type { ActivityBroadcaster, ActivityEntry } from "../../session/activity-types";
+import type { ActivityBroadcaster, ActivityEntry } from "../session/activity-types";
 
 // ============================================================================
 // ActivityLogger

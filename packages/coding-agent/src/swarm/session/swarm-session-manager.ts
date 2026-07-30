@@ -46,7 +46,7 @@ import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager"
 import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../../session/session-storage";
 import type { AgentState, Chapter, SwarmState } from "../core/state";
-import type { ActivityEntry } from "../infra/activity-logger";
+import type { ActivityEntry } from "../../infra/activity-logger";
 
 // ============================================================================
 // Custom entry type tags

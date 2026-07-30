@@ -22,10 +22,10 @@ import type { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
 import type { Tool } from "../../tools";
-import { CommChannel } from "../comm-bus";
+import { CommChannel } from "../../comm";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { AgentLauncher, LaunchContext } from "./agent-launcher";
 import type { AgentSpec } from "./agent-spec";
 

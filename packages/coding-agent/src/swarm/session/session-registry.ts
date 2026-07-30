@@ -25,10 +25,10 @@ import type { ContextPipeline } from "../context-manager/context-pipeline";
 import { OffloadSource } from "../context-manager/sources/offload-source";
 import type { RunManager, SteeringSink } from "../core/services";
 import type { StateTracker } from "../core/state";
-import type { ExperienceStore } from "../curtain/experience";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
-import type { ActivityBroadcaster, ActivityLogger } from "../infra/activity-logger";
+import type { ExperienceStore } from "../../experience/experience";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import { registerBuiltinHooks } from "../../hooks/register-builtins";
+import type { ActivityBroadcaster, ActivityLogger } from "../../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 // NOTE: SwarmSessionManager is used at RUNTIME (openOrCreate), not just as a

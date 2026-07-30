@@ -28,7 +28,7 @@ import { StageBehavior } from "../behaviors/stage-behavior";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { WorkflowFsm } from "../core/workflow-fsm";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { createStageController, type StageResult } from "../stage/stage-controller";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";

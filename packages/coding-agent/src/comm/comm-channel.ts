@@ -12,9 +12,9 @@
  * - vote: question -> collect -> tally VOTE: patterns (delegates to runVote)
  */
 
-import type { IrcBus } from "../../irc/bus";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HookContext } from "../hook-system/types";
+import type { IrcBus } from "../irc/bus";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { type RoundtableConfig, runRoundtable } from "./roundtable";
 import { runVote } from "./vote";

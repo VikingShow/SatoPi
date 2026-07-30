@@ -10,8 +10,8 @@ import * as path from "node:path";
 import { logger } from "@satopi/pi-utils";
 import { OffloadManager } from "../../offload/manager";
 import { OffloadSource } from "../context-manager/sources/offload-source";
-import { registerBuiltinHooks } from "../hook-system/register-builtins";
-import type { ActivityBroadcaster } from "../infra/activity-logger";
+import { registerBuiltinHooks } from "../../hooks/register-builtins";
+import type { ActivityBroadcaster } from "../../infra/activity-logger";
 import type { SessionFactory, SessionServices, SharedServices } from "./session-types";
 import { SwarmSessionManager } from "./swarm-session-manager";
 

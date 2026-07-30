@@ -9,8 +9,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
-import type { ExperienceEntry, ExperienceStore } from "../../curtain/experience";
+import type { Chapter } from "../../types/chapter";
+import type { ExperienceEntry, ExperienceStore } from "../../experience/experience";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------

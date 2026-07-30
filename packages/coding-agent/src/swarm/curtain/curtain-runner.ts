@@ -28,7 +28,7 @@ import {
 	reflectDeep,
 	reflectionToLesson,
 } from "../curtain";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 import curtainReporterPrompt from "../prompts/curtain-reporter.md" with { type: "text" };

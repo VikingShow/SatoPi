@@ -23,7 +23,7 @@ import { logger } from "@satopi/pi-utils";
 import type { AgentRuntime } from "../agent-runtime";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { ActivityLogger } from "../../infra/activity-logger";
 
 /** Default per-agent wall-clock cap (5 minutes). */
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;

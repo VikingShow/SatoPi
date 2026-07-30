@@ -8,8 +8,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { IOffloadManager } from "../../../offload/manager";
-import type { Chapter } from "../../core/state";
+import type { IOffloadManager } from "../../offload/manager";
+import type { Chapter } from "../../types/chapter";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 

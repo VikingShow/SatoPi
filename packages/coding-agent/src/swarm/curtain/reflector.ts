@@ -16,7 +16,7 @@ import { resolveRoleSelection } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import reflectionSystemPrompt from "../../prompts/system/loop-reflection.md" with { type: "text" };
 import type { StageResult } from "../stage/stage-controller";
-import type { ExtractedLesson, ExtractionResult } from "./extractor";
+import type { ExtractedLesson, ExtractionResult } from "../../experience/extractor";
 
 // ============================================================================
 // Types

@@ -17,8 +17,8 @@ import type { ToolExample } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { IrcBus } from "../irc/bus";
-import { CommChannel } from "../swarm/comm-bus/comm-channel";
-import type { ActivityLogger } from "../swarm/infra/activity-logger";
+import { CommChannel } from "../comm/comm-channel";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Types

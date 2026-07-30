@@ -19,10 +19,10 @@ import { logger, Snowflake } from "@satopi/pi-utils";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import type { CustomMessage } from "../session/messages";
-import { CommChannel } from "../swarm/comm-bus/comm-channel";
-import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
-import type { HookContext } from "../swarm/hook-system/types";
-import type { ActivityLogger } from "../swarm/infra/activity-logger";
+import { CommChannel } from "../comm/comm-channel";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
+import type { ActivityLogger } from "../infra/activity-logger";
 
 export interface IrcMessage {
 	id: string;
@@ -94,7 +94,7 @@ export class IrcBus {
 	 * configurable timeout. Returns responses keyed by sender agent id.
 	 * Agents that time out or fail are excluded from the map.
 	 *
-	 * @param callerId — the agent id that will receive the replies (e.g. the Cloner).
+	 * @param callerId — the agent id that will receive the replies.
 	 */
 	async collectResponses(
 		callerId: string,
@@ -454,13 +454,15 @@ export class IrcBus {
 
 	// ── CommBus-migrated: wiring ──
 
-	/** Set the activity logger reference. */
+	/** Set the activity logger reference. First-writer-wins: no-op if already set. */
 	setActivityLogger(logger: ActivityLogger): void {
+		if (this.#activityLogger) return;
 		this.#activityLogger = logger;
 	}
 
-	/** Set the hook pipeline reference. */
+	/** Set the hook pipeline reference. First-writer-wins: no-op if already set. */
 	setHookPipeline(hookPipeline: HookPipeline): void {
+		if (this.#hookPipeline) return;
 		this.#hookPipeline = hookPipeline;
 	}
 }

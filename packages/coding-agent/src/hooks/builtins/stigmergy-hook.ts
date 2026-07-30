@@ -8,7 +8,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { MarkEnvironment } from "../../../coordination";
+import type { MarkEnvironment } from "../../coordination";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 

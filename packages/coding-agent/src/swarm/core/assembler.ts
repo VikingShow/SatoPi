@@ -38,10 +38,10 @@ import { MmdSource } from "../context-manager/sources/mmd-source";
 import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
 import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
-import type { ExperienceStore } from "../curtain/experience";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import { type BuiltinHookDeps, registerBuiltinHooks } from "../hook-system/register-builtins";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { ExperienceStore } from "../../experience/experience";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import { type BuiltinHookDeps, registerBuiltinHooks } from "../../hooks/register-builtins";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 

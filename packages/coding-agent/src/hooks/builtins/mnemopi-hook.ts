@@ -9,7 +9,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { SwarmMnemopiAdapter } from "../../infra/mnemopi-adapter";
+import type { SwarmMnemopiAdapter } from "../../swarm/infra/mnemopi-adapter";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 /**

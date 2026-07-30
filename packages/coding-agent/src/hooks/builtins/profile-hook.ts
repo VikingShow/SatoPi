@@ -8,7 +8,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ProfileRegistry } from "../../../agent/agent-profile";
+import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 import { resolveAgentId } from "../utils";
 

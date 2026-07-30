@@ -9,8 +9,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
-import type { VerificationHook } from "../../core/verification-hook";
+import type { Chapter } from "../../types/chapter";
+import type { VerificationHook } from "../../swarm/core/verification-hook";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------

@@ -12,13 +12,13 @@
 import type { IrcBus } from "../../irc/bus";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentRuntime } from "../agent-runtime";
-import type { CommChannel } from "../comm-bus/comm-channel";
+import type { CommChannel } from "../../comm/comm-channel";
 import type { ContextPipeline } from "../context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { Chapter, StateTracker } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { ActivityLogger } from "../../infra/activity-logger";
 
 // ============================================================================
 // PhaseContext

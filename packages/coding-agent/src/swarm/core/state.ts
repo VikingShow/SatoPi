@@ -7,6 +7,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
+import type { Chapter } from "../../types/chapter";
 
 // ============================================================================
 // Audit trail
@@ -31,12 +32,10 @@ export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "fai
 /**
  * Workflow phase — a string tag that identifies the current stage.
  *
- * Formerly a closed union, now `string` so new phases can be added by
- * registering a PhaseDefinition + PhaseBehavior without editing the type.
- *
- * Lifecycle: idle → script → (script-debate) → script-confirm → stage ↔ (paused | blocked) → curtain → idle
+ * Re-exported from src/types/chapter.ts for backward compatibility.
+ * NEW CODE should import directly from "../../types/chapter".
  */
-export type Chapter = string;
+export type { Chapter } from "../../types/chapter";
 
 /**
  * To-Do item — a structured task parsed from plan.md.

@@ -12,8 +12,8 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../session/session-storage";
-import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
-import type { HookContext } from "../swarm/hook-system/types";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------

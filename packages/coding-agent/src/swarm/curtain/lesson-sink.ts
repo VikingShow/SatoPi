@@ -20,8 +20,8 @@
 import { logger } from "@satopi/pi-utils";
 import type { HindsightLessonItem, SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
-import type { ExperienceStore } from "./experience";
-import type { ExtractedLesson, LoopRunStats } from "./extractor";
+import type { ExperienceStore } from "../../experience/experience";
+import type { ExtractedLesson, LoopRunStats } from "../../experience/extractor";
 
 // ============================================================================
 // Interface
