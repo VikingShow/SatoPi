@@ -96,7 +96,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -556,6 +556,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
 	#swarmSidebarHandle?: OverlayHandle;
+	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
@@ -4573,6 +4574,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		if (this.#swarmSidebarHandle) {
 			this.#swarmSidebarHandle.hide();
 			this.#swarmSidebarHandle = undefined;
+			this.#swarmSidebarUnsubscribe?.();
+			this.#swarmSidebarUnsubscribe = undefined;
 			this.ui.requestRender();
 			return;
 		}
@@ -4598,6 +4601,18 @@ export class InteractiveMode implements InteractiveModeContext {
 		});
 		this.ui.setFocus(sidebar);
 		this.ui.requestRender();
+		// Subscribe to agent status changes to show unread dots
+		// when a non-focused agent produces output.
+		this.#swarmSidebarUnsubscribe = AgentRegistry.global().onChange(event => {
+			const focusedId = this.focusedAgentId;
+			const agentId: string | undefined =
+				event.type === "status_changed" || event.type === "registered"
+					? event.ref.id
+					: undefined;
+			if (agentId && agentId !== focusedId) {
+				sidebar.markUnread(agentId);
+			}
+		});
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

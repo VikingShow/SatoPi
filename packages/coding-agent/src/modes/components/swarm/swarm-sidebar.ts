@@ -21,7 +21,7 @@ const AGENT_STATUS_ICON: Record<string, ToolUIStatus> = {
 // ── Tree node model ────────────────────────────────────────────────────────
 
 interface TreeNode {
-	type: "session" | "agent" | "crew" | "crew-member";
+	type: "session" | "agent" | "crew" | "crew-member" | "swarm";
 	id: string;
 	label: string;
 	status?: string;
@@ -55,6 +55,8 @@ export class SwarmSidebar implements Component {
 	#sidebarWidthPct = DEFAULT_SIDEBAR_WIDTH_PCT;
 	#selectedPath: string[] = []; // breadcrumb of node ids
 	#expandedCrews = new Set<string>();
+	#expandedSwarms = new Set<string>();
+	#unreadAgents = new Set<string>();
 	#multiSelected = new Set<string>();
 	#unsubscribe?: () => void;
 
@@ -64,6 +66,13 @@ export class SwarmSidebar implements Component {
 		this.#unsubscribe = AgentRegistry.global().onChange(() => {
 			this.#config.onRequestRender?.();
 		});
+	}
+
+	/** Mark an agent as having unread output. Requests a render to show the dot. */
+	markUnread(agentId: string): void {
+		if (this.#unreadAgents.has(agentId)) return;
+		this.#unreadAgents.add(agentId);
+		this.#config.onRequestRender?.();
 	}
 
 	get sidebarWidthPct(): number {
@@ -79,11 +88,14 @@ export class SwarmSidebar implements Component {
 		const sessionName = this.#config.sessionName ?? "Session";
 		nodes.push({ type: "session", id: "session", label: sessionName, depth: 0 });
 
-		// Agents (non-advisor)
-		const refs = AgentRegistry.global()
+		const allRefs = AgentRegistry.global()
 			.list()
 			.filter(r => r.kind !== "advisor");
-		for (const ref of refs) {
+		const mainRefs = allRefs.filter(r => r.kind === "main");
+		const subRefs = allRefs.filter(r => r.kind === "sub");
+
+		// Main agent at root (e.g. the orchestrator)
+		for (const ref of mainRefs) {
 			nodes.push({
 				type: "agent",
 				id: ref.id,
@@ -94,6 +106,31 @@ export class SwarmSidebar implements Component {
 			});
 		}
 
+		// Swarms node: groups sub-agents under a collapsible tree node
+		if (subRefs.length > 0) {
+			const swarmsExpanded = this.#expandedSwarms.has("swarms");
+			const swarmsNode: TreeNode = {
+				type: "swarm",
+				id: "swarms",
+				label: "Swarms",
+				expanded: swarmsExpanded,
+				depth: 0,
+				children: [],
+			};
+			if (swarmsExpanded) {
+				for (const ref of subRefs) {
+					swarmsNode.children!.push({
+						type: "agent",
+						id: ref.id,
+						label: ref.displayName,
+						status: ref.status,
+						agentId: ref.id,
+						depth: 1,
+					});
+				}
+			}
+			nodes.push(swarmsNode);
+		}
 		// Crews
 		const crews = this.#config.crewManager?.listCrews() ?? [];
 		for (const crew of crews) {
@@ -190,8 +227,9 @@ export class SwarmSidebar implements Component {
 						const icon = t.fg(color as "accent" | "error" | "dim", glyph);
 						const maxName = Math.max(4, innerWidth - 20);
 						const name = node.label.length > maxName ? `${node.label.slice(0, maxName - 1)}\u2026` : node.label;
-						lines.push(`${prefix}${cursor}${multiMark}${icon} ${name}`);
-					} else if (node.type === "crew") {
+						const unreadDot = this.#unreadAgents.has(node.agentId ?? "") ? t.fg("accent", "\u25cf ") : "";
+						lines.push(`${prefix}${cursor}${multiMark}${icon} ${unreadDot}${name}`);
+					} else if (node.type === "crew" || node.type === "swarm") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
@@ -268,7 +306,7 @@ export class SwarmSidebar implements Component {
 			case " ": // Space: toggle multi-select
 				if (currentIdx >= 0) {
 					const node = flat[currentIdx].node;
-					if (node.type === "agent" || node.type === "crew-member" || node.type === "crew") {
+					if (node.type === "agent" || node.type === "crew-member" || node.type === "crew" || node.type === "swarm") {
 						if (this.#multiSelected.has(node.id)) {
 							this.#multiSelected.delete(node.id);
 						} else {
@@ -292,8 +330,17 @@ export class SwarmSidebar implements Component {
 							}
 							this.#config.onRequestRender?.();
 						}
+					} else if (node.type === "swarm") {
+						// Toggle swarm expand/collapse
+						if (this.#expandedSwarms.has(node.id)) {
+							this.#expandedSwarms.delete(node.id);
+						} else {
+							this.#expandedSwarms.add(node.id);
+						}
+						this.#config.onRequestRender?.();
 					} else if (node.type === "agent" || node.type === "crew-member") {
 						if (node.agentId) {
+							this.#unreadAgents.delete(node.agentId);
 							this.#config.onSelectAgent?.(node.agentId);
 							if (this.#multiSelected.size === 0) {
 								this.#config.onClose?.();

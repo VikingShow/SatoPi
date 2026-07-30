@@ -14,6 +14,7 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/sessio
 import { sanitizeStatusText } from "../../shared";
 import { theme } from "../../theme/theme";
 import { canReuseCachedPr, createPrCacheContext, isSamePrCacheContext, type PrCacheContext } from "./git-utils";
+import { AgentRegistry } from "../../../registry/agent-registry";
 import { getPreset } from "./presets";
 import { renderSegment, type SegmentContext } from "./segments";
 import { getSeparator } from "./separators";
@@ -1145,6 +1146,38 @@ export class StatusLineComponent implements Component {
 		return undefined;
 	}
 
+	#swarmAgentStatusText(): string | undefined {
+		const agents = AgentRegistry.global().list().filter(ref => ref.kind !== "advisor");
+		// Swarm mode: Main + at least one sub-agent
+		if (agents.length <= 1) return undefined;
+
+		// Sort: running agents first, then alphabetically
+		const sorted = [...agents].sort((a, b) => {
+			if (a.status === "running" && b.status !== "running") return -1;
+			if (b.status === "running" && a.status !== "running") return 1;
+			return a.displayName.localeCompare(b.displayName);
+		});
+
+		const MAX_VISIBLE = 3;
+		const visible = sorted.slice(0, MAX_VISIBLE);
+
+		const bracket = (s: string) =>
+			`${theme.format.bracketLeft}${s}${theme.format.bracketRight}`;
+
+		const parts: string[] = [];
+		for (const ref of visible) {
+			const label = ref.status === "aborted" ? "failed" : ref.status;
+			const color = ref.status === "running" ? "accent" : ref.status === "aborted" ? "error" : "dim";
+			parts.push(theme.fg(color, bracket(`${ref.displayName}:${label}`)));
+		}
+
+		if (sorted.length > MAX_VISIBLE) {
+			parts.push(theme.fg("dim", `+${sorted.length - MAX_VISIBLE} more`));
+		}
+
+		return parts.join(theme.sep.dot);
+	}
+
 	#buildStatusLine(width: number): string {
 		const effectiveSettings = this.#resolveSettings();
 		const includePath =
@@ -1178,7 +1211,8 @@ export class StatusLineComponent implements Component {
 		const transparentBg = bgAnsi === TRANSPARENT_BG_ANSI;
 		const fgAnsi = theme.getFgAnsi("text");
 		const sepAnsi = theme.getFgAnsi("statusLineSep");
-		const subagentBadge = this.#subagentBadgeText();
+		const swarmBadge = this.#swarmAgentStatusText();
+		const subagentBadge = swarmBadge ?? this.#subagentBadgeText();
 
 		// Collect visible segment contents
 		const leftParts: string[] = [];
