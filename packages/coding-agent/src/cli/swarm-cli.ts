@@ -12,28 +12,24 @@ import { RoleAssetManager } from "../agent/role-asset";
 import { ModelRegistry } from "../config/model-registry";
 import { Settings } from "../config/settings";
 import { MarkEnvironment } from "../coordination/mark-environment";
-import { IrcBus } from "../irc/bus";
+import { ExperienceStore } from "../experience/experience";
+import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../graph/graph-runner";
+import { getSessionPlanPath } from "../graph/plan-paths";
+import { registerBuiltinHooks } from "../hooks/register-builtins";
 import { NoopOffloadManager } from "../offload/manager";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
-import { assembleAgentRuntime } from "../swarm/core/assembler";
-import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
-import type { RunManager, SteeringSink } from "../swarm/core/services";
-import { StateTracker } from "../swarm/core/state";
-import { SwarmRunner } from "../swarm/core/swarm-runner";
-import { ExperienceStore } from "../swarm/curtain/experience";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
-import { ActivityLogger } from "../swarm/infra/activity-logger";
+import type { SteeringSink } from "../swarm/core/services";
+import { setCurrentSwarmPhase } from "../swarm/core/state";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
-import { DebateRoundtable } from "../swarm/script/debate-roundtable";
-import { getSessionPlanPath } from "../swarm/script/plan-paths";
 import { SessionRegistry } from "../swarm/session";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
 export type SwarmAction = "run" | "plan" | "resume";
 
@@ -72,7 +68,6 @@ async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
-	engine: "graph" | "legacy" = "graph",
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -109,16 +104,23 @@ async function createSwarmServices(
 	};
 
 	const factory: SessionFactory = async (s, name, swarmDir) => {
-		const stateTracker = new StateTracker(cwd, name);
-		const activityLogger = new ActivityLogger(swarmDir, name);
+		// Create shared swarm infrastructure (StateTracker, SwarmSessionManager,
+		// ActivityLogger, ExperienceStore, RoleAssetManager, HookPipeline, runtime).
+		const infra = await createSwarmInfra({
+			workspace: s.workspace,
+			swarmDir,
+			swarmName: name,
+			modelRegistry: s.modelRegistry,
+			settings: s.settings,
+			profileRegistry: s.profileRegistry,
+			startPhase: "script",
+		});
 
-		// HookPipeline with NoopOffloadManager — SessionRegistry upgrades
-		// to a real OffloadManager once SessionStorage is available.
-		const hookPipeline = new HookPipeline();
-		registerBuiltinHooks(hookPipeline, {
+		// Register custom hooks (MnemopiAdapter)
+		registerBuiltinHooks(infra.hookPipeline, {
 			offloadManager: new NoopOffloadManager(),
 			profileRegistry: s.profileRegistry,
-			experienceStore: s.experienceStore,
+			experienceStore: infra.experienceStore,
 			mnemopiAdapter: s.mnemopiClient
 				? new SwarmMnemopiAdapter(s.mnemopiClient, {
 						enabled: true,
@@ -129,63 +131,37 @@ async function createSwarmServices(
 				: undefined,
 		});
 
-		// Assemble AgentRuntime with full DI (no global singletons).
-		// IrcBus.global() is the one exception — SatoPi owns it.
-		const ircBus = IrcBus.global();
-		const runtime = assembleAgentRuntime({
+		// GraphRunner with injected infra
+		const graphRunner = new GraphRunner({
+			workspace: s.workspace,
+			graphPath: s.yamlPath,
 			modelRegistry: s.modelRegistry,
 			settings: s.settings,
-			activityLogger,
-			roleAssetManager: s.roleAssetManager,
-			hookPipeline,
-			ircBus,
-			experienceStore: s.experienceStore,
-			hindsightClient: s.hindsightClient,
-			mnemopiClient: s.mnemopiClient,
-			markEnvironment: s.markEnvironment,
+			profileRegistry: s.profileRegistry,
+			infra,
+			onPhaseChange: phase => setCurrentSwarmPhase(phase),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
+			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
-		let runManager: RunManager;
-		if (engine === "graph") {
-			// GraphRunner implements ISwarmOrchestrator; wrap in adapter for RunManager.
-			const graphRunner = new GraphRunner({
-				workspace: s.workspace,
-				graphPath: s.yamlPath,
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				profileRegistry: s.profileRegistry,
-			});
-			await graphRunner.init();
-			runManager = new GraphRunnerAsRunManager(graphRunner);
-		} else {
-			// Legacy SwarmRunner with AgentRuntime — StageController uses
-			// runtime.spawn() instead of the legacy streamAgentOutput path.
-			process.stderr.write("WARNING: SwarmRunner is deprecated; prefer --engine graph (GraphRunner).\n");
-			runManager = new SwarmRunner({
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				workspace: s.workspace,
-				yamlPath: s.yamlPath,
-				stateTracker,
-				activityLogger,
-				experienceStore: s.experienceStore,
-				sessionManager: undefined,
-				profileRegistry: s.profileRegistry,
-				markEnvironment,
-				roleAssetManager: s.roleAssetManager,
-				hookPipeline,
-				runtime,
-				hindsightClient: s.hindsightClient,
-			});
-		}
+		await graphRunner.init();
+		const runManager = new GraphRunnerAsRunManager(graphRunner);
 
-		// Real SteeringSink — routes human steering via IrcBus → AgentRuntime.
+		// Real SteeringSink — routes human steering via IrcBus.
 		const steeringSink: SteeringSink = {
 			steer(text: string): void {
-				void runtime.sendHumanMessage("planner", text);
+				void infra.runtime.sendHumanMessage("planner", text);
 			},
 		};
 
-		return { name, swarmDir, stateTracker, activityLogger, runManager, steeringSink, hookPipeline };
+		return {
+			name,
+			swarmDir,
+			stateTracker: infra.stateTracker,
+			activityLogger: infra.activityLogger,
+			runManager,
+			steeringSink,
+			hookPipeline: infra.hookPipeline,
+		};
 	};
 
 	return { shared, factory };
@@ -211,34 +187,20 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const yamlPath = path.resolve(cmd.target);
 	const cwd = getProjectDir();
 
-	// Determine engine before parsing — graph engine skips swarm YAML parsing
-	const engine = (cmd.engine ?? "graph") as "graph" | "legacy";
-
-	let def: SwarmDefinition;
-	if (engine === "graph") {
-		// GraphRunner handles its own YAML parsing (graph.yaml format)
-		def = {
-			name: path.basename(yamlPath, path.extname(yamlPath)),
-			workspace: cwd,
-			mode: "loop",
-			targetCount: 0,
-			agents: new Map(),
-			agentOrder: [],
-			loopConfig: undefined,
-		};
-	} else {
-		try {
-			def = await parseSwarmYamlFile(yamlPath);
-		} catch (err) {
-			process.stderr.write(`Failed to parse ${yamlPath}: ${String(err)}\n`);
-			process.exitCode = 1;
-			return;
-		}
-	}
+	// GraphRunner handles its own YAML parsing (graph.yaml format)
+	const def: SwarmDefinition = {
+		name: path.basename(yamlPath, path.extname(yamlPath)),
+		workspace: cwd,
+		mode: "loop",
+		targetCount: 0,
+		agents: new Map(),
+		agentOrder: [],
+		loopConfig: undefined,
+	};
 
 	const swarmName = def.name;
 
-	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def);
 
 	try {
 		const registry = new SessionRegistry(shared, factory, 1);
@@ -253,20 +215,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			return;
 		}
 
-		if (engine === "graph") {
-			// GraphRunnerAsRunManager handles completion internally.
-			process.stderr.write(`Graph "${swarmName}" started.\n`);
-		} else {
-			process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
-			process.stderr.write("WARNING: SwarmRunner waitForCompletion is deprecated; prefer GraphRunner.\n");
-			await (session.runManager as SwarmRunner).waitForCompletion();
-			const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
-			if (curtainResult) {
-				process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
-			} else {
-				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
-			}
-		}
+		// GraphRunnerAsRunManager handles completion internally.
+		process.stderr.write(`Graph "${swarmName}" started.\n`);
 	} finally {
 		await shared.profileRegistry.save(cwd);
 	}
@@ -301,27 +251,31 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 	try {
 		// Create shared services (reuse createSwarmServices for consistency).
 		// We only need `shared`; the factory and session are unused in plan mode.
-		const { shared } = await createSwarmServices(cwd, yamlPath, def, "graph");
+		const { shared } = await createSwarmServices(cwd, yamlPath, def);
 		const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${swarmName}`);
 		await fs.mkdir(swarmDir, { recursive: true });
 
-		const bridge = new EmbeddedSwarmBridge(
-			{
-				workspace: shared.workspace,
-				swarmDir,
-				modelRegistry: shared.modelRegistry,
-				settings: shared.settings,
-				roleAssetManager: shared.roleAssetManager,
-				profileRegistry: shared.profileRegistry,
-				autoApplaud: true,
-			},
-			event => {
-				if (event.phase) phase = event.phase;
-				if (event.subStatus) {
-					process.stderr.write(`[${event.phase}] ${event.subStatus}\n`);
-				}
-			},
-		);
+		const infra = await createSwarmInfra({
+			workspace: shared.workspace,
+			swarmDir,
+			swarmName,
+			modelRegistry: shared.modelRegistry,
+			settings: shared.settings,
+			profileRegistry: shared.profileRegistry,
+			startPhase: "script",
+		});
+		const bridge = new GraphRunner({
+			workspace: shared.workspace,
+			swarmDir,
+			modelRegistry: shared.modelRegistry,
+			settings: shared.settings,
+			profileRegistry: shared.profileRegistry,
+			autoApplaud: true,
+			infra,
+			onPhaseChange: p => setCurrentSwarmPhase(p),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
+			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+		});
 		await bridge.init();
 		phase = "script";
 
@@ -491,7 +445,7 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 }
 
 /** Spawn planner agent and wait for response. */
-async function sendToPlanner(bridge: EmbeddedSwarmBridge, text: string): Promise<void> {
+async function sendToPlanner(bridge: GraphRunner, text: string): Promise<void> {
 	const runtime = bridge.runtime;
 	await runtime.ircBus.receiveFromHuman(text, "planner");
 	const [planner] = await runtime.spawn([

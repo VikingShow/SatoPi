@@ -26,6 +26,7 @@ import { IrcBus } from "../../irc/bus";
 import { AgentLifecycleManager } from "../../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, type AgentStatus, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
+import { currentSwarmPhase } from "../../swarm/core/state";
 import { parseThinkingLevel } from "../../thinking";
 import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
 import type { ObservableSession, SessionObserverRegistry } from "../session-observer-registry";
@@ -452,6 +453,9 @@ export class AgentHubOverlayComponent extends Container {
 		lines.push(...new DynamicBorder().render(width));
 		const counts = this.#statusSummary();
 		lines.push(` ${theme.fg("accent", "Agent Hub")}${counts ? theme.fg("dim", `${theme.sep.dot}${counts}`) : ""}`);
+		if (currentSwarmPhase !== "idle") {
+			lines.push(` ${theme.fg("accent", `🐝 ${currentSwarmPhase}`)}`);
+		}
 		lines.push(...new DynamicBorder().render(width));
 
 		if (this.#rows.length === 0) {
@@ -531,7 +535,7 @@ export class AgentHubOverlayComponent extends Container {
 		if (ref.kind === "advisor") {
 			fields.push(theme.fg("warning", "read-only"));
 		}
-		if (ref.kind === "persistent") {
+		if (ref.profileId) {
 			const badgeParts: string[] = [theme.fg("accent", "[P]")];
 			let info = "";
 			if (ref.role) info += ref.role;

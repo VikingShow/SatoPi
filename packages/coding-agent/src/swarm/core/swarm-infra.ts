@@ -1,14 +1,14 @@
 /**
  * swarm-infra.ts — Shared swarm infrastructure factory.
  *
- * Creates the common set of swarm services that both EmbeddedSwarmBridge
- * and GraphRunner need during init():
- *   SwarmSessionManager, StateTracker, ActivityLogger, WorkflowFSM,
+ * Creates the common set of swarm services that GraphRunner needs
+ * during init() for both graph mode and swarm keyword mode:
+ *   SwarmSessionManager, StateTracker, ActivityLogger,
  *   ExperienceStore, RoleAssetManager, and the orchestrator runtime
  *   (HookPipeline + MarkEnvironment + AgentRuntime).
  *
- * Both orchestrators call this once, then add their own specializations
- * (FSM onChange listener, graph loading, gate controller, etc.).
+ * GraphRunner calls this once, then adds its own specializations
+ * (graph loading, node behaviors, gate controller, etc.).
  */
 
 import * as fs from "node:fs/promises";
@@ -17,15 +17,15 @@ import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
+import { ExperienceStore } from "../../experience/experience";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import { ActivityLogger } from "../../infra/activity-logger";
 import { IrcBus } from "../../irc/bus";
-import type { AgentRuntime } from "../agent-runtime";
-import { ExperienceStore } from "../curtain/experience";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import { ActivityLogger } from "../infra/activity-logger";
+import { type IOffloadManager, OffloadManager } from "../../offload/manager";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createOrchestratorRuntime } from "./assembler";
 import { type Chapter, StateTracker } from "./state";
-import { PHASES, WorkflowFsm } from "./workflow-fsm";
+import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
 // Types
@@ -42,17 +42,16 @@ export interface CreateSwarmInfraOptions {
 	activeMmd?: string;
 	startPhase: Chapter;
 }
-
 export interface SwarmInfra {
 	sessionManager: SwarmSessionManager;
 	stateTracker: StateTracker;
 	activityLogger: ActivityLogger;
-	fsm: WorkflowFsm;
 	experienceStore: ExperienceStore;
 	hookPipeline: HookPipeline;
-	runtime: AgentRuntime;
+	runtime: SwarmRuntime;
 	roleAssetManager: RoleAssetManagerType;
 	markEnvironment: MarkEnvironment;
+	offloadManager: IOffloadManager;
 	ircBus: IrcBus;
 }
 
@@ -63,9 +62,8 @@ export interface SwarmInfra {
 /**
  * Create the shared swarm infrastructure.
  *
- * Both EmbeddedSwarmBridge and GraphRunner call this during init()
- * to create the common set of services, then add their own
- * specializations (FSM onChange listener, graph loading, etc.).
+ * GraphRunner calls this during init() to create the common set
+ * of services, then adds its own specializations.
  */
 export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<SwarmInfra> {
 	const { workspace, swarmDir, swarmName, modelRegistry, settings, profileRegistry, activeMmd, startPhase } = opts;
@@ -90,9 +88,8 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 	const experienceStore = new ExperienceStore(workspace);
 	await experienceStore.init();
 
-	// 6. WorkflowFSM — each caller adds its own onChange listener
-	const fsm = new WorkflowFsm(stateTracker, activityLogger, startPhase);
-	for (const def of PHASES) fsm.registerPhase(def);
+	// 6. Set initial phase via StateTracker
+	await stateTracker.updatePipeline({ phase: startPhase });
 
 	// 7. IrcBus
 	const ircBus = IrcBus.global();
@@ -115,16 +112,19 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		activeMmd,
 	});
 
+	// 10. OffloadManager — L1→L3 context offloading
+	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
+
 	return {
 		sessionManager,
 		stateTracker,
 		activityLogger,
-		fsm,
 		experienceStore,
 		hookPipeline: orch.hookPipeline,
 		runtime: orch.runtime,
 		roleAssetManager,
 		markEnvironment: orch.markEnvironment,
+		offloadManager,
 		ircBus,
 	};
 }

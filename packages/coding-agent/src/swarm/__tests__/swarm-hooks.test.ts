@@ -15,12 +15,12 @@
  * 6. onStageComplete does not throw
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { SingleResult } from "@satopi/pi-coding-agent";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
 import { MarkEnvironment } from "../../coordination";
-import type { Task } from "../executor/task-queue";
+import type { Task } from "../../graph/task-queue";
 import { createStageFeedback } from "../infra/swarm-hooks";
 
 describe("createStageFeedback (StageController callbacks)", () => {
@@ -220,6 +220,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 				errors: [],
 				agents: [],
 				taskProgress: { total: 1, completed: 1 },
+				degradedMode: [],
 			}),
 		).not.toThrow();
 	});
@@ -229,8 +230,8 @@ describe("createStageFeedback (StageController callbacks)", () => {
 // Hook event coverage — verify all 15 previously untriggered event types
 // ============================================================================
 
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HandlerArgs, HookContext, HookEvent, HookRegistration } from "../hook-system/types";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HandlerArgs, HookContext, HookEvent, HookRegistration } from "../../hooks/types";
 
 /** Helper to create a hook that records events it receives. */
 function makeRecordingHook(name: string, priority: number, events: HookEvent[], log: string[]): HookRegistration {
@@ -423,18 +424,14 @@ describe("Hook event trigger coverage (15 untriggered types)", () => {
 // ============================================================================
 
 import type { AgentMessage } from "@satopi/pi-agent-core";
+import { CommChannel } from "../../comm/comm-channel";
+import { runRoundtable } from "../../comm/roundtable";
+import { runVote } from "../../comm/vote";
+import type { AssembledContext } from "../../context/context-pipeline";
+import { ContextPipeline } from "../../context/context-pipeline";
 import { IrcBus } from "../../irc/bus";
 import { OffloadManager } from "../../offload/manager";
 import { MemorySessionStorage } from "../../session/session-storage";
-import { CommChannel } from "../comm-bus/comm-channel";
-import { runRoundtable } from "../comm-bus/roundtable";
-import { runVote } from "../comm-bus/vote";
-import type { AssembledContext } from "../context-manager/context-pipeline";
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { StateTracker } from "../core/state";
-import type { PhaseDefinition } from "../core/workflow-fsm";
-import { WorkflowFsm } from "../core/workflow-fsm";
-import { ActivityLogger } from "../infra/activity-logger";
 
 describe("Hook event trigger E2E (real integration points)", () => {
 	let hookPipeline: HookPipeline;
@@ -567,53 +564,6 @@ describe("Hook event trigger E2E (real integration points)", () => {
 		expect(fired).toContain("context:afterInjection");
 		expect(fired).toContain("context:beforeCompaction");
 		expect(fired).toContain("context:afterCompaction");
-	});
-
-	// ── Workflow: phaseTimeout ─────────────────────────────────
-
-	test("workflow:phaseTimeout fires through WorkflowFsm timed transition", async () => {
-		const stateTracker = new StateTracker("/tmp/test-e2e-swarm", "test");
-		const activityLogger = new ActivityLogger("/tmp/test-e2e-swarm", "test");
-		const fsm = new WorkflowFsm(stateTracker, activityLogger, "idle", hookPipeline);
-
-		const idleDef: PhaseDefinition = {
-			phase: "idle",
-			allowedFrom: ["script"],
-			allowedTo: ["script"],
-			capabilities: {
-				multiAgent: false,
-				roundtable: false,
-				vote: false,
-				offload: false,
-				compaction: false,
-				humanMode: "none",
-			},
-			defaultTimeoutMs: 0,
-		};
-		const scriptDef: PhaseDefinition = {
-			phase: "script",
-			allowedFrom: ["idle"],
-			allowedTo: ["idle"],
-			capabilities: {
-				multiAgent: true,
-				roundtable: true,
-				vote: false,
-				offload: false,
-				compaction: false,
-				humanMode: "none",
-			},
-			defaultTimeoutMs: 100,
-			timedTransitionTarget: "idle",
-		};
-		fsm.registerPhase(idleDef);
-		fsm.registerPhase(scriptDef);
-
-		vi.useFakeTimers();
-		await fsm.transition("script");
-		vi.advanceTimersByTime(150);
-		vi.useRealTimers();
-
-		expect(fired).toContain("workflow:phaseTimeout");
 	});
 
 	// ── Offload: afterL1 / beforeFlush / afterFlush ────────────

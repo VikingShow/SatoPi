@@ -23,7 +23,7 @@ import {
 	ContextPipeline,
 	type ContextSource,
 	type PhaseInfo,
-} from "../context-manager/context-pipeline";
+} from "../../context/context-pipeline";
 
 // ============================================================================
 // Helpers

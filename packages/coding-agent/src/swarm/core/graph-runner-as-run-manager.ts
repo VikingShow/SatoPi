@@ -1,4 +1,4 @@
-import type { ISwarmOrchestrator } from "./embedded-swarm-bridge";
+import type { ISwarmOrchestrator } from "../../graph/orchestrator-interface";
 import type { RunManager } from "./services";
 
 export class GraphRunnerAsRunManager implements RunManager {

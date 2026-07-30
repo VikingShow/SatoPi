@@ -11,9 +11,9 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 import type { SessionStorage } from "../session/session-storage";
-import type { HookPipeline } from "../swarm/hook-system/hook-pipeline";
-import type { HookContext } from "../swarm/hook-system/types";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,8 @@ export interface IOffloadManager {
 	getMmdContext(agentId: string, taskDescription: string): Promise<string | null>;
 	/** Get experience context for agent spawn injection (context direction). */
 	getExperienceContext(agentId: string, taskDescription: string): Promise<string | null>;
+	/** Get a map of agent_id → latest summary for all offloaded agents. */
+	getOffloadSummaries(): Promise<Map<string, string>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,16 @@ export class OffloadManager implements IOffloadManager {
 		}
 	}
 
+	async getOffloadSummaries(): Promise<Map<string, string>> {
+		const entries = await this.#store.readAllEntries();
+		const map = new Map<string, string>();
+		// Later entries for the same agent_id overwrite earlier ones (latest wins)
+		for (const e of entries) {
+			map.set(e.agent_id, e.summary);
+		}
+		return map;
+	}
+
 	// -- Context direction -----------------------------------------------------
 
 	async getMmdContext(agentId: string, taskDescription: string): Promise<string | null> {
@@ -154,6 +166,7 @@ export class OffloadManager implements IOffloadManager {
 	}
 }
 
+
 // ---------------------------------------------------------------------------
 // No-op implementation — fallback when SessionStorage is unavailable
 // ---------------------------------------------------------------------------
@@ -171,6 +184,10 @@ export class NoopOffloadManager implements IOffloadManager {
 	async getExperienceContext(_agentId: string, _taskDescription: string): Promise<string | null> {
 		return null;
 	}
+	async getOffloadSummaries(): Promise<Map<string, string>> {
+		return new Map();
+	}
+
 }
 
 // ---------------------------------------------------------------------------

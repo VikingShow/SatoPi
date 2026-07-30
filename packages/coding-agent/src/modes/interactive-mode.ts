@@ -74,7 +74,10 @@ import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { type GuidedGoalMessage, runGuidedGoalTurn } from "../goals/guided-setup";
 import type { Goal, GoalModeState } from "../goals/state";
+import { GraphRunner } from "../graph/graph-runner";
+import { TaskComplexityAnalyzer } from "../graph/task-analyzer";
 import { resolveLocalUrlToPath } from "../internal-urls";
+import { IrcBus } from "../irc/bus";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "../lsp/startup-events";
 import type { MCPManager } from "../mcp";
 import {
@@ -93,7 +96,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -110,8 +113,7 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } fr
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import { TaskComplexityAnalyzer } from "../swarm/script/task-analyzer";
+import { currentSwarmPhase } from "../swarm/core/state";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -131,6 +133,7 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../utils/session-colo
 import { messageHasDisplayableThinking } from "../utils/thinking-display";
 import { popTerminalTitle, pushTerminalTitle, setSessionTerminalTitle } from "../utils/title-generator";
 import { VibeSessionRegistry } from "../vibe/runtime";
+import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -144,6 +147,8 @@ import type { HookSelectorComponent, HookSelectorSlider } from "./components/hoo
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
+import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
+import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -170,7 +175,7 @@ import {
 } from "./loop-limit";
 import { OAuthManualInputManager } from "./oauth-manual-input";
 import {
-	countRunningPersistentAgents,
+	countRunningProfileAgents,
 	countRunningSubagentBadgeAgents,
 	getRunningSubagentBadgeRegistry,
 } from "./running-subagent-badge";
@@ -552,7 +557,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
+	#swarmSidebarHandle?: OverlayHandle;
+	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
+	#swarmStatusBar: SwarmStatusBar | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
@@ -942,6 +950,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		// the prompt while keeping the one-line gap above the editor.
 		this.ui.addChild(this.statusContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
+		this.#swarmStatusBar = new SwarmStatusBar();
+		this.ui.addChild(this.#swarmStatusBar);
 		this.ui.addChild(this.hookWidgetContainerAbove);
 		this.ui.addChild(this.editorContainer);
 		this.ui.addChild(this.hookWidgetContainerBelow);
@@ -1213,6 +1223,26 @@ export class InteractiveMode implements InteractiveModeContext {
 		const { promise, resolve } = Promise.withResolvers<SubmittedUserInput>();
 		this.onInputCallback = input => {
 			this.onInputCallback = undefined;
+			// Route @mentions to target agents via IRC before normal processing
+			if (input.text && !input.synthetic && !input.customType) {
+				const mentions = parseMentions(input.text);
+				if (mentions.agentIds.length > 0 || mentions.allMentioned) {
+					const targets = resolveMentionTargets(mentions);
+					if (targets.length > 0) {
+						const cleanBody = mentions.cleanText || input.text;
+						IrcBus.global()
+							.sendToGroup(targets, {
+								from: this.session.getAgentId() ?? "Main",
+								body: cleanBody,
+							})
+							.catch(() => {});
+					}
+					// Use cleaned text (without @tokens) for normal processing
+					if (mentions.cleanText) {
+						input = { ...input, text: mentions.cleanText };
+					}
+				}
+			}
 			resolve(input);
 		};
 		this.#scheduleLoopAutoSubmit();
@@ -1638,7 +1668,8 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.syncRunningSubagentBadge();
 			});
 		}
-		const persistentCount = countRunningPersistentAgents(registry);
+		const persistentCount = countRunningProfileAgents(registry);
+		this.#updateSwarmModeStatus();
 		const subCount = countRunningSubagentBadgeAgents(registry);
 		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();
@@ -2021,6 +2052,45 @@ export class InteractiveMode implements InteractiveModeContext {
 				? { enabled: this.goalModeEnabled, paused: this.goalModePaused }
 				: undefined;
 		this.statusLine.setGoalModeStatus(status);
+		this.ui.requestRender();
+	}
+
+	#updateSwarmModeStatus(): void {
+		const phase = currentSwarmPhase;
+		if (phase === "idle" || !this.session.embeddedSwarm) {
+			this.statusLine.setSwarmModeStatus(null);
+			this.ui.requestRender();
+			return;
+		}
+
+		const refs = AgentRegistry.global()
+			.list()
+			.filter(r => r.kind !== "advisor" && r.kind !== "main");
+
+		let running = 0;
+		let completed = 0;
+		let failed = 0;
+		for (const ref of refs) {
+			switch (ref.status) {
+				case "running":
+					running++;
+					break;
+				case "aborted":
+					failed++;
+					break;
+				case "idle":
+				case "parked":
+					completed++;
+					break;
+			}
+		}
+
+		this.statusLine.setSwarmModeStatus(
+			refs.length > 0
+				? { phase, agentCount: refs.length, runningCount: running, completedCount: completed, failedCount: failed }
+				: null,
+		);
+
 		this.ui.requestRender();
 	}
 
@@ -2616,7 +2686,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Agent-count slider — same logic as handlePlanApproval
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		const maxWorkers = (this.session.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4;
 		const maxRounds = (this.session.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3;
 		const loopConfig: LoopSwarmConfig = {
@@ -2666,7 +2736,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 					selectedIndex: 0,
 					onChange: index => {
-						selectedAgentType = index === 0 ? "swift" : "persistent";
+						selectedAgentType = index === 0 ? "swift" : "main";
 					},
 				},
 			},
@@ -3568,7 +3638,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const startTierIndex = defaultTierIndex >= 0 ? defaultTierIndex : (cycle?.currentIndex ?? 0);
 		let selectedTierIndex = startTierIndex;
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		let slider: HookSelectorSlider | undefined =
 			cycle && cycle.models.length > 1
 				? {
@@ -3685,7 +3755,7 @@ export class InteractiveMode implements InteractiveModeContext {
 							labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 							selectedIndex: 0,
 							onChange: index => {
-								selectedAgentType = index === 0 ? "swift" : "persistent";
+								selectedAgentType = index === 0 ? "swift" : "main";
 							},
 						}
 					: undefined,
@@ -4526,7 +4596,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		const overlay = new SwarmDashboardOverlay(
 			bridge
 				? {
-						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
 						graphDefinition: bridge instanceof GraphRunner ? bridge.graph : undefined,
 						modelCost,
@@ -4545,8 +4614,48 @@ export class InteractiveMode implements InteractiveModeContext {
 			margin: 0,
 			fullscreen: true,
 		});
-		this.ui.setFocus(overlay);
+	}
+	showSwarmSidebar(): void {
+		if (this.#swarmSidebarHandle) {
+			this.#swarmSidebarHandle.hide();
+			this.#swarmSidebarHandle = undefined;
+			this.#swarmSidebarUnsubscribe?.();
+			this.#swarmSidebarUnsubscribe = undefined;
+			this.ui.requestRender();
+			return;
+		}
+		const sidebar = new SwarmSidebar(
+			{
+				onSelectAgent: (agentId: string) => {
+					void this.focusAgentSession(agentId).catch(() => {});
+				},
+				onClose: () => this.showSwarmSidebar(),
+				onRequestRender: () => this.ui.requestRender(),
+				onFocusTranscript: () => {
+					this.ui.setFocus(this.editor);
+				},
+				sessionName: this.sessionName,
+			},
+			theme,
+		);
+		const widthPct = sidebar.sidebarWidthPct;
+		this.#swarmSidebarHandle = this.ui.showOverlay(sidebar, {
+			width: `${widthPct}%`,
+			anchor: "left-center",
+			margin: 1,
+		});
+		this.ui.setFocus(sidebar);
 		this.ui.requestRender();
+		// Subscribe to agent status changes to show unread dots
+		// when a non-focused agent produces output.
+		this.#swarmSidebarUnsubscribe = AgentRegistry.global().onChange(event => {
+			const focusedId = this.focusedAgentId;
+			const agentId: string | undefined =
+				event.type === "status_changed" || event.type === "registered" ? event.ref.id : undefined;
+			if (agentId && agentId !== focusedId) {
+				sidebar.markUnread(agentId);
+			}
+		});
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

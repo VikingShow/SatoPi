@@ -10,17 +10,17 @@ import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentRegistry } from "../registry/agent-registry";
-import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { AgentSession } from "../session/agent-session";
 import type { StateTracker } from "../swarm/core/state";
-import type { ActivityLogger } from "../swarm/infra/activity-logger";
 
 // ============================================================================
 // Gate discriminated unions
 // ============================================================================
 
 /** Gate types map to built-in verification steps. */
-export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script";
+export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script" | "debate";
 
 /** When the gate check should run. */
 export type GateMode = "always" | "on-failure" | "never";
@@ -106,6 +106,7 @@ export const VALID_GATE_TYPES: Record<string, true> = {
 	lsp: true,
 	"human-review": true,
 	script: true,
+	debate: true,
 };
 
 export const VALID_GATE_MODES: Record<string, true> = { always: true, "on-failure": true, never: true };
@@ -334,6 +335,16 @@ export interface NodeResult {
 }
 
 /**
+ * Minimal spawn contract for graph nodes. Satisfied by AgentRuntime (during
+ * transition) or createAgentSession directly (post-Phase-5).
+ */
+export interface AgentSpawner {
+	spawn(
+		specs: Array<{ id: string; role: string; task: string; profileId?: string; tools?: string[] }>,
+	): Promise<AgentSession[]>;
+}
+
+/**
  * Context assembled by GraphExecutor and injected into every NodeBehavior method.
  */
 export interface NodeContext {
@@ -352,9 +363,11 @@ export interface NodeContext {
 	/** AbortSignal for cooperative cancellation. */
 	signal: AbortSignal;
 	/** Agent runtime for spawning sub-agents. */
-	runtime: AgentRuntime;
+	runtime: AgentSpawner;
 	/** Agent registry for persistent agent routing and lifecycle management. */
 	agentRegistry: AgentRegistry;
+	/** IRC bus for inter-agent messaging (swarm-aware behaviors only). */
+	ircBus?: import("../irc/bus").IrcBus;
 	/** Role asset manager for library-based role resolution. */
 	roleAssetManager?: RoleAssetManager;
 	/** Agent profile registry for cross-run identity. */

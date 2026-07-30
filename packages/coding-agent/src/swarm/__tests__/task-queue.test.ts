@@ -17,7 +17,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { TaskQueue } from "../executor/task-queue";
+import { TaskQueue } from "../../graph/task-queue";
 import { createTaskQueueFromPlan } from "../stage/stage-controller";
 
 // ============================================================================

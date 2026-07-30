@@ -9,7 +9,7 @@
 
 import type { SingleResult } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
-import type { ReviewVerdict } from "../../swarm/core/pipeline";
+import type { ReviewVerdict } from "../../types/pipeline-types";
 import type { L2MermaidOutput, L2NewEntry, LlmMermaidSynthesizer } from "../mermaid/llm-synthesizer";
 import type { AgentOffloadEntry } from "./agent-summarizer";
 import { type MmdEdge, type MmdNode, PlanNodeAttributor, type PlanPhase } from "./attributor";

@@ -11,7 +11,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { ActivityLogger } from "../../infra/activity-logger";
 
 // ============================================================================
 // Types

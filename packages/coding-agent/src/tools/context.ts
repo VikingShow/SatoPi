@@ -1,7 +1,7 @@
 import type { AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
-import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { EventBus } from "../utils/event-bus";
 
 declare module "@satopi/pi-agent-core" {
@@ -9,7 +9,7 @@ declare module "@satopi/pi-agent-core" {
 		ui?: ExtensionUIContext;
 		hasUI?: boolean;
 		toolNames?: string[];
-		agentRuntime?: AgentRuntime;
+		agentRuntime?: SwarmRuntime;
 		toolCall?: ToolCallContext;
 		eventBus?: EventBus;
 	}
@@ -19,7 +19,7 @@ export class ToolContextStore {
 	#uiContext: ExtensionUIContext | undefined;
 	#hasUI = false;
 	#toolNames: string[] = [];
-	#agentRuntime: AgentRuntime | undefined;
+	#agentRuntime: SwarmRuntime | undefined;
 	#eventBus: EventBus | undefined;
 
 	constructor(private readonly getBaseContext: () => CustomToolContext) {}
@@ -41,7 +41,7 @@ export class ToolContextStore {
 		this.#hasUI = hasUI;
 	}
 
-	setAgentRuntime(runtime: AgentRuntime | undefined): void {
+	setAgentRuntime(runtime: SwarmRuntime | undefined): void {
 		this.#agentRuntime = runtime;
 	}
 	hasAgentRuntime(): boolean {

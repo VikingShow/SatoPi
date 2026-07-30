@@ -13,7 +13,7 @@ export {
 	type ActivityEntry,
 	type ActivityEventType,
 	ActivityLogger,
-} from "./activity-logger";
+} from "../../infra/activity-logger";
 export {
 	type MnemopiAdapterConfig,
 	type MnemopiClient,

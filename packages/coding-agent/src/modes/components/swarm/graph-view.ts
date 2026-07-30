@@ -72,7 +72,7 @@ export function renderGraphView(input: GraphViewInput, theme: Theme): Component 
 
 	return swarmPanel(
 		title,
-		({ innerWidth, theme: t }) => {
+		({ innerWidth: _innerWidth, theme: t }) => {
 			if (maxWidth < 40) return narrowFallback(input, maxWidth, t);
 			if (nodeIds.length === 0) return [t.fg("dim", "  (no graph loaded)")];
 
@@ -230,11 +230,10 @@ function renderWaveBar(
 	waves: WaveLayout[],
 	currentWave: number,
 	totalWaves: number,
-	maxWidth: number,
+	_maxWidth: number,
 	theme: Theme,
 ): string[] {
 	const lines: string[] = [];
-	const barWidth = Math.min(maxWidth - 4, 60);
 	for (let wi = 0; wi < waves.length; wi++) {
 		const wave = waves[wi];
 		const isCurrent = wi === currentWave;

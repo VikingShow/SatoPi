@@ -172,6 +172,7 @@ export type StatusLineSegmentId =
 	| "cache_write"
 	| "cache_hit"
 	| "session_name"
+	| "swarm"
 	| "usage"
 	| "collab";
 
@@ -1775,13 +1776,12 @@ export const SETTINGS_SCHEMA = {
 	"swarm.engine": {
 		type: "enum",
 		values: ["graph", "legacy"],
-		default: "legacy",
+		default: "graph",
 		ui: {
 			tab: "magic",
 			group: "Swarm",
 			label: "Swarm Engine",
-			description:
-				"Swarm execution engine (legacy = EmbeddedSwarmBridge for interactive, graph = Theatre Graph for CLI). Defaults to legacy.",
+			description: "Swarm execution engine (graph = Theatre Graph, legacy deprecated).",
 		},
 	},
 

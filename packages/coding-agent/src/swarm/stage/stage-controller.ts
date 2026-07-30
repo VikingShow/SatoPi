@@ -1,22 +1,23 @@
 /**
- * StageController — CANONICAL stage execution implementation.
+ * StageController — Canonical stage execution with rich features.
  *
- * This is the primary, authoritative path for Stage (execution) phase
- * orchestration.  All stage execution — whether driven by the CLI
- * (SwarmRunner), the GraphRunner (StageNodeBehavior), or the embedded
- * bridge — SHOULD route through this class.
+ * This is the full-featured stage orchestration with profile-based agent
+ * selection, domain matching, complexity analysis, credit-aware role
+ * assignment, retry-with-backoff, and circuit breaker.  Used by the
+ * graph engine ({@link StageNodeBehavior}) which calls its monolithic
+ * {@link run()} method.
  *
  * ## Relationship with StageBehavior
  *
- * {@link StageBehavior} is a PhaseBehavior adapter that provides an
- * event-driven lifecycle (enter → handleAgentEvent → checkCompletion →
- * exit) for the theatre graph engine.  It uses simplified agent creation
- * (one agent per unique task role) and does NOT perform profile-based
- * agent selection, complexity analysis, or credit-aware assignment.
- *
- * StageBehavior SHOULD delegate core task-parsing and role-assignment
- * logic to the shared helpers exported from this module
+ * {@link StageBehavior} is a lightweight PhaseBehavior adapter for the
+ * theatre graph engine's event-driven lifecycle.  It uses simplified
+ * agent creation (one agent per unique task role) and delegates
+ * task-parsing and role-assignment to shared helpers from this module
  * ({@link assignAgentRoles}, {@link TaskQueue.parseFromPlan}).
+ *
+ * StageController and StageBehavior serve **different API surfaces**:
+ *   - StageController: monolithic `run()` → `StageResult` (for NodeBehavior)
+ *   - StageBehavior: event-driven enter/handleAgentEvent/checkCompletion/exit
  *
  * ## Flow
  *   1. Select agents (scored by domain match + credit)
@@ -33,15 +34,14 @@ import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
 import type { RoleAssetManager } from "../../agent/role-asset";
+import { TaskComplexityAnalyzer } from "../../graph/task-analyzer";
+import { type Task, TaskQueue } from "../../graph/task-queue";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
-import type { AgentRuntime } from "../agent-runtime";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
-import type { WorkflowFsm } from "../core/workflow-fsm";
-import { type Task, TaskQueue } from "../executor/task-queue";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
-import { TaskComplexityAnalyzer } from "../script/task-analyzer";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { RoleCandidate } from "./role-roundtable";
 
 // ============================================================================
@@ -86,16 +86,14 @@ export interface StageOptions {
 	agentIds?: string[];
 	/** User-specified agent count (overrides complexity analyzer). */
 	agentCount?: number;
-	/** Agent tooling strategy for spawned agents ("swift" or "persistent"). */
-	agentTooling?: "swift" | "persistent";
+	/** Agent tooling strategy for spawned agents ("swift" or "main"). */
+	agentTooling?: "swift" | "main";
 	/** P7: Stage lifecycle callbacks (credit updates, stigmergy marks). */
 	callbacks?: StageCallbacks;
 	/** v3: Unified hook pipeline for lifecycle events. */
 	hookPipeline?: HookPipeline;
-	/** v3: Workflow FSM for authoritative phase transitions. */
-	fsm?: WorkflowFsm;
-	/** v3: AgentRuntime — required for agent spawning (unified execution path). */
-	runtime?: AgentRuntime;
+	/** v3: SwarmRuntime — required for agent spawning (unified execution path). */
+	runtime?: SwarmRuntime;
 	ircBus?: IrcBus;
 	/** P5: Max retries per task before blocking (default 3). */
 	maxRetries?: number;
@@ -238,13 +236,13 @@ export function createTaskQueueFromPlan(planContent: string): TaskQueueSetup {
 }
 export class StageController {
 	readonly #opts: StageOptions;
-	/** AgentRuntime — required for all agent spawning (unified execution path). */
-	#runtime: AgentRuntime;
+	/** SwarmRuntime — required for all agent spawning (unified execution path). */
+	#runtime: SwarmRuntime;
 
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
 		if (!opts.runtime) {
-			throw new Error("[StageController] AgentRuntime is required. Pass `runtime` in StageOptions.");
+			throw new Error("[StageController] SwarmRuntime is required. Pass `runtime` in StageOptions.");
 		}
 		this.#runtime = opts.runtime;
 	}
@@ -257,14 +255,8 @@ export class StageController {
 		const errors: string[] = [];
 
 		// ── Phase: stage ─────────────────────────────────────────────────────────
-		// Use WorkflowFsm (single authority) when available; fall back to direct
-		// StateTracker update for callers that haven't wired the FSM yet.
-		if (this.#opts.fsm) {
-			await this.#opts.fsm.transition("stage", { reason: "running" });
-		} else {
-			await stateTracker.updatePipeline({ phase: "stage", status: "running" });
-			activityLogger.logPhase("stage-start");
-		}
+		await stateTracker.updatePipeline({ phase: "stage", status: "running" });
+		activityLogger.logPhase("stage-start");
 
 		// 1. Analyse complexity → recommendations
 		const analyzer = new TaskComplexityAnalyzer();
@@ -398,12 +390,8 @@ export class StageController {
 
 		// 6. All tasks complete — transition to curtain
 		const progress = queue.progress;
-		if (this.#opts.fsm) {
-			await this.#opts.fsm.transition("curtain", { reason: "Execution complete" });
-		} else {
-			await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Execution complete" });
-			activityLogger.logPhase("curtain", undefined, 1);
-		}
+		await stateTracker.updatePipeline({ phase: "curtain", roundtablePhase: "Execution complete" });
+		activityLogger.logPhase("curtain", undefined, 1);
 
 		const result: StageResult = {
 			status: errors.length > 0 ? "failed" : "completed",
@@ -494,12 +482,12 @@ export class StageController {
 
 				let result: SingleResult;
 
-				// Unified path — AgentRuntime.spawn() is the only execution path.
+				// Unified path — SwarmRuntime.spawn() is the only execution path.
 				// Legacy streamAgentOutput path removed (Phase A4).
 				const toolingTools: string[] | undefined =
 					this.#opts.agentTooling === "swift"
 						? ["quick-task-complete", "task-report"]
-						: this.#opts.agentTooling === "persistent"
+						: this.#opts.agentTooling === "main"
 							? ["session-save", "session-restore", "streaming-report"]
 							: undefined;
 
@@ -616,15 +604,8 @@ export class StageController {
 	/**
 	 * Activate circuit breaker when retries are exhausted for a task.
 	 *
-	 * Transitions the FSM to "blocked" and awaits a human decision via
-	 * {@link WorkflowFsm.waitForHumanDecision}. The caller (TUI / behavior)
-	 * resolves the decision by transitioning the FSM:
-	 *
-	 * - `stage` → retry (releases task back to queue)
-	 * - `stage` with reason `"skip"` → skip this task (block it, continue)
-	 * - `idle` → abort the entire pipeline
-	 *
-	 * Falls back to the old permanent-block behavior when no FSM is available.
+	 * Blocks the task and continues — human interaction is handled
+	 * by the orchestrator (GraphRunner).
 	 *
 	 * @returns `"continue"` to keep the agent loop running, `"break"` to exit.
 	 */
@@ -642,48 +623,7 @@ export class StageController {
 			reason: failureReason,
 		});
 
-		const fsm = this.#opts.fsm;
-		if (fsm && fsm.phase === "stage") {
-			await fsm.transition("blocked", {
-				reason: `Agent ${agent.id}: task "${task.title}" — ${failureReason}`,
-			});
-
-			activityLogger.logBroadcast(
-				"system",
-				`${agent.id}: Circuit breaker — "${task.title}" blocked. ` +
-					`Transition to stage (retry/skip) or idle (abort).`,
-			);
-
-			let decision: string;
-			try {
-				decision = (await fsm.waitForHumanDecision()) as string;
-			} catch (err) {
-				logger.error("Human decision wait failed, skipping task", {
-					agentId: agent.id,
-					taskId: task.id,
-					error: String(err),
-				});
-				queue.block(task.id, `Circuit breaker: human decision error — skipped`);
-				return "continue";
-			}
-
-			if (decision === "stage") {
-				const subStatus = fsm.state.subStatus;
-				if (subStatus === "skip") {
-					queue.block(task.id, `Circuit breaker: human chose to skip`);
-					return "continue";
-				}
-				// Default: retry — release back to the queue
-				queue.release(task.id, `Circuit breaker: human approved retry`);
-				return "continue";
-			}
-
-			// Abort (idle or any other unexpected transition)
-			queue.block(task.id, `Circuit breaker: human chose to abort pipeline`);
-			return "break";
-		}
-
-		// No FSM available — fall back to permanent block (legacy behavior)
+		// Block the task and continue — human interaction is handled by the orchestrator
 		queue.block(task.id, `Agent ${agent.id} failed: ${failureReason}`);
 		this.#opts.callbacks?.onTaskFailed(agent.id, task, failureReason);
 		this.#opts.hookPipeline

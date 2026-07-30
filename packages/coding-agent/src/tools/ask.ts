@@ -969,7 +969,12 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 				if (error instanceof Error && error.name === "AbortError") {
 					throw new ToolAbortError("Ask input was cancelled");
 				}
-				throw error;
+				if (error instanceof TypeError) {
+					// Rendering error (e.g., non-global regex in gradient highlighter) —
+					// fall through to the non-rich dialog path instead of crashing.
+				} else {
+					throw error;
+				}
 			}
 		}
 

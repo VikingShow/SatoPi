@@ -448,6 +448,11 @@ export class InputController {
 		for (const key of planModeKeys) {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.ctx.handlePlanModeCommand());
 		}
+		for (const key of this.ctx.keybindings.getKeys("app.swarm.sidebar")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => {
+				this.ctx.showSwarmSidebar();
+			});
+		}
 
 		for (const key of this.ctx.keybindings.getKeys("app.session.new")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.handleClearCommand());

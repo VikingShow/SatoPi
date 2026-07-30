@@ -53,6 +53,7 @@ interface AppKeybindings {
 	"app.plan.toggle": true;
 	"app.history.search": true;
 	"app.stt.toggle": true;
+	"app.swarm.sidebar": true;
 }
 
 export type AppKeybinding = keyof AppKeybindings;
@@ -221,6 +222,10 @@ export const KEYBINDINGS = {
 	"app.stt.toggle": {
 		defaultKeys: [],
 		description: "Toggle speech-to-text (default gesture: hold Space)",
+	},
+	"app.swarm.sidebar": {
+		defaultKeys: "ctrl+b",
+		description: "Toggle swarm sidebar",
 	},
 } as const satisfies KeybindingDefinitions;
 

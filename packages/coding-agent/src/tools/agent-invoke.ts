@@ -25,7 +25,7 @@ export interface AgentInvokeDetails {
 	results: SingleResult[];
 	profileId: string;
 	displayName: string;
-	kind: "persistent";
+	kind: "main";
 }
 
 export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails> = {
@@ -58,7 +58,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 		// Find existing persistent idle agent
 		const existing = registry
 			.list()
-			.find(ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle");
+			.find(ref => ref.profileId === profileId && ref.kind === "main" && ref.status === "idle");
 
 		let session: AgentSession | undefined;
 		let displayName = agentId;
@@ -70,8 +70,8 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			signal?.throwIfAborted();
 			try {
 				const result = await createAgentSession({
-					agentKind: "persistent",
-					persistentProfileId: profileId,
+					agentKind: "main",
+					profileId,
 					agentId,
 					agentDisplayName: agentId,
 					autoApprove: true,
@@ -82,7 +82,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				registry.register({
 					id: agentId,
 					displayName: agentId,
-					kind: "persistent",
+					kind: "main",
 					profileId,
 					session,
 				});
@@ -91,7 +91,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				return {
 					content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 					isError: true,
-					details: { progress: [], results: [], profileId, displayName: agentId, kind: "persistent" },
+					details: { progress: [], results: [], profileId, displayName, kind: "main" },
 				};
 			}
 		}
@@ -130,7 +130,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				progress.push(snap);
 				_onUpdate?.({
 					content: [{ type: "text", text: "..." }],
-					details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
+					details: { progress: [...progress], results: [], profileId, displayName, kind: "main" },
 				});
 			}
 		});
@@ -174,7 +174,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 					results: [final],
 					profileId,
 					displayName,
-					kind: "persistent",
+					kind: "main",
 				},
 			};
 		} catch (err) {
@@ -196,7 +196,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			return {
 				content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 				isError: true,
-				details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
+				details: { progress: [...progress], results: [], profileId, displayName, kind: "main" },
 			};
 		}
 	},

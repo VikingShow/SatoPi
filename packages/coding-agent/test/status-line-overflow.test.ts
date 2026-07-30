@@ -48,6 +48,7 @@ function createCtx(overrides?: { pathMaxLength?: number; branch?: string | null 
 		prewalk: null,
 		goalMode: null,
 		vibeMode: null,
+		swarmMode: null,
 		collab: null,
 		usageStats: {
 			input: 0,

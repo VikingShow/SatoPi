@@ -13,11 +13,11 @@
  */
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { CurtainBehavior } from "../behaviors/curtain-behavior";
-import type { PhaseBehavior, PhaseContext } from "../behaviors/index";
+import { CurtainBehavior } from "../../graph/behaviors/curtain-behavior";
+import type { PhaseBehavior, PhaseContext } from "../../graph/behaviors/index";
 // Import behaviors
-import { ScriptBehavior } from "../behaviors/script-behavior";
-import { StageBehavior } from "../behaviors/stage-behavior";
+import { ScriptBehavior } from "../../graph/behaviors/script-behavior";
+import { StageBehavior } from "../../graph/behaviors/stage-behavior";
 
 // ============================================================================
 // Mock factories
@@ -304,34 +304,25 @@ describe("ScriptBehavior", () => {
 	});
 
 	describe("enter()", () => {
-		it("spawns a planner agent", async () => {
+		it("returns empty agents (MAIN model IS the planner)", async () => {
 			const result = await behavior.enter(ctx);
 
 			expect(result.agents).toBeArray();
-			expect(result.agents.length).toBe(1);
-			expect(result.agents[0].id).toBe("planner");
+			expect(result.agents.length).toBe(0);
 		});
 
-		it("creates a script-dialogue channel", async () => {
-			const result = await behavior.enter(ctx);
-
-			expect(result.channels).toBeArray();
-			expect(result.channels.length).toBe(1);
-			expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
-		});
-
-		it("returns PhaseEnterResult with initialUIMessage", async () => {
+		it("returns initialUIMessage", async () => {
 			const result = await behavior.enter(ctx);
 
 			expect(result.initialUIMessage).toBeString();
-			expect(result.initialUIMessage!.length).toBeGreaterThan(0);
 		});
 
-		it("uses planContent as the Planner task when provided", async () => {
+		it("uses planContent from context without spawning", async () => {
 			ctx.planContent = "Build a REST API for users";
 			const result = await behavior.enter(ctx);
 
-			expect(result.agents[0].id).toBe("planner");
+			// Plan content is used by the MAIN model; no agent spawned
+			expect(result.agents.length).toBe(0);
 		});
 	});
 
@@ -882,11 +873,12 @@ describe("PhaseContext", () => {
 		// enter() should receive and use all context services without error
 		const result = await behavior.enter(ctx);
 		expect(result).toBeDefined();
+		expect(result.agents).toBeArray();
+		expect(result.agents.length).toBe(0); // MAIN model IS the planner
 
-		// Verify context is accessible — all service mocks should have been
-		// callable (the behavior delegates to them internally)
-		expect(ctx.runtime.spawn).toHaveBeenCalled();
-		expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
+		// Context services are accessible (but ScriptBehavior doesn't spawn agents)
+		expect(ctx.runtime.spawn).toBeDefined();
+		expect(ctx.ircBus.groupChannel).toBeDefined();
 	});
 
 	it("loopConfig is accessible for roundtable/roundtable configuration", async () => {

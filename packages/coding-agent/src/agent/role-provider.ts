@@ -9,7 +9,7 @@
  */
 
 import { logger, prompt } from "@satopi/pi-utils";
-import type { AgentSpec } from "../swarm/agent-runtime/agent-spec";
+import type { AgentSpec } from "../graph/agent-spec";
 import roleFallbackPrompt from "../swarm/prompts/role-fallback.md" with { type: "text" };
 import roleProfilePrompt from "../swarm/prompts/role-profile.md" with { type: "text" };
 import type { AgentProfile, ProfileRegistry } from "./agent-profile";

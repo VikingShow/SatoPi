@@ -44,6 +44,7 @@ export function buildHotkeysMarkdown(bindings: HotkeysMarkdownBindings): string 
 		`| \`${appKey(bindings, "app.model.selectTemporary")}\` | Select model (temporary) |`,
 		`| \`${appKey(bindings, "app.model.select")}\` | Select model (set roles) |`,
 		`| \`${appKey(bindings, "app.plan.toggle")}\` | Toggle plan mode |`,
+		`| \`${appKey(bindings, "app.swarm.sidebar")}\` | Toggle swarm sidebar (when swarm is active) |`,
 		`| \`${appKey(bindings, "app.history.search")}\` | Search prompt history |`,
 		`| \`${appKey(bindings, "app.tools.expand")}\` | Toggle tool output expansion |`,
 		`| \`${appKey(bindings, "app.thinking.toggle")}\` | Toggle thinking block visibility |`,
