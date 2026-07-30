@@ -27,7 +27,6 @@ import { createAgentSession } from "../../sdk";
 import type { AssembledContext, ContextPipeline, PhaseInfo } from "../context-manager/context-pipeline";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
-import type { AgentLauncher, LaunchContext } from "./agent-launcher";
 import type { AgentSpec } from "../../graph/agent-spec";
 
 // ============================================================================
@@ -79,7 +78,6 @@ export interface AgentRuntimeOptions {
 	contextPipeline: ContextPipeline;
 
 	/** Shared service for agent creation + launch. */
-	launcher: AgentLauncher;
 
 	/** Communication bus for human steering and system messages. Defaults to IrcBus.global(). */
 	ircBus?: IrcBus;
@@ -87,10 +85,8 @@ export interface AgentRuntimeOptions {
 	/** Hook pipeline for lifecycle events. */
 	hookPipeline: HookPipeline;
 
-	/** Model registry (needed for LaunchContext modelRegistry). */
 	modelRegistry: ModelRegistry;
 
-	/** Settings (needed for LaunchContext settings). */
 	settings: Settings;
 
 	/** Optional activity logger for streaming output. */
@@ -130,7 +126,6 @@ export interface AgentRuntimeOptions {
 export class AgentRuntime {
 	readonly #roleProvider: RoleProvider;
 	readonly #contextPipeline: ContextPipeline;
-	readonly #launcher: AgentLauncher;
 	readonly #ircBus: IrcBus;
 	readonly #hookPipeline: HookPipeline;
 	readonly #modelRegistry: ModelRegistry;
@@ -356,7 +351,6 @@ export class AgentRuntime {
 		}
 
 		// 4. Build AgentLoopConfig hook providers from CommChannel-backed queues
-		const hookProviders: LaunchContext["hookProviders"] = {
 			getAsideMessages: async () => {
 				const queue = this.#asideQueues.get(agentId);
 				if (!queue || queue.length === 0) return [];
@@ -380,7 +374,6 @@ export class AgentRuntime {
 			},
 		};
 
-		// 5. Resolve model (model resolution previously in AgentLauncher)
 		const availableModels = this.#modelRegistry.getAvailable();
 		const model =
 			spec.modelPreference === "smartest"
@@ -396,7 +389,6 @@ export class AgentRuntime {
 			throw new Error(`[AgentRuntime] No available model for agent "${spec.id}"`);
 		}
 
-		// 6. Build system prompt (previously in AgentLauncher.#buildSystemPrompt)
 		const promptParts: string[] = [];
 		if (resolvedRole.systemPrompt) {
 			promptParts.push(resolvedRole.systemPrompt);
