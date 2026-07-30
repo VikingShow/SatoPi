@@ -73,7 +73,6 @@ describe("assembleAgentRuntime", () => {
 		// Verify we got back a valid AgentRuntime (public API surface)
 		expect(runtime).toBeTruthy();
 		expect(typeof runtime.spawn).toBe("function");
-		expect(typeof runtime.spawnRoundtable).toBe("function");
 	});
 
 	// ── Combo 2: ALL optional dependencies absent ─────────────────────────

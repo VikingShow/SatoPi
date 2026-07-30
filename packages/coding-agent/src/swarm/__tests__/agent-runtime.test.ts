@@ -9,40 +9,11 @@
  * - AgentRuntime.spawn(): single agent, multiple agents in parallel,
  *   HookPipeline triggers
  * - AgentLoopConfig assembly: transformContext, getSteeringMessages,
- *   getFollowUpMessages, getAsideMessages
- * - Error handling: RoleProvider throws, ContextPipeline throws,
- *   Launcher throws
+ *   getFollowUpMessages
+ * - Error handling: RoleProvider throws, ContextPipeline throws
  */
 
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-
-// Mock session factory for AgentLauncher tests — avoids pulling in full SDK
-// Variant A: agent stays "running" for basic lifecycle tests
-const makeMockSession = (agentId?: string) => ({
-	agent: {
-		setAsideMessageProvider: () => {},
-		subscribe: () => () => {},
-		prompt: async () => {},
-		steer: () => {},
-		followUp: () => {},
-	},
-	prompt: async () => {},
-	setToolContextAgentRuntime: () => {},
-	get id() {
-		return agentId ?? "unknown";
-	},
-	get status() {
-		return "running" as const;
-	},
-	role: undefined as string | undefined,
-});
-const mockSessionFactory = async (opts?: { agentId?: string }) =>
-	({
-		session: makeMockSession(opts?.agentId) as unknown as AgentSession,
-		extensionsResult: { extensions: [], errors: [], runtime: {} },
-		setToolUIContext: () => {},
-		eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
-	}) as unknown as CreateAgentSessionResult;
 
 const makeCompletingMockSession = (agentId?: string) => ({
 	agent: {
@@ -73,12 +44,11 @@ const mockCompletingSessionFactory = async (opts?: { agentId?: string }) =>
 		eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
 	}) as unknown as CreateAgentSessionResult;
 
-import type { AgentMessage, AsideMessage } from "@satopi/pi-agent-core";
-import { Agent } from "@satopi/pi-agent-core";
+import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 // Dependencies
 import type { RoleAsset, RoleAssetManager } from "../../agent/role-asset";
-import { type ResolvedRole, RoleProvider } from "../../agent/role-provider";
+import { RoleProvider } from "../../agent/role-provider";
 import { IrcBus } from "../../irc/bus";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "../../sdk";
@@ -87,9 +57,9 @@ import type { Tool } from "../../tools";
 // Module under test
 import type { AgentSpec, AgentSpecInline } from "../../graph/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
-import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
+import { ContextPipeline } from "../context-manager/context-pipeline";
 import { HookPipeline } from "../../hooks/hook-pipeline";
-import type { AgentAfterSpawnPayload, AgentBeforeSpawnPayload } from "../../hooks/types";
+import type { AgentAfterSpawnPayload, AgentBeforeSpawnPayload, HandlerArgs } from "../../hooks/types";
 
 // ============================================================================
 // Helpers
@@ -100,12 +70,9 @@ function makeSpec(overrides?: Partial<AgentSpec>): AgentSpec {
 	return {
 		id: "agent-1",
 		role: "planner",
-		roleSource: "library",
-		task: "Test task",
 		...overrides,
 	} as AgentSpec;
 }
-
 /** Create a mock RoleAssetManager. */
 function mockRoleAssetManager(roles: Record<string, RoleAsset | null> = {}): RoleAssetManager {
 	return {
@@ -114,8 +81,6 @@ function mockRoleAssetManager(roles: Record<string, RoleAsset | null> = {}): Rol
 		list: async () => [],
 		search: async () => [],
 		create: async () => ({}) as RoleAsset,
-		update: async () => ({}) as RoleAsset,
-		approve: async () => ({}) as RoleAsset,
 		deprecate: async () => ({}) as RoleAsset,
 		recordUsage: async () => {},
 		delete: async () => false,
@@ -319,7 +284,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -339,7 +303,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -364,7 +327,7 @@ describe("AgentRuntime", () => {
 				name: "test-hook",
 				priority: 0,
 				events: ["agent:beforeSpawn"],
-				handler: async (_event, payload, _ctx) => {
+				handler: async ({ payload }: HandlerArgs) => {
 					events.push(`before:${(payload as AgentBeforeSpawnPayload).agentId}`);
 				},
 			});
@@ -372,7 +335,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -391,7 +353,7 @@ describe("AgentRuntime", () => {
 				name: "after-hook",
 				priority: 0,
 				events: ["agent:afterSpawn"],
-				handler: async (_event, payload, _ctx) => {
+				handler: async ({ payload }: HandlerArgs) => {
 					const p = payload as AgentAfterSpawnPayload;
 					events.push(`after:${p.agentId}`);
 					expect(p.session).toBeTruthy();
@@ -401,7 +363,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -420,7 +381,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -437,7 +397,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -461,7 +420,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
@@ -621,7 +579,6 @@ describe("AgentRuntime", () => {
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher,
 			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
