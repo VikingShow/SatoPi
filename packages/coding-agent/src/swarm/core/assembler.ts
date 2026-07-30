@@ -2,21 +2,12 @@
  * assembler.ts — Unified service assembly for swarm CLI/TUI mode.
  *
  * Creates the full AgentRuntime dependency graph with proper DI:
- *   RoleProvider + ContextPipeline + AgentLauncher + IrcBus
+ *   RoleProvider + ContextPipeline + IrcBus
  *   → AgentRuntime
  *
  * All services are created fresh per session — no global singletons.
  * The IrcBus is the single exception (SatoPi owns it); we accept
  * the global instance and inject it explicitly.
- *
- * Usage:
- * ```ts
- * const runtime = assembleAgentRuntime({
- *   modelRegistry, settings, activityLogger,
- *   roleAssetManager, hookPipeline, ircBus,
- * });
- * scriptManager.setRuntime(runtime);
- * ```
  */
 
 import type { ProfileRegistry } from "../../agent/agent-profile";
@@ -29,7 +20,6 @@ import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import { AgentRuntime } from "../agent-runtime";
-import { AgentLauncher } from "../agent-runtime/agent-launcher";
 
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
@@ -50,33 +40,19 @@ import type { MnemopiClient } from "../infra/mnemopi-adapter";
 // ============================================================================
 
 export interface AssemblerOptions {
-	/** Model registry for API key resolution and model selection. */
 	modelRegistry: ModelRegistry;
-	/** Settings for model and tool configuration. */
 	settings: Settings;
-	/** Activity logger for streaming output and event capture. */
 	activityLogger: ActivityLogger;
-	/** Role asset manager for library-based role resolution. */
 	roleAssetManager: RoleAssetManager;
-	/** Optional profile registry for profile-based role resolution. */
 	profileRegistry?: ProfileRegistry;
-	/** Hook pipeline for lifecycle events (already created by caller). */
 	hookPipeline: HookPipeline;
-	/** Optional IrcBus for agent-to-agent communication. */
 	ircBus?: IrcBus;
-	/** Optional tool registry for resolving tool names to real Tool instances. */
 	toolRegistry?: Map<string, Tool>;
-	/** Local experience store — enables ExperienceSource (past-run lessons). */
 	experienceStore?: ExperienceStore;
-	/** Remote Hindsight handle — enables HindsightSource (cross-session recall). Null when unconfigured. */
 	hindsightClient?: SwarmHindsightClient | null;
-	/** Semantic memory handle — enables MnemopiSource. Null when unavailable. */
 	mnemopiClient?: MnemopiClient | null;
-	/** MarkEnvironment for stigmergic coordination — enables StigmergySource. */
 	markEnvironment?: MarkEnvironment;
-	/** OffloadManager for context offload — enables OffloadSource (L1 summaries, MMD context). */
 	offloadManager?: IOffloadManager;
-	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
 }
 
@@ -84,7 +60,6 @@ export interface AssemblerOptions {
 // Orchestrator Runtime Factory
 // ============================================================================
 
-/** Options for createOrchestratorRuntime — the shared orchestrator bootstrap. */
 export interface CreateOrchestratorRuntimeOptions {
 	modelRegistry: ModelRegistry;
 	settings: Settings;
@@ -98,13 +73,6 @@ export interface CreateOrchestratorRuntimeOptions {
 	activeMmd?: string;
 }
 
-/**
- * Create the shared orchestration runtime — MarkEnvironment, HookPipeline
- * with builtins, and a fully-wired AgentRuntime — in one call.
- *
- * Both EmbeddedSwarmBridge and GraphRunner use this to eliminate duplicated
- * bootstrap code.
- */
 export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
 	runtime: AgentRuntime;
 	hookPipeline: HookPipeline;
@@ -142,29 +110,9 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 // Assembler
 // ============================================================================
 
-/**
- * Assemble a fully-wired AgentRuntime from shared services.
- *
- * This is the single entry point for creating an AgentRuntime in CLI/TUI mode.
- * It creates all internal services (RoleProvider, ContextPipeline, AgentLauncher,
- * IrcBus) and wires them into an AgentRuntime instance.
- *
- * The OffloadManager is NOT wired here — it's created later by SessionRegistry
- * once SessionStorage is available. The AgentLauncher handles the missing
- * OffloadManager gracefully (skips compaction).
- */
 export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
-	// 1. RoleProvider — resolves AgentSpec.role → ResolvedRole
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
-	// 2. ContextPipeline — assembles agent context from registered sources.
-	//    Memory sources are registered when their backing handle is available;
-	//    each source no-ops (or is skipped) when its dependency is absent, so an
-	//    unconfigured environment degrades gracefully.
-	//    AgentRuntime.spawnOne() uses spec.phase (when provided by the behavior)
-	//    as BuildContext.phase, so phase-filtered sources like ExperienceSource
-	//    ("script"/"script-debate" only) now fire correctly when the caller
-	//    passes the real phase. Fallback is "stage" for backward compat.
 	const contextPipeline = new ContextPipeline();
 	if (opts.experienceStore) {
 		contextPipeline.register(new ExperienceSource(opts.experienceStore));
@@ -185,20 +133,14 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 		contextPipeline.register(new OffloadSource(opts.offloadManager));
 	}
 
-	// 3. AgentLauncher — creates Agent instances with full hook wiring
-	const launcher = new AgentLauncher(opts.modelRegistry, opts.settings);
-
-	// 4. Wire IrcBus with activity logger and hook pipeline (ircBus is optional)
 	if (opts.ircBus) {
 		opts.ircBus.setActivityLogger(opts.activityLogger);
 		opts.ircBus.setHookPipeline(opts.hookPipeline);
 	}
 
-	// 5. AgentRuntime — the central agent lifecycle controller
 	return new AgentRuntime({
 		roleProvider,
 		contextPipeline,
-		launcher,
 		ircBus: opts.ircBus,
 		hookPipeline: opts.hookPipeline,
 		modelRegistry: opts.modelRegistry,
