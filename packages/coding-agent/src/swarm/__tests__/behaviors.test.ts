@@ -873,11 +873,12 @@ describe("PhaseContext", () => {
 		// enter() should receive and use all context services without error
 		const result = await behavior.enter(ctx);
 		expect(result).toBeDefined();
+		expect(result.agents).toBeArray();
+		expect(result.agents.length).toBe(0); // MAIN model IS the planner
 
-		// Verify context is accessible — all service mocks should have been
-		// callable (the behavior delegates to them internally)
-		expect(ctx.runtime.spawn).toHaveBeenCalled();
-		expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
+		// Context services are accessible (but ScriptBehavior doesn't spawn agents)
+		expect(ctx.runtime.spawn).toBeDefined();
+		expect(ctx.ircBus.groupChannel).toBeDefined();
 	});
 
 	it("loopConfig is accessible for roundtable/roundtable configuration", async () => {

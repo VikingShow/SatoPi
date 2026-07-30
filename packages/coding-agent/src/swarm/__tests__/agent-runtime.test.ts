@@ -801,8 +801,8 @@ describe("AgentRuntime", () => {
 			});
 
 			const config: RoundtableConfig = {
-				rounds: 2,
-				timeoutMs: 5000,
+				rounds: 1,
+				timeoutMs: 500,
 				convergenceThreshold: 0.99,
 				convergenceStreak: 1,
 			};

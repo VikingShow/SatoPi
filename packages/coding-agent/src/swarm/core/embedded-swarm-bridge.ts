@@ -157,8 +157,10 @@ export function validatePlanTasks(planContent: string): string[] {
 			const taskLine = tasks[i][0];
 			const taskIndex = tasks[i].index!;
 			const afterTask = sectionText.slice(taskIndex + taskLine.length);
-			const continuationEnd = afterTask.search(/^(?![\t ])/m);
-			const taskBlock = afterTask.slice(0, continuationEnd === -1 ? undefined : continuationEnd);
+			const afterTaskStart = afterTask.startsWith("\n") ? 1 : 0;
+			const continuationEnd = afterTask.slice(afterTaskStart).search(/^(?![\t ])/m);
+			const adjustedEnd = continuationEnd === -1 ? undefined : afterTaskStart + continuationEnd;
+			const taskBlock = afterTask.slice(0, adjustedEnd);
 			const fullTaskText = taskLine + taskBlock;
 
 			const hasFiles = /\bFiles:/.test(fullTaskText);

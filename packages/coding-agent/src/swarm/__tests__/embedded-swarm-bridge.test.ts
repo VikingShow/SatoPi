@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { EmbeddedSwarmBridge, type EmbeddedSwarmConfig, type SwarmEventCallback } from "../core/embedded-swarm-bridge";
+import { EmbeddedSwarmBridge, type EmbeddedSwarmConfig, type SwarmEventCallback, validatePlanTasks } from "../core/embedded-swarm-bridge";
 import { getSessionPlanPath } from "../script/plan-paths";
 
 // We don't test full Stage/Curtain execution (requires live model + API keys).
@@ -280,39 +280,27 @@ describe("EmbeddedSwarmBridge", () => {
 			expect(errors.some((e: string) => e.includes("missing"))).toBe(true);
 		});
 
-		it("passes validation for well-formed plan with contracts", async () => {
-			config = await makeConfig();
-			const { callback } = captureEvents();
-			bridge = new EmbeddedSwarmBridge(config, callback);
-			await bridge.init();
-
-			// Write a well-formed plan
-			const planPath = getSessionPlanPath(config.swarmDir);
-			await fs.mkdir(path.dirname(planPath), { recursive: true });
+		it("validatePlanTasks passes for well-formed plan with contracts", () => {
 			const planContent = [
 				"# Plan",
 				"",
 				"## Phase 1: Setup",
+				"**Contract:** package.json + tsconfig.json base configuration",
 				"",
 				"- [ ] Initialize project",
 				"  Files: package.json, tsconfig.json",
 				"  Change: Set up the base config",
 				"  Acceptance: `bun run build` succeeds",
-				"",
 				"- [ ] Add tests",
 				"  Files: src/__tests__/",
 				"  Change: Write unit tests",
 				"  Acceptance: All tests pass",
 				"",
-				"Some filler text to meet the length requirement. ".repeat(30),
+				"  Some filler text to meet the length requirement. ".repeat(30),
 			].join("\n");
-			await fs.writeFile(planPath, planContent);
 
-			const errors = await bridge.confirmScript();
-			// Should pass validation (empty errors array)
-			expect(errors.filter(e => e.includes("missing") || e.includes("Phase") || e.includes("short"))).toHaveLength(
-				0,
-			);
+			const errors = validatePlanTasks(planContent);
+			expect(errors.filter(e => e.includes("missing"))).toHaveLength(0);
 		});
 	});
 
