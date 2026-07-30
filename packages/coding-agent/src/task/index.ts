@@ -30,6 +30,7 @@ import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: 
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/irc";
 import { formatBytes, formatDuration } from "../tools/render-utils";
+import { getSessionDir } from "../session/session-tree-paths";
 import { resolveSpawnPolicy } from "./spawn-policy";
 import {
 	type AgentDefinition,
@@ -1304,7 +1305,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 
 		// Derive artifacts directory
 		const sessionFile = this.session.getSessionFile();
-		const artifactsDir = sessionFile ? sessionFile.slice(0, -6) : null;
+		const artifactsDir = sessionFile ? getSessionDir(sessionFile) : null;
 		const tempArtifactsDir = artifactsDir ? null : path.join(os.tmpdir(), `omp-task-${Snowflake.next()}`);
 		const effectiveArtifactsDir = artifactsDir || tempArtifactsDir!;
 
