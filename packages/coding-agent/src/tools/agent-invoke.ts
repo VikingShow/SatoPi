@@ -58,7 +58,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 		// Find existing persistent idle agent
 		const existing = registry
 			.list()
-			.find(ref => ref.profileId === profileId && ref.kind === "persistent" && ref.status === "idle");
+			.find(ref => ref.profileId === profileId && ref.kind === "main" && ref.status === "idle");
 
 		let session: AgentSession | undefined;
 		let displayName = agentId;
@@ -70,7 +70,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			signal?.throwIfAborted();
 			try {
 				const result = await createAgentSession({
-					agentKind: "persistent",
+					agentKind: "main",
 					persistentProfileId: profileId,
 					agentId,
 					agentDisplayName: agentId,
@@ -82,7 +82,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				registry.register({
 					id: agentId,
 					displayName: agentId,
-					kind: "persistent",
+					kind: "main",
 					profileId,
 					session,
 				});

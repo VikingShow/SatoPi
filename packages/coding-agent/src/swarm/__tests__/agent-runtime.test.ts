@@ -908,13 +908,13 @@ describe("AgentRegistry integration", () => {
 		const ref = registry.register({
 			id: "persistent-architect",
 			displayName: "Architect v3",
-			kind: "persistent",
+			kind: "main",
 			profileId: "architect-v3",
 			role: "architect",
 			session: null,
 		});
 
-		expect(ref.kind).toBe("persistent");
+		expect(ref.kind).toBe("main");
 		expect(ref.profileId).toBe("architect-v3");
 		expect(ref.role).toBe("architect");
 	});
@@ -923,7 +923,7 @@ describe("AgentRegistry integration", () => {
 		registry.register({
 			id: "with-session",
 			displayName: "Session Test",
-			kind: "persistent",
+			kind: "main",
 			session: null,
 		});
 
@@ -945,7 +945,7 @@ describe("AgentRegistry integration", () => {
 		const first = registry.register({
 			id: "dup-agent",
 			displayName: "First",
-			kind: "persistent",
+			kind: "main",
 			session: { dispose: mockDispose } as unknown as AgentSession,
 		});
 		expect(first.displayName).toBe("First");
@@ -954,7 +954,7 @@ describe("AgentRegistry integration", () => {
 		const second = registry.register({
 			id: "dup-agent",
 			displayName: "Second",
-			kind: "persistent",
+			kind: "main",
 			session: null,
 		});
 		expect(second.displayName).toBe("Second");

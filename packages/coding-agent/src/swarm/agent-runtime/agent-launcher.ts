@@ -193,7 +193,7 @@ export class AgentLauncher {
 
 		const { session } = await this.#sessionFactory({
 			// 4. Create persistent AgentSession (same path as agent_invoke)
-			agentKind: "persistent",
+			agentKind: "main",
 			persistentProfileId: spec.id,
 			model,
 			systemPrompt: [systemPrompt],

@@ -34,9 +34,9 @@ import type { AgentSession, FreshSessionResult } from "../session/agent-session"
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
-import { convertLoopFileToGraph } from "../swarm/graph/loop-converter";
-import { compileMermaidToGraph } from "../swarm/graph/mermaid-compiler";
-import type { GraphDefinition } from "../swarm/graph/schema";
+import { convertLoopFileToGraph } from "../graph/loop-converter";
+import { compileMermaidToGraph } from "../graph/mermaid-compiler";
+import type { GraphDefinition } from "../graph/schema";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
 import {

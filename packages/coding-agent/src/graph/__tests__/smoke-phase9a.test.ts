@@ -86,7 +86,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			AgentRegistry.global().register({
 				id: "persist-steer-worker",
 				displayName: "persist-steer-worker",
-				kind: "persistent",
+				kind: "main",
 				profileId: "steer-worker",
 				session: session as unknown as AgentSession,
 				status: "idle",

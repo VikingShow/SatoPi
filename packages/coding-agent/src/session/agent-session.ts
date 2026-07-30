@@ -301,7 +301,6 @@ import {
 } from "../secrets/obfuscator";
 import { invalidateHostMetadata } from "../ssh/connection-manager";
 import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
-import { GraphRunner } from "../swarm/graph/graph-runner";
 import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import type { SingleResult } from "../task/types";
@@ -1678,7 +1677,7 @@ export class AgentSession {
 	readonly sessionManager: SessionManager;
 	readonly settings: Settings;
 	readonly yieldQueue: YieldQueue;
-	/** Agent kind: "main" | "sub" | "advisor" | "persistent" */
+	/** Agent kind: "main" | "sub" | "advisor" */
 	readonly kind: AgentKind;
 	/** Profile ID for persistent agents that survive across sessions. */
 	readonly persistentProfileId?: string;
@@ -8243,39 +8242,6 @@ export class AgentSession {
 
 	async #initializeEmbeddedSwarm(): Promise<void> {
 		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
-		const engine = (this.settings.get("swarm.engine") as string) ?? "legacy";
-
-		if (engine === "graph") {
-			const graphPath = path.join(import.meta.dir, "..", "swarm", "graph", "builtin", "theatre.graph.yaml");
-			const bridge = new GraphRunner({
-				workspace: process.cwd(),
-				graphPath,
-				modelRegistry: this.#modelRegistry,
-				settings: this.settings,
-			});
-			await bridge.init();
-			this.emitNotice(
-				"info",
-				"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
-				"swarm",
-			);
-			this.setToolContextAgentRuntime(bridge.runtime);
-			this.#embeddedSwarm = bridge;
-			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
-			// Register beforeToolCall hook to capture plan.md writes → bridge.onPlanUpdated
-			this.agent.beforeToolCall = ctx => {
-				if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
-					const args = ctx.args as { path?: string; content?: string };
-					if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-						this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-						this.#embeddedSwarm.onPlanUpdated(args.content);
-					}
-				}
-				return undefined;
-			};
-			return;
-		}
-
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
 		const profileRegistry = await ProfileRegistry.load(process.cwd());
@@ -8300,9 +8266,7 @@ export class AgentSession {
 			},
 		);
 
-		// Register beforeToolCall BEFORE bridge.init() — the MAIN model may
-		// start writing plan.md while init is still in-flight (it's fire-and-forget
-		// upstream). Catch plan writes early so getPlanContent() is never empty.
+		// Register beforeToolCall BEFORE bridge.init() — catch plan writes early
 		const planCapture = bridge;
 		this.agent.beforeToolCall = ctx => {
 			if (ctx.toolCall.name === "write") {
@@ -8316,11 +8280,7 @@ export class AgentSession {
 		};
 
 		await bridge.init();
-		this.emitNotice(
-			"info",
-			"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
-			"swarm",
-		);
+		this.emitNotice("info", "Swarm orchestration mode active.", "swarm");
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
 		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });

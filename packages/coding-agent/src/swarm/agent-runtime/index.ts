@@ -427,7 +427,7 @@ export class AgentRuntime {
 		try {
 			const factory = this.#sessionFactory ?? createAgentSession;
 			const result = await factory({
-				agentKind: "persistent",
+				agentKind: "main",
 				persistentProfileId: spec.id,
 				model,
 				systemPrompt: [systemPrompt],
@@ -453,7 +453,7 @@ export class AgentRuntime {
 				AgentRegistry.global().register({
 					id: spec.id,
 					displayName: spec.id,
-					kind: "persistent" as const,
+					kind: "main" as const,
 					profileId: spec.id,
 					role: spec.role,
 					session,

@@ -22,7 +22,7 @@ import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manag
 import type { RunManager, SteeringSink } from "../swarm/core/services";
 import { StateTracker } from "../swarm/core/state";
 import { ExperienceStore } from "../experience/experience";
-import { GraphRunner } from "../swarm/graph/graph-runner";
+import { GraphRunner } from "../graph/graph-runner";
 import { HookPipeline } from "../hooks/hook-pipeline";
 import { registerBuiltinHooks } from "../hooks/register-builtins";
 import { ActivityLogger } from "../infra/activity-logger";

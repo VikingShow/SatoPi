@@ -35,7 +35,6 @@ const DEFAULT_STAGE_TOOLS: readonly string[] = [
 	"irc",
 	"todo",
 	"agent_fork",
-	"agent_peers",
 ];
 
 /** Default script tools. */

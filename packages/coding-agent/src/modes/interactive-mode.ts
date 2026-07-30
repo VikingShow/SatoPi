@@ -110,7 +110,7 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } fr
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { GraphRunner } from "../swarm/graph/graph-runner";
+import { GraphRunner } from "../graph/graph-runner";
 import { TaskComplexityAnalyzer } from "../swarm/script/task-analyzer";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
@@ -170,7 +170,7 @@ import {
 } from "./loop-limit";
 import { OAuthManualInputManager } from "./oauth-manual-input";
 import {
-	countRunningPersistentAgents,
+	countRunningProfileAgents,
 	countRunningSubagentBadgeAgents,
 	getRunningSubagentBadgeRegistry,
 } from "./running-subagent-badge";
@@ -1638,7 +1638,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.syncRunningSubagentBadge();
 			});
 		}
-		const persistentCount = countRunningPersistentAgents(registry);
+		const persistentCount = countRunningProfileAgents(registry);
 		const subCount = countRunningSubagentBadgeAgents(registry);
 		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();

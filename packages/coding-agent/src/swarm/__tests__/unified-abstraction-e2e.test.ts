@@ -278,7 +278,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const ref = registry.register({
 				id: "persistent-test-1",
 				displayName: "Test Persistent",
-				kind: "persistent" as const,
+				kind: "main" as const,
 				session: null,
 				profileId: "architect-v1",
 				role: "architect",
@@ -295,7 +295,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			registry.register({
 				id: "persistent-test-2",
 				displayName: "Status Test",
-				kind: "persistent" as const,
+				kind: "main" as const,
 				session: null,
 				profileId: "dev-v2",
 			});

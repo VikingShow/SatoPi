@@ -154,13 +154,11 @@ function formatAgentLine(
 	const glyph = formatStatusIcon(iconStatus, theme);
 	const name = ref.displayName;
 
-	// Kind badge: [persistent] or [sub]
+	// Kind badge: [sub] for subagents
 	const kindBadge =
-		ref.kind === "persistent"
-			? theme.fg("dim", `${theme.format.bracketLeft}persistent${theme.format.bracketRight}`)
-			: ref.kind === "sub"
-				? theme.fg("dim", `${theme.format.bracketLeft}sub${theme.format.bracketRight}`)
-				: "";
+		ref.kind === "sub"
+			? theme.fg("dim", `${theme.format.bracketLeft}sub${theme.format.bracketRight}`)
+			: "";
 
 	// Role badge
 	const roleLabel = ref.role ?? swarmAgent?.role ?? swarmAgent?.modelName ?? "";

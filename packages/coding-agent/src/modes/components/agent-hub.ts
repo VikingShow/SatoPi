@@ -535,7 +535,7 @@ export class AgentHubOverlayComponent extends Container {
 		if (ref.kind === "advisor") {
 			fields.push(theme.fg("warning", "read-only"));
 		}
-		if (ref.kind === "persistent") {
+		if (ref.profileId) {
 			const badgeParts: string[] = [theme.fg("accent", "[P]")];
 			let info = "";
 			if (ref.role) info += ref.role;

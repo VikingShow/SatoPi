@@ -602,13 +602,11 @@ export class AgentTranscriptViewer implements Component {
 		const lines = [theme.fg("accent", `Agent Hub ${theme.sep.dot} ${this.deps.agentId}`)];
 		if (status && kind) {
 			let kindLabel = kind;
-			if (kind === "persistent" && (profileId || role)) {
-				const parts = ["persistent"];
+			if (profileId) {
+				const parts = [kind];
 				if (role) parts.push(role);
-				if (profileId) {
-					const profile = ProfileRegistry.global().get(profileId);
-					if (profile) parts.push(`score:${profile.credit.score}`);
-				}
+				const profile = ProfileRegistry.global().get(profileId);
+				if (profile) parts.push(`score:${profile.credit.score}`);
 				kindLabel = parts.join(` ${theme.sep.dot} `);
 			}
 			const kindTag = theme.fg("dim", ` ${parentId ? `${kindLabel} ${theme.sep.dot} of ${parentId}` : kindLabel}`);

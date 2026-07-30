@@ -569,7 +569,7 @@ export interface CreateAgentSessionOptions {
 	settingsManager?: Settings | Promise<Settings>;
 	hasUI?: boolean;
 
-	/** Agent kind: "main" | "sub" | "advisor" | "persistent". Overrides the derived default. */
+	/** Agent kind: "main" | "sub" | "advisor". Overrides the derived default. */
 	agentKind?: AgentKind;
 	persistentProfileId?: string;
 	/** MarkEnvironment for stigmergic coordination. Default: creates a new instance. */

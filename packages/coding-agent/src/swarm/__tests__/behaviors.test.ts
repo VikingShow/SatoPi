@@ -13,11 +13,11 @@
  */
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { CurtainBehavior } from "../behaviors/curtain-behavior";
-import type { PhaseBehavior, PhaseContext } from "../behaviors/index";
+import { CurtainBehavior } from "../../graph/behaviors/curtain-behavior";
+import type { PhaseBehavior, PhaseContext } from "../../graph/behaviors/index";
 // Import behaviors
-import { ScriptBehavior } from "../behaviors/script-behavior";
-import { StageBehavior } from "../behaviors/stage-behavior";
+import { ScriptBehavior } from "../../graph/behaviors/script-behavior";
+import { StageBehavior } from "../../graph/behaviors/stage-behavior";
 
 // ============================================================================
 // Mock factories
