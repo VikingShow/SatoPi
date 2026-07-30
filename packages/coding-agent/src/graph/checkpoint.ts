@@ -27,11 +27,28 @@ import type { GraphRunState } from "./types";
 import { CTX, SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
 // ============================================================================
+// Persistence contract
+// ============================================================================
+
+/**
+ * Persistence contract for graph checkpoint state.
+ *
+ * Implemented by SwarmSessionManager-backed stores in the swarm
+ * layer, but kept abstract here so GraphEngine has zero swarm deps.
+ */
+export interface CheckpointStore {
+	/** Persist a full-state checkpoint. Returns true on success. */
+	write(state: GraphRunState): boolean;
+
+	/** Recover the most recent checkpoint for a graph, or null if none exists. */
+	recover(graphName: string): Promise<GraphRunState | null>;
+}
+
+// ============================================================================
 // Types — re-exported from the canonical location
 // ============================================================================
 
 export type { GraphRunState, GraphRunStatus, NodeRunState, NodeStatus } from "./types";
-
 // ============================================================================
 // Persistence
 // ============================================================================

@@ -20,8 +20,8 @@ import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { AssistantMessage } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
-import type { ProfileRegistry } from "../../agent/agent-profile";
-import type { RoleAssetManager } from "../../agent/role-asset";
+import type { ProfileRegistry } from "../agent/agent-profile";
+import type { RoleAssetManager } from "../agent/role-asset";
 import type { CheckpointStore } from "./checkpoint";
 import {
 	GraphEngine,
@@ -30,9 +30,9 @@ import {
 	type NodeExecutor,
 } from "./graph-engine";
 import type { GraphRunState } from "./types";
-import type { IrcBus } from "../../irc/bus";
-import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
+import type { IrcBus } from "../irc/bus";
+import { AgentRegistry } from "../registry/agent-registry";
+import type { AgentSession } from "../session/agent-session";
 import type { AgentRuntime } from "../swarm/agent-runtime";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
@@ -42,9 +42,9 @@ import { buildExecutionWaves } from "../swarm/core/dag";
 import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
 import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import type { WorkflowFsm } from "../swarm/core/workflow-fsm";
-import type { ExperienceStore } from "../../experience/experience";
-import type { HookPipeline } from "../../hooks/hook-pipeline";
-import type { ActivityLogger } from "../../infra/activity-logger";
+import type { ExperienceStore } from "../experience/experience";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 import { recoverState } from "./checkpoint";
 import { GateController } from "./gate-controller";

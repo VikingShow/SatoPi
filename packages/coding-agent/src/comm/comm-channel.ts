@@ -116,10 +116,21 @@ export class CommChannel {
 
 	addMember(agentId: string): void {
 		this.#members.add(agentId);
+		this.send("system", `[System] ${agentId} has joined the channel`).catch(() => {});
 	}
 
 	removeMember(agentId: string): void {
 		this.#members.delete(agentId);
+		this.send("system", `[System] ${agentId} has left the channel`).catch(() => {});
+	}
+
+	/**
+	 * Send a one-time context message to a specific member.
+	 * Used when an agent joins mid-discussion — injects the existing
+	 * conversation summary so the new member can catch up.
+	 */
+	async injectContext(agentId: string, summary: string): Promise<void> {
+		await this.#ircBus.send("system", agentId, `[System] Discussion context:\n${summary}`);
 	}
 
 	addObserver(observerId: string): void {

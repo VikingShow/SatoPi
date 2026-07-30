@@ -2,7 +2,7 @@
  * Swarm role profiles — predefined AgentProfiles for common swarm roles.
  * Used by AgentRuntime to map AgentSpec → persistent agent via agent_invoke.
  */
-import type { AgentProfile } from "../../agent/agent-profile";
+import type { AgentProfile } from "./agent-profile";
 
 export interface SwarmRoleProfile {
 	profileId: string;

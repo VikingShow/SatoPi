@@ -19,7 +19,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../session/agent-session";
 import type { AgentRuntime } from "../swarm/agent-runtime";
 import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
@@ -28,7 +28,7 @@ import { StageBehavior } from "./behaviors/stage-behavior";
 import type { ContextPipeline } from "../swarm/context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { WorkflowFsm } from "../swarm/core/workflow-fsm";
-import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HookPipeline } from "../hooks/hook-pipeline";
 import { createStageController, type StageResult } from "../swarm/stage/stage-controller";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
