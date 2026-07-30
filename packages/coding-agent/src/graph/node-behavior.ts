@@ -312,6 +312,8 @@ export interface NodeBehaviorFactoryConfig {
 	workspace: string;
 	swarmDir: string;
 	loopConfig: LoopSwarmConfig;
+	/** Current plan.md content from the Script phase (if already produced). */
+	planContent: string;
 }
 
 /**

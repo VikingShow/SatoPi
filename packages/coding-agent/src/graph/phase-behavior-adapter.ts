@@ -65,6 +65,11 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 		this.nodeType = CHAPTER_TO_NODE_TYPE[behavior.phase] ?? "custom";
 	}
 
+	/** Agents spawned by enter(). Used by GraphRunner to wire events and poll completion. */
+	getAgents(): AgentSession[] {
+		return this.#agents;
+	}
+
 	// ==========================================================================
 	// NodeBehavior: prepare
 	// ==========================================================================
@@ -96,7 +101,7 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 			activityLogger: ctx.activityLogger!,
 			workspace: ctx.workspace,
 			swarmDir: this.#config.swarmDir,
-			planContent: "",
+			planContent: this.#config.planContent,
 			loopConfig: this.#config.loopConfig,
 			signal: ctx.signal,
 		};

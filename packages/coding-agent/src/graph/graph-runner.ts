@@ -39,6 +39,7 @@ import { buildExecutionWaves } from "./dag";
 import { GateController } from "./gate-controller";
 import { GraphEngine, type GraphEngineConfig, type NodeExecutionContext, type NodeExecutor } from "./graph-engine";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
+import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { ISwarmOrchestrator } from "./orchestrator-interface";
 import { getSessionPlanPath } from "./plan-paths";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
@@ -171,6 +172,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#roleAssetManager = infra.roleAssetManager;
 		this.#ircBus = infra.ircBus;
 		this.#markEnvironment = infra.markEnvironment;
+		this.#offloadManager = infra.offloadManager;
 
 		// Create CurtainBehavior for post-execution curtain phase
 		this.#curtainBehavior = new CurtainBehavior();
@@ -384,6 +386,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			workspace: this.#config.workspace,
 			swarmDir: this.#swarmDir,
 			loopConfig: this.#loopConfig,
+			planContent: this.#planContent,
 		};
 		const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
 		const ctx: NodeContext = {
@@ -414,6 +417,25 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		try {
 			const prepared = await behavior.prepare(ctx);
 			const behaviorResult = await behavior.execute(ctx, prepared);
+
+			// PhaseBehavior-backed nodes (script, stage, curtain) return
+			// immediately from execute() but may spawn agents internally
+			// that need time to complete.  Poll validate() (which calls
+			// checkCompletion()) until the phase resolves or the signal
+			// is aborted.
+			const phaseAgents = "getAgents" in behavior ? (behavior as PhaseBehaviorNodeAdapter).getAgents() : [];
+			if (phaseAgents.length > 0) {
+				this.#wireAgentEvents(phaseAgents);
+			}
+
+			if (behavior instanceof PhaseBehaviorNodeAdapter) {
+				while (!this.#abortController?.signal.aborted) {
+					const gateResult = await behavior.validate(behaviorResult);
+					if (gateResult.passed) break;
+					await Bun.sleep(750);
+				}
+				this.#unwireAgentEvents();
+			}
 
 			if (!node.gate) {
 				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });

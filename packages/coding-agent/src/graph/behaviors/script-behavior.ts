@@ -50,12 +50,24 @@ export class ScriptBehavior implements PhaseBehavior {
 	// Lifecycle: enter
 	// ==========================================================================
 
-	async enter(_ctx: PhaseContext): Promise<PhaseEnterResult> {
+	async enter(ctx: PhaseContext): Promise<PhaseEnterResult> {
 		// The MAIN model (this conversation) IS the planner. ScriptBehavior
 		// does not spawn a separate Planner agent. Plan.md is captured via
-		// the beforeToolCall hook in agent-session.ts. checkCompletion()
-		// detects plan readiness via onPlanUpdated → #planConfirmed flag.
+		// the beforeToolCall hook in agent-session.ts or already exists from
+		// a prior planning step (e.g. swarm keyword in an ongoing session).
 		logger.info("[ScriptBehavior] Script phase started — MAIN model is the planner");
+
+		// Auto-confirm when plan.md content is already available (e.g. from
+		// the session that triggered the swarm keyword).  checkCompletion()
+		// will pick this up on the next validation poll.
+		if (ctx.planContent && ctx.planContent.trim().length > 0) {
+			const hasHeadings = /^#{1,3}\s+/m.test(ctx.planContent);
+			const minLength = ctx.planContent.trim().length >= 200;
+			if (hasHeadings && minLength) {
+				this.#planConfirmed = true;
+				logger.info("[ScriptBehavior] Existing plan detected — auto-confirming");
+			}
+		}
 
 		return {
 			agents: [],

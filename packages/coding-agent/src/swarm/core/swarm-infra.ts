@@ -21,6 +21,7 @@ import { ExperienceStore } from "../../experience/experience";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
 import { IrcBus } from "../../irc/bus";
+import { type IOffloadManager, OffloadManager } from "../../offload/manager";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createOrchestratorRuntime } from "./assembler";
 import { type Chapter, StateTracker } from "./state";
@@ -41,7 +42,6 @@ export interface CreateSwarmInfraOptions {
 	activeMmd?: string;
 	startPhase: Chapter;
 }
-
 export interface SwarmInfra {
 	sessionManager: SwarmSessionManager;
 	stateTracker: StateTracker;
@@ -51,6 +51,7 @@ export interface SwarmInfra {
 	runtime: SwarmRuntime;
 	roleAssetManager: RoleAssetManagerType;
 	markEnvironment: MarkEnvironment;
+	offloadManager: IOffloadManager;
 	ircBus: IrcBus;
 }
 
@@ -111,6 +112,9 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		activeMmd,
 	});
 
+	// 10. OffloadManager — L1→L3 context offloading
+	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
+
 	return {
 		sessionManager,
 		stateTracker,
@@ -120,6 +124,7 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		runtime: orch.runtime,
 		roleAssetManager,
 		markEnvironment: orch.markEnvironment,
+		offloadManager,
 		ircBus,
 	};
 }

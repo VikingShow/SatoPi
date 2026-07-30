@@ -45,6 +45,7 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 		contextPipeline,
 		workspace: WORKSPACE,
 		swarmDir: "/tmp/test-swarm",
+		planContent: "",
 		loopConfig: {
 			maxIterations: 3,
 			autoRetry: false,
