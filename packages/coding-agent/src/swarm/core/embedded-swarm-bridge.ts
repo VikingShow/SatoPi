@@ -309,7 +309,6 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#offloadManager = offloadManager;
 
 		// 3. Create StateTracker
-		const swarmName = path.basename(swarmDir);
 
 		this.#stateTracker = new StateTracker(workspace, swarmName);
 

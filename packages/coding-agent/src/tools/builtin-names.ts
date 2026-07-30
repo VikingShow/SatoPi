@@ -37,7 +37,6 @@ export const BUILTIN_TOOL_NAMES = [
 	"agent_query_majority",
 	"agent_roundtable",
 	"agent_peers",
-	"agent_create_crew",
 ] as const;
 
 export type BuiltinToolName = (typeof BUILTIN_TOOL_NAMES)[number];

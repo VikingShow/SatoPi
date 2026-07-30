@@ -20,5 +20,5 @@ export interface SwarmRuntime {
 	/** Communication bus for human steering and agent messaging. */
 	readonly ircBus: IrcBus;
 	/** Queue a human steering message for a specific agent. */
-	sendHumanMessage?(agentId: string, text: string): Promise<void>;
+	sendHumanMessage(agentId: string, text: string): Promise<void>;
 }
