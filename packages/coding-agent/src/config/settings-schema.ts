@@ -1775,13 +1775,13 @@ export const SETTINGS_SCHEMA = {
 	"swarm.engine": {
 		type: "enum",
 		values: ["graph", "legacy"],
-		default: "legacy",
+	default: "graph",
 		ui: {
 			tab: "magic",
 			group: "Swarm",
 			label: "Swarm Engine",
 			description:
-				"Swarm execution engine (legacy = EmbeddedSwarmBridge for interactive, graph = Theatre Graph for CLI). Defaults to legacy.",
+				"Swarm execution engine (legacy = EmbeddedSwarmBridge for interactive, graph = Theatre Graph for CLI).",
 		},
 	},
 

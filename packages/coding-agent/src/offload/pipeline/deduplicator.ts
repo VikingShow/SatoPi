@@ -6,7 +6,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ReviewVerdict } from "../../swarm/core/pipeline";
+import type { ReviewVerdict } from "../../swarm/core/pipeline-types";
 
 // ============================================================================
 // Types

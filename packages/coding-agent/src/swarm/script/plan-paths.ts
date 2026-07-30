@@ -9,6 +9,7 @@
  * path.join(…, ".session", "plan.md") anywhere else.
  */
 
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 /**
@@ -42,4 +43,40 @@ export function getSessionStpDir(swarmDir: string): string {
  */
 export function getPlanArchiveDir(workspace: string): string {
 	return path.join(workspace, ".stp", "plans");
+}
+
+/**
+ * Archive the current plan.md to .stp/plans/ for historical reference.
+ *
+ * Archives are workspace-scoped so Planner can reference past plans
+ * in the Before Loop prompt across sessions. The plan is copied with
+ * a timestamped filename (plan-YYYY-MM-DDTHHMMSS.md) into
+ * {workspace}/.stp/plans/.
+ *
+ * The stamp comment (<!-- plan-generated: … -->) is stripped before
+ * archiving — the archive holds raw plan content.
+ */
+export async function archivePlanForHistory(swarmDir: string, workspace: string): Promise<void> {
+	const planPath = getSessionPlanPath(swarmDir);
+
+	let content: string;
+	try {
+		content = await Bun.file(planPath).text();
+	} catch {
+		return; // No plan to archive
+	}
+
+	if (content.trim().length === 0) return;
+
+	// Strip stamp comment if present — archived plans are raw plan content.
+	if (content.startsWith("<!-- plan-generated:")) {
+		const nl = content.indexOf("\n");
+		content = nl >= 0 ? content.slice(nl + 1) : "";
+	}
+
+	const archiveDir = getPlanArchiveDir(workspace);
+	await fs.mkdir(archiveDir, { recursive: true });
+	const ts = new Date().toISOString().replace(/:/g, "").slice(0, 19);
+	const archivePath = path.join(archiveDir, `plan-${ts}.md`);
+	await Bun.write(archivePath, content);
 }

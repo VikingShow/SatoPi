@@ -1,10 +1,10 @@
 /**
- * agent-spec.ts — Declarative specification for spawning a swarm agent.
+ * agent-spec.ts — Canonical API types for AgentRuntime.spawn().
  *
- * Part of the AgentRuntime system (Phase 3A of the swarm v3 unified architecture).
+ * Declarative specification for spawning a swarm agent.
  * An AgentSpec describes WHAT to spawn — the AgentRuntime handles HOW.
  *
- * @deprecated Use AgentSessionOptions directly with AgentRuntime.spawn().
+ * These are the primary types for configuring agent sessions.
  */
 import type { Chapter } from "../core/state";
 
@@ -44,21 +44,17 @@ interface AgentSpecBase {
 	 */
 	tools?: string[];
 }
-/** @deprecated Use AgentSessionOptions directly. */
+
 export interface AgentSpecLibrary extends AgentSpecBase {
 	roleSource: "library";
 	/** Optional persistent agent profile binding (not required for library roles). */
 	profileId?: string;
 }
-
-/** @deprecated Use AgentSessionOptions directly. */
 export interface AgentSpecProfile extends AgentSpecBase {
 	roleSource: "profile";
 	/** Required persistent agent profile ID for profile-based role resolution. */
 	profileId: string;
 }
-
-/** @deprecated Use AgentSessionOptions directly. */
 export interface AgentSpecInline extends AgentSpecBase {
 	roleSource: "inline";
 	/** Inline role definition — required when roleSource is "inline". */
@@ -76,7 +72,5 @@ export interface AgentSpecInline extends AgentSpecBase {
  * All phases (script, stage, curtain) use this discriminated union.
  * The AgentRuntime resolves the role, assembles context, builds
  * AgentLoopConfig, and launches the SatoPi Agent instance.
- *
- * @deprecated Use AgentSessionOptions directly with AgentRuntime.spawn().
  */
 export type AgentSpec = AgentSpecLibrary | AgentSpecProfile | AgentSpecInline;
