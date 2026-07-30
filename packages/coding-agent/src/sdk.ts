@@ -2271,7 +2271,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		toolContextStore.setEventBus(eventBus);
 
 		if (options.agentRuntime) {
-			toolContextStore.setAgentRuntime(options.agentRuntime);
+			toolContextStore.setAgentRuntime(options.agentRuntime as unknown as AgentRuntime);
 		}
 
 		const registeredTools = extensionRunner.getAllRegisteredTools();

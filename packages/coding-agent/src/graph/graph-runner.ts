@@ -34,6 +34,7 @@ import type { IrcBus } from "../irc/bus";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
+import type { AgentRuntime } from "../swarm/agent-runtime";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
 import type { ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
@@ -324,7 +325,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		await this.#stateTracker.updateAgent(nodeId, { status: "running" });
 
 		const behaviorFactoryConfig: NodeBehaviorFactoryConfig = {
-			runtime: this.#runtime,
+			runtime: this.#runtime as unknown as AgentRuntime,
 			fsm: this.#fsm,
 			hookPipeline: this.#hookPipeline,
 			contextPipeline: this.#runtime.contextPipeline,

@@ -268,173 +268,6 @@ describe("RoleProvider", () => {
 	});
 });
 
-// ============================================================================
-// AgentLauncher
-// ============================================================================
-
-describe("AgentLauncher", () => {
-	/** Create a minimal LaunchContext for testing. */
-	function makeLaunchContext(overrides?: Partial<LaunchContext>): LaunchContext {
-		const assembled: AssembledContext = {
-			systemPrompt: "",
-			taskPrompt: "Test task",
-			tools: ["read", "grep"],
-			injectedMessages: [],
-			metadata: {},
-		};
-		const resolvedRole: ResolvedRole = {
-			systemPrompt: "You are a test agent.",
-			guidelines: [],
-			tools: ["read"],
-		};
-		const mockModel = { id: "test-model", provider: "test", supportsTools: true, contextWindow: 128000 };
-		const mockModelRegistry = {
-			getAvailable: () => [mockModel],
-			resolver: async () => undefined,
-			find: () => mockModel,
-			authStorage: { onCredentialDisabled: () => undefined },
-		} as unknown as ModelRegistry;
-
-		const mockSettings = { get: () => "one-at-a-time", getGroup: () => ({}) } as unknown as Settings;
-
-		return {
-			spec: makeSpec(),
-			resolvedRole,
-			assembledContext: assembled,
-			hookProviders: {},
-			modelRegistry: mockModelRegistry,
-			settings: mockSettings,
-			activityLogger: undefined,
-			toolRegistry: new Map(),
-			...overrides,
-		};
-	}
-
-	test("launches an agent and returns AgentSession", async () => {
-		const ctx = makeLaunchContext();
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
-
-		const handle = await launcher.launch(ctx);
-		expect(handle).toBeTruthy();
-		expect(handle.id).toBe("agent-1");
-		expect(handle.role).toBe("planner");
-		expect(handle.status).toBe("running");
-	});
-
-	test("throws when no models available", async () => {
-		const ctx = makeLaunchContext({
-			modelRegistry: {
-				getAvailable: () => [],
-				resolver: async () => undefined,
-			} as unknown as ModelRegistry,
-		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
-
-		await expect(launcher.launch(ctx)).rejects.toThrow(/No available model/);
-	});
-
-	test("wires transformContext from assembledContext", async () => {
-		const injectedMsg: AgentMessage = {
-			role: "user",
-			content: [{ type: "text", text: "Injected context" }],
-			timestamp: Date.now(),
-		};
-		const assembled: AssembledContext = {
-			systemPrompt: "System prompt",
-			taskPrompt: "Task",
-			tools: [],
-			injectedMessages: [injectedMsg as AgentMessage],
-			metadata: {},
-		};
-
-		const ctx = makeLaunchContext({
-			assembledContext: assembled,
-		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
-
-		// Launch should succeed — the transformContext from assembled
-		// is wired into the Agent constructor
-		const handle = await launcher.launch(ctx);
-		expect(handle).toBeTruthy();
-	});
-
-	test("wires aside message provider from hook providers", async () => {
-		const asideMessages: AsideMessage[] = [
-			{
-				role: "user",
-				content: [{ type: "text", text: "System notification" }],
-				timestamp: Date.now(),
-			},
-		];
-		const ctx = makeLaunchContext({
-			hookProviders: {
-				getAsideMessages: async () => asideMessages,
-			},
-		});
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, mockSessionFactory);
-
-		// Should not throw — aside provider is wired
-		const handle = await launcher.launch(ctx);
-		expect(handle).toBeTruthy();
-	});
-
-	test("SP-7: hasIrcInterrupts reaches Agent through spawn path", async () => {
-		// Factory that creates a real Agent and wires hasIrcInterrupts
-		// the same way createAgentSession does: options.hasIrcInterrupts
-		// becomes a () => true function on the agent.
-		const hasIrcSessionFactory = async (options?: CreateAgentSessionOptions) => {
-			options = options ?? ({} as CreateAgentSessionOptions);
-			const rawPrompt = options.systemPrompt ?? [];
-			const systemPromptStr = typeof rawPrompt === "function" ? rawPrompt([]) : rawPrompt;
-			const systemPrompt = Array.isArray(systemPromptStr) ? systemPromptStr : [systemPromptStr];
-			const agent = new Agent({
-				initialState: {
-					systemPrompt,
-					messages: [],
-					tools: [],
-				},
-			});
-			// Simulate what createAgentSession + agent-session do:
-			// AgentLoopConfig gets hasIrcInterrupts: () => true
-			// then agent-session overrides agent.hasIrcInterrupts with real check.
-			// For the E2E test we just verify the final observable: the function
-			// is set and returns true.
-			if (options.hasIrcInterrupts) {
-				agent.hasIrcInterrupts = () => true;
-			}
-			return {
-				session: {
-					agent,
-					prompt: async () => {},
-					setToolContextAgentRuntime: () => {},
-					get id() {
-						return options.agentId ?? "has-irc-unknown";
-					},
-					role: undefined as string | undefined,
-				} as unknown as AgentSession,
-				extensionsResult: { extensions: [], errors: [], runtime: {} },
-				setToolUIContext: () => {},
-				eventBus: { emit: () => {}, on: () => () => {}, clear: () => {} },
-			} as unknown as CreateAgentSessionResult;
-		};
-
-		const ctx = makeLaunchContext();
-		const launcher = new AgentLauncher(ctx.modelRegistry, ctx.settings, hasIrcSessionFactory);
-
-		const handle = await launcher.launch(ctx);
-		expect(handle).toBeTruthy();
-		expect(handle.id).toBe("agent-1");
-
-		// Access the internal Agent through AgentSession
-		const agent = handle.agent;
-		expect(agent).toBeInstanceOf(Agent);
-
-		// hasIrcInterrupts is set and returns true
-		expect(agent.hasIrcInterrupts).toBeDefined();
-		expect(typeof agent.hasIrcInterrupts).toBe("function");
-		expect(agent.hasIrcInterrupts!()).toBe(true);
-	});
-});
 
 // ============================================================================
 // AgentRuntime
@@ -444,7 +277,6 @@ describe("AgentRuntime", () => {
 	let roleProvider: RoleProvider;
 	let contextPipeline: ContextPipeline;
 	let hookPipeline: HookPipeline;
-	let launcher: AgentLauncher;
 	let ircBus: IrcBus;
 	let modelRegistry: ModelRegistry;
 	let settings: Settings;
@@ -460,7 +292,7 @@ describe("AgentRuntime", () => {
 		hookPipeline = new HookPipeline();
 		ircBus = new IrcBus(new AgentRegistry());
 
-		// Mock tool registry so AgentLauncher can resolve tools without real implementations
+		// Mock tool registry for test purposes
 		const mockTool = { name: "mock", execute: async () => ({ output: "ok" }) } as unknown as Tool;
 		toolRegistry = new Map([
 			["read", mockTool],
@@ -478,7 +310,6 @@ describe("AgentRuntime", () => {
 
 		settings = {} as Settings;
 
-		launcher = new AgentLauncher(modelRegistry, settings, mockCompletingSessionFactory);
 		// Reset the global AgentRegistry between tests to avoid ID conflicts
 		AgentRegistry.resetGlobalForTests?.();
 	});
@@ -841,12 +672,9 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockCompletingSessionFactory);
-
 		const runtime = new AgentRuntime({
 			roleProvider: brokenRoleProvider,
 			contextPipeline,
-			launcher,
 			ircBus,
 			hookPipeline,
 			modelRegistry,
@@ -866,8 +694,6 @@ describe("Error handling", () => {
 			resolver: async () => undefined,
 		} as unknown as ModelRegistry;
 
-		const launcher = new AgentLauncher(modelRegistry, {} as Settings, mockCompletingSessionFactory);
-
 		// Create a ContextPipeline that throws on assemble
 		const brokenPipeline = {
 			register: () => {},
@@ -881,7 +707,6 @@ describe("Error handling", () => {
 		const runtime = new AgentRuntime({
 			roleProvider,
 			contextPipeline: brokenPipeline,
-			launcher,
 			ircBus,
 			hookPipeline,
 			modelRegistry,

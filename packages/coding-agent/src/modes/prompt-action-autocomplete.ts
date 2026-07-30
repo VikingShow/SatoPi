@@ -15,6 +15,7 @@ import {
 	getInternalUrlSuggestions,
 	isInternalUrlPrefix,
 } from "./internal-url-autocomplete";
+import { createAgentMentionAutocompleteProvider } from "./agent-mention-autocomplete";
 
 interface PromptActionDefinition {
 	id: string;
@@ -128,6 +129,15 @@ function applyGithubRefCompletion(
 export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 	#commands: SlashCommand[];
 	#baseProvider: CombinedAutocompleteProvider;
+	#mentionProvider: AutocompleteProvider = null!;
+
+	// Create mention provider lazily (AgentRegistry might not be populated yet)
+	get #agentMentionProvider(): AutocompleteProvider {
+		if (!this.#mentionProvider) {
+			this.#mentionProvider = createAgentMentionAutocompleteProvider();
+		}
+		return this.#mentionProvider;
+	}
 	#actions: PromptActionDefinition[];
 	#basePath: string;
 
@@ -194,6 +204,10 @@ export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 			if (emojiSuggestions) return emojiSuggestions;
 		}
 
+
+		// Agent @mention autocomplete
+		const mentionSuggestions = await this.#agentMentionProvider.getSuggestions(lines, cursorLine, cursorCol);
+		if (mentionSuggestions) return mentionSuggestions;
 		return this.#baseProvider.getSuggestions(lines, cursorLine, cursorCol);
 	}
 
@@ -239,6 +253,11 @@ export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 
 		if (isEmojiPrefix(prefix)) {
 			return applyEmojiCompletion(lines, cursorLine, cursorCol, item, prefix);
+		}
+
+		// Agent @mention completion
+		if (prefix.startsWith("@")) {
+			return this.#agentMentionProvider.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
 		}
 		return this.#baseProvider.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
 	}

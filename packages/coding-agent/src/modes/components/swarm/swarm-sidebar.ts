@@ -49,8 +49,8 @@ export class SwarmSidebar implements Component {
 					? ref.displayName.slice(0, maxName - 1) + "\u2026"
 					: ref.displayName;
 				const role = ref.role ? theme.fg("dim", ` ${ref.role.slice(0, 8)}`) : "";
-				const color: string = ref.status === "running" ? "accent"
-					: ref.status === "failed" ? "error" : "dim";
+				const color: string = iconStatus === "running" ? "accent"
+					: iconStatus === "error" ? "error" : "dim";
 				lines.push(`${cursor}${theme.fg(color as "accent" | "error" | "dim", glyph)} ${name.padEnd(maxName)}${role}`);
 			}
 			if (refs.length > max) lines.push(theme.fg("dim", `  +${refs.length - max} more`));
