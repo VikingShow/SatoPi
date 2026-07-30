@@ -8266,8 +8266,10 @@ export class AgentSession {
 			startPhase: "script",
 		});
 
+		const builtinGraphPath = path.resolve(import.meta.dir, "..", "graph", "builtin", "theatre.graph.yaml");
 		const bridge = new GraphRunner({
 			workspace: process.cwd(),
+			graphPath: builtinGraphPath,
 			swarmDir,
 			modelRegistry: this.#modelRegistry,
 			settings: this.settings,
