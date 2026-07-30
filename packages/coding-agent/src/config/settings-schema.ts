@@ -172,6 +172,7 @@ export type StatusLineSegmentId =
 	| "cache_write"
 	| "cache_hit"
 	| "session_name"
+	| "swarm"
 	| "usage"
 	| "collab";
 

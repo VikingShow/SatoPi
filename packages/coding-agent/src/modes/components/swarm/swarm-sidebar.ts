@@ -306,7 +306,12 @@ export class SwarmSidebar implements Component {
 			case " ": // Space: toggle multi-select
 				if (currentIdx >= 0) {
 					const node = flat[currentIdx].node;
-					if (node.type === "agent" || node.type === "crew-member" || node.type === "crew" || node.type === "swarm") {
+					if (
+						node.type === "agent" ||
+						node.type === "crew-member" ||
+						node.type === "crew" ||
+						node.type === "swarm"
+					) {
 						if (this.#multiSelected.has(node.id)) {
 							this.#multiSelected.delete(node.id);
 						} else {

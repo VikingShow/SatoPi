@@ -6,8 +6,8 @@
  * Keyboard: Esc / q → close overlay.
  */
 
-import { matchesKey } from "@satopi/pi-tui/keys";
 import type { Component } from "@satopi/pi-tui";
+import { matchesKey } from "@satopi/pi-tui/keys";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import { theme as appTheme, type Theme } from "../../theme/theme";

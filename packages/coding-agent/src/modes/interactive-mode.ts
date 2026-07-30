@@ -113,6 +113,7 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } fr
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
+import { currentSwarmPhase } from "../swarm/core/state";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -147,6 +148,7 @@ import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-rev
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
+import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -558,6 +560,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#swarmSidebarHandle?: OverlayHandle;
 	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
+	#swarmStatusBar: SwarmStatusBar | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
@@ -947,6 +950,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		// the prompt while keeping the one-line gap above the editor.
 		this.ui.addChild(this.statusContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
+		this.#swarmStatusBar = new SwarmStatusBar();
+		this.ui.addChild(this.#swarmStatusBar);
 		this.ui.addChild(this.hookWidgetContainerAbove);
 		this.ui.addChild(this.editorContainer);
 		this.ui.addChild(this.hookWidgetContainerBelow);
@@ -1664,6 +1669,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			});
 		}
 		const persistentCount = countRunningProfileAgents(registry);
+		this.#updateSwarmModeStatus();
 		const subCount = countRunningSubagentBadgeAgents(registry);
 		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();
@@ -2046,6 +2052,45 @@ export class InteractiveMode implements InteractiveModeContext {
 				? { enabled: this.goalModeEnabled, paused: this.goalModePaused }
 				: undefined;
 		this.statusLine.setGoalModeStatus(status);
+		this.ui.requestRender();
+	}
+
+	#updateSwarmModeStatus(): void {
+		const phase = currentSwarmPhase;
+		if (phase === "idle" || !this.session.embeddedSwarm) {
+			this.statusLine.setSwarmModeStatus(null);
+			this.ui.requestRender();
+			return;
+		}
+
+		const refs = AgentRegistry.global()
+			.list()
+			.filter(r => r.kind !== "advisor" && r.kind !== "main");
+
+		let running = 0;
+		let completed = 0;
+		let failed = 0;
+		for (const ref of refs) {
+			switch (ref.status) {
+				case "running":
+					running++;
+					break;
+				case "aborted":
+					failed++;
+					break;
+				case "idle":
+				case "parked":
+					completed++;
+					break;
+			}
+		}
+
+		this.statusLine.setSwarmModeStatus(
+			refs.length > 0
+				? { phase, agentCount: refs.length, runningCount: running, completedCount: completed, failedCount: failed }
+				: null,
+		);
+
 		this.ui.requestRender();
 	}
 
@@ -4606,9 +4651,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#swarmSidebarUnsubscribe = AgentRegistry.global().onChange(event => {
 			const focusedId = this.focusedAgentId;
 			const agentId: string | undefined =
-				event.type === "status_changed" || event.type === "registered"
-					? event.ref.id
-					: undefined;
+				event.type === "status_changed" || event.type === "registered" ? event.ref.id : undefined;
 			if (agentId && agentId !== focusedId) {
 				sidebar.markUnread(agentId);
 			}

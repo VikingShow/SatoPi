@@ -5,6 +5,7 @@ import type { AssistantMessage, UsageLimit, UsageReport } from "@satopi/pi-ai";
 import { type Component, truncateToWidth, visibleWidth } from "@satopi/pi-tui";
 import { getProjectDir } from "@satopi/pi-utils";
 import { settings } from "../../../config/settings";
+import { AgentRegistry } from "../../../registry/agent-registry";
 import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
 import { limitMatchesActiveAccount } from "../../../slash-commands/helpers/active-oauth-account";
@@ -14,7 +15,6 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/sessio
 import { sanitizeStatusText } from "../../shared";
 import { theme } from "../../theme/theme";
 import { canReuseCachedPr, createPrCacheContext, isSamePrCacheContext, type PrCacheContext } from "./git-utils";
-import { AgentRegistry } from "../../../registry/agent-registry";
 import { getPreset } from "./presets";
 import { renderSegment, type SegmentContext } from "./segments";
 import { getSeparator } from "./separators";
@@ -25,6 +25,7 @@ import type {
 	StatusLineSegmentId,
 	StatusLineSegmentOptions,
 	StatusLineSettings,
+	SwarmModeStatus,
 } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -278,6 +279,7 @@ export class StatusLineComponent implements Component {
 	#loopModeStatus: { enabled: boolean } | null = null;
 	#goalModeStatus: { enabled: boolean; paused: boolean } | null = null;
 	#vibeModeStatus: { enabled: boolean } | null = null;
+	#swarmModeStatus: SwarmModeStatus = null;
 	#collabStatus: CollabStatus | null = null;
 	#focusedAgentId: string | undefined;
 	#activeRepoCache: ActiveRepoCache | undefined;
@@ -516,6 +518,10 @@ export class StatusLineComponent implements Component {
 
 	setVibeModeStatus(status: { enabled: boolean } | undefined): void {
 		this.#vibeModeStatus = status ?? null;
+	}
+
+	setSwarmModeStatus(status: SwarmModeStatus): void {
+		this.#swarmModeStatus = status;
 	}
 
 	setCollabStatus(status: CollabStatus | null): void {
@@ -1067,6 +1073,7 @@ export class StatusLineComponent implements Component {
 					: null,
 			goalMode: this.#goalModeStatus,
 			vibeMode: this.#vibeModeStatus,
+			swarmMode: this.#swarmModeStatus,
 			collab: this.#collabStatus,
 			usageStats,
 			contextPercent,
@@ -1147,7 +1154,9 @@ export class StatusLineComponent implements Component {
 	}
 
 	#swarmAgentStatusText(): string | undefined {
-		const agents = AgentRegistry.global().list().filter(ref => ref.kind !== "advisor");
+		const agents = AgentRegistry.global()
+			.list()
+			.filter(ref => ref.kind !== "advisor");
 		// Swarm mode: Main + at least one sub-agent
 		if (agents.length <= 1) return undefined;
 
@@ -1161,8 +1170,7 @@ export class StatusLineComponent implements Component {
 		const MAX_VISIBLE = 3;
 		const visible = sorted.slice(0, MAX_VISIBLE);
 
-		const bracket = (s: string) =>
-			`${theme.format.bracketLeft}${s}${theme.format.bracketRight}`;
+		const bracket = (s: string) => `${theme.format.bracketLeft}${s}${theme.format.bracketRight}`;
 
 		const parts: string[] = [];
 		for (const ref of visible) {

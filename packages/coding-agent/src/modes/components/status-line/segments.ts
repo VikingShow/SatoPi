@@ -235,6 +235,40 @@ const modeSegment: StatusLineSegment = {
 	},
 };
 
+const swarmSegment: StatusLineSegment = {
+	id: "swarm",
+	render(ctx) {
+		const sm = ctx.swarmMode;
+		if (!sm) return { content: "", visible: false };
+
+		const phaseColors = {
+			script: "accent",
+			"script-debate": "warning",
+			stage: "accent",
+			curtain: "success",
+		} as const;
+		const phaseColor = (phaseColors as Record<string, string>)[sm.phase] ?? "dim";
+		const phaseLabel = sm.phase === "script-debate" ? "debate" : sm.phase;
+
+		const parts: string[] = [];
+		const icon = theme.icon.agents ?? "\u25c6";
+		parts.push(theme.fg(phaseColor as ThemeColor, `${icon} ${phaseLabel}`));
+
+		const counts: string[] = [];
+		if (sm.runningCount > 0) counts.push(theme.fg("accent", `${sm.runningCount} running`));
+		if (sm.completedCount > 0) counts.push(theme.fg("success", `${sm.completedCount} done`));
+		if (sm.failedCount > 0) counts.push(theme.fg("error", `${sm.failedCount} failed`));
+		const pending = sm.agentCount - sm.runningCount - sm.completedCount - sm.failedCount;
+		if (pending > 0) counts.push(theme.fg("dim", `${pending} pending`));
+
+		if (counts.length > 0) {
+			parts.push(`[${counts.join(" \u00b7 ")}]`);
+		}
+
+		return { content: parts.join(" "), visible: true };
+	},
+};
+
 const pathSegment: StatusLineSegment = {
 	id: "path",
 	render(ctx) {
@@ -642,6 +676,7 @@ export const SEGMENTS: Record<StatusLineSegmentId, StatusLineSegment> = {
 	pi: piSegment,
 	model: modelSegment,
 	mode: modeSegment,
+	swarm: swarmSegment,
 	path: pathSegment,
 	git: gitSegment,
 	pr: prSegment,

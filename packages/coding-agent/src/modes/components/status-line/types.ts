@@ -73,6 +73,14 @@ export interface SegmentContext {
 	vibeMode: {
 		enabled: boolean;
 	} | null;
+	/** Active swarm orchestration state — null when no swarm is running. */
+	swarmMode: {
+		phase: string;
+		agentCount: number;
+		runningCount: number;
+		completedCount: number;
+		failedCount: number;
+	} | null;
 	collab: CollabStatus | null;
 	// Cached values for performance (computed once per render)
 	usageStats: {
@@ -120,6 +128,9 @@ export interface SegmentContext {
 		sevenDay?: { percent: number; resetHours?: number };
 	} | null;
 }
+
+/** Swarm orchestration status snapshot for the status-line segment. */
+export type SwarmModeStatus = SegmentContext["swarmMode"];
 
 export interface RenderedSegment {
 	content: string; // The segment text (may include ANSI color codes)
