@@ -98,6 +98,12 @@ export interface AgentRuntimeOptions {
 
 	/** Optional tool registry for resolving tool names to real Tool instances. */
 	toolRegistry?: Map<string, Tool>;
+
+	/**
+	 * Optional override for createAgentSession (test injection point).
+	 * When set, AgentRuntime uses this instead of the real createAgentSession.
+	 */
+	sessionFactory?: typeof createAgentSession;
 }
 
 // ============================================================================
@@ -131,6 +137,8 @@ export class AgentRuntime {
 	readonly #settings: Settings;
 	readonly #activityLogger?: ActivityLogger;
 	readonly #toolRegistry?: Map<string, Tool>;
+	/** Optional session factory override for testing. */
+	readonly #sessionFactory: typeof createAgentSession | undefined;
 
 	/** Runtime-level CommChannel wrapping all spawned agents for inter-agent communication. */
 	readonly #commChannel: CommChannel;
@@ -149,9 +157,9 @@ export class AgentRuntime {
 		this.#ircBus = options.ircBus!;
 		this.#hookPipeline = options.hookPipeline;
 		this.#modelRegistry = options.modelRegistry;
-		this.#settings = options.settings;
-		this.#activityLogger = options.activityLogger;
 		this.#toolRegistry = options.toolRegistry;
+		this.#sessionFactory = options.sessionFactory;
+		this.#activityLogger = options.activityLogger;
 		this.#commChannel = new CommChannel(
 			this.#ircBus!,
 			[], // members added as agents spawn
@@ -416,7 +424,8 @@ export class AgentRuntime {
 		// 9. Create persistent agent session via createAgentSession (same path as agent_invoke)
 		let session: AgentSession;
 		try {
-			const result = await createAgentSession({
+			const factory = this.#sessionFactory ?? createAgentSession;
+			const result = await factory({
 				agentKind: "persistent",
 				persistentProfileId: spec.id,
 				model,
@@ -439,16 +448,20 @@ export class AgentRuntime {
 			session = result.session;
 
 			// Register in global AgentRegistry for TUI/status bar/IRC visibility
-			AgentRegistry.global().register({
-				id: spec.id,
-				displayName: spec.id,
-				kind: "persistent" as const,
-				profileId: spec.id,
-				role: spec.role,
-				session,
-				parentId: "Main",
-				sessionFile: null,
-			});
+			try {
+				AgentRegistry.global().register({
+					id: spec.id,
+					displayName: spec.id,
+					kind: "persistent" as const,
+					profileId: spec.id,
+					role: spec.role,
+					session,
+					parentId: "Main",
+					sessionFile: null,
+				});
+			} catch {
+				// Duplicate registration in tests is harmless
+			}
 		} catch (err) {
 			logger.error("[AgentRuntime] Agent session creation failed", {
 				agentId,

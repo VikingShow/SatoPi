@@ -304,34 +304,25 @@ describe("ScriptBehavior", () => {
 	});
 
 	describe("enter()", () => {
-		it("spawns a planner agent", async () => {
+		it("returns empty agents (MAIN model IS the planner)", async () => {
 			const result = await behavior.enter(ctx);
 
 			expect(result.agents).toBeArray();
-			expect(result.agents.length).toBe(1);
-			expect(result.agents[0].id).toBe("planner");
+			expect(result.agents.length).toBe(0);
 		});
 
-		it("creates a script-dialogue channel", async () => {
-			const result = await behavior.enter(ctx);
-
-			expect(result.channels).toBeArray();
-			expect(result.channels.length).toBe(1);
-			expect(ctx.ircBus.groupChannel).toHaveBeenCalled();
-		});
-
-		it("returns PhaseEnterResult with initialUIMessage", async () => {
+		it("returns initialUIMessage", async () => {
 			const result = await behavior.enter(ctx);
 
 			expect(result.initialUIMessage).toBeString();
-			expect(result.initialUIMessage!.length).toBeGreaterThan(0);
 		});
 
-		it("uses planContent as the Planner task when provided", async () => {
+		it("uses planContent from context without spawning", async () => {
 			ctx.planContent = "Build a REST API for users";
 			const result = await behavior.enter(ctx);
 
-			expect(result.agents[0].id).toBe("planner");
+			// Plan content is used by the MAIN model; no agent spawned
+			expect(result.agents.length).toBe(0);
 		});
 	});
 

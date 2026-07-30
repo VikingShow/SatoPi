@@ -459,7 +459,7 @@ describe("AgentRuntime", () => {
 		roleProvider = new RoleProvider(roleMgr);
 		contextPipeline = new ContextPipeline();
 		hookPipeline = new HookPipeline();
-		ircBus = new IrcBus();
+		ircBus = new IrcBus(new AgentRegistry());
 
 		// Mock tool registry so AgentLauncher can resolve tools without real implementations
 		const mockTool = { name: "mock", execute: async () => ({ output: "ok" }) } as unknown as Tool;
@@ -480,6 +480,8 @@ describe("AgentRuntime", () => {
 		settings = {} as Settings;
 
 		launcher = new AgentLauncher(modelRegistry, settings, mockCompletingSessionFactory);
+		// Reset the global AgentRegistry between tests to avoid ID conflicts
+		AgentRegistry.resetGlobalForTests?.();
 	});
 
 	describe("spawn()", () => {
@@ -488,6 +490,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -507,6 +510,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -539,6 +543,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -567,6 +572,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -585,6 +591,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -601,6 +608,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -624,6 +632,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -649,12 +658,11 @@ describe("AgentRuntime", () => {
 				} as unknown as CreateAgentSessionResult;
 			};
 
-			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
 
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher: capturingLauncher,
+				sessionFactory: capturingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -691,12 +699,11 @@ describe("AgentRuntime", () => {
 				} as unknown as CreateAgentSessionResult;
 			};
 
-			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
 
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher: capturingLauncher,
+				sessionFactory: capturingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -746,12 +753,11 @@ describe("AgentRuntime", () => {
 				} as unknown as CreateAgentSessionResult;
 			};
 
-			const capturingLauncher = new AgentLauncher(modelRegistry, settings, capturingSessionFactory);
 
 			const runtime = new AgentRuntime({
 				roleProvider,
 				contextPipeline,
-				launcher: capturingLauncher,
+				sessionFactory: capturingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
@@ -786,6 +792,7 @@ describe("AgentRuntime", () => {
 				roleProvider,
 				contextPipeline,
 				launcher,
+			sessionFactory: mockCompletingSessionFactory as unknown as typeof import("../../sdk").createAgentSession,
 				ircBus,
 				hookPipeline,
 				modelRegistry,
