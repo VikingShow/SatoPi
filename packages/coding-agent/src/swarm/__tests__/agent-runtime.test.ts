@@ -70,6 +70,8 @@ function makeSpec(overrides?: Partial<AgentSpec>): AgentSpec {
 	return {
 		id: "agent-1",
 		role: "planner",
+		roleSource: "library" as const,
+		task: "Test task",
 		...overrides,
 	} as AgentSpec;
 }
