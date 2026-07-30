@@ -43,6 +43,11 @@ interface AgentSpecBase {
 	 * (e.g. swift: quick-task-complete; persistent: session-save).
 	 */
 	tools?: string[];
+	/**
+	 * Optional structured todo phases to inject into the agent session.
+	 * When set, AgentRuntime calls session.setTodoPhases() before prompt().
+	 */
+	todoPhases?: Array<{ title: string; files?: string[]; dependsOn?: string[] }>;
 }
 
 export interface AgentSpecLibrary extends AgentSpecBase {

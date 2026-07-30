@@ -146,6 +146,7 @@ export class StageBehavior implements PhaseBehavior {
 				role,
 				roleSource: "library" as const,
 				task: initialTask,
+				todoPhases: roleTasks.map(t => ({ title: t.title, files: t.files, dependsOn: t.dependsOn })),
 				phase: this.phase,
 			};
 		});

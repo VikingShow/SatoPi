@@ -468,6 +468,15 @@ export class AgentRuntime {
 		// 12. Set agent identity on the session for swarm tracking
 		session.role = spec.role;
 
+		// 12.5 Inject structured todo phases from plan.md (if provided)
+		if (spec.todoPhases && spec.todoPhases.length > 0) {
+			session.setTodoPhases(spec.todoPhases.map(p => ({
+				title: p.title,
+				files: p.files,
+				dependsOn: p.dependsOn,
+			})));
+		}
+
 		// 13. Register agent in the runtime-level CommChannel
 		this.#commChannel.addMember(agentId);
 
