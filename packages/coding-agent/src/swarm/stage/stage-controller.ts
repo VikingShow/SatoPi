@@ -1,22 +1,23 @@
 /**
- * StageController — CANONICAL stage execution implementation.
+ * StageController — Canonical stage execution with rich features.
  *
- * This is the primary, authoritative path for Stage (execution) phase
- * orchestration.  All stage execution — whether driven by the CLI
- * (SwarmRunner), the GraphRunner (StageNodeBehavior), or the embedded
- * bridge — SHOULD route through this class.
+ * This is the full-featured stage orchestration with profile-based agent
+ * selection, domain matching, complexity analysis, credit-aware role
+ * assignment, retry-with-backoff, and circuit breaker.  Used by the
+ * graph engine ({@link StageNodeBehavior}) which calls its monolithic
+ * {@link run()} method.
  *
  * ## Relationship with StageBehavior
  *
- * {@link StageBehavior} is a PhaseBehavior adapter that provides an
- * event-driven lifecycle (enter → handleAgentEvent → checkCompletion →
- * exit) for the theatre graph engine.  It uses simplified agent creation
- * (one agent per unique task role) and does NOT perform profile-based
- * agent selection, complexity analysis, or credit-aware assignment.
- *
- * StageBehavior SHOULD delegate core task-parsing and role-assignment
- * logic to the shared helpers exported from this module
+ * {@link StageBehavior} is a lightweight PhaseBehavior adapter for the
+ * theatre graph engine's event-driven lifecycle.  It uses simplified
+ * agent creation (one agent per unique task role) and delegates
+ * task-parsing and role-assignment to shared helpers from this module
  * ({@link assignAgentRoles}, {@link TaskQueue.parseFromPlan}).
+ *
+ * StageController and StageBehavior serve **different API surfaces**:
+ *   - StageController: monolithic `run()` → `StageResult` (for NodeBehavior)
+ *   - StageBehavior: event-driven enter/handleAgentEvent/checkCompletion/exit
  *
  * ## Flow
  *   1. Select agents (scored by domain match + credit)

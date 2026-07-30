@@ -37,6 +37,7 @@ import { CurtainBehavior } from "../behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "../behaviors/index";
 import type { ISwarmOrchestrator } from "../core/embedded-swarm-bridge";
 import type { LoopSwarmConfig } from "../core/schema";
+import { buildExecutionWaves } from "../core/dag";
 import type { Chapter, StateTracker, SwarmState } from "../core/state";
 import { createSwarmInfra } from "../core/swarm-infra";
 import type { WorkflowFsm } from "../core/workflow-fsm";

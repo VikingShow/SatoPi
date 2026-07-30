@@ -21,7 +21,6 @@ import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
 import type { RunManager, SteeringSink } from "../swarm/core/services";
 import { StateTracker } from "../swarm/core/state";
-import { SwarmRunner } from "../swarm/core/swarm-runner";
 import { ExperienceStore } from "../swarm/curtain/experience";
 import { GraphRunner } from "../swarm/graph/graph-runner";
 import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
@@ -72,7 +71,6 @@ async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
-	engine: "graph" | "legacy" = "graph",
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -144,39 +142,16 @@ async function createSwarmServices(
 			mnemopiClient: s.mnemopiClient,
 			markEnvironment: s.markEnvironment,
 		});
-		let runManager: RunManager;
-		if (engine === "graph") {
-			// GraphRunner implements ISwarmOrchestrator; wrap in adapter for RunManager.
-			const graphRunner = new GraphRunner({
-				workspace: s.workspace,
-				graphPath: s.yamlPath,
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				profileRegistry: s.profileRegistry,
-			});
-			await graphRunner.init();
-			runManager = new GraphRunnerAsRunManager(graphRunner);
-		} else {
-			// Legacy SwarmRunner with AgentRuntime — StageController uses
-			// runtime.spawn() instead of the legacy streamAgentOutput path.
-			process.stderr.write("WARNING: SwarmRunner is deprecated; prefer --engine graph (GraphRunner).\n");
-			runManager = new SwarmRunner({
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				workspace: s.workspace,
-				yamlPath: s.yamlPath,
-				stateTracker,
-				activityLogger,
-				experienceStore: s.experienceStore,
-				sessionManager: undefined,
-				profileRegistry: s.profileRegistry,
-				markEnvironment,
-				roleAssetManager: s.roleAssetManager,
-				hookPipeline,
-				runtime,
-				hindsightClient: s.hindsightClient,
-			});
-		}
+		// GraphRunner implements ISwarmOrchestrator; wrap in adapter for RunManager.
+		const graphRunner = new GraphRunner({
+			workspace: s.workspace,
+			graphPath: s.yamlPath,
+			modelRegistry: s.modelRegistry,
+			settings: s.settings,
+			profileRegistry: s.profileRegistry,
+		});
+		await graphRunner.init();
+		const runManager = new GraphRunnerAsRunManager(graphRunner);
 
 		// Real SteeringSink — routes human steering via IrcBus → AgentRuntime.
 		const steeringSink: SteeringSink = {
@@ -211,34 +186,20 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const yamlPath = path.resolve(cmd.target);
 	const cwd = getProjectDir();
 
-	// Determine engine before parsing — graph engine skips swarm YAML parsing
-	const engine = (cmd.engine ?? "graph") as "graph" | "legacy";
-
-	let def: SwarmDefinition;
-	if (engine === "graph") {
-		// GraphRunner handles its own YAML parsing (graph.yaml format)
-		def = {
-			name: path.basename(yamlPath, path.extname(yamlPath)),
-			workspace: cwd,
-			mode: "loop",
-			targetCount: 0,
-			agents: new Map(),
-			agentOrder: [],
-			loopConfig: undefined,
-		};
-	} else {
-		try {
-			def = await parseSwarmYamlFile(yamlPath);
-		} catch (err) {
-			process.stderr.write(`Failed to parse ${yamlPath}: ${String(err)}\n`);
-			process.exitCode = 1;
-			return;
-		}
-	}
+	// GraphRunner handles its own YAML parsing (graph.yaml format)
+	const def: SwarmDefinition = {
+		name: path.basename(yamlPath, path.extname(yamlPath)),
+		workspace: cwd,
+		mode: "loop",
+		targetCount: 0,
+		agents: new Map(),
+		agentOrder: [],
+		loopConfig: undefined,
+	};
 
 	const swarmName = def.name;
 
-	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def);
 
 	try {
 		const registry = new SessionRegistry(shared, factory, 1);
@@ -253,20 +214,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			return;
 		}
 
-		if (engine === "graph") {
-			// GraphRunnerAsRunManager handles completion internally.
-			process.stderr.write(`Graph "${swarmName}" started.\n`);
-		} else {
-			process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
-			process.stderr.write("WARNING: SwarmRunner waitForCompletion is deprecated; prefer GraphRunner.\n");
-			await (session.runManager as SwarmRunner).waitForCompletion();
-			const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
-			if (curtainResult) {
-				process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
-			} else {
-				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
-			}
-		}
+		// GraphRunnerAsRunManager handles completion internally.
+		process.stderr.write(`Graph "${swarmName}" started.\n`);
 	} finally {
 		await shared.profileRegistry.save(cwd);
 	}
@@ -301,7 +250,7 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 	try {
 		// Create shared services (reuse createSwarmServices for consistency).
 		// We only need `shared`; the factory and session are unused in plan mode.
-		const { shared } = await createSwarmServices(cwd, yamlPath, def, "graph");
+		const { shared } = await createSwarmServices(cwd, yamlPath, def);
 		const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${swarmName}`);
 		await fs.mkdir(swarmDir, { recursive: true });
 

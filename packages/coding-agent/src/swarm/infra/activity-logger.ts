@@ -13,7 +13,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ReviewVerdict } from "../core/pipeline";
+import type { ReviewVerdict } from "../core/pipeline-types";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================

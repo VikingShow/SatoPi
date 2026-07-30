@@ -19,7 +19,7 @@
 import type { SingleResult } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../session/session-storage";
-import type { LoopPipelineHooks, PipelineContext, PipelineResult, ReviewVerdict } from "../swarm/core/pipeline";
+import type { LoopPipelineHooks, PipelineContext, PipelineResult, ReviewVerdict } from "../swarm/core/pipeline-types";
 import type { ExperienceStore } from "../swarm/curtain/experience";
 import type { ExtractedLesson, LoopRunStats } from "../swarm/curtain/extractor";
 import { MmdInjector } from "./mermaid/injector";
