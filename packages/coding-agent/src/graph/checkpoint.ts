@@ -24,8 +24,12 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { GraphRunState } from "./types";
-import { CTX, SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
+
+/** Structural type for SwarmSessionManager (imported as type-only). */
+interface SessionManagerLike {
+	appendCustomEntry(customType: string, data: unknown): void;
+}
 // ============================================================================
 // Persistence contract
 // ============================================================================
@@ -49,6 +53,9 @@ export interface CheckpointStore {
 // ============================================================================
 
 export type { GraphRunState, GraphRunStatus, NodeRunState, NodeStatus } from "./types";
+
+/** Custom entry type for graph checkpoint persistence (inlined from swarm/session/swarm-session-manager CTX). */
+const GRAPH_CHECKPOINT = "graph_checkpoint" as const;
 // ============================================================================
 // Persistence
 // ============================================================================
@@ -59,9 +66,9 @@ export type { GraphRunState, GraphRunStatus, NodeRunState, NodeStatus } from "./
  * Each call writes a complete snapshot — the session file is append-only
  * so the latest matching entry always holds the current state.
  */
-export function writeCheckpoint(state: GraphRunState, sessionManager: SwarmSessionManager): boolean {
+export function writeCheckpoint(state: GraphRunState, sessionManager: SessionManagerLike): boolean {
 	try {
-		sessionManager.appendCustomEntry(CTX.GRAPH_CHECKPOINT, state);
+		sessionManager.appendCustomEntry(GRAPH_CHECKPOINT, state);
 		return true;
 	} catch (err) {
 		logger.error("[checkpoint] Failed to write checkpoint", {
@@ -85,14 +92,14 @@ export function writeCheckpoint(state: GraphRunState, sessionManager: SwarmSessi
  * requested graph.
  */
 export async function recoverState(
-	sessionManager: SwarmSessionManager,
+	readRawEntries: () => Promise<Array<Record<string, unknown>>>,
 	graphName: string,
 ): Promise<GraphRunState | null> {
-	const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
+	const raw = await readRawEntries();
 
 	for (let i = raw.length - 1; i >= 0; i--) {
 		const entry = raw[i];
-		if (entry.type === "custom" && entry.customType === CTX.GRAPH_CHECKPOINT) {
+		if (entry.type === "custom" && entry.customType === GRAPH_CHECKPOINT) {
 			const data = entry.data as GraphRunState | undefined;
 			if (data?.graphName === graphName) {
 				return data;

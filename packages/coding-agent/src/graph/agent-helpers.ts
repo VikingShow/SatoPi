@@ -46,6 +46,10 @@ export interface SpawnAgentOptions {
 	toolRegistry?: Map<string, Tool>;
 	/** Optional CommChannel for crew-based communication. */
 	commChannel?: CommChannel;
+	/** Optional external steering queue — when set, spawnAgent pushes here instead of a local queue. */
+	steeringQueue?: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>;
+	/** Optional external aside queue — when set, spawnAgent pushes here instead of a local queue. */
+	asideQueue?: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>;
 	/** Current phase for context filtering. */
 	phase?: string;
 	/** Optional session factory override for testing. */
@@ -71,7 +75,7 @@ export interface SpawnAgentOptions {
  * 9. session.prompt(spec.task) — blocks until completion
  */
 export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession> {
-	const { spec, roleProvider, contextPipeline, hookPipeline, modelRegistry, settings, ircBus, activityLogger, toolRegistry, commChannel, phase, sessionFactory } = opts;
+	const { spec, roleProvider, contextPipeline, hookPipeline, modelRegistry, settings, ircBus, activityLogger, toolRegistry, commChannel, phase, sessionFactory, steeringQueue: extSteeringQueue, asideQueue: extAsideQueue } = opts;
 	const agentId = spec.id;
 
 	// 1. Before-spawn hook
@@ -155,15 +159,17 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession>
 	const transformCtx = contextPipeline.toTransformContext(assembledContext, {});
 
 	// 8. Build hook providers (steering/aside/followup queues)
-	const asideQueue: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }> = [];
-	const steeringQueue: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }> = [];
+	// Use external queues when provided (for runtime-level message routing),
+	// otherwise create local ones (standalone spawn).
+	const asideQueue = extAsideQueue ?? [];
+	const steeringQueue = extSteeringQueue ?? [];
 	const followUpQueue: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }> = [];
 
 	// 9. Create agent session
 	const factory = sessionFactory ?? createAgentSession;
 	const result = await factory({
 		agentKind: "main",
-		persistentProfileId: spec.profileId,
+		profileId: spec.profileId,
 		model,
 		systemPrompt: [systemPrompt],
 		toolNames,

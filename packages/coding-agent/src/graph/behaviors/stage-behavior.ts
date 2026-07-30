@@ -35,7 +35,7 @@ import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../../comm/comm-channel";
 import type { Chapter } from "../../swarm/core/state";
-import { TaskQueue } from "../../swarm/executor/task-queue";
+import { TaskQueue } from "../task-queue";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
 
 // ============================================================================
@@ -312,7 +312,7 @@ export class StageBehavior implements PhaseBehavior {
 
 		if (this.#agents.size > 0 && this.#completedAgents.size === this.#agents.size) {
 			// All agents have completed — check task queue too
-			const tasksDone = !this.#taskQueue || this.#taskQueue.isAllComplete;
+			const tasksDone = !this.#taskQueue || this.#taskQueue.allDone;
 
 			if (tasksDone) {
 				// Count failures
@@ -330,7 +330,7 @@ export class StageBehavior implements PhaseBehavior {
 
 		// Alternative: if task queue is fully complete but some agents are still
 		// running (idle waiting for tasks), we can consider the stage done.
-		if (this.#taskQueue?.isAllComplete && allFinished) {
+		if (this.#taskQueue?.allDone && allFinished) {
 			return {
 				nextPhase: "curtain",
 				message: "All tasks complete. Transitioning to Curtain.",

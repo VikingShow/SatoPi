@@ -88,7 +88,6 @@ export class PhaseBehaviorNodeAdapter implements NodeBehavior {
 	async execute(ctx: NodeContext, _prepared: AgentSpec[]): Promise<NodeResult> {
 		// Build PhaseContext from NodeContext + constructor config
 		const phaseCtx: PhaseContext = {
-			fsm: this.#config.fsm,
 			ircBus: this.#config.runtime.ircBus,
 			runtime: this.#config.runtime,
 			contextPipeline: this.#config.contextPipeline,

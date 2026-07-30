@@ -20,7 +20,7 @@ import type { ActivityLogger } from "../infra/activity-logger";
 // ============================================================================
 
 /** Gate types map to built-in verification steps. */
-export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script";
+export type GateType = "compile-check" | "test" | "lsp" | "human-review" | "script" | "debate";
 
 /** When the gate check should run. */
 export type GateMode = "always" | "on-failure" | "never";
@@ -106,6 +106,7 @@ export const VALID_GATE_TYPES: Record<string, true> = {
 	lsp: true,
 	"human-review": true,
 	script: true,
+	debate: true,
 };
 
 export const VALID_GATE_MODES: Record<string, true> = { always: true, "on-failure": true, never: true };

@@ -1,8 +1,8 @@
 /**
  * CurtainTransition — shared curtain pipeline finalization.
  *
- * Extracted from GraphRunner (confirmScript, resumeGraphRun) and
- * EmbeddedSwarmBridge (#runCurtain) which each duplicated the pattern:
+ * Extracted from GraphRunner (confirmScript, resumeGraphRun, #runCurtain)
+ * which each duplicated the pattern:
  *   build StageResult → runCurtainPipeline → FSM transition to idle.
  */
 
@@ -11,7 +11,6 @@ import type { SingleResult } from "../../task";
 import type { CurtainResultData, CurtainRunnerOpts } from "../curtain/curtain-runner";
 import { runCurtainPipeline } from "../curtain/curtain-runner";
 import type { StageResult } from "../stage/stage-controller";
-import type { WorkflowFsm } from "./workflow-fsm";
 
 // ============================================================================
 // StageResult builder (GraphRunner path)
@@ -62,15 +61,14 @@ export function buildStageResultFromGraphRun(
 // ============================================================================
 
 /**
- * Run the curtain pipeline and transition the FSM to idle.
+ * Run the curtain pipeline and transition to idle.
  *
- * Shared by GraphRunner (no applaud wait) and EmbeddedSwarmBridge
+ * Shared by GraphRunner for both graph mode and swarm keyword mode
  * (applaud wait passed via `preIdleHook`).
  *
  * @param result      - Stage execution result (agent outputs, errors, progress).
- * @param opts        - Curtain pipeline options (workspace, stores, registries, etc.).
- * @param fsm         - The workflow FSM to transition to idle.
- * @param idleReason  - Reason metadata for the FSM idle transition.
+ * @param opts        - Curtain pipeline options (includes stateTracker and activityLogger).
+ * @param idleReason  - Reason metadata for the idle transition.
  * @param preIdleHook - Optional async hook run after curtain pipeline but before
  *                       the idle transition (used for human applaud wait).
  * @returns The curtain result data (summary, lessons, reflection), or null if skipped.
@@ -78,12 +76,12 @@ export function buildStageResultFromGraphRun(
 export async function transitionToCurtainAndIdle(
 	result: StageResult,
 	opts: CurtainRunnerOpts,
-	fsm: WorkflowFsm,
 	idleReason: string,
 	preIdleHook?: () => Promise<void>,
 ): Promise<CurtainResultData | null> {
 	const curtainResult = await runCurtainPipeline(result, opts);
 	if (preIdleHook) await preIdleHook();
-	await fsm.transition("idle", { reason: idleReason });
+	await opts.stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
+	opts.activityLogger.logPhase("idle", undefined, undefined, "curtain", idleReason);
 	return curtainResult;
 }

@@ -20,7 +20,7 @@ import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
 import type { MarkEnvironment } from "../../coordination";
-import type { Task } from "../executor/task-queue";
+import type { Task } from "../../graph/task-queue";
 import type { StageCallbacks } from "../stage/stage-controller";
 
 // ============================================================================

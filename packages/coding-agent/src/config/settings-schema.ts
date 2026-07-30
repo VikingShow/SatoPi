@@ -1781,7 +1781,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Swarm",
 			label: "Swarm Engine",
 			description:
-				"Swarm execution engine (legacy = EmbeddedSwarmBridge for interactive, graph = Theatre Graph for CLI).",
+				"Swarm execution engine (graph = Theatre Graph, legacy deprecated).",
 		},
 	},
 

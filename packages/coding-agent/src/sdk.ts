@@ -137,7 +137,7 @@ import { SnapcompactInlineTransformer } from "./session/snapcompact-inline";
 import { createSnapcompactSavingsRecorder } from "./session/snapcompact-savings-journal";
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
-import type { AgentRuntime } from "./swarm/agent-runtime";
+import type { SwarmRuntime } from "./swarm/core/swarm-runtime";
 import {
 	type BuildSystemPromptResult,
 	buildSystemPrompt as buildSystemPromptInternal,
@@ -571,7 +571,7 @@ export interface CreateAgentSessionOptions {
 
 	/** Agent kind: "main" | "sub" | "advisor". Overrides the derived default. */
 	agentKind?: AgentKind;
-	persistentProfileId?: string;
+	profileId?: string;
 	/** MarkEnvironment for stigmergic coordination. Default: creates a new instance. */
 	markEnvironment?: MarkEnvironment;
 	/** MMD injector for per-turn Mermaid diagram injection. */
@@ -2271,7 +2271,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		toolContextStore.setEventBus(eventBus);
 
 		if (options.agentRuntime) {
-			toolContextStore.setAgentRuntime(options.agentRuntime as unknown as AgentRuntime);
+			toolContextStore.setAgentRuntime(options.agentRuntime as unknown as SwarmRuntime);
 		}
 
 		const registeredTools = extensionRunner.getAllRegisteredTools();
@@ -2730,10 +2730,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return obfuscateMessages(obfuscator, converted);
 		};
 
-		// Auto-create OffloadManager for persistent sessions (Phase 5).
+		// Auto-create OffloadManager for profile-driven sessions (Phase 5).
 		const effectiveOffloadManager: IOffloadManager | undefined =
 			options.offloadManager ??
-			(options.persistentProfileId
+			(options.profileId
 				? new OffloadManager(cwd, resolvedAgentId, providerSessionId, new MemorySessionStorage())
 				: undefined);
 
@@ -3079,7 +3079,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			obfuscator,
 			agentId: resolvedAgentId,
 			agentKind,
-			persistentProfileId: options.persistentProfileId,
+			profileId: options.profileId,
 			markEnvironment,
 			providerSessionId: options.providerSessionId,
 			providerPromptCacheKeySource,
@@ -3089,7 +3089,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 		hasSession = true;
 		// Register the tool context runtime setter so swarm layers (GraphRunner,
-		// EmbeddedSwarmBridge, AgentLauncher) can inject AgentRuntime into tool context.
+		// AgentLauncher) can inject AgentRuntime into tool context.
 		session._registerToolContextRuntimeSetter(r => toolContextStore.setAgentRuntime(r as any));
 
 		// If this session is swarm-managed, wire the AgentRuntime into the tool context.

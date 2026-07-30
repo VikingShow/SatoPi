@@ -1,27 +1,23 @@
 /**
- * GraphRunner — Thin adapter wrapping GraphEngine for ISwarmOrchestrator.
+ * GraphRunner — Sole ISwarmOrchestrator implementation.
  *
- * Implements ISwarmOrchestrator and NodeExecutor.
+ * Supports two modes:
+ *   1. Graph mode (graphPath provided) — loads a .graph.yaml, runs theatre graph
+ *   2. Swarm keyword mode (graphPath absent) — dynamic plan.md lifecycle
+ *
  * DAG execution is delegated to GraphEngine; GraphRunner handles
  * per-node behavior lifecycle (prepare → execute → gate → cleanup)
  * and swarm lifecycle (FSM transitions, curtain pipeline).
- *
- * ## Lifecycle (PhaseBehavior-driven)
- *   init() → parse graph → build waves → confirmScript():
- *     create GraphEngine → engine.run(this) → CurtainBehavior → idle
- *
- * Per-node behaviors (script / stage / curtain) are driven by
- * PhaseBehaviorNodeAdapter inside GraphEngine.execute(). The
- * top-level CurtainBehavior in confirmScript() handles the
- * post-execution curtain phase when no dedicated curtain node exists.
  */
 
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { AssistantMessage } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
+import { MarkEnvironment } from "../coordination/mark-environment";
 import type { CheckpointStore } from "./checkpoint";
 import {
 	GraphEngine,
@@ -34,31 +30,37 @@ import type { IrcBus } from "../irc/bus";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
-import type { AgentRuntime } from "../swarm/agent-runtime";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
-import type { ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
+import type { ISwarmOrchestrator } from "./orchestrator-interface";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { buildExecutionWaves } from "../swarm/core/dag";
+import { buildExecutionWaves } from "./dag";
 import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
-import { createSwarmInfra } from "../swarm/core/swarm-infra";
-import type { WorkflowFsm } from "../swarm/core/workflow-fsm";
+import type { SwarmInfra } from "../swarm/core/swarm-infra";
 import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
-import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
+import { NoopOffloadManager, type IOffloadManager } from "../offload/manager";
+import type { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
+import type { DebateRoundtableResult } from "../swarm/script/debate-roundtable";
+import { getSessionPlanPath } from "./plan-paths";
+import { validatePlanTasks } from "./plan-validator";
 import { recoverState } from "./checkpoint";
 import { GateController } from "./gate-controller";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
 
+
+/** Phases where the workflow is considered actively running. */
+const ACTIVE_PHASES: Set<Chapter> = new Set(["script", "script-debate", "stage", "curtain"]);
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface GraphRunnerConfig {
 	workspace: string;
-	graphPath: string;
+	/** Path to .graph.yaml file. Omit for swarm keyword (plan.md) mode. */
+	graphPath?: string;
 	modelRegistry: ModelRegistry;
 	settings: Settings;
 	profileRegistry?: ProfileRegistry;
@@ -67,6 +69,21 @@ export interface GraphRunnerConfig {
 	autoApplaud?: boolean;
 	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
+	/** Swarm directory path (for swarm keyword mode, auto-derived when graphPath present). */
+	swarmDir?: string;
+	/** Pre-built swarm infrastructure. Required — callers create via createSwarmInfra. */
+	infra: SwarmInfra;
+	/** Called on phase transitions. Callers wire to setCurrentSwarmPhase. */
+	onPhaseChange?: (phase: Chapter) => void;
+	/** Factory for debate roundtable instances during plan debate. */
+	debateRoundtableFactory?: (config: {
+		agentCount: number;
+		maxRounds: number;
+		convergenceThreshold: number;
+		runtime: SwarmRuntime;
+	}) => { debate(planContent: string, workspace: string, modelRegistry: ModelRegistry, settings: Settings): Promise<DebateRoundtableResult> };
+	/** Reader for session.jsonl raw entries (used by checkpoint recovery). */
+	readSessionEntries: () => Promise<Array<Record<string, unknown>>>;
 }
 
 // ============================================================================
@@ -75,7 +92,7 @@ export interface GraphRunnerConfig {
 
 export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	readonly #config: GraphRunnerConfig;
-	#fsm!: WorkflowFsm;
+	#phase: Chapter = "idle";
 	#stateTracker!: StateTracker;
 	#activityLogger!: ActivityLogger;
 	#sessionManager!: SwarmSessionManager;
@@ -94,47 +111,60 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#swarmDir!: string;
 	#loopConfig!: LoopSwarmConfig;
 
+	// ── Swarm keyword mode state ────────────────────────────────────────
+	#planContent = "";
+	#planReady = false;
+	#offloadManager: IOffloadManager;
+	#markEnvironment: MarkEnvironment;
+
 	// ── PhaseBehavior instances ─────────────────────────────────────────
 	#curtainBehavior!: CurtainBehavior;
 	#currentBehavior: PhaseBehavior | null = null;
 	/** Active agent event unsubscriptions for the current phase. */
 	#agentUnsubscribes: Array<() => void> = [];
 
+	/** Whether confirmScript() has started Stage execution. */
+	#graphStageStarted = false;
+
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
+		this.#offloadManager = new NoopOffloadManager();
+		this.#markEnvironment = new MarkEnvironment();
 	}
 
 	// ── Lifecycle ──────────────────────────────────────────────────────────
 
 	async init(): Promise<void> {
-		const { workspace, modelRegistry, settings, profileRegistry, activeMmd } = this.#config;
-		this.#graphName = path.basename(this.#config.graphPath, ".graph.yaml");
-		this.#swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
+		const { workspace, modelRegistry, settings } = this.#config;
+		const hasGraph = !!this.#config.graphPath;
 
-		// Load graph and compute execution waves (needed for start-phase detection)
-		this.#graph = await loadGraphDefinition(this.#config.graphPath);
-		const deps = new Map<string, Set<string>>();
-		for (const [id, node] of Object.entries(this.#graph.nodes)) {
-			deps.set(id, new Set(node.depends_on ?? []));
+		if (hasGraph) {
+			this.#graphName = path.basename(this.#config.graphPath!, ".graph.yaml");
+			this.#swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${this.#graphName}`);
+
+			// Load graph and compute execution waves
+			this.#graph = await loadGraphDefinition(this.#config.graphPath!);
+			const deps = new Map<string, Set<string>>();
+			for (const [id, node] of Object.entries(this.#graph.nodes)) {
+				deps.set(id, new Set(node.depends_on ?? []));
+			}
+			this.#waves = buildExecutionWaves(deps);
+		} else {
+			// Swarm keyword mode: no graph file
+			const sessionId = this.#config.swarmDir?.split("/").pop()?.replace("swarm-", "") ?? crypto.randomUUID().slice(0, 8);
+			this.#graphName = sessionId;
+			this.#swarmDir = this.#config.swarmDir ?? path.join(workspace, ".stp", "sessions", `swarm-${sessionId}`);
+			this.#graph = { name: sessionId, description: "", version: 1, revision: 1, nodes: {}, edges: [], hooks: [] };
+			this.#waves = [];
 		}
-		this.#waves = buildExecutionWaves(deps);
 
-		const infra = await createSwarmInfra({
-			workspace,
-			swarmDir: this.#swarmDir,
-			swarmName: this.#graphName,
-			modelRegistry,
-			settings,
-			profileRegistry,
-			activeMmd,
-			startPhase: this.#detectStartPhase(),
-		});
+		const infra = this.#config.infra;
 
 		this.#sessionManager = infra.sessionManager;
 		this.#stateTracker = infra.stateTracker;
 		this.#activityLogger = infra.activityLogger;
-		this.#fsm = infra.fsm;
 		this.#experienceStore = infra.experienceStore;
+		this.#phase = infra.stateTracker.state.phase as Chapter;
 		this.#hookPipeline = infra.hookPipeline;
 		this.#runtime = infra.runtime;
 		this.#roleAssetManager = infra.roleAssetManager;
@@ -148,7 +178,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			maxIterations: 5,
 			autoRetry: true,
 			humanEscalation: true,
-			agents: { initial: 4, min: 1, max: 12, auto: true, maxRounds: 5, roundsConvergenceThreshold: 3 },
+			agents: { initial: this.#config.maxWorkers ?? 4, min: 1, max: 12, auto: true, maxRounds: this.#config.maxRounds ?? 5, roundsConvergenceThreshold: 3 },
 			debate: { enabled: true, maxRounds: 2 },
 			planDebate: { enabled: true, agentCount: 2, maxRounds: 3, convergenceThreshold: 2 },
 			convergenceThreshold: 2,
@@ -157,15 +187,22 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		};
 		this.#gateController = new GateController({ workspace });
 
-		// Mark mode as graph for TUI dashboard rendering
-		await this.#stateTracker
-			.updatePipeline({ phase: "stage" })
-			.catch(err => logger.error("StateTracker updatePipeline failed", { error: String(err) }));
-		logger.info("[GraphRunner] Initialized", {
-			graph: this.#graphName,
-			nodes: Object.keys(this.#graph.nodes).length,
-			waves: this.#waves.length,
-		});
+		if (hasGraph) {
+			// Mark mode as graph for TUI dashboard rendering
+			await this.#stateTracker
+				.updatePipeline({ phase: "stage" })
+				.catch(err => logger.error("StateTracker updatePipeline failed", { error: String(err) }));
+			logger.info("[GraphRunner] Initialized (graph mode)", {
+				graph: this.#graphName,
+				nodes: Object.keys(this.#graph.nodes).length,
+				waves: this.#waves.length,
+			});
+		} else {
+			logger.info("[GraphRunner] Initialized (swarm keyword mode)", {
+				sessionId: this.#graphName,
+				swarmDir: this.#swarmDir,
+			});
+		}
 	}
 
 	/**
@@ -206,7 +243,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	#buildPhaseContext(planContent?: string): PhaseContext {
 		return {
-			fsm: this.#fsm,
 			ircBus: this.#ircBus,
 			runtime: this.#runtime,
 			contextPipeline: this.#runtime.contextPipeline,
@@ -297,14 +333,16 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 					this.#applaudResolve = null;
 				}
 
-				await this.#fsm.transition("idle", {
-					reason: completion.message ?? "curtain complete",
-				});
+				this.#phase = "idle";
+				this.#config.onPhaseChange?.("idle");
+				await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
+				this.#activityLogger.logPhase("idle", undefined, undefined, "curtain", completion.message ?? "curtain complete");
 				return;
 			}
-
 			// Re-plan or unknown — go idle
-			await this.#fsm.transition("idle", { reason: completion.message ?? "curtain complete" }).catch(() => {});
+			this.#phase = "idle";
+			this.#config.onPhaseChange?.("idle");
+			await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
 			return;
 		}
 	}
@@ -325,8 +363,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		await this.#stateTracker.updateAgent(nodeId, { status: "running" });
 
 		const behaviorFactoryConfig: NodeBehaviorFactoryConfig = {
-			runtime: this.#runtime as unknown as AgentRuntime,
-			fsm: this.#fsm,
+			runtime: this.#runtime,
 			hookPipeline: this.#hookPipeline,
 			contextPipeline: this.#runtime.contextPipeline,
 			workspace: this.#config.workspace,
@@ -408,28 +445,78 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		}
 	}
 
-	onPlanUpdated(_content: string): void {}
+	// ── Plan management ────────────────────────────────────────────────────
+
+	/** Called by agent-session when the agent writes/updates plan.md. */
+	onPlanUpdated(content: string): void {
+		this.#planContent = content;
+		const planPath = getSessionPlanPath(this.#swarmDir);
+		fs.mkdir(path.dirname(planPath), { recursive: true })
+			.then(() => fs.writeFile(planPath, content, "utf-8"))
+			.catch(err => logger.warn("[GraphRunner] Failed to persist plan.md", { error: String(err) }));
+		const hasHeadings = /^#{1,3}\s+/m.test(content);
+		const minLength = content.trim().length >= 200;
+		this.#planReady = hasHeadings && minLength;
+	}
 
 	getPlanContent(): string {
-		return "";
+		return this.#planContent;
 	}
 
-	// =========================================================================
-	// ISwarmOrchestrator — confirmScript delegates to GraphEngine
-	// =========================================================================
+	/** Whether the plan is ready (has content and meets minimum structure). */
+	isPlanReady(): boolean {
+		return this.#planReady;
+	}
 
 	/** Set agent type and count from plan review confirmation TUI. */
-	setAgentConfig(_opts: { agentType?: "swift" | "persistent"; agentCount?: number }): void {
-		// GraphRunner drives agent count from graph definition.
+	setAgentConfig(opts: { agentType?: "swift" | "main"; agentCount?: number }): void {
+		if (opts.agentCount !== undefined && opts.agentCount >= 1) {
+			this.#loopConfig.agents.initial = opts.agentCount;
+		}
 	}
 
-	async confirmScript(_opts?: { agentType?: "swift" | "persistent"; agentCount?: number }): Promise<string[]> {
-		await this.#fsm.transition("stage", { reason: "graph execution start" });
+	/**
+	 * Run the plan debate and return structured results without affecting FSM state.
+	 * Returns undefined when debate is not enabled.
+	 */
+	async debatePlan(planContent: string): Promise<DebateRoundtableResult | undefined> {
+		const enableDebate = (this.#config.settings.get("magicKeywords.swarm.enableDebate") as boolean) ?? false;
+		if (!enableDebate) return undefined;
+
+		const factory = this.#config.debateRoundtableFactory;
+		if (!factory) return undefined;
+
+		const debate = factory({
+			agentCount: 2,
+			maxRounds: 2,
+			convergenceThreshold: 2,
+			runtime: this.#runtime,
+		});
+		try {
+			return await debate.debate(
+				planContent,
+				this.#config.workspace,
+				this.#config.modelRegistry,
+				this.#config.settings,
+			);
+		} catch (err) {
+			logger.warn("[GraphRunner] Plan debate failed, returning undefined", {
+				error: String(err),
+			});
+			return undefined;
+		}
+	}
+
+	async confirmScript(_opts?: { agentType?: "swift" | "main"; agentCount?: number }): Promise<string[]> {
+		this.#phase = "stage";
+		this.#config.onPhaseChange?.("stage");
+		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		this.#abortController = new AbortController();
 		this.#graphStageStarted = true;
 
 		// Build CheckpointStore adapter wrapping SwarmSessionManager.
 		const sessionManager = this.#sessionManager;
+		const readSessionEntries = this.#config.readSessionEntries;
 		const checkpointStore: CheckpointStore = {
 			write(state): boolean {
 				try {
@@ -444,7 +531,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				}
 			},
 			async recover(graphName: string) {
-				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
+				const raw = await readSessionEntries();
 				for (let i = raw.length - 1; i >= 0; i--) {
 					const entry = raw[i];
 					if (entry.type === "custom" && entry.customType === "graph_checkpoint") {
@@ -471,14 +558,16 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine execution failed", { error: String(err) });
-			await this.#fsm
-				.transition("blocked", { reason: String(err) })
-				.catch(err2 => logger.error("FSM transition failed during error recovery", { error: String(err2) }));
+			this.#phase = "blocked";
+			this.#config.onPhaseChange?.("blocked");
+			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return [];
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		await this.#fsm.transition("curtain", { reason: "graph execution complete" });
+		this.#phase = "curtain";
+		this.#config.onPhaseChange?.("curtain");
+		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 
 		const curtainCtx = this.#buildPhaseContext();
 		const curtainEnterResult = await this.#curtainBehavior.enter(curtainCtx);
@@ -520,12 +609,14 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	async pauseStage(): Promise<void> {
 		this.#abortController?.abort();
-		await this.#fsm.transition("paused", { reason: "human paused" });
+		this.#phase = "paused";
+		this.#config.onPhaseChange?.("paused");
+		await this.#stateTracker.updatePipeline({ phase: "paused" }).catch(() => {});
 	}
 
 	async resumeGraphRun(): Promise<{ success: boolean; error?: string }> {
 		// Verify a checkpoint exists to resume from.
-		const checkpointState = await recoverState(this.#sessionManager, this.#graphName);
+		const checkpointState = await recoverState(this.#config.readSessionEntries, this.#graphName);
 		if (!checkpointState) {
 			return { success: false, error: "No checkpoint found — nothing to resume" };
 		}
@@ -539,11 +630,14 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			currentWave: checkpointState.currentWave,
 		});
 
-		await this.#fsm.transition("stage", { reason: "graph resume from checkpoint" });
+		this.#phase = "stage";
+		this.#config.onPhaseChange?.("stage");
+		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		this.#abortController = new AbortController();
 
 		// Build CheckpointStore adapter wrapping SwarmSessionManager.
 		const sessionManager = this.#sessionManager;
+		const readSessionEntries = this.#config.readSessionEntries;
 		const checkpointStore: CheckpointStore = {
 			write(state): boolean {
 				try {
@@ -558,7 +652,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				}
 			},
 			async recover(graphName: string) {
-				const raw = await SwarmSessionManager.readRawEntries(sessionManager.swarmDir);
+				const raw = await readSessionEntries();
 				for (let i = raw.length - 1; i >= 0; i--) {
 					const entry = raw[i];
 					if (entry.type === "custom" && entry.customType === "graph_checkpoint") {
@@ -585,14 +679,16 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine resume execution failed", { error: String(err) });
-			await this.#fsm
-				.transition("blocked", { reason: String(err) })
-				.catch(err2 => logger.error("FSM transition failed during error recovery", { error: String(err2) }));
+			this.#phase = "blocked";
+			this.#config.onPhaseChange?.("blocked");
+			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return { success: false, error: String(err) };
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		await this.#fsm.transition("curtain", { reason: "graph resume complete" });
+		this.#phase = "curtain";
+		this.#config.onPhaseChange?.("curtain");
+		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 
 		const curtainCtx = this.#buildPhaseContext();
 		const curtainEnterResult = await this.#curtainBehavior.enter(curtainCtx);
@@ -610,9 +706,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	// ── Accessors ──────────────────────────────────────────────────────────
 
-	get fsm(): WorkflowFsm {
-		return this.#fsm;
-	}
 	get stateTracker(): StateTracker {
 		return this.#stateTracker;
 	}
@@ -623,13 +716,11 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		return this.#stateTracker.state;
 	}
 	get currentPhase(): Chapter | null {
-		return this.#fsm?.phase ?? null;
+		return this.#phase;
 	}
 	get isRunning(): boolean {
-		return !this.#disposed && (this.#fsm?.state.running ?? false);
+		return !this.#disposed && ACTIVE_PHASES.has(this.#phase);
 	}
-	/** Whether confirmScript() has started Stage execution. */
-	#graphStageStarted = false;
 	get stageStarted(): boolean {
 		return this.#graphStageStarted;
 	}
@@ -642,5 +733,11 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	}
 	get gateController(): GateController {
 		return this.#gateController;
+	}
+	get offloadManager(): IOffloadManager {
+		return this.#offloadManager;
+	}
+	get markEnvironment(): MarkEnvironment {
+		return this.#markEnvironment;
 	}
 }

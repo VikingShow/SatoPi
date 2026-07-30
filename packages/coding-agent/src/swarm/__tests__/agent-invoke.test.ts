@@ -91,7 +91,7 @@ describe("agent_invoke E2E", () => {
 			expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
 			expect(mockCreateAgentSession).toHaveBeenCalledWith({
 				agentKind: "main",
-				persistentProfileId: "testProfile",
+				profileId: "testProfile",
 				agentId: "persist-testProfile",
 				agentDisplayName: "persist-testProfile",
 				autoApprove: true,

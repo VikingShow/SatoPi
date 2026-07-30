@@ -318,9 +318,9 @@ export class StateTracker {
 	}
 
 	/**
-	 * Append a transition record to the FSM audit trail.
+	 * Append a transition record to the phase audit trail.
 	 *
-	 * Called by WorkflowFsm on every successful phase change so the full
+	 * Called on every successful phase change so the full
 	 * transition history is recoverable from persisted state.
 	 */
 	async logTransition(record: TransitionRecord): Promise<void> {

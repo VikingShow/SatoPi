@@ -1,6 +1,5 @@
 // Core swarm infrastructure
 
-export { buildExecutionWaves, detectCycles } from "./dag";
 export {
 	type AgentToolRestriction,
 	type HookConfig,

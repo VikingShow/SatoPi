@@ -47,6 +47,7 @@ import { logger } from "@satopi/pi-utils";
 import type { SessionStorage } from "../../session/session-storage";
 import type { AgentState, Chapter, SwarmState } from "../core/state";
 import type { ActivityEntry } from "../../infra/activity-logger";
+import { getSwarmAgentsDir, getSwarmAgentSessionPath, getSwarmSessionDir } from "../../session/session-tree-paths";
 
 // ============================================================================
 // Custom entry type tags
@@ -72,26 +73,44 @@ export const CTX = {
 export class SwarmSessionManager {
 	#session: SessionManager;
 	readonly #swarmDir: string;
-	/** Session data dir: .stp/sessions/swarm-{name}/.session/ */
+	/** Session data dir: .stp/sessions/swarm-{name}/.session/ (flat) or tree-nested variant */
 	readonly #sessionDir: string;
+	/** Parent session file path for tree-nested layout (optional). */
+	readonly #parentSessionFile?: string;
+	/** Swarm name for tree-nested layout (optional). */
+	readonly #swarmName?: string;
 
 	/** @internal Use static factory methods: {@link create}, {@link open}, {@link openOrCreate}. */
-	constructor(session: SessionManager, swarmDir: string, sessionDir: string) {
+	constructor(
+		session: SessionManager,
+		swarmDir: string,
+		sessionDir: string,
+		parentSessionFile?: string,
+		swarmName?: string,
+	) {
 		this.#session = session;
 		this.#swarmDir = swarmDir;
 		this.#sessionDir = sessionDir;
+		this.#parentSessionFile = parentSessionFile;
+		this.#swarmName = swarmName;
 	}
 
-	/** The session dir under the swarm directory. */
-	static sessionDir(swarmDir: string): string {
+	/** The session dir under the swarm directory. Supports both flat and tree-nested layouts. */
+	static sessionDir(swarmDir: string, parentSessionFile?: string, swarmName?: string): string {
+		if (parentSessionFile && swarmName) {
+			return getSwarmSessionDir(parentSessionFile, swarmName);
+		}
 		return path.join(swarmDir, ".session");
 	}
-
 	// -- Factory --------------------------------------------------------------
 
 	/** Create a new SwarmSessionManager. Forces session file creation in the swarm dir. */
-	static async create(swarmDir: string): Promise<SwarmSessionManager> {
-		const sessionDir = SwarmSessionManager.sessionDir(swarmDir);
+	static async create(
+		swarmDir: string,
+		parentSessionFile?: string,
+		swarmName?: string,
+	): Promise<SwarmSessionManager> {
+		const sessionDir = SwarmSessionManager.sessionDir(swarmDir, parentSessionFile, swarmName);
 		await fs.mkdir(sessionDir, { recursive: true });
 
 		// SessionManager's lazy gate only creates files after an assistant
@@ -114,30 +133,39 @@ export class SwarmSessionManager {
 
 		const session = await SessionManager.open(filePath);
 		logger.debug("[SwarmSessionManager] created", { swarmDir, filePath });
-		return new SwarmSessionManager(session, swarmDir, sessionDir);
+		return new SwarmSessionManager(session, swarmDir, sessionDir, parentSessionFile, swarmName);
 	}
 
 	/** Open an existing session by file path. */
-	static async open(filePath: string, swarmDir: string): Promise<SwarmSessionManager> {
+	static async open(
+		filePath: string,
+		swarmDir: string,
+		parentSessionFile?: string,
+		swarmName?: string,
+	): Promise<SwarmSessionManager> {
 		const session = await SessionManager.open(filePath);
 		const sessionDir = path.dirname(filePath);
-		return new SwarmSessionManager(session, swarmDir, sessionDir);
+		return new SwarmSessionManager(session, swarmDir, sessionDir, parentSessionFile, swarmName);
 	}
 
 	/** Open or create. */
-	static async openOrCreate(swarmDir: string): Promise<SwarmSessionManager> {
-		const sessionDir = SwarmSessionManager.sessionDir(swarmDir);
+	static async openOrCreate(
+		swarmDir: string,
+		parentSessionFile?: string,
+		swarmName?: string,
+	): Promise<SwarmSessionManager> {
+		const sessionDir = SwarmSessionManager.sessionDir(swarmDir, parentSessionFile, swarmName);
 		try {
 			const sessions = await SessionManager.list(swarmDir, sessionDir);
 			if (sessions.length > 0) {
 				// Open the most recently modified session
 				sessions.sort((a, b) => (b.modified?.getTime() ?? 0) - (a.modified?.getTime() ?? 0));
-				return SwarmSessionManager.open(sessions[0].path, swarmDir);
+				return SwarmSessionManager.open(sessions[0].path, swarmDir, parentSessionFile, swarmName);
 			}
 		} catch {
 			// first run — no sessions yet
 		}
-		return SwarmSessionManager.create(swarmDir);
+		return SwarmSessionManager.create(swarmDir, parentSessionFile, swarmName);
 	}
 
 	// -- Accessors ------------------------------------------------------------
@@ -149,6 +177,38 @@ export class SwarmSessionManager {
 	/** Expose the underlying SessionStorage for offload pipeline use. */
 	get storage(): SessionStorage {
 		return this.#session.storage;
+	}
+
+	/** Parent session file for tree-nested layout, if available. */
+	get parentSessionFile(): string | undefined {
+		return this.#parentSessionFile;
+	}
+
+	/** Swarm name for tree-nested layout, if available. */
+	get swarmName(): string | undefined {
+		return this.#swarmName;
+	}
+
+	/**
+	 * Get the agents directory under the swarm (tree-nested layout).
+	 * Falls back to flat `{swarmDir}/agents` when parent session info is unavailable.
+	 */
+	getSwarmAgentsDir(): string {
+		if (this.#parentSessionFile && this.#swarmName) {
+			return getSwarmAgentsDir(this.#parentSessionFile, this.#swarmName);
+		}
+		return path.join(this.#swarmDir, "agents");
+	}
+
+	/**
+	 * Get the session file path for a swarm agent (tree-nested layout).
+	 * Falls back to flat `{swarmDir}/agents/{agentId}.jsonl` when parent session info is unavailable.
+	 */
+	getAgentSessionPath(agentId: string): string {
+		if (this.#parentSessionFile && this.#swarmName) {
+			return getSwarmAgentSessionPath(this.#parentSessionFile, this.#swarmName, agentId);
+		}
+		return path.join(this.#swarmDir, "agents", `${agentId}.jsonl`);
 	}
 
 	// -- Swarm State ----------------------------------------------------------

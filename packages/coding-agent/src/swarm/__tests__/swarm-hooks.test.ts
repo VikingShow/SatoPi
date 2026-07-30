@@ -20,7 +20,7 @@ import type { SingleResult } from "@satopi/pi-coding-agent";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
 import { MarkEnvironment } from "../../coordination";
-import type { Task } from "../executor/task-queue";
+import type { Task } from "../../graph/task-queue";
 import { createStageFeedback } from "../infra/swarm-hooks";
 
 describe("createStageFeedback (StageController callbacks)", () => {
@@ -220,6 +220,7 @@ describe("createStageFeedback (StageController callbacks)", () => {
 				errors: [],
 				agents: [],
 				taskProgress: { total: 1, completed: 1 },
+				degradedMode: [],
 			}),
 		).not.toThrow();
 	});
@@ -432,8 +433,6 @@ import { runVote } from "../../comm/vote";
 import type { AssembledContext } from "../context-manager/context-pipeline";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { StateTracker } from "../core/state";
-import type { PhaseDefinition } from "../core/workflow-fsm";
-import { WorkflowFsm } from "../core/workflow-fsm";
 import { ActivityLogger } from "../../infra/activity-logger";
 
 describe("Hook event trigger E2E (real integration points)", () => {
@@ -569,52 +568,6 @@ describe("Hook event trigger E2E (real integration points)", () => {
 		expect(fired).toContain("context:afterCompaction");
 	});
 
-	// ── Workflow: phaseTimeout ─────────────────────────────────
-
-	test("workflow:phaseTimeout fires through WorkflowFsm timed transition", async () => {
-		const stateTracker = new StateTracker("/tmp/test-e2e-swarm", "test");
-		const activityLogger = new ActivityLogger("/tmp/test-e2e-swarm", "test");
-		const fsm = new WorkflowFsm(stateTracker, activityLogger, "idle", hookPipeline);
-
-		const idleDef: PhaseDefinition = {
-			phase: "idle",
-			allowedFrom: ["script"],
-			allowedTo: ["script"],
-			capabilities: {
-				multiAgent: false,
-				roundtable: false,
-				vote: false,
-				offload: false,
-				compaction: false,
-				humanMode: "none",
-			},
-			defaultTimeoutMs: 0,
-		};
-		const scriptDef: PhaseDefinition = {
-			phase: "script",
-			allowedFrom: ["idle"],
-			allowedTo: ["idle"],
-			capabilities: {
-				multiAgent: true,
-				roundtable: true,
-				vote: false,
-				offload: false,
-				compaction: false,
-				humanMode: "none",
-			},
-			defaultTimeoutMs: 100,
-			timedTransitionTarget: "idle",
-		};
-		fsm.registerPhase(idleDef);
-		fsm.registerPhase(scriptDef);
-
-		vi.useFakeTimers();
-		await fsm.transition("script");
-		vi.advanceTimersByTime(150);
-		vi.useRealTimers();
-
-		expect(fired).toContain("workflow:phaseTimeout");
-	});
 
 	// ── Offload: afterL1 / beforeFlush / afterFlush ────────────
 

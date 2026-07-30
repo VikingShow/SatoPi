@@ -14,6 +14,7 @@ import { registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityBroadcaster } from "../../infra/activity-logger";
 import type { SessionFactory, SessionServices, SharedServices } from "./session-types";
 import { SwarmSessionManager } from "./swarm-session-manager";
+import { getSwarmDir } from "../../session/session-tree-paths";
 
 export async function createSwarmSession(
 	shared: SharedServices,
@@ -23,9 +24,13 @@ export async function createSwarmSession(
 		broadcaster?: ActivityBroadcaster | null;
 		maxConcurrent?: number;
 		runtime?: SessionServices["runtime"];
+		/** Parent session file path for tree-nested layout under the parent session. */
+		parentSessionFile?: string;
 	},
 ): Promise<SessionServices> {
-	const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${name}`);
+	const swarmDir = options?.parentSessionFile
+		? getSwarmDir(options.parentSessionFile, name)
+		: path.join(shared.workspace, ".stp", "sessions", `swarm-${name}`);
 	await fs.mkdir(swarmDir, { recursive: true });
 
 	const services = await factory(shared, name, swarmDir);
@@ -34,7 +39,11 @@ export async function createSwarmSession(
 	// Create SwarmSessionManager for unified OH-MY-PI persistence.
 	let sessionManager: SwarmSessionManager | undefined;
 	try {
-		sessionManager = await SwarmSessionManager.openOrCreate(swarmDir);
+		sessionManager = await SwarmSessionManager.openOrCreate(
+			swarmDir,
+			options?.parentSessionFile,
+			name,
+		);
 		logger.info("[createSwarmSession] SwarmSessionManager created", { name, swarmDir });
 	} catch (err) {
 		logger.warn("[createSwarmSession] SwarmSessionManager unavailable — falling back to legacy persistence", {
@@ -108,7 +117,7 @@ export async function destroySwarmSession(session: SessionServices, workspace: s
 			/* best-effort */
 		}
 	}
-	const swarmDir = path.join(workspace, ".stp", "sessions", `swarm-${session.name}`);
+	const swarmDir = session.swarmDir;
 	try {
 		await fs.rm(swarmDir, { recursive: true, force: true });
 	} catch {

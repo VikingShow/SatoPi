@@ -9,9 +9,9 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { logger, Snowflake } from "@satopi/pi-utils";
 import { CommChannel } from "../comm/comm-channel";
-import type { IrcBus } from "../irc/bus";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { IrcBus } from "../irc/bus";
 
 // ============================================================================
 // Public types
@@ -65,11 +65,14 @@ export class CrewManager {
 	async createCrew(name: string, members: string[], agentCreated?: boolean): Promise<string> {
 		const crewId = Snowflake.next();
 		const state = this.#makeState(crewId, name, members);
-		const channel = this.#makeChannel(state.members);
+		const channel = this.#makeChannel(state.members, crewId);
 		this.#crews.set(crewId, { state, channel });
 		await this.#save(crewId, state);
 		logger.info("[CrewManager] Crew created", {
-			crewId, name, memberCount: members.length, agentCreated: !!agentCreated,
+			crewId,
+			name,
+			memberCount: members.length,
+			agentCreated: !!agentCreated,
 		});
 		return crewId;
 	}
@@ -109,7 +112,11 @@ export class CrewManager {
 
 	async disposeCrew(crewId: string): Promise<void> {
 		this.#crews.delete(crewId);
-		try { await fs.unlink(path.join(this.#crewsDir, `${crewId}.json`)); } catch { /* ok */ }
+		try {
+			await fs.unlink(path.join(this.#crewsDir, `${crewId}.json`));
+		} catch {
+			/* ok */
+		}
 	}
 
 	async disposeAll(): Promise<void> {
@@ -125,15 +132,15 @@ export class CrewManager {
 			for (const f of await fs.readdir(this.#crewsDir)) {
 				if (!f.endsWith(".json")) continue;
 				try {
-					const state: CrewState = JSON.parse(
-						await fs.readFile(path.join(this.#crewsDir, f), "utf-8"),
-					);
+					const state: CrewState = JSON.parse(await fs.readFile(path.join(this.#crewsDir, f), "utf-8"));
 					if (!state.id || !state.members) continue;
 					this.#crews.set(state.id, {
 						state,
-						channel: this.#makeChannel(state.members),
+						channel: this.#makeChannel(state.members, state.id),
 					});
-				} catch { /* skip corrupt files */ }
+				} catch {
+					/* skip corrupt files */
+				}
 			}
 			logger.info("[CrewManager] Restored crews", { count: this.#crews.size });
 		} catch (err) {
@@ -160,25 +167,33 @@ export class CrewManager {
 		}
 		return { id: crewId, name, members, createdAt: Date.now() };
 	}
-
-	#makeChannel(members: CrewMember[]): CommChannel {
+	#makeChannel(members: CrewMember[], crewId: string): CommChannel {
 		return new CommChannel(
 			this.#ircBus,
 			members.filter(m => m.role === "member").map(m => m.agentId),
 			members.filter(m => m.role === "observer").map(m => m.agentId),
 			this.#activityLogger,
 			this.#hookPipeline,
+			(from, body) => {
+				this.persistMessage(crewId, from, body).catch(() => {});
+			},
 		);
+	}
+
+	/** Append a message to the crew's transcript JSONL file. */
+	async persistMessage(crewId: string, from: string, body: string): Promise<void> {
+		try {
+			const line = `${JSON.stringify({ ts: Date.now(), from, body })}\n`;
+			await fs.appendFile(path.join(this.#crewsDir, `${crewId}.jsonl`), line, "utf-8");
+		} catch (err) {
+			logger.warn("[CrewManager] Transcript persist failed", { crewId, error: String(err) });
+		}
 	}
 
 	async #save(crewId: string, state: CrewState): Promise<void> {
 		try {
 			await fs.mkdir(this.#crewsDir, { recursive: true });
-			await fs.writeFile(
-				path.join(this.#crewsDir, `${crewId}.json`),
-				JSON.stringify(state, null, 2),
-				"utf-8",
-			);
+			await fs.writeFile(path.join(this.#crewsDir, `${crewId}.json`), JSON.stringify(state, null, 2), "utf-8");
 		} catch (err) {
 			logger.warn("[CrewManager] Persist failed", { crewId, error: String(err) });
 		}

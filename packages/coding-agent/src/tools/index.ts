@@ -34,9 +34,16 @@ import type { DiscoverableTool, DiscoverableToolSearchIndex } from "../tool-disc
 import type { EventBus } from "../utils/event-bus";
 import { WebSearchTool } from "../web/search";
 import type { WorkspaceTree } from "../workspace-tree";
-import { agentInvokeTool } from "./agent-invoke";
+import {
+	AgentBroadcastTool,
+	AgentPeersTool,
+	AgentQueryAllTool,
+	AgentQueryMajorityTool,
+	AgentRoundtableTool,
+} from "./agent-channel-tools";
+import { AgentCreateCrewTool } from "./agent-create-crew";
 import { AgentForkTool } from "./agent-fork-tool";
-import { AgentBroadcastTool, AgentPeersTool, AgentQueryAllTool, AgentQueryMajorityTool, AgentRoundtableTool } from "./agent-channel-tools";
+import { agentInvokeTool } from "./agent-invoke";
 import { AskTool } from "./ask";
 import { AstEditTool } from "./ast-edit";
 import { AstGrepTool } from "./ast-grep";
@@ -492,6 +499,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	agent_query_majority: s => new AgentQueryMajorityTool(),
 	agent_roundtable: s => new AgentRoundtableTool(),
 	agent_peers: s => new AgentPeersTool(),
+	agent_create_crew: () => new AgentCreateCrewTool(),
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
@@ -664,7 +672,8 @@ export async function createTools(
 			name === "agent_query_all" ||
 			name === "agent_query_majority" ||
 			name === "agent_roundtable" ||
-			name === "agent_peers"
+			name === "agent_peers" ||
+			name === "agent_create_crew"
 		) {
 			return true;
 		}

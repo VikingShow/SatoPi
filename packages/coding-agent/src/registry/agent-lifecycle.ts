@@ -94,18 +94,25 @@ export class AgentLifecycleManager {
 
 	/**
 	 * Take ownership of a finished subagent. Caller has already set registry
-	 * status to "idle". Arms the TTL timer (idleTtlMs <= 0 adopts without one).
+	 * status to "idle".
+	 *
+	 * Lifecycle policy (Phase 2):
+	 *   - main + profileId → no TTL (explicit dispose only)
+	 *   - sub → TTL-park
+	 *   - main without profileId → TTL-park
 	 */
 	adopt(id: string, opts: AdoptOptions): void {
 		if (id === MAIN_AGENT_ID) return;
 		const ref = this.#registry.get(id);
-		if (!this.#registry.get(id)) {
+		if (!ref) {
 			logger.warn("AgentLifecycleManager.adopt: unknown agent id", { id });
 			return;
 		}
+		// Profile-driven main agents are explicitly disposed — never auto-parked.
+		const effectiveTtlMs = ref.kind === "main" && ref.profileId ? 0 : opts.idleTtlMs;
 		const existing = this.#adopted.get(id);
 		clearTimeout(existing?.timer);
-		const adopted: AdoptedAgent = { idleTtlMs: opts.idleTtlMs, revive: opts.revive };
+		const adopted: AdoptedAgent = { idleTtlMs: effectiveTtlMs, revive: opts.revive };
 		this.#adopted.set(id, adopted);
 		this.#armTimer(id, adopted);
 	}

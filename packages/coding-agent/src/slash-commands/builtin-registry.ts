@@ -34,7 +34,7 @@ import type { AgentSession, FreshSessionResult } from "../session/agent-session"
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
-import { convertLoopFileToGraph } from "../graph/loop-converter";
+import { convertLoopFileToGraph } from "../swarm/loop-converter";
 import { compileMermaidToGraph } from "../graph/mermaid-compiler";
 import type { GraphDefinition } from "../graph/schema";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";

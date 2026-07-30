@@ -12,10 +12,10 @@
  * - vote: question -> collect -> tally VOTE: patterns (delegates to runVote)
  */
 
-import type { IrcBus } from "../irc/bus";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { IrcBus } from "../irc/bus";
 import { type RoundtableConfig, runRoundtable } from "./roundtable";
 import { runVote } from "./vote";
 
@@ -83,6 +83,7 @@ export class CommChannel {
 	readonly #activityLogger?: ActivityLogger;
 
 	readonly #hookPipeline: HookPipeline | undefined;
+	readonly #afterSend?: (from: string, body: string) => void | Promise<void>;
 
 	constructor(
 		ircBus: IrcBus,
@@ -90,10 +91,12 @@ export class CommChannel {
 		observers: string[],
 		activityLogger?: ActivityLogger,
 		hookPipeline?: HookPipeline,
+		afterSend?: (from: string, body: string) => void | Promise<void>,
 	) {
 		this.#ircBus = ircBus;
 		this.#activityLogger = activityLogger;
 		this.#hookPipeline = hookPipeline;
+		this.#afterSend = afterSend;
 		for (const m of members) this.#members.add(m);
 		for (const o of observers) this.#observers.add(o);
 	}
@@ -161,6 +164,9 @@ export class CommChannel {
 
 		// Secret CC to observers — suppressed from UI relay
 		await Promise.all([...this.#observers].map(to => this.#ircBus.send({ from, to, body }, { suppressRelay: true })));
+
+		// Persist transcript via callback (e.g. CrewManager)
+		await this.#afterSend?.(from, body);
 
 		// Hook: comm:afterBroadcast
 		if (this.#hookPipeline) {

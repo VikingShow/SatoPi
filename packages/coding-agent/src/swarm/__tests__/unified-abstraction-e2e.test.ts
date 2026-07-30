@@ -20,7 +20,6 @@ import { ExperienceSource } from "../context-manager/sources/experience-source";
 import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { StateTracker } from "../core/state";
-import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
 import { ExperienceStore } from "../../experience/experience";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../../graph/node-behavior";
 import { PhaseBehaviorNodeAdapter } from "../../graph/phase-behavior-adapter";
@@ -38,8 +37,6 @@ const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBehaviorFactoryConfig {
 	const stateTracker = new StateTracker(WORKSPACE, "test");
 	const activityLogger = new ActivityLogger(WORKSPACE, "test");
-	const fsm = new WorkflowFsm(stateTracker, activityLogger, "stage");
-	for (const def of PHASES) fsm.registerPhase(def);
 	const hookPipeline = new HookPipeline();
 	const contextPipeline = new ContextPipeline();
 
@@ -47,9 +44,7 @@ function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBeh
 		runtime: {
 			ircBus: IrcBus.global(),
 			spawn: async () => [],
-			contextPipeline,
 		} as unknown as NodeBehaviorFactoryConfig["runtime"],
-		fsm,
 		hookPipeline,
 		contextPipeline,
 		workspace: WORKSPACE,

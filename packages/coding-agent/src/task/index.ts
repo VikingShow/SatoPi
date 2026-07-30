@@ -30,7 +30,7 @@ import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: 
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/irc";
 import { formatBytes, formatDuration } from "../tools/render-utils";
-import { getSessionDir } from "../session/session-tree-paths";
+import { getAgentSessionPath, getSessionDir } from "../session/session-tree-paths";
 import { resolveSpawnPolicy } from "./spawn-policy";
 import {
 	type AgentDefinition,
@@ -1369,6 +1369,12 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				agentId = await outputManager.allocate(params.name?.trim() || generateTaskName());
 			}
 
+			// Compute subagent session file path using tree-nested layout under parent session
+			const subagentSessionFile = sessionFile ? getAgentSessionPath(sessionFile, agentId) : null;
+			if (subagentSessionFile) {
+				await fs.mkdir(path.dirname(subagentSessionFile), { recursive: true });
+			}
+
 			const availableSkills = [...(this.session.skills ?? [])];
 			// Resolve autoload skills from agent definition against available skills
 			const resolvedAutoloadSkills =
@@ -1435,7 +1441,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				parentActiveModelPattern,
 				thinkingLevel: thinkingLevelOverride,
 				outputSchema: effectiveOutputSchema,
-				sessionFile,
+				sessionFile: subagentSessionFile,
 				persistArtifacts: !!artifactsDir,
 				artifactsDir: effectiveArtifactsDir,
 				enableLsp: subagentLspEnabled,

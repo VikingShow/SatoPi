@@ -16,7 +16,6 @@ import type { CommChannel } from "../../comm/comm-channel";
 import type { ContextPipeline } from "../../swarm/context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../../swarm/core/schema";
 import type { Chapter, StateTracker } from "../../swarm/core/state";
-import type { WorkflowFsm } from "../../swarm/core/workflow-fsm";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 
@@ -32,9 +31,6 @@ import type { ActivityLogger } from "../../infra/activity-logger";
  * track state — without importing the concrete implementations directly.
  */
 export interface PhaseContext {
-	/** Workflow state machine — manages phase transitions. */
-	fsm: WorkflowFsm;
-
 	/** Communication bus — creates channels and routes messages. */
 	ircBus: IrcBus;
 

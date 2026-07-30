@@ -20,16 +20,14 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
-import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
 import type { ContextPipeline } from "../swarm/context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import type { WorkflowFsm } from "../swarm/core/workflow-fsm";
 import type { HookPipeline } from "../hooks/hook-pipeline";
-import { createStageController, type StageResult } from "../swarm/stage/stage-controller";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
 
@@ -294,153 +292,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 	}
 }
 
-// ============================================================================
-// StageNodeBehavior — Drives real parallel worker agents via StageController
-// ============================================================================
 
-/**
- * Stage (execution) phase behavior.
- *
- * Parses the plan from the upstream script node, builds a StageController
- * with real parallel worker agents, and collects per-agent results.
- *
- * Falls back to CustomNodeBehavior when roleAssetManager or profileRegistry
- * are not available in the NodeContext.
- */
-export class StageNodeBehavior implements NodeBehavior {
-	readonly name = "stage";
-
-	#delegate = new CustomNodeBehavior();
-
-	async prepare(ctx: NodeContext): Promise<AgentSpec[]> {
-		if (!(ctx.roleAssetManager && ctx.profileRegistry && ctx.stateTracker && ctx.activityLogger)) {
-			return this.#delegate.prepare(ctx);
-		}
-		// StageController manages its own agent creation — no pre-spawn needed.
-		return [];
-	}
-
-	async execute(ctx: NodeContext, _prepared: AgentSpec[]): Promise<NodeResult> {
-		if (!(ctx.roleAssetManager && ctx.profileRegistry && ctx.stateTracker && ctx.activityLogger)) {
-			logger.info("[StageNodeBehavior] Services unavailable, delegating to CustomNodeBehavior");
-			return this.#delegate.execute(ctx, _prepared);
-		}
-
-		const planContent = this.#extractPlanContent(ctx);
-		const loopConfig = this.#buildLoopConfig();
-
-		logger.info("[StageNodeBehavior] Creating StageController", {
-			nodeId: ctx.node.id,
-			planLength: planContent.length,
-		});
-
-		const stageController = createStageController({
-			workspace: ctx.workspace,
-			swarmName: `graph-${ctx.node.id}`,
-			planContent,
-			loopConfig,
-			stateTracker: ctx.stateTracker!,
-			activityLogger: ctx.activityLogger!,
-			modelRegistry: ctx.modelRegistry,
-			settings: ctx.settings,
-			signal: ctx.signal,
-			profileRegistry: ctx.profileRegistry!,
-			roleAssetManager: ctx.roleAssetManager!,
-			runtime: ctx.runtime as AgentRuntime,
-			ircBus: ctx.ircBus!,
-		});
-
-		try {
-			const result: StageResult = await stageController.run();
-
-			logger.info("[StageNodeBehavior] Stage complete", {
-				nodeId: ctx.node.id,
-				status: result.status,
-				agentCount: result.agents.length,
-				tasksCompleted: result.taskProgress.completed,
-			});
-
-			return this.#toNodeResult(ctx.node.id, result);
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			logger.error("[StageNodeBehavior] Stage failed", { nodeId: ctx.node.id, error: msg });
-			return { nodeId: ctx.node.id, success: false, error: msg };
-		}
-	}
-
-	async validate(result: NodeResult, gate?: GateSpec): Promise<GateResult> {
-		return this.#delegate.validate(result, gate);
-	}
-
-	async cleanup(ctx: NodeContext): Promise<void> {
-		return this.#delegate.cleanup(ctx);
-	}
-
-	// ── private helpers ───────────────────────────────────────────────────
-
-	#extractPlanContent(ctx: NodeContext): string {
-		for (const [, output] of Object.entries(ctx.upstreamOutputs)) {
-			if (output.result && typeof output.result === "string") {
-				return output.result;
-			}
-			if (output.summary) {
-				return output.summary;
-			}
-		}
-		logger.warn("[StageNodeBehavior] No plan content found in upstream outputs, using empty plan");
-		return "# Plan\n\nNo plan content available from upstream script node.";
-	}
-
-	#buildLoopConfig(): LoopSwarmConfig {
-		return {
-			maxIterations: 5,
-			autoRetry: true,
-			humanEscalation: true,
-			agents: {
-				initial: 4,
-				min: 1,
-				max: 12,
-				auto: true,
-				maxRounds: 5,
-				roundsConvergenceThreshold: 3,
-			},
-			debate: {
-				enabled: true,
-				maxRounds: 2,
-			},
-			planDebate: {
-				enabled: true,
-				agentCount: 2,
-				maxRounds: 3,
-				convergenceThreshold: 2,
-			},
-			convergenceThreshold: 2,
-			iterationTimeoutMs: 300_000,
-			enableDeliberation: true,
-		};
-	}
-
-	#toNodeResult(nodeId: string, result: StageResult): NodeResult {
-		const agentResults: Array<{ agentId: string; output: string; error?: string }> = [];
-		for (const [agentId, singles] of result.agentResults) {
-			for (const s of singles) {
-				agentResults.push({
-					agentId,
-					output: s.output ?? "",
-					error: s.error,
-				});
-			}
-		}
-
-		return {
-			nodeId,
-			success: result.status === "completed",
-			output: `Stage ${result.status} — ${result.taskProgress.completed}/${result.taskProgress.total} tasks by ${result.agents.length} agents`,
-			error: result.errors.length > 0 ? result.errors.join("; ") : undefined,
-			agentResults,
-		};
-	}
-}
 
 // ============================================================================
 // Factory
@@ -456,8 +308,7 @@ export class StageNodeBehavior implements NodeBehavior {
  * PhaseBehaviorNodeAdapter instead of using stubs.
  */
 export interface NodeBehaviorFactoryConfig {
-	runtime: AgentRuntime;
-	fsm: WorkflowFsm;
+	runtime: SwarmRuntime;
 	hookPipeline: HookPipeline;
 	contextPipeline: ContextPipeline;
 	workspace: string;

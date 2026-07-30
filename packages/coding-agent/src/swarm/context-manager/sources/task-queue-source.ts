@@ -10,7 +10,7 @@
  */
 
 import type { Chapter } from "../../core/state";
-import type { TaskQueue } from "../../executor/task-queue";
+import type { TaskQueue } from "../../../graph/task-queue";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class TaskQueueSource implements ContextSource {

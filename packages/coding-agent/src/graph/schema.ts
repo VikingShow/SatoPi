@@ -7,7 +7,7 @@
  */
 
 import type { AgentSpec } from "./agent-spec";
-import { detectCycles } from "../swarm/core/dag";
+import { detectCycles } from "./dag";
 import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 
 // Re-export all graph types from the canonical location.

@@ -25,7 +25,7 @@ export interface AgentInvokeDetails {
 	results: SingleResult[];
 	profileId: string;
 	displayName: string;
-	kind: "persistent";
+	kind: "main";
 }
 
 export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDetails> = {
@@ -71,7 +71,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			try {
 				const result = await createAgentSession({
 					agentKind: "main",
-					persistentProfileId: profileId,
+					profileId,
 					agentId,
 					agentDisplayName: agentId,
 					autoApprove: true,
@@ -91,7 +91,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				return {
 					content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 					isError: true,
-					details: { progress: [], results: [], profileId, displayName: agentId, kind: "persistent" },
+					details: { progress: [], results: [], profileId, displayName, kind: "main" },
 				};
 			}
 		}
@@ -130,7 +130,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 				progress.push(snap);
 				_onUpdate?.({
 					content: [{ type: "text", text: "..." }],
-					details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
+					details: { progress: [...progress], results: [], profileId, displayName, kind: "main" },
 				});
 			}
 		});
@@ -174,7 +174,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 					results: [final],
 					profileId,
 					displayName,
-					kind: "persistent",
+					kind: "main",
 				},
 			};
 		} catch (err) {
@@ -196,7 +196,7 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 			return {
 				content: [{ type: "text", text: `agent_invoke failed: ${msg}` }],
 				isError: true,
-				details: { progress: [...progress], results: [], profileId, displayName, kind: "persistent" },
+				details: { progress: [...progress], results: [], profileId, displayName, kind: "main" },
 			};
 		}
 	},

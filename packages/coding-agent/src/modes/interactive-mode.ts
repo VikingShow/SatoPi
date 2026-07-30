@@ -145,6 +145,8 @@ import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-rev
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
+import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
+import { IrcBus } from "../irc/bus";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -1216,6 +1218,24 @@ export class InteractiveMode implements InteractiveModeContext {
 		const { promise, resolve } = Promise.withResolvers<SubmittedUserInput>();
 		this.onInputCallback = input => {
 			this.onInputCallback = undefined;
+			// Route @mentions to target agents via IRC before normal processing
+			if (input.text && !input.synthetic && !input.customType) {
+				const mentions = parseMentions(input.text);
+				if (mentions.agentIds.length > 0 || mentions.allMentioned) {
+					const targets = resolveMentionTargets(mentions);
+					if (targets.length > 0) {
+						const cleanBody = mentions.cleanText || input.text;
+						IrcBus.global().sendToGroup(targets, {
+							from: this.session.getAgentId() ?? "Main",
+							body: cleanBody,
+						}).catch(() => {});
+					}
+					// Use cleaned text (without @tokens) for normal processing
+					if (mentions.cleanText) {
+						input = { ...input, text: mentions.cleanText };
+					}
+				}
+			}
 			resolve(input);
 		};
 		this.#scheduleLoopAutoSubmit();
@@ -2619,7 +2639,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Agent-count slider — same logic as handlePlanApproval
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		const maxWorkers = (this.session.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4;
 		const maxRounds = (this.session.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3;
 		const loopConfig: LoopSwarmConfig = {
@@ -2669,7 +2689,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 					selectedIndex: 0,
 					onChange: index => {
-						selectedAgentType = index === 0 ? "swift" : "persistent";
+						selectedAgentType = index === 0 ? "swift" : "main";
 					},
 				},
 			},
@@ -3571,7 +3591,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const startTierIndex = defaultTierIndex >= 0 ? defaultTierIndex : (cycle?.currentIndex ?? 0);
 		let selectedTierIndex = startTierIndex;
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		let slider: HookSelectorSlider | undefined =
 			cycle && cycle.models.length > 1
 				? {
@@ -3688,7 +3708,7 @@ export class InteractiveMode implements InteractiveModeContext {
 							labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 							selectedIndex: 0,
 							onChange: index => {
-								selectedAgentType = index === 0 ? "swift" : "persistent";
+								selectedAgentType = index === 0 ? "swift" : "main";
 							},
 						}
 					: undefined,
@@ -4529,7 +4549,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		const overlay = new SwarmDashboardOverlay(
 			bridge
 				? {
-						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
 						graphDefinition: bridge instanceof GraphRunner ? bridge.graph : undefined,
 						modelCost,
@@ -4560,17 +4579,19 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		const sidebar = new SwarmSidebar({
 			onSelectAgent: (agentId: string) => {
-				const ref = AgentRegistry.global().get(agentId);
-				if (ref) {
-					this.showStatus(`Selected: ${ref.displayName}${ref.role ? ` (${ref.role})` : ""} [status: ${ref.status}]`);
-				}
+				void this.focusAgentSession(agentId).catch(() => {});
 			},
 			onClose: () => this.showSwarmSidebar(),
 			onRequestRender: () => this.ui.requestRender(),
+			onFocusTranscript: () => {
+				this.ui.setFocus(this.editor);
+			},
+			sessionName: this.sessionName,
 		}, theme);
 		this.#swarmSidebar = sidebar;
+		const widthPct = sidebar.sidebarWidthPct;
 		this.#swarmSidebarHandle = this.ui.showOverlay(sidebar, {
-			width: "35%",
+			width: `${widthPct}%`,
 			anchor: "left-center",
 			margin: 1,
 		});

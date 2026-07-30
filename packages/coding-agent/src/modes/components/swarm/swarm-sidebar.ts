@@ -3,24 +3,54 @@ import { AgentRegistry } from "../../../registry/agent-registry";
 import { formatStatusIcon } from "../../../tools/render-utils";
 import type { Theme } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
+import type { CrewManager } from "../../../crew/crew-manager";
+import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
 
 type ToolUIStatus = "done" | "error" | "aborted" | "running" | "pending";
 
-const ICON: Record<string, ToolUIStatus> = {
+const AGENT_STATUS_ICON: Record<string, ToolUIStatus> = {
 	completed: "done", failed: "error", aborted: "aborted",
 	running: "running", idle: "done", parked: "done", pending: "pending",
 };
+
+// ── Tree node model ────────────────────────────────────────────────────────
+
+interface TreeNode {
+	type: "session" | "agent" | "crew" | "crew-member";
+	id: string;
+	label: string;
+	status?: string;
+	crewId?: string;
+	agentId?: string;
+	children?: TreeNode[];
+	expanded?: boolean;
+	depth: number;
+}
+
+// ── Config & Limits ────────────────────────────────────────────────────────
+
+const MIN_SIDEBAR_WIDTH_PCT = 15;
+const MAX_SIDEBAR_WIDTH_PCT = 60;
+const RESIZE_STEP_PCT = 5;
+const DEFAULT_SIDEBAR_WIDTH_PCT = 35;
 
 export interface SwarmSidebarConfig {
 	onSelectAgent?: (agentId: string) => void;
 	onClose?: () => void;
 	onRequestRender?: () => void;
+	crewManager?: CrewManager;
+	sessionName?: string;
+	/** Called when Tab is pressed to return focus to transcript. */
+	onFocusTranscript?: () => void;
 }
 
 export class SwarmSidebar implements Component {
 	readonly #config: SwarmSidebarConfig;
 	readonly #theme: Theme;
-	#selectedIndex = 0;
+	#sidebarWidthPct = DEFAULT_SIDEBAR_WIDTH_PCT;
+	#selectedPath: string[] = []; // breadcrumb of node ids
+	#expandedCrews = new Set<string>();
+	#multiSelected = new Set<string>();
 	#unsubscribe?: () => void;
 
 	constructor(config: SwarmSidebarConfig, theme: Theme) {
@@ -31,54 +61,249 @@ export class SwarmSidebar implements Component {
 		});
 	}
 
-	render(width: number): readonly string[] {
-		// Use swarmPanel to match existing agent-panel styling
-		const panel = swarmPanel("Agents", ({ innerWidth, theme }) => {
-			const refs = AgentRegistry.global().list().filter(r => r.kind !== "advisor");
-			if (refs.length === 0) return [theme.fg("dim", "  No active agents")];
-			const lines: string[] = [];
-			const max = Math.min(refs.length, 8);
-			for (let i = 0; i < max; i++) {
-				const ref = refs[i];
-				const selected = i === this.#selectedIndex;
-				const iconStatus = ICON[ref.status] ?? "done";
-				const glyph = formatStatusIcon(iconStatus, theme);
-				const cursor = selected ? theme.fg("accent", "*") : " ";
-				const maxName = Math.max(4, innerWidth - 14);
-				const name = ref.displayName.length > maxName
-					? ref.displayName.slice(0, maxName - 1) + "\u2026"
-					: ref.displayName;
-				const role = ref.role ? theme.fg("dim", ` ${ref.role.slice(0, 8)}`) : "";
-				const color: string = iconStatus === "running" ? "accent"
-					: iconStatus === "error" ? "error" : "dim";
-				lines.push(`${cursor}${theme.fg(color as "accent" | "error" | "dim", glyph)} ${name.padEnd(maxName)}${role}`);
+	get sidebarWidthPct(): number {
+		return this.#sidebarWidthPct;
+	}
+
+	// ── Tree building ──────────────────────────────────────────────────────
+
+	#buildTree(): TreeNode[] {
+		const nodes: TreeNode[] = [];
+
+		// Root: Session name
+		const sessionName = this.#config.sessionName ?? "Session";
+		nodes.push({ type: "session", id: "session", label: sessionName, depth: 0 });
+
+		// Agents (non-advisor)
+		const refs = AgentRegistry.global().list().filter(r => r.kind !== "advisor");
+		for (const ref of refs) {
+			nodes.push({
+				type: "agent",
+				id: ref.id,
+				label: ref.displayName,
+				status: ref.status,
+				agentId: ref.id,
+				depth: 0,
+			});
+		}
+
+		// Crews
+		const crews = this.#config.crewManager?.listCrews() ?? [];
+		for (const crew of crews) {
+			const expanded = this.#expandedCrews.has(crew.id);
+			const crewNode: TreeNode = {
+				type: "crew",
+				id: `crew:${crew.id}`,
+				label: crew.name,
+				crewId: crew.id,
+				expanded,
+				depth: 0,
+				children: [],
+			};
+			if (expanded) {
+				const entry = this.#config.crewManager?.getCrew(crew.id);
+				if (entry) {
+					for (const member of entry.state.members) {
+						const agentRef = AgentRegistry.global().get(member.agentId);
+						crewNode.children!.push({
+							type: "crew-member",
+							id: `crew:${crew.id}:member:${member.agentId}`,
+							label: agentRef?.displayName ?? member.agentId,
+							status: agentRef?.status ?? "idle",
+							agentId: member.agentId,
+							depth: 1,
+						});
+					}
+				}
 			}
-			if (refs.length > max) lines.push(theme.fg("dim", `  +${refs.length - max} more`));
+			nodes.push(crewNode);
+		}
+
+		return nodes;
+	}
+
+	// ── Flatten tree with branch prefixes ─────────────────────────────────
+
+	#flattenTree(nodes: TreeNode[], ancestors: boolean[] = []): FlatNode[] {
+		const result: FlatNode[] = [];
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i];
+			const isLast = i === nodes.length - 1;
+			const branch = getTreeBranch(isLast, this.#theme);
+			const continuePrefix = getTreeContinuePrefix(isLast, this.#theme);
+			const depthPrefix = ancestors
+				.map(hasNext => (hasNext ? `${this.#theme.fg("dim", this.#theme.tree.vertical)}  ` : "   "))
+				.join("");
+			const prefix = `${depthPrefix}${this.#theme.fg("dim", branch)} `;
+
+			result.push({ node, prefix, continuePrefix: `${depthPrefix}${continuePrefix}`, flatIndex: result.length });
+
+			if (node.children && node.expanded) {
+				const childResults = this.#flattenTree(node.children, [...ancestors, !isLast]);
+				result.push(...childResults);
+			}
+		}
+		return result;
+	}
+
+	// ── Render ─────────────────────────────────────────────────────────────
+
+	render(width: number): readonly string[] {
+		const panel = swarmPanel("Agents", ({ innerWidth, theme: t }) => {
+			const tree = this.#buildTree();
+			const lines: string[] = [];
+
+			if (tree.length === 0) {
+				return [t.fg("dim", "  No active agents or crews")];
+			}
+
+			const flat = this.#flattenTree(tree);
+			const maxVisible = Math.min(flat.length, 20);
+
+			for (let i = 0; i < maxVisible; i++) {
+				const { node, prefix } = flat[i];
+				const isSelected = this.#selectedPath.length > 0 &&
+					this.#selectedPath[this.#selectedPath.length - 1] === node.id;
+
+				if (node.type === "session") {
+					const cursor = isSelected ? t.fg("accent", "*") : " ";
+					lines.push(`${cursor}${t.bold(node.label)}`);
+					continue;
+				}
+
+				const multiMark = this.#multiSelected.has(node.id) ? t.fg("accent", "\u2713 ") : "";
+				const cursor = isSelected ? t.fg("accent", "\u25b6 ") : "  ";
+
+				if (node.type === "agent" || node.type === "crew-member") {
+					const iconStatus = AGENT_STATUS_ICON[node.status ?? "idle"] ?? "done";
+					const glyph = formatStatusIcon(iconStatus, t);
+					const color = iconStatus === "running" ? "accent"
+						: iconStatus === "error" ? "error" : "dim";
+					const icon = t.fg(color as "accent" | "error" | "dim", glyph);
+					const maxName = Math.max(4, innerWidth - 20);
+					const name = node.label.length > maxName
+						? node.label.slice(0, maxName - 1) + "\u2026"
+						: node.label;
+					lines.push(`${prefix}${cursor}${multiMark}${icon} ${name}`);
+				} else if (node.type === "crew") {
+					const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
+					const expandGlyph = t.fg("dim", expandIcon);
+					const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
+					lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+				}
+			}
+
+			if (flat.length > maxVisible) {
+				lines.push(t.fg("dim", `  +${flat.length - maxVisible} more`));
+			}
+
 			lines.push("");
-			lines.push(theme.fg("dim", ` j/k nav  Enter sel  Esc close`));
+			lines.push(t.fg("dim", ` j/k nav  Enter sel/open  Space select  Ctrl+B close  \u2190\u2192 resize`));
 			return lines;
 		}, this.#theme);
 		return panel.render(width);
 	}
 
+	// ── Input handling ─────────────────────────────────────────────────────
+
 	handleInput(data: string): void {
-		const refs = AgentRegistry.global().list().filter(r => r.kind !== "advisor");
-		const max = Math.min(refs.length, 8);
+		const tree = this.#buildTree();
+		const flat = this.#flattenTree(tree);
+
+		// Tab: return focus to transcript
+		if (data === "\t" || data === "Tab") {
+			this.#config.onFocusTranscript?.();
+			return;
+		}
+
+		// Ctrl+B / Esc: close sidebar
+		if (data === "\x02" || data === "escape" || data === "q" || data === "\x1b") {
+			this.#config.onClose?.();
+			return;
+		}
+
+		// Ctrl+Left: shrink
+		if (data === "\x1b[1;5D" || data === "\x1b[1;3D") {
+			this.#sidebarWidthPct = Math.max(MIN_SIDEBAR_WIDTH_PCT, this.#sidebarWidthPct - RESIZE_STEP_PCT);
+			this.#config.onRequestRender?.();
+			return;
+		}
+
+		// Ctrl+Right: expand
+		if (data === "\x1b[1;5C" || data === "\x1b[1;3C") {
+			this.#sidebarWidthPct = Math.min(MAX_SIDEBAR_WIDTH_PCT, this.#sidebarWidthPct + RESIZE_STEP_PCT);
+			this.#config.onRequestRender?.();
+			return;
+		}
+
+		// Find current selected index
+		const currentId = this.#selectedPath.length > 0 ? this.#selectedPath[this.#selectedPath.length - 1] : undefined;
+		let currentIdx = currentId ? flat.findIndex(f => f.node.id === currentId) : -1;
+
 		switch (data) {
 			case "j": case "ArrowDown":
-				if (max > 0) { this.#selectedIndex = Math.min(max - 1, this.#selectedIndex + 1); this.#config.onRequestRender?.(); }
+				if (flat.length > 0) {
+					const next = Math.min(flat.length - 1, currentIdx + 1);
+					this.#selectedPath = [flat[next].node.id];
+					this.#config.onRequestRender?.();
+				}
 				break;
 			case "k": case "ArrowUp":
-				this.#selectedIndex = Math.max(0, this.#selectedIndex - 1); this.#config.onRequestRender?.();
+				if (flat.length > 0) {
+					const prev = Math.max(0, currentIdx - 1);
+					this.#selectedPath = [flat[prev].node.id];
+					this.#config.onRequestRender?.();
+				}
+				break;
+			case " ": // Space: toggle multi-select
+				if (currentIdx >= 0) {
+					const node = flat[currentIdx].node;
+					if (node.type === "agent" || node.type === "crew-member" || node.type === "crew") {
+						if (this.#multiSelected.has(node.id)) {
+							this.#multiSelected.delete(node.id);
+						} else {
+							this.#multiSelected.add(node.id);
+						}
+						this.#config.onRequestRender?.();
+					}
+				}
 				break;
 			case "Enter":
-				if (refs[this.#selectedIndex]) { this.#config.onSelectAgent?.(refs[this.#selectedIndex].id); this.#config.onClose?.(); }
-				break;
-			case "escape": case "q": case "\x1b":
-				this.#config.onClose?.();
+				if (currentIdx >= 0) {
+					const node = flat[currentIdx].node;
+					if (node.type === "crew") {
+						// Toggle crew expand/collapse
+						const crewId = node.crewId;
+						if (crewId) {
+							if (this.#expandedCrews.has(crewId)) {
+								this.#expandedCrews.delete(crewId);
+							} else {
+								this.#expandedCrews.add(crewId);
+							}
+							this.#config.onRequestRender?.();
+						}
+					} else if (node.type === "agent" || node.type === "crew-member") {
+						if (node.agentId) {
+							this.#config.onSelectAgent?.(node.agentId);
+							if (this.#multiSelected.size === 0) {
+								this.#config.onClose?.();
+							}
+						}
+					} else if (node.type === "session") {
+						// Focus main session
+						this.#config.onClose?.();
+					}
+				}
 				break;
 		}
 	}
 
 	dispose(): void { this.#unsubscribe?.(); }
+}
+
+interface FlatNode {
+	node: TreeNode;
+	prefix: string;
+	continuePrefix: string;
+	flatIndex: number;
 }

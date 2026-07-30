@@ -18,7 +18,7 @@ import { parseInternalUrl } from "../../internal-urls/parse";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
-import { buildExecutionWaves } from "../../swarm/core/dag";
+import { buildExecutionWaves } from "../dag";
 import type { CheckpointStore } from "../checkpoint";
 import type { NodeExecutionContext } from "../graph-engine";
 import { GraphEngine } from "../graph-engine";

@@ -1,9 +1,9 @@
 /**
  * assembler.ts — Unified service assembly for swarm CLI/TUI mode.
  *
- * Creates the full AgentRuntime dependency graph with proper DI:
+ * Creates the full SwarmRuntime dependency graph with proper DI:
  *   RoleProvider + ContextPipeline + IrcBus
- *   → AgentRuntime
+ *   → SwarmRuntime
  *
  * All services are created fresh per session — no global singletons.
  * The IrcBus is the single exception (SatoPi owns it); we accept
@@ -19,7 +19,8 @@ import { MarkEnvironment } from "../../coordination";
 import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
-import { AgentRuntime } from "../agent-runtime";
+import { spawnAgent } from "../../graph/agent-helpers";
+import { CommChannel } from "../../comm/comm-channel";
 import type { SwarmRuntime } from "./swarm-runtime";
 
 import { ContextPipeline } from "../context-manager/context-pipeline";
@@ -110,7 +111,6 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 // ============================================================================
 // Assembler
 // ============================================================================
-
 export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
@@ -139,14 +139,57 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 		opts.ircBus.setHookPipeline(opts.hookPipeline);
 	}
 
-	return new AgentRuntime({
-		roleProvider,
+	const ircBus = opts.ircBus!;
+
+	// Runtime-level CommChannel (same role as AgentRuntime.#commChannel)
+	const commChannel = new CommChannel(
+		ircBus,
+		[], // members added as agents spawn
+		["human"], // human is always an observer
+		opts.activityLogger,
+		opts.hookPipeline,
+	);
+
+	// Per-agent steering queues — populated by sendHumanMessage, drained by the agent loop
+	const steeringQueues = new Map<string, Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>>();
+
+	const runtime: SwarmRuntime = {
 		contextPipeline,
-		ircBus: opts.ircBus,
-		hookPipeline: opts.hookPipeline,
-		modelRegistry: opts.modelRegistry,
-		settings: opts.settings,
-		activityLogger: opts.activityLogger,
-		toolRegistry: opts.toolRegistry,
-	});
+		ircBus,
+
+		async spawn(specs) {
+			const sessions = await Promise.all(specs.map(async (spec) => {
+				const steeringQueue: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }> = [];
+				steeringQueues.set(spec.id, steeringQueue);
+				return spawnAgent({
+					spec,
+					roleProvider,
+					contextPipeline,
+					hookPipeline: opts.hookPipeline,
+					modelRegistry: opts.modelRegistry,
+					settings: opts.settings,
+					ircBus,
+					activityLogger: opts.activityLogger,
+					toolRegistry: opts.toolRegistry,
+					commChannel,
+					steeringQueue,
+				});
+			}));
+			return sessions;
+		},
+
+		async sendHumanMessage(agentId, text) {
+			const queue = steeringQueues.get(agentId) ?? [];
+			queue.push({
+				role: "user",
+				content: [{ type: "text", text }],
+				timestamp: Date.now(),
+			});
+			steeringQueues.set(agentId, queue);
+			// Route through CommChannel for real-time IRC delivery
+			await commChannel.interrupt("human", agentId, text);
+		},
+	};
+
+	return runtime;
 }

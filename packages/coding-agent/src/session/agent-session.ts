@@ -300,7 +300,12 @@ import {
 	type SecretObfuscator,
 } from "../secrets/obfuscator";
 import { invalidateHostMetadata } from "../ssh/connection-manager";
-import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
+import { GraphRunner } from "../graph/graph-runner";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
+import { setCurrentSwarmPhase } from "../swarm/core/state";
+import { DebateRoundtable } from "../swarm/script/debate-roundtable";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
+import type { ISwarmOrchestrator } from "../graph/orchestrator-interface";
 import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import type { SingleResult } from "../task/types";
@@ -888,8 +893,8 @@ export interface AgentSessionConfig {
 	 *  prelude gating so a top-level session created with a custom `agentId` still
 	 *  receives the always-mode reminder. Defaults to "main". */
 	agentKind?: AgentKind;
-	/** Profile ID for persistent agents that survive across sessions. */
-	persistentProfileId?: string;
+	/** Profile ID for agents that survive across sessions. */
+	profileId?: string;
 	/** Mark environment tracking region locks and ownership. */
 	markEnvironment?: MarkEnvironment;
 	/**
@@ -1679,8 +1684,8 @@ export class AgentSession {
 	readonly yieldQueue: YieldQueue;
 	/** Agent kind: "main" | "sub" | "advisor" */
 	readonly kind: AgentKind;
-	/** Profile ID for persistent agents that survive across sessions. */
-	readonly persistentProfileId?: string;
+	/** Profile ID for agents that survive across sessions. */
+	readonly profileId?: string;
 	/** Mark environment tracking region locks and ownership. */
 	readonly markEnvironment: MarkEnvironment;
 	/** Agent role assigned at spawn (swarm tracking). */
@@ -2626,7 +2631,7 @@ export class AgentSession {
 		this.#obfuscator = config.obfuscator;
 		this.#agentId = config.agentId;
 		this.kind = config.agentKind ?? "main";
-		this.persistentProfileId = config.persistentProfileId;
+		this.profileId = config.profileId;
 		this.markEnvironment = config.markEnvironment ?? new MarkEnvironment();
 		this.#providerSessionId = config.providerSessionId;
 		this.#inheritedProviderPromptCacheKey =
@@ -6181,7 +6186,7 @@ export class AgentSession {
 
 	/** Profile for persistent agents that survive across sessions. */
 	get profile(): AgentProfile | undefined {
-		return this.persistentProfileId ? ProfileRegistry.global().get(this.persistentProfileId) : undefined;
+		return this.profileId ? ProfileRegistry.global().get(this.profileId) : undefined;
 	}
 
 	/**
@@ -8244,27 +8249,32 @@ export class AgentSession {
 		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
+
 		const profileRegistry = await ProfileRegistry.load(process.cwd());
-		const bridge = new EmbeddedSwarmBridge(
-			{
-				workspace: process.cwd(),
-				swarmDir,
-				modelRegistry: this.#modelRegistry,
-				settings: this.settings,
-				profileRegistry,
-				maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
-				maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
-				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
-			},
-			event => {
-				if ('phase' in event && event.phase === "script") {
-					const taskInfo = event.progress?.totalTasks
-						? ` (${event.progress.totalTasks} task${event.progress.totalTasks === 1 ? "" : "s"} outlined)`
-						: "";
-					this.emitNotice("info", `Script phase: ${event.subStatus}${taskInfo}`, "swarm");
-				}
-			},
-		);
+		const infra = await createSwarmInfra({
+			workspace: process.cwd(),
+			swarmDir,
+			swarmName: sessionId,
+			modelRegistry: this.#modelRegistry,
+			settings: this.settings,
+			profileRegistry,
+			startPhase: "script",
+		});
+
+		const bridge = new GraphRunner({
+			workspace: process.cwd(),
+			swarmDir,
+			modelRegistry: this.#modelRegistry,
+			settings: this.settings,
+			profileRegistry,
+			maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
+			maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
+			autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
+			infra,
+			onPhaseChange: (phase) => setCurrentSwarmPhase(phase),
+			debateRoundtableFactory: (config) => new DebateRoundtable(config),
+			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+		});
 
 		// Register beforeToolCall BEFORE bridge.init() — catch plan writes early
 		const planCapture = bridge;
@@ -8283,7 +8293,7 @@ export class AgentSession {
 		this.emitNotice("info", "Swarm orchestration mode active.", "swarm");
 		this.setToolContextAgentRuntime(bridge.runtime);
 		this.#embeddedSwarm = bridge;
-		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
+		logger.info("[AgentSession] GraphRunner initialized (swarm keyword)", { sessionId, swarmDir });
 	}
 
 	/**
