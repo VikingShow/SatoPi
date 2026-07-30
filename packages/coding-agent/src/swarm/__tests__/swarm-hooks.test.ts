@@ -229,8 +229,8 @@ describe("createStageFeedback (StageController callbacks)", () => {
 // Hook event coverage — verify all 15 previously untriggered event types
 // ============================================================================
 
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HandlerArgs, HookContext, HookEvent, HookRegistration } from "../hook-system/types";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HandlerArgs, HookContext, HookEvent, HookRegistration } from "../../hooks/types";
 
 /** Helper to create a hook that records events it receives. */
 function makeRecordingHook(name: string, priority: number, events: HookEvent[], log: string[]): HookRegistration {
@@ -426,15 +426,15 @@ import type { AgentMessage } from "@satopi/pi-agent-core";
 import { IrcBus } from "../../irc/bus";
 import { OffloadManager } from "../../offload/manager";
 import { MemorySessionStorage } from "../../session/session-storage";
-import { CommChannel } from "../comm-bus/comm-channel";
-import { runRoundtable } from "../comm-bus/roundtable";
-import { runVote } from "../comm-bus/vote";
+import { CommChannel } from "../../comm/comm-channel";
+import { runRoundtable } from "../../comm/roundtable";
+import { runVote } from "../../comm/vote";
 import type { AssembledContext } from "../context-manager/context-pipeline";
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { StateTracker } from "../core/state";
 import type { PhaseDefinition } from "../core/workflow-fsm";
 import { WorkflowFsm } from "../core/workflow-fsm";
-import { ActivityLogger } from "../infra/activity-logger";
+import { ActivityLogger } from "../../infra/activity-logger";
 
 describe("Hook event trigger E2E (real integration points)", () => {
 	let hookPipeline: HookPipeline;

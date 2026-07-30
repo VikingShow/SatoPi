@@ -21,7 +21,7 @@ import {
 	AgentQueryMajorityTool,
 	AgentRoundtableTool,
 } from "../../tools/agent-channel-tools";
-import { CommChannel } from "../comm-bus/comm-channel";
+import { CommChannel } from "../../comm/comm-channel";
 
 function makeChannel(bus: IrcBus, agentIds: string[]): CommChannel {
 	return new CommChannel(bus, agentIds, []);

@@ -19,9 +19,9 @@ import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import { assembleAgentRuntime } from "../core/assembler";
-import type { ExperienceStore } from "../curtain/experience";
-import type { HookPipeline } from "../hook-system/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
+import type { ExperienceStore } from "../../experience/experience";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 

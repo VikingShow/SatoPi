@@ -9,9 +9,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { HandlerArgs, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../hook-system/types";
-import { resolveAgentId } from "../hook-system/utils";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import type { HandlerArgs, HookContext, HookEvent, HookPayloadMap, HookRegistration } from "../../hooks/types";
+import { resolveAgentId } from "../../hooks/utils";
 
 // ---------------------------------------------------------------------------
 // Test helpers

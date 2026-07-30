@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { ExperienceStore } from "../curtain/experience";
-import type { ExtractedLesson, LoopRunStats } from "../curtain/extractor";
+import type { ExperienceStore } from "../../experience/experience";
+import type { ExtractedLesson, LoopRunStats } from "../../experience/extractor";
 import { MultiLessonSink } from "../curtain/lesson-sink";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";

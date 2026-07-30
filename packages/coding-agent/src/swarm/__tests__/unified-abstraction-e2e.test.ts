@@ -21,13 +21,13 @@ import { OffloadSource } from "../context-manager/sources/offload-source";
 import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { StateTracker } from "../core/state";
 import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
-import { ExperienceStore } from "../curtain/experience";
+import { ExperienceStore } from "../../experience/experience";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../graph/node-behavior";
 import { PhaseBehaviorNodeAdapter } from "../graph/phase-behavior-adapter";
 import type { NodeContext } from "../graph/schema";
 import { type GraphDefinition, loadGraphDefinition } from "../graph/schema";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import { ActivityLogger } from "../infra/activity-logger";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import { ActivityLogger } from "../../infra/activity-logger";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 

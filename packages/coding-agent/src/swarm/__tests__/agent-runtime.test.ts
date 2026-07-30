@@ -89,8 +89,8 @@ import { AgentLauncher, type LaunchContext } from "../agent-runtime/agent-launch
 import type { AgentSpec, AgentSpecInline } from "../agent-runtime/agent-spec";
 import { AgentRuntime, type RoundtableConfig } from "../agent-runtime/index";
 import { type AssembledContext, ContextPipeline } from "../context-manager/context-pipeline";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import type { AgentAfterSpawnPayload, AgentBeforeSpawnPayload } from "../hook-system/types";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import type { AgentAfterSpawnPayload, AgentBeforeSpawnPayload } from "../../hooks/types";
 
 // ============================================================================
 // Helpers

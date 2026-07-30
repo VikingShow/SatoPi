@@ -458,7 +458,9 @@ export class AgentRuntime {
 		}
 
 		// 10. Wire AgentRuntime into the session's tool context (agent_invoke / spawn / steer)
-		session.setToolContextAgentRuntime(this);
+		if (typeof session.setToolContextAgentRuntime === "function") {
+			session.setToolContextAgentRuntime(this);
+		}
 
 		// 11. Wire aside message provider (system notifications from CommBus)
 		if (hookProviders.getAsideMessages) {
