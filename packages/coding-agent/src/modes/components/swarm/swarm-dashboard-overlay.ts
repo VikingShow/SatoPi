@@ -6,6 +6,7 @@
  * Keyboard: Esc / q → close overlay.
  */
 
+import { matchesKey } from "@satopi/pi-tui/keys";
 import type { Component } from "@satopi/pi-tui";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
@@ -51,9 +52,8 @@ export class SwarmDashboardOverlay implements Component {
 		const dashboard = renderDashboard(input);
 		return dashboard.render(width);
 	}
-
 	handleInput(data: string): void {
-		if (data === "escape" || data === "q" || data === "\x1b") {
+		if (matchesKey(data, "escape") || data === "q") {
 			this.onClose?.();
 		}
 	}
