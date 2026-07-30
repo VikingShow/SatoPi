@@ -1,79 +1,43 @@
 /**
- * SwarmSidebar — TUI sidebar showing agent/crew tree with status.
+ * SwarmSidebar — TUI agent/crew list panel matching existing swarm style.
  *
- * Renders a scrollable list of agents from AgentRegistry with status
- * indicators, role labels, and crew membership. Supports keyboard
- * navigation (j/k, Enter to select).
+ * Uses `swarmPanel` wrapper for consistent border/chrome. Shows agent status
+ * with icons, role badges, and profile scores. Keyboard: j/k to navigate,
+ * Enter to select, Ctrl+B to toggle visibility.
  *
- * ## Layout
- *   ┌─ Agents ────────────────────┐
- *   │ ● architect    idle  planner│
- *   │ ● worker-1     run   coder  │
- *   │ ○ reflector    wait  analyst│
- *   │ 👥 design-crew  (2 members) │
- *   └─────────────────────────────┘
+ * Integrates with the existing subagentContainer area — renders agent list
+ * from AgentRegistry with live status updates.
  */
 
 import type { Component } from "@satopi/pi-tui";
-import { AgentRegistry } from "../../registry/agent-registry";
-import type { Theme } from "../theme/theme";
+import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
+import { formatStatusIcon } from "../../../tools/render-utils";
+import type { Theme } from "../../theme/theme";
+import { swarmPanel } from "./swarm-panel-block";
 
 // ============================================================================
-// Types
+// Config
 // ============================================================================
-
-export interface SidebarAgentEntry {
-	id: string;
-	displayName: string;
-	kind: string;
-	status: string;
-	role?: string;
-	profileId?: string;
-	selected: boolean;
-}
-
-export interface SidebarCrewEntry {
-	id: string;
-	name: string;
-	memberCount: number;
-}
-
-export type SidebarEntry =
-	| { type: "agent"; agent: SidebarAgentEntry }
-	| { type: "crew"; crew: SidebarCrewEntry }
-	| { type: "separator" };
 
 export interface SwarmSidebarConfig {
 	/** Callback when user selects an agent (Enter). */
 	onSelectAgent?: (agentId: string) => void;
-	/** Callback when user selects a crew. */
-	onSelectCrew?: (crewId: string) => void;
-	/** Max visible entries before scrolling (default 15). */
-	maxVisible?: number;
+	/** Callback when user requests render (for live updates). */
+	onRequestRender?: () => void;
 }
 
 // ============================================================================
-// Status display helpers
+// Status mapping (matches agent-panel.ts)
 // ============================================================================
 
-const STATUS_GLYPH: Record<string, string> = {
-	running: "●",
-	idle: "○",
-	parked: "○",
-	pending: "○",
-	completed: "✓",
-	failed: "✗",
-	aborted: "⚠",
-};
-
-const STATUS_COLOR: Record<string, string> = {
-	running: "accent",
-	idle: "dim",
-	parked: "dim",
-	pending: "dim",
-	completed: "success",
+const STATUS_ICON: Record<string, string> = {
+	completed: "done",
 	failed: "error",
-	aborted: "warning",
+	aborted: "aborted",
+	running: "running",
+	idle: "done",
+	parked: "done",
+	pending: "pending",
 };
 
 // ============================================================================
@@ -81,142 +45,123 @@ const STATUS_COLOR: Record<string, string> = {
 // ============================================================================
 
 export class SwarmSidebar implements Component {
-	readonly rows: number;
-	readonly cols: number;
-	readonly name = "SwarmSidebar";
+	onRequestRender?: () => void;
 
 	readonly #config: SwarmSidebarConfig;
 	readonly #theme: Theme;
-	#entries: SidebarEntry[] = [];
 	#selectedIndex = 0;
+	#visible = true;
 
 	constructor(config: SwarmSidebarConfig, theme: Theme) {
 		this.#config = config;
 		this.#theme = theme;
-		this.rows = config.maxVisible ?? 15;
-		this.cols = 35; // Fixed width for sidebar
 	}
 
-	// ==========================================================================
-	// Layout
-	// ==========================================================================
-
-	layout(_maxRows: number, _maxCols: number): void {
-		this.refresh();
+	get visible(): boolean {
+		return this.#visible;
 	}
 
-	/**
-	 * Refresh entries from AgentRegistry.
-	 * Call this when agents are spawned/completed.
-	 */
-	refresh(): void {
-		const refs = AgentRegistry.global().list();
-		this.#entries = [];
-
-		// Header
-		this.#entries.push({ type: "separator" });
-
-		for (const ref of refs) {
-			// Skip the main agent itself when swarm is active
-			if (ref.kind === "advisor") continue;
-
-			this.#entries.push({
-				type: "agent",
-				agent: {
-					id: ref.id,
-					displayName: ref.displayName,
-					kind: ref.kind,
-					status: ref.status,
-					role: ref.role,
-					profileId: ref.profileId,
-					selected: this.#entries.length - 1 === this.#selectedIndex,
-				},
-			});
-		}
+	toggle(): void {
+		this.#visible = !this.#visible;
+		this.onRequestRender?.();
 	}
-
-	// ==========================================================================
-	// Keyboard
-	// ==========================================================================
 
 	handleKey(key: string): boolean {
+		if (!this.#visible) return false;
+
+		const refs = this.#getVisibleRefs();
 		switch (key) {
 			case "j":
 			case "ArrowDown":
-				this.#moveSelection(1);
+				if (refs.length > 0) {
+					this.#selectedIndex = Math.min(refs.length - 1, this.#selectedIndex + 1);
+					this.onRequestRender?.();
+				}
 				return true;
 			case "k":
 			case "ArrowUp":
-				this.#moveSelection(-1);
+				this.#selectedIndex = Math.max(0, this.#selectedIndex - 1);
+				this.onRequestRender?.();
 				return true;
 			case "Enter":
-				this.#selectCurrent();
+				if (refs[this.#selectedIndex]) {
+					this.#config.onSelectAgent?.(refs[this.#selectedIndex].id);
+				}
 				return true;
 			default:
 				return false;
 		}
 	}
 
-	#moveSelection(delta: number): void {
-		const agentEntries = this.#entries.filter(e => e.type === "agent");
-		if (agentEntries.length === 0) return;
-		this.#selectedIndex = Math.max(0, Math.min(agentEntries.length - 1, this.#selectedIndex + delta));
-		this.refresh();
-	}
-
-	#selectCurrent(): void {
-		const agentEntries = this.#entries.filter(e => e.type === "agent");
-		const entry = agentEntries[this.#selectedIndex];
-		if (entry && entry.type === "agent") {
-			this.#config.onSelectAgent?.(entry.agent.id);
-		}
-	}
-
-	// ==========================================================================
-	// Render
-	// ==========================================================================
-
 	render(): string[] {
-		const lines: string[] = [];
-		const theme = this.#theme;
-		const maxWidth = this.cols - 2; // Borders
+		if (!this.#visible) return [];
 
-		// Header
-		lines.push(theme.fg("accent", `┌─ Agents ─${"─".repeat(maxWidth - 10)}┐`));
-
-		// Limit to visible entries
-		const visible = this.#entries.slice(0, this.rows - 2);
-
-		for (const entry of visible) {
-			if (entry.type === "separator") {
-				lines.push(theme.fg("dim", `│${" ".repeat(maxWidth)}│`));
-				continue;
+		return swarmPanel("Agents", ({ innerWidth, theme }) => {
+			const refs = this.#getVisibleRefs();
+			if (refs.length === 0) {
+				return [theme.fg("dim", "  No agents")];
 			}
 
-			if (entry.type === "agent") {
-				const a = entry.agent;
-				const glyph = STATUS_GLYPH[a.status] ?? " ";
-				const color = STATUS_COLOR[a.status] ?? "dim";
-				const selected = a.selected ? theme.fg("accent", "›") : " ";
-				const name = a.selected ? theme.bold(a.displayName.slice(0, 20)) : a.displayName.slice(0, 20);
-				const role = a.role ? theme.fg("dim", a.role.slice(0, 10)) : "";
-				const status = a.status === "running" ? theme.fg(color, glyph) : theme.fg(color, glyph);
+			const lines: string[] = [];
 
-				const line = `│${selected} ${status} ${name.padEnd(20)} ${role.padEnd(10)}│`;
-				lines.push(line.slice(0, maxWidth + 2));
+			// Show max 8 agents (fit in terminal)
+			const maxVisible = Math.min(refs.length, 8);
+			for (let i = 0; i < maxVisible; i++) {
+				const ref = refs[i];
+				const isSelected = i === this.#selectedIndex;
+				const line = this.#formatAgentLine(ref, isSelected, innerWidth, theme);
+				lines.push(line);
 			}
 
-			if (entry.type === "crew") {
-				const c = entry.crew;
-				const line = `│  👥 ${c.name.slice(0, 15).padEnd(15)} (${c.memberCount})${" ".repeat(maxWidth - 25)}│`;
-				lines.push(line.slice(0, maxWidth + 2));
+			if (refs.length > maxVisible) {
+				lines.push(theme.fg("dim", `  ... and ${refs.length - maxVisible} more`));
 			}
-		}
 
-		// Footer
-		lines.push(theme.fg("dim", `└${"─".repeat(maxWidth)}┘`));
-		lines.push(theme.fg("dim", " j/k navigate · Enter select"));
+			// Footer
+			lines.push("");
+			lines.push(theme.fg("dim", ` ${theme.format.bracketLeft}j/k${theme.format.bracketRight} navigate  ${theme.format.bracketLeft}Enter${theme.format.bracketRight} select  ${theme.format.bracketLeft}Ctrl+B${theme.format.bracketRight} toggle`));
 
-		return lines;
+			return lines;
+		}, theme);
+	}
+
+	// ==========================================================================
+	// Internal
+	// ==========================================================================
+
+	#getVisibleRefs(): AgentRef[] {
+		return AgentRegistry.global()
+			.list()
+			.filter(ref => ref.kind !== "advisor");
+	}
+
+	#formatAgentLine(ref: AgentRef, selected: boolean, width: number, theme: Theme): string {
+		const status = ref.status;
+		const iconStatus = STATUS_ICON[status] ?? "done";
+		const glyph = formatStatusIcon(iconStatus, theme);
+		const cursor = selected ? theme.fg("accent", "›") : " ";
+
+		// Name (truncated)
+		const maxName = Math.max(5, width - 22);
+		const name = ref.displayName.length > maxName
+			? ref.displayName.slice(0, maxName - 1) + "…"
+			: ref.displayName.padEnd(maxName);
+
+		// Kind badge
+		const kindBadge = ref.kind === "sub"
+			? theme.fg("dim", `${theme.format.bracketLeft}sub${theme.format.bracketRight}`)
+			: ref.profileId
+				? theme.fg("accent", `${theme.format.bracketLeft}P${theme.format.bracketRight}`)
+				: "";
+
+		// Role
+		const role = ref.role ? theme.fg("dim", ref.role.slice(0, 8)) : "";
+
+		// Status icon
+		const statusColor = status === "running" ? "accent" : status === "failed" ? "error" : "dim";
+
+		const line = `${cursor} ${theme.fg(statusColor, glyph)} ${theme.fg(selected ? "accent" : "default", name)} ${kindBadge} ${role}`;
+
+		return line;
 	}
 }

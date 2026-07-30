@@ -144,6 +144,7 @@ import type { HookSelectorComponent, HookSelectorSlider } from "./components/hoo
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
+import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -552,6 +553,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
+	#swarmSidebar?: SwarmSidebar;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
@@ -2614,6 +2616,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		const swarmBridge = this.session.embeddedSwarm;
 		if (!swarmBridge) return undefined;
 
+		// Ensure sidebar is visible when swarm is active
+		this.#ensureSwarmSidebar();
+
 		// Agent-count slider — same logic as handlePlanApproval
 		let selectedAgentCount = 0;
 		let selectedAgentType: "swift" | "persistent" = "swift";
@@ -2728,6 +2733,24 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#swarmDashboardHandle?.hide();
 		this.#swarmDashboardOverlay = undefined;
 		this.#swarmDashboardHandle = undefined;
+	}
+
+	#ensureSwarmSidebar(): void {
+		if (this.#swarmSidebar) return;
+		const theme = this.session.settings.get("theme") as string ?? "default";
+		this.#swarmSidebar = new SwarmSidebar({
+			onSelectAgent: (agentId: string) => {
+				// TODO: switch transcript view to selected agent
+			},
+			onRequestRender: () => this.ui.requestRender(),
+		}, theme as unknown as Theme);
+		// Add to UI — render in subagent area
+		this.subagentContainer.addChild(this.#swarmSidebar);
+		this.#inputController.addKeyHandler("Ctrl+B", () => {
+			this.#swarmSidebar?.toggle();
+			this.ui.requestRender();
+		});
+		this.ui.requestRender();
 	}
 
 	#getEditorTerminalPath(): string | null {
