@@ -37,6 +37,10 @@ export type AgentStatus = "pending" | "waiting" | "running" | "completed" | "fai
  */
 export type { Chapter } from "../../types/chapter";
 
+/** Global swarm phase indicator — updated by WorkflowFSM on every transition. Read by TUI components. */
+export let currentSwarmPhase: Chapter = "idle";
+export function setCurrentSwarmPhase(phase: Chapter): void { currentSwarmPhase = phase; }
+
 /**
  * To-Do item — a structured task parsed from plan.md.
  * Tracks real-time completion status during loop execution.

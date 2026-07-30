@@ -30,6 +30,7 @@ import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { HookContext } from "../../hooks/types";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { Chapter, StateTracker } from "./state";
+import { setCurrentSwarmPhase } from "./state";
 
 // ============================================================================
 // Interfaces
@@ -538,7 +539,7 @@ export class WorkflowFsm {
 
 		// Update internal state.
 		this.#phase = to;
-		this.#subStatus = meta.reason ?? "";
+		setCurrentSwarmPhase(to);
 		this.#running = ACTIVE_PHASES.has(to);
 		this.#iteration = meta.iteration ?? this.#iteration + 1;
 		this.#phaseStartedAt = Date.now();

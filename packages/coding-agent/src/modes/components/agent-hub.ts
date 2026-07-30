@@ -20,6 +20,7 @@ import { Container, Ellipsis, matchesKey, type OverlayHandle, padding, type TUI,
 import { formatAge, getProjectDir, logger } from "@satopi/pi-utils";
 import { ADVISOR_TRANSCRIPT_FILENAME, isAdvisorTranscriptName } from "../../advisor";
 import { ProfileRegistry } from "../../agent/agent-profile";
+import { currentSwarmPhase } from "../../swarm/core/state";
 import type { KeyId } from "../../config/keybindings";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
 import { IrcBus } from "../../irc/bus";
@@ -452,6 +453,9 @@ export class AgentHubOverlayComponent extends Container {
 		lines.push(...new DynamicBorder().render(width));
 		const counts = this.#statusSummary();
 		lines.push(` ${theme.fg("accent", "Agent Hub")}${counts ? theme.fg("dim", `${theme.sep.dot}${counts}`) : ""}`);
+		if (currentSwarmPhase !== "idle") {
+			lines.push(` ${theme.fg("accent", `🐝 ${currentSwarmPhase}`)}`);
+		}
 		lines.push(...new DynamicBorder().render(width));
 
 		if (this.#rows.length === 0) {
