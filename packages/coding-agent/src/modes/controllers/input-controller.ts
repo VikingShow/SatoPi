@@ -450,9 +450,7 @@ export class InputController {
 		}
 		for (const key of this.ctx.keybindings.getKeys("app.swarm.sidebar")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => {
-				if (this.ctx.session.embeddedSwarm) {
-					this.ctx.showSwarmSidebar();
-				}
+				this.ctx.showSwarmSidebar();
 			});
 		}
 
