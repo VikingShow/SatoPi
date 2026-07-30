@@ -494,11 +494,11 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	manage_skill: ManageSkillTool.createIf,
 	agent_invoke: () => agentInvokeTool,
 	agent_fork: () => new AgentForkTool(),
-	agent_broadcast: s => new AgentBroadcastTool(),
-	agent_query_all: s => new AgentQueryAllTool(),
-	agent_query_majority: s => new AgentQueryMajorityTool(),
-	agent_roundtable: s => new AgentRoundtableTool(),
-	agent_peers: s => new AgentPeersTool(),
+	agent_broadcast: _s => new AgentBroadcastTool(),
+	agent_query_all: _s => new AgentQueryAllTool(),
+	agent_query_majority: _s => new AgentQueryMajorityTool(),
+	agent_roundtable: _s => new AgentRoundtableTool(),
+	agent_peers: _s => new AgentPeersTool(),
 	agent_create_crew: () => new AgentCreateCrewTool(),
 };
 

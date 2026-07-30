@@ -98,7 +98,13 @@ export class RoundtableSession {
 		const roundtableId = `roundtable-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 		const startedAt = Date.now();
 
-		logger.info("[RoundtableSession] Starting", { roundtableId, crewId, topic: topic.slice(0, 80), rounds, agentIds });
+		logger.info("[RoundtableSession] Starting", {
+			roundtableId,
+			crewId,
+			topic: topic.slice(0, 80),
+			rounds,
+			agentIds,
+		});
 
 		// Delegate to CommChannel.roundtable for the actual discussion
 		const channelResult = await crew.channel.roundtable(topic, {

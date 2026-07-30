@@ -34,14 +34,14 @@ import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
 import type { RoleAssetManager } from "../../agent/role-asset";
-import type { IrcBus } from "../../irc/bus";
-import type { SwarmRuntime } from "../core/swarm-runtime";
-import type { LoopSwarmConfig } from "../core/schema";
-import type { StateTracker } from "../core/state";
+import { TaskComplexityAnalyzer } from "../../graph/task-analyzer";
 import { type Task, TaskQueue } from "../../graph/task-queue";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
-import { TaskComplexityAnalyzer } from "../script/task-analyzer";
+import type { IrcBus } from "../../irc/bus";
+import type { LoopSwarmConfig } from "../core/schema";
+import type { StateTracker } from "../core/state";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { RoleCandidate } from "./role-roundtable";
 
 // ============================================================================

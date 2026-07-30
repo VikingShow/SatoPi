@@ -244,6 +244,9 @@ import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { GoalRuntime } from "../goals/runtime";
 import type { Goal, GoalModeState } from "../goals/state";
+import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../graph/graph-runner";
+import type { ISwarmOrchestrator } from "../graph/orchestrator-interface";
 import type { HindsightSessionState } from "../hindsight/state";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import { IrcBus, type IrcMessage } from "../irc/bus";
@@ -300,13 +303,10 @@ import {
 	type SecretObfuscator,
 } from "../secrets/obfuscator";
 import { invalidateHostMetadata } from "../ssh/connection-manager";
-import { GraphRunner } from "../graph/graph-runner";
-import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import { setCurrentSwarmPhase } from "../swarm/core/state";
-import { DebateRoundtable } from "../swarm/script/debate-roundtable";
-import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
-import type { ISwarmOrchestrator } from "../graph/orchestrator-interface";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import type { SingleResult } from "../task/types";
 import {
@@ -4960,9 +4960,11 @@ export class AgentSession {
 		// or TUI routing missed the swarm path), call confirmScript() here.
 		const bridge = this.#embeddedSwarm;
 		if (bridge && !bridge.stageStarted) {
-			bridge.confirmScript().catch(err =>
-				logger.error("Swarm confirmScript failed from afterToolCall fallback", { error: String(err) }),
-			);
+			bridge
+				.confirmScript()
+				.catch(err =>
+					logger.error("Swarm confirmScript failed from afterToolCall fallback", { error: String(err) }),
+				);
 		}
 	}
 
@@ -8212,7 +8214,11 @@ export class AgentSession {
 					if (!bridge) return undefined;
 					if (ctx.toolCall.name === "write") {
 						const args = ctx.args as { path?: string; content?: string };
-						if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
+						if (
+							typeof args.path === "string" &&
+							args.path.includes("plan.md") &&
+							typeof args.content === "string"
+						) {
 							this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
 							bridge.onPlanUpdated(args.content);
 						}
@@ -8249,7 +8255,6 @@ export class AgentSession {
 		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
-
 		const profileRegistry = await ProfileRegistry.load(process.cwd());
 		const infra = await createSwarmInfra({
 			workspace: process.cwd(),
@@ -8271,8 +8276,8 @@ export class AgentSession {
 			maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
 			autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
 			infra,
-			onPhaseChange: (phase) => setCurrentSwarmPhase(phase),
-			debateRoundtableFactory: (config) => new DebateRoundtable(config),
+			onPhaseChange: phase => setCurrentSwarmPhase(phase),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
 			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
 

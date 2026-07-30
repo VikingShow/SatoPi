@@ -41,7 +41,7 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 		events: ["agent:afterComplete", "workflow:beforePhase", "roundtable:afterRound"],
 		phases: ACTIVE_PHASES,
 
-		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<boolean | undefined> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:afterComplete — L1 summarize

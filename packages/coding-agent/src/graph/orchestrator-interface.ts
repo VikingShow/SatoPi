@@ -9,9 +9,9 @@ import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
 import type { ActivityLogger } from "../infra/activity-logger";
+import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
-import type { StateTracker, SwarmState, Chapter } from "../swarm/core/state";
-import type { DebateRoundtableResult } from "../swarm/script/debate-roundtable";
+import type { DebateRoundtableResult } from "./behaviors/debate-roundtable";
 
 // ============================================================================
 // Configuration

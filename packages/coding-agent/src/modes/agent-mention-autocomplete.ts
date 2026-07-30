@@ -30,22 +30,24 @@ export function createAgentMentionAutocompleteProvider(): AutocompleteProvider {
 
 			// @all special item — always first when partial matches
 			if (partial === "" || "all".includes(partial)) {
-			items.push({
-				value: "__all__",
-				label: "@all",
-				description: "Mention all visible agents",
-			});
+				items.push({
+					value: "__all__",
+					label: "@all",
+					description: "Mention all visible agents",
+				});
 			}
 
 			// Agent-specific matches
-			items.push(...refs
-				.filter(r => partial === "" || r.displayName.toLowerCase().includes(partial))
-				.slice(0, 10)
-				.map(r => ({
-					value: r.id,
-					label: `@${r.displayName}`,
-					description: r.role ?? r.kind,
-				})));
+			items.push(
+				...refs
+					.filter(r => partial === "" || r.displayName.toLowerCase().includes(partial))
+					.slice(0, 10)
+					.map(r => ({
+						value: r.id,
+						label: `@${r.displayName}`,
+						description: r.role ?? r.kind,
+					})),
+			);
 
 			if (items.length === 0) return null;
 			return { items, prefix: `@${partial}` };
@@ -56,7 +58,7 @@ export function createAgentMentionAutocompleteProvider(): AutocompleteProvider {
 			const mention = findAgentMentionPrefix(text, cursorCol);
 			if (!mention) return { lines, cursorLine, cursorCol };
 
-			const label = item.value === "__all__" ? "all" : (item.label.startsWith("@") ? item.label.slice(1) : item.label);
+			const label = item.value === "__all__" ? "all" : item.label.startsWith("@") ? item.label.slice(1) : item.label;
 			const before = text.slice(0, mention.start);
 			const after = text.slice(cursorCol);
 			const newLine = `${before}@${label} ${after}`;
@@ -101,8 +103,8 @@ export function parseMentions(text: string): ParsedMentions {
 	// Match @word at word boundaries
 	const mentionRe = /(?:^|\s)@([a-zA-Z0-9_-]+)/g;
 	let cleanText = text;
-	let match: RegExpExecArray | null;
-	while ((match = mentionRe.exec(text)) !== null) {
+	let match = mentionRe.exec(text);
+	while (match !== null) {
 		const name = match[1].toLowerCase();
 		if (name === "all") {
 			allMentioned = true;
@@ -115,6 +117,7 @@ export function parseMentions(text: string): ParsedMentions {
 				cleanText = cleanText.replace(match[0], match[0].startsWith(" ") ? "" : "");
 			}
 		}
+		match = mentionRe.exec(text);
 	}
 
 	return { agentIds, allMentioned, cleanText: cleanText.trim() };

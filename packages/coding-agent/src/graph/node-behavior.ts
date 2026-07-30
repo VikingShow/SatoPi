@@ -19,15 +19,15 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { ContextPipeline } from "../context/context-pipeline";
+import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { AgentSession } from "../session/agent-session";
+import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
-import type { ContextPipeline } from "../swarm/context-manager/context-pipeline";
-import type { LoopSwarmConfig } from "../swarm/core/schema";
-import type { HookPipeline } from "../hooks/hook-pipeline";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
 
@@ -291,8 +291,6 @@ export class CustomNodeBehavior implements NodeBehavior {
 		this.#sessions = [];
 	}
 }
-
-
 
 // ============================================================================
 // Factory

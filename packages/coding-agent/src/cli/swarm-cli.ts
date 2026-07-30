@@ -12,25 +12,24 @@ import { RoleAssetManager } from "../agent/role-asset";
 import { ModelRegistry } from "../config/model-registry";
 import { Settings } from "../config/settings";
 import { MarkEnvironment } from "../coordination/mark-environment";
-import { IrcBus } from "../irc/bus";
+import { ExperienceStore } from "../experience/experience";
+import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../graph/graph-runner";
+import { getSessionPlanPath } from "../graph/plan-paths";
+import { registerBuiltinHooks } from "../hooks/register-builtins";
 import { NoopOffloadManager } from "../offload/manager";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
-import { createSwarmInfra } from "../swarm/core/swarm-infra";
-import { GraphRunner } from "../graph/graph-runner";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
-import type { RunManager, SteeringSink } from "../swarm/core/services";
+import type { SteeringSink } from "../swarm/core/services";
 import { setCurrentSwarmPhase } from "../swarm/core/state";
-import { ExperienceStore } from "../experience/experience";
-import { registerBuiltinHooks } from "../hooks/register-builtins";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
-import { DebateRoundtable } from "../swarm/script/debate-roundtable";
-import { getSessionPlanPath } from "../graph/plan-paths";
 import { SessionRegistry } from "../swarm/session";
-import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
 export type SwarmAction = "run" | "plan" | "resume";
 
@@ -140,8 +139,8 @@ async function createSwarmServices(
 			settings: s.settings,
 			profileRegistry: s.profileRegistry,
 			infra,
-			onPhaseChange: (phase) => setCurrentSwarmPhase(phase),
-			debateRoundtableFactory: (config) => new DebateRoundtable(config),
+			onPhaseChange: phase => setCurrentSwarmPhase(phase),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
 			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
 		await graphRunner.init();
@@ -154,7 +153,15 @@ async function createSwarmServices(
 			},
 		};
 
-		return { name, swarmDir, stateTracker: infra.stateTracker, activityLogger: infra.activityLogger, runManager, steeringSink, hookPipeline: infra.hookPipeline };
+		return {
+			name,
+			swarmDir,
+			stateTracker: infra.stateTracker,
+			activityLogger: infra.activityLogger,
+			runManager,
+			steeringSink,
+			hookPipeline: infra.hookPipeline,
+		};
 	};
 
 	return { shared, factory };
@@ -265,8 +272,8 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 			profileRegistry: shared.profileRegistry,
 			autoApplaud: true,
 			infra,
-			onPhaseChange: (p) => setCurrentSwarmPhase(p),
-			debateRoundtableFactory: (config) => new DebateRoundtable(config),
+			onPhaseChange: p => setCurrentSwarmPhase(p),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
 			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
 		await bridge.init();

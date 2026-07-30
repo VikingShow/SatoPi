@@ -11,7 +11,7 @@
  *   - Turn 5+: wrap up, summarize, prepare for confirmation
  */
 
-import type { Chapter } from "../../core/state";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class TurnGuidanceSource implements ContextSource {

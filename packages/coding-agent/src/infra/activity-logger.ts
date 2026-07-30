@@ -13,8 +13,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { ReviewVerdict } from "../types/pipeline-types";
 import type { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
+import type { ReviewVerdict } from "../types/pipeline-types";
 
 // ============================================================================
 // Types (imported from shared module; re-exported for backward compat)

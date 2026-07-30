@@ -13,29 +13,28 @@
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import { RoleProvider } from "../../agent/role-provider";
+import { CommChannel } from "../../comm/comm-channel";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
+import { ContextPipeline } from "../../context/context-pipeline";
+import { ExperienceSource } from "../../context/sources/experience-source";
+import { HindsightSource } from "../../context/sources/hindsight-source";
+import { MmdSource } from "../../context/sources/mmd-source";
+import { MnemopiSource } from "../../context/sources/mnemopi-source";
+import { OffloadSource } from "../../context/sources/offload-source";
+import { StigmergySource } from "../../context/sources/stigmergy-source";
 import { MarkEnvironment } from "../../coordination";
-import type { IrcBus } from "../../irc/bus";
-import type { IOffloadManager } from "../../offload/manager";
-import type { Tool } from "../../tools";
-import { spawnAgent } from "../../graph/agent-helpers";
-import { CommChannel } from "../../comm/comm-channel";
-import type { SwarmRuntime } from "./swarm-runtime";
-
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { ExperienceSource } from "../context-manager/sources/experience-source";
-import { HindsightSource } from "../context-manager/sources/hindsight-source";
-import { MmdSource } from "../context-manager/sources/mmd-source";
-import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
-import { OffloadSource } from "../context-manager/sources/offload-source";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import type { ExperienceStore } from "../../experience/experience";
+import { spawnAgent } from "../../graph/agent-helpers";
 import { HookPipeline } from "../../hooks/hook-pipeline";
 import { type BuiltinHookDeps, registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityLogger } from "../../infra/activity-logger";
+import type { IrcBus } from "../../irc/bus";
+import type { IOffloadManager } from "../../offload/manager";
+import type { Tool } from "../../tools";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
+import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
 // Types
@@ -151,30 +150,36 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	);
 
 	// Per-agent steering queues — populated by sendHumanMessage, drained by the agent loop
-	const steeringQueues = new Map<string, Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>>();
+	const steeringQueues = new Map<
+		string,
+		Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>
+	>();
 
 	const runtime: SwarmRuntime = {
 		contextPipeline,
 		ircBus,
 
 		async spawn(specs) {
-			const sessions = await Promise.all(specs.map(async (spec) => {
-				const steeringQueue: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }> = [];
-				steeringQueues.set(spec.id, steeringQueue);
-				return spawnAgent({
-					spec,
-					roleProvider,
-					contextPipeline,
-					hookPipeline: opts.hookPipeline,
-					modelRegistry: opts.modelRegistry,
-					settings: opts.settings,
-					ircBus,
-					activityLogger: opts.activityLogger,
-					toolRegistry: opts.toolRegistry,
-					commChannel,
-					steeringQueue,
-				});
-			}));
+			const sessions = await Promise.all(
+				specs.map(async spec => {
+					const steeringQueue: Array<{
+						role: "user";
+						content: Array<{ type: "text"; text: string }>;
+						timestamp: number;
+					}> = [];
+					steeringQueues.set(spec.id, steeringQueue);
+					return spawnAgent({
+						spec,
+						roleProvider,
+						contextPipeline,
+						hookPipeline: opts.hookPipeline,
+						modelRegistry: opts.modelRegistry,
+						settings: opts.settings,
+						commChannel,
+						steeringQueue,
+					});
+				}),
+			);
 			return sessions;
 		},
 

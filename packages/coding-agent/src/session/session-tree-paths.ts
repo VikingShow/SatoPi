@@ -80,6 +80,10 @@ export function getRoundtablesDir(parentSessionFile: string, swarmName: string):
 /**
  * Get the transcript path for a roundtable session.
  */
-export function getRoundtableTranscriptPath(parentSessionFile: string, swarmName: string, roundtableId: string): string {
+export function getRoundtableTranscriptPath(
+	parentSessionFile: string,
+	swarmName: string,
+	roundtableId: string,
+): string {
 	return path.join(getRoundtablesDir(parentSessionFile, swarmName), `${roundtableId}.jsonl`);
 }

@@ -6,8 +6,8 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { SwarmSessionManager } from "../session/swarm-session-manager";
 import type { Chapter } from "../../types/chapter";
+import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 // Audit trail
@@ -39,7 +39,9 @@ export type { Chapter } from "../../types/chapter";
 
 /** Global swarm phase indicator — updated by WorkflowFSM on every transition. Read by TUI components. */
 export let currentSwarmPhase: Chapter = "idle";
-export function setCurrentSwarmPhase(phase: Chapter): void { currentSwarmPhase = phase; }
+export function setCurrentSwarmPhase(phase: Chapter): void {
+	currentSwarmPhase = phase;
+}
 
 /**
  * To-Do item — a structured task parsed from plan.md.

@@ -24,6 +24,8 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../extensibility/plugins/marketplace";
+import { compileMermaidToGraph } from "../graph/mermaid-compiler";
+import type { GraphDefinition } from "../graph/schema";
 import { resolveMemoryBackend } from "../memory-backend";
 import { runPauseScreen } from "../modes/components/pause-screen";
 import { describeLoopLimitRuntime } from "../modes/loop-limit";
@@ -35,8 +37,6 @@ import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
 import { convertLoopFileToGraph } from "../swarm/loop-converter";
-import { compileMermaidToGraph } from "../graph/mermaid-compiler";
-import type { GraphDefinition } from "../graph/schema";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
 import {

@@ -11,23 +11,16 @@
  * integration point with SatoPi's agent loop.
  *
  * ## Location Decision (2026-07-30)
- * ContextPipeline stays in swarm/context-manager/ rather than moving to
- * src/context/ or graph/. Rationale:
- *   1. Heavily used by swarm/core/assembler.ts — the canonical runtime factory.
- *   2. Used by swarm/session/session-registry.ts for session lifecycle.
- *   3. Integrated into sdk.ts's agent loop config (transformContext).
- *   4. In graph/, only imported as `import type` — no runtime coupling.
- *   5. No equivalent context assembly exists in sdk.ts or agent-session.ts.
- * Moving would cascade changes through assembler, session-registry, sdk,
- * and all context sources, for zero benefit.
+ * ContextPipeline moved from swarm/context-manager/ to src/context/.
+ * All imports updated. Relative structure (context-pipeline.ts alongside sources/) preserved.
  */
 
 import type { AgentLoopConfig, AgentMessage } from "@satopi/pi-agent-core";
 import { logger } from "@satopi/pi-utils";
-import { compactContext, DEFAULT_COMPACT_CONFIG } from "../../offload/compact";
-import type { Chapter } from "../core/state";
-import type { HookPipeline } from "../../hooks/hook-pipeline";
-import type { HookContext } from "../../hooks/types";
+import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
+import { compactContext, DEFAULT_COMPACT_CONFIG } from "../offload/compact";
+import type { Chapter } from "../swarm/core/state";
 
 // ============================================================================
 // Types

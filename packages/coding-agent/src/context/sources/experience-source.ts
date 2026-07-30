@@ -10,8 +10,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
-import type { ExperienceStore } from "../../../experience/experience";
+import type { ExperienceStore } from "../../experience/experience";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class ExperienceSource implements ContextSource {

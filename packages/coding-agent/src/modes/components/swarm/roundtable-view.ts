@@ -86,9 +86,8 @@ class RoundtableComponent implements Component {
 				// 2. Round counter + convergence badge + view mode
 				const roundLabel = t.fg("accent", `Round ${this.#state.currentRound} / ${this.#state.totalRounds}`);
 				const convergeBadge = this.#state.converged ? t.fg("success", "CONVERGED") : t.fg("warning", "DEBATING");
-				const viewMode = this.#viewRound > 0
-					? t.fg("accent", `[Viewing Round ${this.#viewRound}]`)
-					: t.fg("dim", "[All Rounds]");
+				const viewMode =
+					this.#viewRound > 0 ? t.fg("accent", `[Viewing Round ${this.#viewRound}]`) : t.fg("dim", "[All Rounds]");
 				lines.push(`  ${roundLabel}  ${convergeBadge}  ${viewMode}`);
 
 				// 3. Convergence bar
@@ -98,21 +97,20 @@ class RoundtableComponent implements Component {
 				}
 
 				// 4. Position history (filtered by viewRound)
-				const visibleRounds = this.#viewRound > 0
-					? this.#state.rounds.filter(r => r.round === this.#viewRound)
-					: this.#state.rounds;
+				const visibleRounds =
+					this.#viewRound > 0 ? this.#state.rounds.filter(r => r.round === this.#viewRound) : this.#state.rounds;
 
 				if (visibleRounds.length > 0) {
 					lines.push("");
-					const title = this.#viewRound > 0
-						? `  Position History — Round ${this.#viewRound}`
-						: "  Position History";
+					const title =
+						this.#viewRound > 0 ? `  Position History — Round ${this.#viewRound}` : "  Position History";
 					lines.push(t.fg("accent", title));
 					for (const r of visibleRounds) {
 						const simStr = r.similarity !== null ? `${(r.similarity * 100).toFixed(0)}%` : "\u2014";
 						const simColor =
 							r.similarity !== null && r.similarity >= (this.#state.convergenceThreshold ?? 0.85)
-								? "success" : "warning";
+								? "success"
+								: "warning";
 						const header = `    Round ${r.round}  [similarity: ${t.fg(simColor, simStr)}]`;
 						lines.push(header);
 

@@ -15,13 +15,13 @@ import type { RoleAssetManager } from "../../agent/role-asset";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
+import type { ExperienceStore } from "../../experience/experience";
+import type { HookPipeline } from "../../hooks/hook-pipeline";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import { assembleAgentRuntime } from "../core/assembler";
-import type { ExperienceStore } from "../../experience/experience";
-import type { HookPipeline } from "../../hooks/hook-pipeline";
-import type { ActivityLogger } from "../../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 

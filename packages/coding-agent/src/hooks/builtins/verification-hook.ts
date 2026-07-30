@@ -9,8 +9,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../types/chapter";
 import type { VerificationHook } from "../../swarm/core/verification-hook";
+import type { Chapter } from "../../types/chapter";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ export function createVerificationHook(verification: VerificationHook): HookRegi
 		events: ["workflow:beforePhase"],
 		phases: ACTIVE_PHASES,
 
-		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<boolean | undefined> {
 			if (event !== "workflow:beforePhase") {
 				return;
 			}

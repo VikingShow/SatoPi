@@ -1,16 +1,21 @@
 import type { Component } from "@satopi/pi-tui";
+import type { CrewManager } from "../../../crew/crew-manager";
 import { AgentRegistry } from "../../../registry/agent-registry";
 import { formatStatusIcon } from "../../../tools/render-utils";
+import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
 import type { Theme } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
-import type { CrewManager } from "../../../crew/crew-manager";
-import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
 
 type ToolUIStatus = "done" | "error" | "aborted" | "running" | "pending";
 
 const AGENT_STATUS_ICON: Record<string, ToolUIStatus> = {
-	completed: "done", failed: "error", aborted: "aborted",
-	running: "running", idle: "done", parked: "done", pending: "pending",
+	completed: "done",
+	failed: "error",
+	aborted: "aborted",
+	running: "running",
+	idle: "done",
+	parked: "done",
+	pending: "pending",
 };
 
 // ── Tree node model ────────────────────────────────────────────────────────
@@ -75,7 +80,9 @@ export class SwarmSidebar implements Component {
 		nodes.push({ type: "session", id: "session", label: sessionName, depth: 0 });
 
 		// Agents (non-advisor)
-		const refs = AgentRegistry.global().list().filter(r => r.kind !== "advisor");
+		const refs = AgentRegistry.global()
+			.list()
+			.filter(r => r.kind !== "advisor");
 		for (const ref of refs) {
 			nodes.push({
 				type: "agent",
@@ -149,58 +156,59 @@ export class SwarmSidebar implements Component {
 	// ── Render ─────────────────────────────────────────────────────────────
 
 	render(width: number): readonly string[] {
-		const panel = swarmPanel("Agents", ({ innerWidth, theme: t }) => {
-			const tree = this.#buildTree();
-			const lines: string[] = [];
+		const panel = swarmPanel(
+			"Agents",
+			({ innerWidth, theme: t }) => {
+				const tree = this.#buildTree();
+				const lines: string[] = [];
 
-			if (tree.length === 0) {
-				return [t.fg("dim", "  No active agents or crews")];
-			}
-
-			const flat = this.#flattenTree(tree);
-			const maxVisible = Math.min(flat.length, 20);
-
-			for (let i = 0; i < maxVisible; i++) {
-				const { node, prefix } = flat[i];
-				const isSelected = this.#selectedPath.length > 0 &&
-					this.#selectedPath[this.#selectedPath.length - 1] === node.id;
-
-				if (node.type === "session") {
-					const cursor = isSelected ? t.fg("accent", "*") : " ";
-					lines.push(`${cursor}${t.bold(node.label)}`);
-					continue;
+				if (tree.length === 0) {
+					return [t.fg("dim", "  No active agents or crews")];
 				}
 
-				const multiMark = this.#multiSelected.has(node.id) ? t.fg("accent", "\u2713 ") : "";
-				const cursor = isSelected ? t.fg("accent", "\u25b6 ") : "  ";
+				const flat = this.#flattenTree(tree);
+				const maxVisible = Math.min(flat.length, 20);
 
-				if (node.type === "agent" || node.type === "crew-member") {
-					const iconStatus = AGENT_STATUS_ICON[node.status ?? "idle"] ?? "done";
-					const glyph = formatStatusIcon(iconStatus, t);
-					const color = iconStatus === "running" ? "accent"
-						: iconStatus === "error" ? "error" : "dim";
-					const icon = t.fg(color as "accent" | "error" | "dim", glyph);
-					const maxName = Math.max(4, innerWidth - 20);
-					const name = node.label.length > maxName
-						? node.label.slice(0, maxName - 1) + "\u2026"
-						: node.label;
-					lines.push(`${prefix}${cursor}${multiMark}${icon} ${name}`);
-				} else if (node.type === "crew") {
-					const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
-					const expandGlyph = t.fg("dim", expandIcon);
-					const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
-					lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+				for (let i = 0; i < maxVisible; i++) {
+					const { node, prefix } = flat[i];
+					const isSelected =
+						this.#selectedPath.length > 0 && this.#selectedPath[this.#selectedPath.length - 1] === node.id;
+
+					if (node.type === "session") {
+						const cursor = isSelected ? t.fg("accent", "*") : " ";
+						lines.push(`${cursor}${t.bold(node.label)}`);
+						continue;
+					}
+
+					const multiMark = this.#multiSelected.has(node.id) ? t.fg("accent", "\u2713 ") : "";
+					const cursor = isSelected ? t.fg("accent", "\u25b6 ") : "  ";
+
+					if (node.type === "agent" || node.type === "crew-member") {
+						const iconStatus = AGENT_STATUS_ICON[node.status ?? "idle"] ?? "done";
+						const glyph = formatStatusIcon(iconStatus, t);
+						const color = iconStatus === "running" ? "accent" : iconStatus === "error" ? "error" : "dim";
+						const icon = t.fg(color as "accent" | "error" | "dim", glyph);
+						const maxName = Math.max(4, innerWidth - 20);
+						const name = node.label.length > maxName ? `${node.label.slice(0, maxName - 1)}\u2026` : node.label;
+						lines.push(`${prefix}${cursor}${multiMark}${icon} ${name}`);
+					} else if (node.type === "crew") {
+						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
+						const expandGlyph = t.fg("dim", expandIcon);
+						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
+						lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+					}
 				}
-			}
 
-			if (flat.length > maxVisible) {
-				lines.push(t.fg("dim", `  +${flat.length - maxVisible} more`));
-			}
+				if (flat.length > maxVisible) {
+					lines.push(t.fg("dim", `  +${flat.length - maxVisible} more`));
+				}
 
-			lines.push("");
-			lines.push(t.fg("dim", ` j/k nav  Enter sel/open  Space select  Ctrl+B close  \u2190\u2192 resize`));
-			return lines;
-		}, this.#theme);
+				lines.push("");
+				lines.push(t.fg("dim", ` j/k nav  Enter sel/open  Space select  Ctrl+B close  \u2190\u2192 resize`));
+				return lines;
+			},
+			this.#theme,
+		);
 		return panel.render(width);
 	}
 
@@ -238,17 +246,19 @@ export class SwarmSidebar implements Component {
 
 		// Find current selected index
 		const currentId = this.#selectedPath.length > 0 ? this.#selectedPath[this.#selectedPath.length - 1] : undefined;
-		let currentIdx = currentId ? flat.findIndex(f => f.node.id === currentId) : -1;
+		const currentIdx = currentId ? flat.findIndex(f => f.node.id === currentId) : -1;
 
 		switch (data) {
-			case "j": case "ArrowDown":
+			case "j":
+			case "ArrowDown":
 				if (flat.length > 0) {
 					const next = Math.min(flat.length - 1, currentIdx + 1);
 					this.#selectedPath = [flat[next].node.id];
 					this.#config.onRequestRender?.();
 				}
 				break;
-			case "k": case "ArrowUp":
+			case "k":
+			case "ArrowUp":
 				if (flat.length > 0) {
 					const prev = Math.max(0, currentIdx - 1);
 					this.#selectedPath = [flat[prev].node.id];
@@ -298,7 +308,9 @@ export class SwarmSidebar implements Component {
 		}
 	}
 
-	dispose(): void { this.#unsubscribe?.(); }
+	dispose(): void {
+		this.#unsubscribe?.();
+	}
 }
 
 interface FlatNode {

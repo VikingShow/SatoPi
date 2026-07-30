@@ -46,7 +46,7 @@ Script（起草剧本）→ Stage（上台演出）→ Curtain（谢幕）
 | **Stage** 上台演出 | `stage` ⇄ `paused` / `blocked` | Agent 从 DAG 任务队列认领任务并行执行，通过 Stigmergy（环境标记）和 IRC（直接通信）协调 |
 | **Curtain** 谢幕 | `curtain` → `idle` | 经验提取、根因分析、反思 — 经验教训持久化供后续运行使用 |
 
-状态机严格执行此流转：`idle → script → script-debate → script-confirm → stage ⇄ (paused | blocked) → curtain → idle`。非法转换被拒绝 — 阶段权威仅存在于后端。
+GraphRunner 通过 DAG 边遍历隐式驱动阶段流转：`idle → script → script-debate → script-confirm → stage ⇄ (paused | blocked) → curtain → idle`。非法转换被 GraphRunner 的节点行为层拒绝 — 阶段权威仅存在于后端。
 
 SatoPi 在 stp 之上扩展了多 Agent Swarm 架构：**script** 阶段通过苏格拉底对话与圆桌辩论完成规划，**stage** 阶段让 Agent 并行执行 DAG 任务队列，**curtain** 阶段进行复盘分析。
 
@@ -56,7 +56,7 @@ SatoPi 在 stp 之上扩展了多 Agent Swarm 架构：**script** 阶段通过�
 
 ### 生命周期状态机
 
-整个 Swarm 运行由一个显式状态转换表控制。每次状态变更通过 `StateTracker` + `ActivityLogger` + SSE 原子广播，确保后端与前端的阶段永远一致。
+整个 Swarm 运行由 GraphRunner 的 DAG 节点行为层控制。每个阶段节点（ScriptBehavior、StageBehavior、CurtainBehavior）封装了该阶段的全部逻辑，状态变更通过 `StateTracker` + `ActivityLogger` + SSE 原子广播。
 
 ```
 idle          空闲，等待任务输入
@@ -161,18 +161,20 @@ cd SatoPi
 bun setup          # 安装依赖 + 编译 Rust 原生插件 + 链接 CLI
 ```
 
-### Swarm 后端（端口 7878）
+### 运行 Swarm
 
 ```sh
-cd packages/coding-agent
-bun run src/swarm/monitor/standalone.ts [workspace-dir]
-```
+# 从配置文件启动 Swarm（GraphRunner 引擎）
+stp swarm run .stp/loop.yaml
 
-### Swarm 前端（端口 5173）
+# 或在交互式会话中使用 /swarm 命令
+/swarm run .stp/loop.yaml
 
-```sh
-cd packages/swarm-gui
-bun run dev        # Vite HMR 开发服务器
+# 仅生成执行计划（Script 阶段）
+stp swarm plan .stp/loop.yaml
+
+# 恢复已暂停的 Swarm 会话
+stp swarm resume <session-name>
 ```
 
 ### stp CLI（从源码运行）
@@ -201,7 +203,7 @@ bun run build:native   # 修改 Rust crate 后重新编译 N-API 插件
 
 ## Swarm 配置
 
-编辑 `.swarm-workspace/loop.yaml`：
+编辑 `.stp/loop.yaml`：
 
 ```yaml
 swarm:
@@ -266,51 +268,50 @@ swarm:
 模型从 `loop.yaml` 的 `swarm.model` 读取，适用于所有 Agent（planner、worker、reviewer），可随时更换：
 
 ```sh
-sed -i 's/model: .*/model: YOUR-MODEL/' .swarm-workspace/loop.yaml
-# 然后重启后端
+sed -i 's/model: .*/model: YOUR-MODEL/' .stp/loop.yaml
+# 重新运行 swarm 即可生效
 ```
-
-前端不硬编码任何模型，始终从后端读取。
 
 ## 热更新
 
-- **前端**：Vite HMR 代码变更自动热更新
-- **后端**：需要手动重启（`kill & re-run`）
-- **loop.yaml**：每次 `start()` 重新读取，改配置无需重启
+- **loop.yaml**：每次运行 `stp swarm run` 重新读取，改配置无需重启
+- **Agent profile**：`.stp/profiles/` 目录，运行时动态更新
 
 ## 关键文件
 
 | 文件 | 用途 |
 |------|------|
-| `packages/coding-agent/src/swarm/` | 后端 Swarm 逻辑（~80 个 .ts 文件，15 个子目录） |
-| `packages/swarm-gui/src/` | React 前端（Zustand + Tailwind + SSE 实时流） |
-| `.swarm-workspace/loop.yaml` | Swarm 配置 |
+| `packages/coding-agent/src/graph/` | GraphRunner DAG 编排引擎（行为层、门控、计划验证） |
+| `packages/coding-agent/src/crew/` | CrewManager + RoundtableSession（圆桌辩论） |
+| `packages/coding-agent/src/context/` | 上下文管道 + 卸载源（L1→L1.5→L2→L3） |
+| `packages/coding-agent/src/swarm/` | Session 管理、提示词模板、Swarm 基础设施 |
+| `packages/coding-agent/src/agent/` | Agent 身份档案、选择算法、角色资产 |
+| `packages/coding-agent/src/comm/` | IRC 通信总线、投票、端点 |
+| `packages/coding-agent/src/modes/` | TUI + 交互模式（含 Swarm 面板组件） |
+| `.stp/loop.yaml` | Swarm 配置 |
 | `.stp/plan.md` | Script 阶段生成的执行计划 |
 
 ## 架构总览
 
 ```
-packages/coding-agent/src/swarm/
-├── core/           状态机、DAG、收敛检测、阻塞检测、Schema
-├── monitor/        HTTP REST API + SSE 事件流（端口 7878）
-├── agent/          Agent 身份档案、选择算法、自动扩缩、角色资产
-├── executor/       Agent 执行器、DAG 任务队列
-├── script/         Script 阶段：规划器、辩论圆桌、复杂度分析
-├── stage/          Stage 阶段：StageController、角色协商
-├── coordination/   Stigmergy 环境标记、区域锁、文件追踪
-├── offload/        上下文卸载管道（L1→L1.5→L2→L3）
-├── curtain/        复盘：经验提取、反思、根因分析
-├── hooks/          生命周期钩子、ActivityLogger（24 种事件类型）
-├── channel/        Agent 间通信频道
-├── session/        多会话管理、JSONL 持久化
-└── render/         流式输出渲染
-
-packages/swarm-gui/src/
-├── stores/         Zustand 状态管理（swarm/session/config-store）
-├── components/     监控页面、聊天视图、任务列表、Agent 拓扑图、
-│                   通信矩阵、上下文面板、复盘面板等
-├── lib/            SSE 客户端、REST API 客户端、类型定义
-└── i18n/           中英文国际化
+packages/coding-agent/src/
+├── graph/          GraphRunner + DAG 编排引擎
+│   ├── behaviors/   Script/Stage/Curtain 行为实现
+│   ├── builtin/     内置 theatre.graph.yaml
+│   ├── gate-controller.ts   门控系统
+│   ├── plan-validator.ts    计划验证
+│   └── graph-runner.ts      核心编排器
+├── crew/           CrewManager + RoundtableSession
+├── context/        上下文管道 + 卸载源
+├── swarm/          Session 管理 + 提示词模板
+│   ├── session/    多会话管理
+│   ├── core/       状态跟踪、基础设施、Schema
+│   ├── infra/      钩子系统、记忆适配器
+│   ├── stage/      StageController、角色协商
+│   └── prompts/    提示词模板（Handlebars）
+├── agent/          Agent 身份档案 + 角色定义
+├── comm/           IRC 通信总线、投票、端点
+└── modes/          TUI + 交互模式（含 Swarm 仪表板）
 ```
 
 ---

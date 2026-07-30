@@ -41,6 +41,7 @@ import type { ArtifactManager } from "../session/artifacts";
 import type { AuthStorage } from "../session/auth-storage";
 import { SKILL_PROMPT_MESSAGE_TYPE, USER_INTERRUPT_LABEL } from "../session/messages";
 import { SessionManager } from "../session/session-manager";
+import { getAgentSessionPath } from "../session/session-tree-paths";
 import { truncateTail } from "../session/streaming-output";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { ContextFileEntry, ToolSession } from "../tools";
@@ -2176,9 +2177,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		};
 	}
 
-	// Set up artifact paths and write input file upfront if artifacts dir provided
+	// Compute subagent session file path using tree-nested layout under parent session
 	let subtaskSessionFile: string | undefined;
-	if (options.artifactsDir) {
+	if (options.sessionFile) {
+		subtaskSessionFile = getAgentSessionPath(options.sessionFile, id);
+	} else if (options.artifactsDir) {
 		subtaskSessionFile = path.join(options.artifactsDir, `${id}.jsonl`);
 	}
 

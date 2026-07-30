@@ -30,7 +30,7 @@ export function createMnemopiHook(adapter: SwarmMnemopiAdapter): HookRegistratio
 		priority: 3,
 		events: ["agent:beforeSpawn", "agent:afterComplete"],
 
-		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<boolean | undefined> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:beforeSpawn — recall historical context

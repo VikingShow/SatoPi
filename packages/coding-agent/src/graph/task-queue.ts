@@ -84,9 +84,7 @@ export class TaskQueue extends EventEmitter {
 		for (const task of tasks) {
 			for (const depId of task.dependsOn) {
 				if (!this.#tasks.has(depId)) {
-					throw new Error(
-						`Task "${task.id}" depends on unknown task "${depId}"`,
-					);
+					throw new Error(`Task "${task.id}" depends on unknown task "${depId}"`);
 				}
 			}
 		}
@@ -120,9 +118,7 @@ export class TaskQueue extends EventEmitter {
 		if (!task) return null;
 
 		if (agentId && task.assignedTo !== agentId) {
-			throw new Error(
-				`Task "${taskId}" is assigned to ${task.assignedTo}, not ${agentId}`,
-			);
+			throw new Error(`Task "${taskId}" is assigned to ${task.assignedTo}, not ${agentId}`);
 		}
 
 		task.status = "completed";
@@ -143,9 +139,7 @@ export class TaskQueue extends EventEmitter {
 		if (!task) return null;
 
 		if (agentId && task.assignedTo !== agentId) {
-			throw new Error(
-				`Task "${taskId}" is assigned to ${task.assignedTo}, not ${agentId}`,
-			);
+			throw new Error(`Task "${taskId}" is assigned to ${task.assignedTo}, not ${agentId}`);
 		}
 
 		task.status = "blocked";
@@ -160,7 +154,7 @@ export class TaskQueue extends EventEmitter {
 	/** Unblock a task, making it ready again. */
 	unblock(taskId: string): Task | null {
 		const task = this.#tasks.get(taskId);
-		if (!task || task.status !== "blocked") return null;
+		if (task?.status !== "blocked") return null;
 
 		task.status = "pending";
 		const idx = this.#blocked.indexOf(taskId);
@@ -243,7 +237,7 @@ export class TaskQueue extends EventEmitter {
 	/** Release a task from in_progress back to pending/ready. */
 	release(taskId: string, _reason?: string): Task | null {
 		const task = this.#tasks.get(taskId);
-		if (!task || task.status !== "in_progress") return null;
+		if (task?.status !== "in_progress") return null;
 
 		task.status = "pending";
 		task.assignedTo = undefined;
@@ -349,17 +343,20 @@ export class TaskQueue extends EventEmitter {
 			const title = match[1].trim();
 
 			// Parse metadata parens: (type: develop) (role: backend) (est: 30m) (depends: a, b)
-			const type = this.#extractMeta(fullLine, "type") ?? "develop";
-			const role = this.#extractMeta(fullLine, "role") ?? "";
-			const estStr = this.#extractMeta(fullLine, "est") ?? "30m";
-			const dependsStr = this.#extractMeta(fullLine, "depends");
+			const type = TaskQueue.#extractMeta(fullLine, "type") ?? "develop";
+			const role = TaskQueue.#extractMeta(fullLine, "role") ?? "";
+			const estStr = TaskQueue.#extractMeta(fullLine, "est") ?? "30m";
+			const dependsStr = TaskQueue.#extractMeta(fullLine, "depends");
 
-			const estimatedMinutes = this.#parseEstimate(estStr);
+			const estimatedMinutes = TaskQueue.#parseEstimate(estStr);
 			const dependsOn = dependsStr
-				? dependsStr.split(",").map(s => s.trim()).filter(Boolean)
+				? dependsStr
+						.split(",")
+						.map(s => s.trim())
+						.filter(Boolean)
 				: [];
 
-			const id = this.#uniqueId(slugify(title), ids);
+			const id = TaskQueue.#uniqueId(slugify(title), ids);
 			ids.add(id);
 
 			tasks.push({

@@ -8,13 +8,13 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { logger } from "@satopi/pi-utils";
-import { OffloadManager } from "../../offload/manager";
-import { OffloadSource } from "../context-manager/sources/offload-source";
+import { OffloadSource } from "../../context/sources/offload-source";
 import { registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityBroadcaster } from "../../infra/activity-logger";
+import { OffloadManager } from "../../offload/manager";
+import { getSwarmDir } from "../../session/session-tree-paths";
 import type { SessionFactory, SessionServices, SharedServices } from "./session-types";
 import { SwarmSessionManager } from "./swarm-session-manager";
-import { getSwarmDir } from "../../session/session-tree-paths";
 
 export async function createSwarmSession(
 	shared: SharedServices,
@@ -39,11 +39,7 @@ export async function createSwarmSession(
 	// Create SwarmSessionManager for unified OH-MY-PI persistence.
 	let sessionManager: SwarmSessionManager | undefined;
 	try {
-		sessionManager = await SwarmSessionManager.openOrCreate(
-			swarmDir,
-			options?.parentSessionFile,
-			name,
-		);
+		sessionManager = await SwarmSessionManager.openOrCreate(swarmDir, options?.parentSessionFile, name);
 		logger.info("[createSwarmSession] SwarmSessionManager created", { name, swarmDir });
 	} catch (err) {
 		logger.warn("[createSwarmSession] SwarmSessionManager unavailable — falling back to legacy persistence", {
@@ -103,7 +99,7 @@ export async function createSwarmSession(
  * Destroy a swarm session — abort its controller, flush/close the session
  * manager, and remove the on-disk directory.
  */
-export async function destroySwarmSession(session: SessionServices, workspace: string): Promise<void> {
+export async function destroySwarmSession(session: SessionServices, _workspace: string): Promise<void> {
 	session.abortController.abort();
 	if (session.sessionManager) {
 		try {

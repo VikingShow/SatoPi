@@ -10,15 +10,12 @@
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { ResolvedRole, RoleProvider } from "../agent/role-provider";
-import type { IrcBus } from "../irc/bus";
-import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
-import type { Tool } from "../tools";
-import { CommChannel } from "../comm/comm-channel";
-import { createAgentSession } from "../sdk";
-import type { ContextPipeline, PhaseInfo } from "../swarm/context-manager/context-pipeline";
+import type { CommChannel } from "../comm/comm-channel";
+import type { ContextPipeline, PhaseInfo } from "../context/context-pipeline";
 import type { HookPipeline } from "../hooks/hook-pipeline";
-import type { ActivityLogger } from "../infra/activity-logger";
+import { AgentRegistry } from "../registry/agent-registry";
+import { createAgentSession } from "../sdk";
+import type { AgentSession } from "../session/agent-session";
 import type { AgentSpec } from "./agent-spec";
 
 // ============================================================================
@@ -38,12 +35,6 @@ export interface SpawnAgentOptions {
 	modelRegistry: ModelRegistry;
 	/** Application settings. */
 	settings: Settings;
-	/** IRC bus for inter-agent messaging. */
-	ircBus: IrcBus;
-	/** Optional activity logger for event capture. */
-	activityLogger?: ActivityLogger;
-	/** Optional tool registry for tool name resolution. */
-	toolRegistry?: Map<string, Tool>;
 	/** Optional CommChannel for crew-based communication. */
 	commChannel?: CommChannel;
 	/** Optional external steering queue — when set, spawnAgent pushes here instead of a local queue. */
@@ -75,7 +66,19 @@ export interface SpawnAgentOptions {
  * 9. session.prompt(spec.task) — blocks until completion
  */
 export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession> {
-	const { spec, roleProvider, contextPipeline, hookPipeline, modelRegistry, settings, ircBus, activityLogger, toolRegistry, commChannel, phase, sessionFactory, steeringQueue: extSteeringQueue, asideQueue: extAsideQueue } = opts;
+	const {
+		spec,
+		roleProvider,
+		contextPipeline,
+		hookPipeline,
+		modelRegistry,
+		settings,
+		commChannel,
+		phase,
+		sessionFactory,
+		steeringQueue: extSteeringQueue,
+		asideQueue: extAsideQueue,
+	} = opts;
 	const agentId = spec.id;
 
 	// 1. Before-spawn hook
@@ -120,13 +123,13 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession>
 	const availableModels = modelRegistry.getAvailable();
 	const model =
 		spec.modelPreference === "smartest"
-			? availableModels
+			? (availableModels
 					.slice()
 					.sort(
 						(a, b) =>
 							(typeof b.contextWindow === "number" ? b.contextWindow : 0) -
 							(typeof a.contextWindow === "number" ? a.contextWindow : 0),
-					)[0] ?? availableModels[0]
+					)[0] ?? availableModels[0])
 			: availableModels[0];
 	if (!model) {
 		throw new Error(`[spawnAgent] No available model for agent "${spec.id}"`);

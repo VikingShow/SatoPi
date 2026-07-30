@@ -32,8 +32,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../../comm/comm-channel";
+import type { AgentSession } from "../../session/agent-session";
 import type { Chapter } from "../../swarm/core/state";
 import { TaskQueue } from "../task-queue";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
@@ -88,9 +88,7 @@ export class StageBehavior implements PhaseBehavior {
 		// Edge case: if ALL tasks were planner, remap them to implementer to avoid
 		// a zero-agent stage.
 		const tasks =
-			execTasks.length > 0
-				? execTasks
-				: allTasks.map(t => ({ ...t, assignedRole: "implementer" as const }));
+			execTasks.length > 0 ? execTasks : allTasks.map(t => ({ ...t, assignedRole: "implementer" as const }));
 
 		this.#taskQueue = new TaskQueue(tasks);
 

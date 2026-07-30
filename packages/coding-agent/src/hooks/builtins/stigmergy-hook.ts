@@ -28,7 +28,7 @@ export function createStigmergyHook(markEnv: MarkEnvironment): HookRegistration 
 		priority: 1,
 		events: ["agent:afterComplete", "agent:onError", "context:afterCompaction"],
 
-		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<boolean | undefined> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:afterComplete — place artifact mark

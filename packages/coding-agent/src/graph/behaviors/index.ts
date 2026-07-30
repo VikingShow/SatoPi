@@ -9,15 +9,15 @@
  * ContextPipeline for agent lifecycle and communication.
  */
 
-import type { IrcBus } from "../../irc/bus";
-import type { AgentSession } from "../../session/agent-session";
-import type { SwarmRuntime } from "../../swarm/core/swarm-runtime";
 import type { CommChannel } from "../../comm/comm-channel";
-import type { ContextPipeline } from "../../swarm/context-manager/context-pipeline";
-import type { LoopSwarmConfig } from "../../swarm/core/schema";
-import type { Chapter, StateTracker } from "../../swarm/core/state";
+import type { ContextPipeline } from "../../context/context-pipeline";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
+import type { IrcBus } from "../../irc/bus";
+import type { AgentSession } from "../../session/agent-session";
+import type { LoopSwarmConfig } from "../../swarm/core/schema";
+import type { Chapter, StateTracker } from "../../swarm/core/state";
+import type { SwarmRuntime } from "../../swarm/core/swarm-runtime";
 
 // ============================================================================
 // PhaseContext

@@ -16,13 +16,13 @@
  */
 
 import { logger, Snowflake } from "@satopi/pi-utils";
-import { AgentLifecycleManager } from "../registry/agent-lifecycle";
-import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
-import type { CustomMessage } from "../session/messages";
 import { CommChannel } from "../comm/comm-channel";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
+import { AgentLifecycleManager } from "../registry/agent-lifecycle";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import type { CustomMessage } from "../session/messages";
 
 export interface IrcMessage {
 	id: string;
@@ -445,9 +445,10 @@ export class IrcBus {
 			if (!channel) return;
 			const currentIds = new Set(channel.members);
 			const activeIds = new Set(
-				this.#registry.list()
-					.filter(ref => ref.status === 'running')
-					.map(ref => ref.id)
+				this.#registry
+					.list()
+					.filter(ref => ref.status === "running")
+					.map(ref => ref.id),
 			);
 			// Add new
 			for (const id of activeIds) {

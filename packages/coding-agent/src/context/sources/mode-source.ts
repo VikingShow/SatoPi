@@ -12,7 +12,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 const MODE_PROMPTS: Record<string, string> = {

@@ -8,7 +8,7 @@ import type { Component } from "@satopi/pi-tui";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import { formatStatusIcon } from "../../../tools/render-utils";
-import type { Theme, ThemeColor } from "../../theme/theme";
+import type { Theme } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
 
 // ============================================================================
@@ -24,16 +24,6 @@ const STATUS_ICON: Record<string, ToolUIStatus> = {
 	idle: "done", // parked / idle — use the check glyph
 	parked: "done",
 	pending: "pending",
-};
-
-const STATUS_COLOR: Record<string, ThemeColor> = {
-	completed: "success",
-	failed: "error",
-	aborted: "warning",
-	running: "accent",
-	idle: "success",
-	parked: "dim",
-	pending: "dim",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -156,9 +146,7 @@ function formatAgentLine(
 
 	// Kind badge: [sub] for subagents
 	const kindBadge =
-		ref.kind === "sub"
-			? theme.fg("dim", `${theme.format.bracketLeft}sub${theme.format.bracketRight}`)
-			: "";
+		ref.kind === "sub" ? theme.fg("dim", `${theme.format.bracketLeft}sub${theme.format.bracketRight}`) : "";
 
 	// Role badge
 	const roleLabel = ref.role ?? swarmAgent?.role ?? swarmAgent?.modelName ?? "";

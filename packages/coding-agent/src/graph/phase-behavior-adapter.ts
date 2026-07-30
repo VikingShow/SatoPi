@@ -17,10 +17,10 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { CommChannel } from "../comm/comm-channel";
 import type { AgentSession } from "../session/agent-session";
 import type { AgentSpec } from "./agent-spec";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./behaviors/index";
-import type { CommChannel } from "../comm/comm-channel";
 import type { NodeBehaviorFactoryConfig } from "./node-behavior";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult, NodeType } from "./schema";
 

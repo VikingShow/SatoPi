@@ -10,10 +10,10 @@ import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
+import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import type { StateTracker } from "../swarm/core/state";
-import type { ActivityLogger } from "../infra/activity-logger";
 
 // ============================================================================
 // Gate discriminated unions
@@ -339,7 +339,9 @@ export interface NodeResult {
  * transition) or createAgentSession directly (post-Phase-5).
  */
 export interface AgentSpawner {
-	spawn(specs: Array<{ id: string; role: string; task: string; profileId?: string; tools?: string[] }>): Promise<AgentSession[]>;
+	spawn(
+		specs: Array<{ id: string; role: string; task: string; profileId?: string; tools?: string[] }>,
+	): Promise<AgentSession[]>;
 }
 
 /**

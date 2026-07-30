@@ -44,10 +44,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 import { logger } from "@satopi/pi-utils";
-import type { SessionStorage } from "../../session/session-storage";
-import type { AgentState, Chapter, SwarmState } from "../core/state";
 import type { ActivityEntry } from "../../infra/activity-logger";
-import { getSwarmAgentsDir, getSwarmAgentSessionPath, getSwarmSessionDir } from "../../session/session-tree-paths";
+import type { SessionStorage } from "../../session/session-storage";
+import { getSwarmAgentSessionPath, getSwarmAgentsDir, getSwarmSessionDir } from "../../session/session-tree-paths";
+import type { AgentState, Chapter, SwarmState } from "../core/state";
 
 // ============================================================================
 // Custom entry type tags
@@ -105,11 +105,7 @@ export class SwarmSessionManager {
 	// -- Factory --------------------------------------------------------------
 
 	/** Create a new SwarmSessionManager. Forces session file creation in the swarm dir. */
-	static async create(
-		swarmDir: string,
-		parentSessionFile?: string,
-		swarmName?: string,
-	): Promise<SwarmSessionManager> {
+	static async create(swarmDir: string, parentSessionFile?: string, swarmName?: string): Promise<SwarmSessionManager> {
 		const sessionDir = SwarmSessionManager.sessionDir(swarmDir, parentSessionFile, swarmName);
 		await fs.mkdir(sessionDir, { recursive: true });
 

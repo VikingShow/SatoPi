@@ -9,24 +9,22 @@
  */
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
+import { ContextPipeline } from "../../context/context-pipeline";
+import { ExperienceSource } from "../../context/sources/experience-source";
+import { OffloadSource } from "../../context/sources/offload-source";
+import { StigmergySource } from "../../context/sources/stigmergy-source";
 import { MarkEnvironment } from "../../coordination/mark-environment";
-import { IrcBus } from "../../irc/bus";
-import { OffloadManager } from "../../offload/manager";
-import { AgentRegistry } from "../../registry/agent-registry";
-import { MemorySessionStorage } from "../../session/session-storage";
-import { discoverAgents } from "../../task/discovery";
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { ExperienceSource } from "../context-manager/sources/experience-source";
-import { OffloadSource } from "../context-manager/sources/offload-source";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
-import { StateTracker } from "../core/state";
 import { ExperienceStore } from "../../experience/experience";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../../graph/node-behavior";
 import { PhaseBehaviorNodeAdapter } from "../../graph/phase-behavior-adapter";
 import type { NodeContext } from "../../graph/schema";
 import { type GraphDefinition, loadGraphDefinition } from "../../graph/schema";
 import { HookPipeline } from "../../hooks/hook-pipeline";
-import { ActivityLogger } from "../../infra/activity-logger";
+import { IrcBus } from "../../irc/bus";
+import { OffloadManager } from "../../offload/manager";
+import { AgentRegistry } from "../../registry/agent-registry";
+import { MemorySessionStorage } from "../../session/session-storage";
+import { discoverAgents } from "../../task/discovery";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 
@@ -35,8 +33,6 @@ const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");
 // ============================================================================
 
 function makeConfig(overrides: Partial<NodeBehaviorFactoryConfig> = {}): NodeBehaviorFactoryConfig {
-	const stateTracker = new StateTracker(WORKSPACE, "test");
-	const activityLogger = new ActivityLogger(WORKSPACE, "test");
 	const hookPipeline = new HookPipeline();
 	const contextPipeline = new ContextPipeline();
 

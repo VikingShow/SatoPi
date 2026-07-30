@@ -89,7 +89,6 @@ export function renderCall(args: AgentInvokeParams, _options: AgentInvokeRenderO
  * After 5s, render returns [] to auto-dismiss the frame.
  */
 const SETTLED_STATUSES = new Set<AgentProgress["status"]>(["completed", "failed", "aborted"]);
-const DISMISS_AFTER_MS = 5000;
 
 export function renderResult(
 	result: { content?: Array<{ type: string; text?: string }>; details?: AgentInvokeDetails; isError?: boolean },
@@ -109,11 +108,9 @@ export function renderResult(
 
 	const progress = details.progress;
 	const results = details.results;
-	const frozen = options.renderContext?.frozen ?? false;
 
 	// Determine state
 	let state: "running" | "done" | "error" = "running";
-	let settleTime: number | undefined;
 
 	if (results && results.length > 0) {
 		const last = results[results.length - 1];

@@ -12,44 +12,37 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { AssistantMessage } from "@satopi/pi-ai";
+import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
 import { MarkEnvironment } from "../coordination/mark-environment";
-import type { CheckpointStore } from "./checkpoint";
-import {
-	GraphEngine,
-	type GraphEngineConfig,
-	type NodeExecutionContext,
-	type NodeExecutor,
-} from "./graph-engine";
-import type { GraphRunState } from "./types";
-import type { IrcBus } from "../irc/bus";
-import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
-import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
-import { CurtainBehavior } from "./behaviors/curtain-behavior";
-import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
-import type { ISwarmOrchestrator } from "./orchestrator-interface";
-import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { buildExecutionWaves } from "./dag";
-import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
-import type { SwarmInfra } from "../swarm/core/swarm-infra";
 import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
-import { NoopOffloadManager, type IOffloadManager } from "../offload/manager";
+import type { IrcBus } from "../irc/bus";
+import { type IOffloadManager, NoopOffloadManager } from "../offload/manager";
+import { AgentRegistry } from "../registry/agent-registry";
+import type { AgentSession } from "../session/agent-session";
+import type { LoopSwarmConfig } from "../swarm/core/schema";
+import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
+import type { SwarmInfra } from "../swarm/core/swarm-infra";
+import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
-import type { DebateRoundtableResult } from "../swarm/script/debate-roundtable";
-import { getSessionPlanPath } from "./plan-paths";
-import { validatePlanTasks } from "./plan-validator";
+import { CurtainBehavior } from "./behaviors/curtain-behavior";
+import type { DebateRoundtableResult } from "./behaviors/debate-roundtable";
+import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
+import type { CheckpointStore } from "./checkpoint";
 import { recoverState } from "./checkpoint";
+import { buildExecutionWaves } from "./dag";
 import { GateController } from "./gate-controller";
+import { GraphEngine, type GraphEngineConfig, type NodeExecutionContext, type NodeExecutor } from "./graph-engine";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
+import type { ISwarmOrchestrator } from "./orchestrator-interface";
+import { getSessionPlanPath } from "./plan-paths";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
-
+import type { GraphRunState } from "./types";
 
 /** Phases where the workflow is considered actively running. */
 const ACTIVE_PHASES: Set<Chapter> = new Set(["script", "script-debate", "stage", "curtain"]);
@@ -81,7 +74,14 @@ export interface GraphRunnerConfig {
 		maxRounds: number;
 		convergenceThreshold: number;
 		runtime: SwarmRuntime;
-	}) => { debate(planContent: string, workspace: string, modelRegistry: ModelRegistry, settings: Settings): Promise<DebateRoundtableResult> };
+	}) => {
+		debate(
+			planContent: string,
+			workspace: string,
+			modelRegistry: ModelRegistry,
+			settings: Settings,
+		): Promise<DebateRoundtableResult>;
+	};
 	/** Reader for session.jsonl raw entries (used by checkpoint recovery). */
 	readSessionEntries: () => Promise<Array<Record<string, unknown>>>;
 }
@@ -135,7 +135,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// ── Lifecycle ──────────────────────────────────────────────────────────
 
 	async init(): Promise<void> {
-		const { workspace, modelRegistry, settings } = this.#config;
+		const { workspace } = this.#config;
 		const hasGraph = !!this.#config.graphPath;
 
 		if (hasGraph) {
@@ -151,7 +151,8 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			this.#waves = buildExecutionWaves(deps);
 		} else {
 			// Swarm keyword mode: no graph file
-			const sessionId = this.#config.swarmDir?.split("/").pop()?.replace("swarm-", "") ?? crypto.randomUUID().slice(0, 8);
+			const sessionId =
+				this.#config.swarmDir?.split("/").pop()?.replace("swarm-", "") ?? crypto.randomUUID().slice(0, 8);
 			this.#graphName = sessionId;
 			this.#swarmDir = this.#config.swarmDir ?? path.join(workspace, ".stp", "sessions", `swarm-${sessionId}`);
 			this.#graph = { name: sessionId, description: "", version: 1, revision: 1, nodes: {}, edges: [], hooks: [] };
@@ -169,6 +170,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#runtime = infra.runtime;
 		this.#roleAssetManager = infra.roleAssetManager;
 		this.#ircBus = infra.ircBus;
+		this.#markEnvironment = infra.markEnvironment;
 
 		// Create CurtainBehavior for post-execution curtain phase
 		this.#curtainBehavior = new CurtainBehavior();
@@ -178,7 +180,14 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			maxIterations: 5,
 			autoRetry: true,
 			humanEscalation: true,
-			agents: { initial: this.#config.maxWorkers ?? 4, min: 1, max: 12, auto: true, maxRounds: this.#config.maxRounds ?? 5, roundsConvergenceThreshold: 3 },
+			agents: {
+				initial: this.#config.maxWorkers ?? 4,
+				min: 1,
+				max: 12,
+				auto: true,
+				maxRounds: this.#config.maxRounds ?? 5,
+				roundsConvergenceThreshold: 3,
+			},
 			debate: { enabled: true, maxRounds: 2 },
 			planDebate: { enabled: true, agentCount: 2, maxRounds: 3, convergenceThreshold: 2 },
 			convergenceThreshold: 2,
@@ -203,20 +212,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				swarmDir: this.#swarmDir,
 			});
 		}
-	}
-
-	/**
-	 * Auto-detect the FSM start phase from the graph's first wave.
-	 * If the first node in the first wave has type "script", start in "script";
-	 * otherwise default to "stage".
-	 */
-	#detectStartPhase(): Chapter {
-		const firstWave = this.#waves[0];
-		if (!firstWave || firstWave.length === 0) return "stage";
-		const firstNodeId = firstWave[0];
-		const firstNode = this.#graph.nodes[firstNodeId];
-		if (firstNode?.type === "script") return "script";
-		return "stage";
 	}
 
 	async dispose(): Promise<void> {
@@ -336,7 +331,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				this.#phase = "idle";
 				this.#config.onPhaseChange?.("idle");
 				await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
-				this.#activityLogger.logPhase("idle", undefined, undefined, "curtain", completion.message ?? "curtain complete");
+				this.#activityLogger.logPhase(
+					"idle",
+					undefined,
+					undefined,
+					"curtain",
+					completion.message ?? "curtain complete",
+				);
 				return;
 			}
 			// Re-plan or unknown — go idle
@@ -351,6 +352,20 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// NodeExecutor — per-node behavior lifecycle (called by GraphEngine)
 	// =========================================================================
 
+	/**
+	 * Read recent lessons from the ExperienceStore and format them as a
+	 * concatenated string for injection into the node's task prompt.
+	 * Returns "" if the store is empty or uninitialized.
+	 */
+	#readExperience(): string {
+		try {
+			const lessons = this.#experienceStore.getRecentLessons(20);
+			if (lessons.length === 0) return "";
+			return lessons.map(l => `- [${l.lesson.type}] ${l.lesson.summary}`).join("\n");
+		} catch {
+			return "";
+		}
+	}
 	/**
 	 * Execute a single graph node. GraphEngine calls this once per node
 	 * during wave scheduling, providing upstream outputs and abort signal.
@@ -385,7 +400,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			workspace: this.#config.workspace,
 			modelRegistry: this.#config.modelRegistry,
 			settings: this.#config.settings,
-			experience: "",
+			experience: this.#readExperience(),
 			signal: this.#abortController!.signal,
 			upstreamOutputs: execCtx.upstreamOutputs,
 			runtime: this.#runtime,

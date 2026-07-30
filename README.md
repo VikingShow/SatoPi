@@ -118,6 +118,8 @@ Script → Stage → Curtain
 | **Stage** | `stage` ⇄ `paused` / `blocked` | Agents claim tasks from a DAG queue and execute in parallel, coordinated via stigmergy (environment marks) and IRC (direct messaging) |
 | **Curtain** | `curtain` → `idle` | Experience extraction, root-cause analysis, and reflection — lessons persist for future runs |
 
+**GraphRunner** (`src/graph/`) is the sole orchestration engine powering the entire lifecycle — DAG scheduling, agent behavior lifecycle, plan validation, and FSM transitions — replacing the earlier fragmented implementation.
+
 ## SatoPi Swarm — Development Guide
 
 ### Configuration
@@ -162,8 +164,32 @@ Or from within an interactive session:
 
 | File | Purpose |
 |------|---------|
-| `packages/coding-agent/src/swarm/` | Backend swarm logic |
+| `src/graph/` | GraphRunner orchestration engine + DAG scheduling |
+| `src/crew/` | CrewManager + RoundtableSession (agent group chat) |
+| `src/context/` | ContextPipeline + offload sources |
+| `src/swarm/` | Session management, state machine, prompts |
 | `.stp/loop.yaml` | Swarm configuration |
 | `.stp/plan.md` | Generated plan from the script phase |
-| `.swarm-workspace/roles/` | Agent role definitions (YAML) |
-| `.swarm-workspace/profiles.json` | Persistent agent credit profiles |
+| `.stp/roles/` | Agent role definitions (YAML) |
+| `profiles.json` | Persistent agent credit profiles |
+
+## Architecture
+
+```
+packages/coding-agent/src/
+├── graph/          GraphRunner + DAG orchestration
+├── crew/           CrewManager + RoundtableSession
+├── context/        ContextPipeline + offload sources
+├── swarm/          Session management + state machine + prompts
+├── agent/          Agent profiles + role definitions + selection
+├── tools/          All 32 built-in tools
+├── modes/          TUI + interactive mode
+├── task/           Subprocess task executor
+├── session/        Agent session management
+├── offload/        Context offloading pipeline (L1→L3)
+├── coordination/   Stigmergy mark environment
+├── experience/     Curtain phase: experience extraction + root-cause analysis
+├── comm/           Agent-to-agent communication channels
+├── hooks/          Lifecycle hooks + ActivityLogger
+└── infra/          Infrastructure: activity logger, MnemoPi, hindsight
+```

@@ -17,14 +17,14 @@ import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
-import { IrcBus } from "../../irc/bus";
-import type { SwarmRuntime } from "./swarm-runtime";
 import { ExperienceStore } from "../../experience/experience";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
+import { IrcBus } from "../../irc/bus";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createOrchestratorRuntime } from "./assembler";
 import { type Chapter, StateTracker } from "./state";
+import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
 // Types

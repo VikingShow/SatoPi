@@ -28,7 +28,7 @@ export function createProfileHook(profileRegistry: ProfileRegistry): HookRegistr
 		priority: 0,
 		events: ["agent:beforeSpawn", "agent:afterComplete", "workflow:afterPhase"],
 
-		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, ctx: HookContext): Promise<boolean | undefined> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// agent:beforeSpawn — ensure profile exists

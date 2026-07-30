@@ -12,7 +12,7 @@
  * On LLM failure: fall back to rules-only + log warning.
  */
 
-import type { LoopSwarmConfig } from "../core/schema";
+import type { LoopSwarmConfig } from "../swarm/core/schema";
 
 // ============================================================================
 // Types

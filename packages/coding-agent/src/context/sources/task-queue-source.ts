@@ -9,8 +9,8 @@
  * awareness of what others are working on and what tasks are available.
  */
 
-import type { Chapter } from "../../core/state";
-import type { TaskQueue } from "../../../graph/task-queue";
+import type { TaskQueue } from "../../graph/task-queue";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class TaskQueueSource implements ContextSource {

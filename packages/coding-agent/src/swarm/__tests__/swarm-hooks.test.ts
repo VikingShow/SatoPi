@@ -15,7 +15,7 @@
  * 6. onStageComplete does not throw
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { SingleResult } from "@satopi/pi-coding-agent";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import type { ScoredAgent } from "../../agent/agent-selector";
@@ -424,16 +424,14 @@ describe("Hook event trigger coverage (15 untriggered types)", () => {
 // ============================================================================
 
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import { IrcBus } from "../../irc/bus";
-import { OffloadManager } from "../../offload/manager";
-import { MemorySessionStorage } from "../../session/session-storage";
 import { CommChannel } from "../../comm/comm-channel";
 import { runRoundtable } from "../../comm/roundtable";
 import { runVote } from "../../comm/vote";
-import type { AssembledContext } from "../context-manager/context-pipeline";
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { StateTracker } from "../core/state";
-import { ActivityLogger } from "../../infra/activity-logger";
+import type { AssembledContext } from "../../context/context-pipeline";
+import { ContextPipeline } from "../../context/context-pipeline";
+import { IrcBus } from "../../irc/bus";
+import { OffloadManager } from "../../offload/manager";
+import { MemorySessionStorage } from "../../session/session-storage";
 
 describe("Hook event trigger E2E (real integration points)", () => {
 	let hookPipeline: HookPipeline;
@@ -567,7 +565,6 @@ describe("Hook event trigger E2E (real integration points)", () => {
 		expect(fired).toContain("context:beforeCompaction");
 		expect(fired).toContain("context:afterCompaction");
 	});
-
 
 	// ── Offload: afterL1 / beforeFlush / afterFlush ────────────
 

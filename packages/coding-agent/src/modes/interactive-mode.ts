@@ -74,7 +74,10 @@ import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { type GuidedGoalMessage, runGuidedGoalTurn } from "../goals/guided-setup";
 import type { Goal, GoalModeState } from "../goals/state";
+import { GraphRunner } from "../graph/graph-runner";
+import { TaskComplexityAnalyzer } from "../graph/task-analyzer";
 import { resolveLocalUrlToPath } from "../internal-urls";
+import { IrcBus } from "../irc/bus";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "../lsp/startup-events";
 import type { MCPManager } from "../mcp";
 import {
@@ -93,7 +96,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -110,8 +113,6 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } fr
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { GraphRunner } from "../graph/graph-runner";
-import { TaskComplexityAnalyzer } from "../swarm/script/task-analyzer";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -131,6 +132,7 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../utils/session-colo
 import { messageHasDisplayableThinking } from "../utils/thinking-display";
 import { popTerminalTitle, pushTerminalTitle, setSessionTerminalTitle } from "../utils/title-generator";
 import { VibeSessionRegistry } from "../vibe/runtime";
+import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -145,8 +147,6 @@ import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-rev
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
-import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
-import { IrcBus } from "../irc/bus";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -555,7 +555,6 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
-	#swarmSidebar?: SwarmSidebar;
 	#swarmSidebarHandle?: OverlayHandle;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
@@ -1225,10 +1224,12 @@ export class InteractiveMode implements InteractiveModeContext {
 					const targets = resolveMentionTargets(mentions);
 					if (targets.length > 0) {
 						const cleanBody = mentions.cleanText || input.text;
-						IrcBus.global().sendToGroup(targets, {
-							from: this.session.getAgentId() ?? "Main",
-							body: cleanBody,
-						}).catch(() => {});
+						IrcBus.global()
+							.sendToGroup(targets, {
+								from: this.session.getAgentId() ?? "Main",
+								body: cleanBody,
+							})
+							.catch(() => {});
 					}
 					// Use cleaned text (without @tokens) for normal processing
 					if (mentions.cleanText) {
@@ -4567,28 +4568,28 @@ export class InteractiveMode implements InteractiveModeContext {
 			margin: 0,
 			fullscreen: true,
 		});
-
 	}
 	showSwarmSidebar(): void {
 		if (this.#swarmSidebarHandle) {
 			this.#swarmSidebarHandle.hide();
 			this.#swarmSidebarHandle = undefined;
-			this.#swarmSidebar = undefined;
 			this.ui.requestRender();
 			return;
 		}
-		const sidebar = new SwarmSidebar({
-			onSelectAgent: (agentId: string) => {
-				void this.focusAgentSession(agentId).catch(() => {});
+		const sidebar = new SwarmSidebar(
+			{
+				onSelectAgent: (agentId: string) => {
+					void this.focusAgentSession(agentId).catch(() => {});
+				},
+				onClose: () => this.showSwarmSidebar(),
+				onRequestRender: () => this.ui.requestRender(),
+				onFocusTranscript: () => {
+					this.ui.setFocus(this.editor);
+				},
+				sessionName: this.sessionName,
 			},
-			onClose: () => this.showSwarmSidebar(),
-			onRequestRender: () => this.ui.requestRender(),
-			onFocusTranscript: () => {
-				this.ui.setFocus(this.editor);
-			},
-			sessionName: this.sessionName,
-		}, theme);
-		this.#swarmSidebar = sidebar;
+			theme,
+		);
 		const widthPct = sidebar.sidebarWidthPct;
 		this.#swarmSidebarHandle = this.ui.showOverlay(sidebar, {
 			width: `${widthPct}%`,

@@ -161,7 +161,9 @@ export class RoleAssetManager {
 		try {
 			const content = await fs.readFile(path.join(this.#projectRolesDir, `${safe}.role.yaml`), "utf-8");
 			return Bun.YAML.parse(content) as RoleAsset;
-		} catch { /* not found at project level */ }
+		} catch {
+			/* not found at project level */
+		}
 		// 2. User-level fallback
 		try {
 			const content = await fs.readFile(path.join(this.#userRolesDir, `${safe}.role.yaml`), "utf-8");
@@ -406,7 +408,9 @@ export class RoleAssetManager {
 			try {
 				await fs.access(filePath);
 				continue; // Already exists — skip
-			} catch { /* doesn't exist yet */ }
+			} catch {
+				/* doesn't exist yet */
+			}
 
 			const role: RoleAsset = {
 				id: seed.id,

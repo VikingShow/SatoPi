@@ -384,5 +384,5 @@ export interface HookRegistration {
 	 * @param ctx   - Shared service context.
 	 * @returns `void` to continue, `false` to short-circuit remaining hooks.
 	 */
-	handler(args: HandlerArgs, ctx: HookContext): Promise<void | undefined | boolean>;
+	handler(args: HandlerArgs, ctx: HookContext): Promise<undefined | undefined | boolean>;
 }

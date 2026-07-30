@@ -8,6 +8,7 @@ import {
 } from "@satopi/pi-tui";
 import { formatKeyHints, type KeybindingsManager } from "../config/keybindings";
 import { isSettingsInitialized, settings } from "../config/settings";
+import { createAgentMentionAutocompleteProvider } from "./agent-mention-autocomplete";
 import { applyEmojiCompletion, getEmojiSuggestions, isEmojiPrefix, tryEmojiInlineReplace } from "./emoji-autocomplete";
 import { getGithubRefContext, getGithubRefSuggestions } from "./github-ref-autocomplete";
 import {
@@ -15,7 +16,6 @@ import {
 	getInternalUrlSuggestions,
 	isInternalUrlPrefix,
 } from "./internal-url-autocomplete";
-import { createAgentMentionAutocompleteProvider } from "./agent-mention-autocomplete";
 
 interface PromptActionDefinition {
 	id: string;
@@ -203,7 +203,6 @@ export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 			const emojiSuggestions = getEmojiSuggestions(textBeforeCursor);
 			if (emojiSuggestions) return emojiSuggestions;
 		}
-
 
 		// Agent @mention autocomplete
 		const mentionSuggestions = await this.#agentMentionProvider.getSuggestions(lines, cursorLine, cursorCol);

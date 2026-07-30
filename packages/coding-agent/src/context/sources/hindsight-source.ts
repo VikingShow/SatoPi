@@ -14,8 +14,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
-import type { SwarmHindsightClient } from "../../infra/hindsight-adapter";
+import type { Chapter } from "../../swarm/core/state";
+import type { SwarmHindsightClient } from "../../swarm/infra/hindsight-adapter";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 /** Max time to wait on a recall before giving up and injecting nothing. */

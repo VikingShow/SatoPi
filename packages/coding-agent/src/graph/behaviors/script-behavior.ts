@@ -16,8 +16,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { AgentSession } from "../../session/agent-session";
 import type { CommChannel } from "../../comm/comm-channel";
+import type { AgentSession } from "../../session/agent-session";
 import type { Chapter } from "../../swarm/core/state";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
 
@@ -50,7 +50,7 @@ export class ScriptBehavior implements PhaseBehavior {
 	// Lifecycle: enter
 	// ==========================================================================
 
-	async enter(ctx: PhaseContext): Promise<PhaseEnterResult> {
+	async enter(_ctx: PhaseContext): Promise<PhaseEnterResult> {
 		// The MAIN model (this conversation) IS the planner. ScriptBehavior
 		// does not spawn a separate Planner agent. Plan.md is captured via
 		// the beforeToolCall hook in agent-session.ts. checkCompletion()

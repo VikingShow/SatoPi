@@ -25,7 +25,6 @@
 import { logger } from "@satopi/pi-utils";
 import type { GraphRunState } from "./types";
 
-
 /** Structural type for SwarmSessionManager (imported as type-only). */
 interface SessionManagerLike {
 	appendCustomEntry(customType: string, data: unknown): void;

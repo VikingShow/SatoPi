@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { AgentSpecLike, BuildContext, PhaseInfo } from "../context-manager/context-pipeline";
-import { HindsightSource } from "../context-manager/sources/hindsight-source";
+import type { AgentSpecLike, BuildContext, PhaseInfo } from "../../context/context-pipeline";
+import { HindsightSource } from "../../context/sources/hindsight-source";
 import type { HindsightRecallItem, SwarmHindsightClient } from "../infra/hindsight-adapter";
 
 const PHASE: PhaseInfo = { phase: "stage", multiAgent: true, humanMode: "observer" };

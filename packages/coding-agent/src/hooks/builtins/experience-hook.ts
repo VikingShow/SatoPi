@@ -9,8 +9,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../types/chapter";
 import type { ExperienceEntry, ExperienceStore } from "../../experience/experience";
+import type { Chapter } from "../../types/chapter";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ export function createExperienceHook(experienceStore: ExperienceStore): HookRegi
 		events: ["offload:afterFlush", "workflow:afterPhase"],
 		phases: ACTIVE_PHASES,
 
-		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<void> {
+		async handler({ event, payload }: HandlerArgs, _ctx: HookContext): Promise<boolean | undefined> {
 			switch (event) {
 				// -----------------------------------------------------------------
 				// offload:afterFlush — bridge offload data to experience store

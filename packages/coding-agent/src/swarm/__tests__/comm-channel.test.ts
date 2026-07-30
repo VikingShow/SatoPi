@@ -15,13 +15,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { IrcBus } from "../../irc/bus";
 import { CommChannel } from "../../comm/comm-channel";
 import { createEndpoint } from "../../comm/endpoint";
 import { runRoundtable } from "../../comm/roundtable";
 import { parseVote, runVote } from "../../comm/vote";
-import { jaccardSimilarity, tokenize } from "../core/convergence";
 import { ActivityLogger } from "../../infra/activity-logger";
+import { IrcBus } from "../../irc/bus";
+import { jaccardSimilarity, tokenize } from "../core/convergence";
 
 // ============================================================================
 // Jaccard similarity (unit — no IrcBus needed)

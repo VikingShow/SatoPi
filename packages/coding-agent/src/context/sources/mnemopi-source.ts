@@ -12,8 +12,8 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { Chapter } from "../../core/state";
-import type { MnemopiClient } from "../../infra/mnemopi-adapter";
+import type { Chapter } from "../../swarm/core/state";
+import type { MnemopiClient } from "../../swarm/infra/mnemopi-adapter";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class MnemopiSource implements ContextSource {

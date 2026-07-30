@@ -78,12 +78,11 @@ export class CrewTranscriptView implements Component {
 				lines.push(t.fg("accent", `  Topic: ${this.#state.topic}`));
 
 				// 2. Convergence badge + round count + active filters
-				const convergeBadge = this.#state.converged
-					? t.fg("success", "CONVERGED")
-					: t.fg("warning", "DEBATING");
-				const roundInfo = this.#roundFilter > 0
-					? t.fg("accent", `Round ${this.#roundFilter}/${this.#state.totalRounds}`)
-					: t.fg("dim", `Rounds: ${this.#state.totalRounds}`);
+				const convergeBadge = this.#state.converged ? t.fg("success", "CONVERGED") : t.fg("warning", "DEBATING");
+				const roundInfo =
+					this.#roundFilter > 0
+						? t.fg("accent", `Round ${this.#roundFilter}/${this.#state.totalRounds}`)
+						: t.fg("dim", `Rounds: ${this.#state.totalRounds}`);
 				const toolMode = this.#showTools ? "tools" : "msg-only";
 				lines.push(`  ${convergeBadge}  ${roundInfo}  ${t.fg("dim", `[${toolMode}]`)}`);
 
@@ -143,25 +142,19 @@ export class CrewTranscriptView implements Component {
 							const prefixLen = visibleLen(prefix);
 							const bodyBudget = Math.max(5, innerWidth - prefixLen - 1);
 							const body =
-								entry.body.length > bodyBudget
-									? `${entry.body.slice(0, bodyBudget - 1)}\u2026`
-									: entry.body;
+								entry.body.length > bodyBudget ? `${entry.body.slice(0, bodyBudget - 1)}\u2026` : entry.body;
 							lines.push(`${prefix}${t.fg("dim", body)}`);
 						} else {
 							const prefix = `  ${time} ${roundLabel} ${tag} `;
 							const prefixLen = visibleLen(prefix);
 							const bodyBudget = Math.max(5, innerWidth - prefixLen - 1);
 							const body =
-								entry.body.length > bodyBudget
-									? `${entry.body.slice(0, bodyBudget - 1)}\u2026`
-									: entry.body;
+								entry.body.length > bodyBudget ? `${entry.body.slice(0, bodyBudget - 1)}\u2026` : entry.body;
 							lines.push(`${prefix}${body}`);
 						}
 					}
 					if (filtered.length > shown.length) {
-						lines.push(
-							t.fg("dim", `  \u2026 ${filtered.length - shown.length} more entries`),
-						);
+						lines.push(t.fg("dim", `  \u2026 ${filtered.length - shown.length} more entries`));
 					}
 				}
 
@@ -174,13 +167,16 @@ export class CrewTranscriptView implements Component {
 
 	handleInput(data: string): void {
 		switch (data) {
-			case "f": case "F":
+			case "f":
+			case "F":
 				this.#showFilterPopup = !this.#showFilterPopup;
 				break;
-			case "t": case "T":
+			case "t":
+			case "T":
 				this.#showTools = !this.#showTools;
 				break;
-			case "r": case "R":
+			case "r":
+			case "R":
 				// Cycle through rounds: 0 (all) → 1 → 2 → ... → max → 0
 				this.#roundFilter = (this.#roundFilter + 1) % (this.#state.totalRounds + 1);
 				break;
@@ -212,8 +208,14 @@ export class CrewTranscriptView implements Component {
 
 /** Stable palette used to colour agent tags. */
 const AGENT_PALETTE: ThemeColor[] = [
-	"accent", "success", "warning", "error", "thinkingMedium",
-	"accent", "success", "warning",
+	"accent",
+	"success",
+	"warning",
+	"error",
+	"thinkingMedium",
+	"accent",
+	"success",
+	"warning",
 ];
 
 /** Map agent ids to a consistent colour from the palette via hash. */

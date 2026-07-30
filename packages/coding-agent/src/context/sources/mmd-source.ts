@@ -8,7 +8,7 @@
  * transformContext. Moving it here means it's injected once at creation
  * time via ContextPipeline.assemble() → assembledContext.injectedMessages.
  */
-import type { Chapter } from "../../core/state";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class MmdSource implements ContextSource {

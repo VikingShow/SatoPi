@@ -5,7 +5,6 @@
  * mapping swarm agents to graph nodes and loop config to node metadata.
  */
 
-import { type LoopSwarmConfig, parseSwarmYaml, type SwarmAgent, type SwarmDefinition } from "./core/schema";
 import {
 	type GateSpec,
 	type GraphDefinition,
@@ -16,6 +15,7 @@ import {
 	type NodeType,
 	validateGraphDefinition,
 } from "../graph/schema";
+import { type LoopSwarmConfig, parseSwarmYaml, type SwarmAgent, type SwarmDefinition } from "./core/schema";
 
 // ============================================================================
 // Constants

@@ -5,8 +5,8 @@
  * Applies to: all phases, all agent roles.
  */
 
-import type { RoleAssetManager } from "../../../agent/role-asset";
-import type { Chapter } from "../../core/state";
+import type { RoleAssetManager } from "../../agent/role-asset";
+import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
 export class RoleSource implements ContextSource {
