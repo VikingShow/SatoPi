@@ -346,7 +346,7 @@ export class StageNodeBehavior implements NodeBehavior {
 			signal: ctx.signal,
 			profileRegistry: ctx.profileRegistry!,
 			roleAssetManager: ctx.roleAssetManager!,
-			runtime: ctx.runtime as import("../../swarm/agent-runtime").AgentRuntime,
+			runtime: ctx.runtime as AgentRuntime,
 			ircBus: ctx.ircBus!,
 		});
 

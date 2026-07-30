@@ -130,7 +130,7 @@ export class CommChannel {
 	 * conversation summary so the new member can catch up.
 	 */
 	async injectContext(agentId: string, summary: string): Promise<void> {
-		await this.#ircBus.send("system", agentId, `[System] Discussion context:\n${summary}`);
+		await this.#ircBus.send({ from: "system", to: agentId, body: `[System] Discussion context:\n${summary}` });
 	}
 
 	addObserver(observerId: string): void {

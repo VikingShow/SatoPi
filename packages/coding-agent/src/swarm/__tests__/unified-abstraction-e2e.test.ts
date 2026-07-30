@@ -22,10 +22,10 @@ import { StigmergySource } from "../context-manager/sources/stigmergy-source";
 import { StateTracker } from "../core/state";
 import { PHASES, WorkflowFsm } from "../core/workflow-fsm";
 import { ExperienceStore } from "../../experience/experience";
-import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../graph/node-behavior";
-import { PhaseBehaviorNodeAdapter } from "../graph/phase-behavior-adapter";
-import type { NodeContext } from "../graph/schema";
-import { type GraphDefinition, loadGraphDefinition } from "../graph/schema";
+import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "../../graph/node-behavior";
+import { PhaseBehaviorNodeAdapter } from "../../graph/phase-behavior-adapter";
+import type { NodeContext } from "../../graph/schema";
+import { type GraphDefinition, loadGraphDefinition } from "../../graph/schema";
 import { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
 
