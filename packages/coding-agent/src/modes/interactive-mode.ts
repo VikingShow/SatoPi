@@ -93,7 +93,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -4559,7 +4559,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 		const sidebar = new SwarmSidebar({
-			onSelectAgent: (_agentId: string) => {},
+			onSelectAgent: (agentId: string) => {
+				const ref = AgentRegistry.global().get(agentId);
+				if (ref) {
+					this.showStatus(`Selected: ${ref.displayName}${ref.role ? ` (${ref.role})` : ""} [status: ${ref.status}]`);
+				}
+			},
 			onClose: () => this.showSwarmSidebar(),
 			onRequestRender: () => this.ui.requestRender(),
 		}, theme);
