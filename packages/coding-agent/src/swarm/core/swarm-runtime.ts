@@ -8,9 +8,9 @@
  * once all callers migrate to spawnAgent() directly, AgentRuntime is deleted.
  */
 
-import type { AgentSession } from "../session/agent-session";
-import type { IrcBus } from "../irc/bus";
-import type { AgentSpec } from "../graph/agent-spec";
+import type { AgentSession } from "../../session/agent-session";
+import type { IrcBus } from "../../irc/bus";
+import type { AgentSpec } from "../../graph/agent-spec";
 
 export interface SwarmRuntime {
 	/** Spawn agents from declarative specs. */
@@ -19,4 +19,6 @@ export interface SwarmRuntime {
 	readonly contextPipeline: import("../../swarm/context-manager/context-pipeline").ContextPipeline;
 	/** Communication bus for human steering and agent messaging. */
 	readonly ircBus: IrcBus;
+	/** Queue a human steering message for a specific agent. */
+	sendHumanMessage?(agentId: string, text: string): Promise<void>;
 }

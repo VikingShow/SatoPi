@@ -304,14 +304,14 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		this.#sessionManager = await SwarmSessionManager.create(swarmDir);
 
 		// 2.5 Create OffloadManager for L1→L3 context offload
-		const offloadManager = new OffloadManager(workspace, swarmName, "swarm", this.#sessionManager.storage);
+		const swarmName = path.basename(swarmDir);
+		const offloadManager = new OffloadManager(workspace, swarmName, swarmName, this.#sessionManager.storage);
 		this.#offloadManager = offloadManager;
 
 		// 3. Create StateTracker
 		const swarmName = path.basename(swarmDir);
 
 		this.#stateTracker = new StateTracker(workspace, swarmName);
-		this.#stateTracker.setSessionManager(this.#sessionManager);
 
 		// 4. Create ActivityLogger
 		this.#activityLogger = new ActivityLogger(swarmDir, swarmName);
