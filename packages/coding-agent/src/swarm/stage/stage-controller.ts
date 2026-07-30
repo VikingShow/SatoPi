@@ -35,7 +35,7 @@ import type { ProfileRegistry } from "../../agent/agent-profile";
 import { extractDomains, type ScoredAgent, selectAgents } from "../../agent/agent-selector";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import type { IrcBus } from "../../irc/bus";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { WorkflowFsm } from "../core/workflow-fsm";
@@ -95,8 +95,8 @@ export interface StageOptions {
 	hookPipeline?: HookPipeline;
 	/** v3: Workflow FSM for authoritative phase transitions. */
 	fsm?: WorkflowFsm;
-	/** v3: AgentRuntime — required for agent spawning (unified execution path). */
-	runtime?: AgentRuntime;
+	/** v3: SwarmRuntime — required for agent spawning (unified execution path). */
+	runtime?: SwarmRuntime;
 	ircBus?: IrcBus;
 	/** P5: Max retries per task before blocking (default 3). */
 	maxRetries?: number;
@@ -239,13 +239,13 @@ export function createTaskQueueFromPlan(planContent: string): TaskQueueSetup {
 }
 export class StageController {
 	readonly #opts: StageOptions;
-	/** AgentRuntime — required for all agent spawning (unified execution path). */
-	#runtime: AgentRuntime;
+	/** SwarmRuntime — required for all agent spawning (unified execution path). */
+	#runtime: SwarmRuntime;
 
 	constructor(opts: StageOptions) {
 		this.#opts = opts;
 		if (!opts.runtime) {
-			throw new Error("[StageController] AgentRuntime is required. Pass `runtime` in StageOptions.");
+			throw new Error("[StageController] SwarmRuntime is required. Pass `runtime` in StageOptions.");
 		}
 		this.#runtime = opts.runtime;
 	}
@@ -495,7 +495,7 @@ export class StageController {
 
 				let result: SingleResult;
 
-				// Unified path — AgentRuntime.spawn() is the only execution path.
+				// Unified path — SwarmRuntime.spawn() is the only execution path.
 				// Legacy streamAgentOutput path removed (Phase A4).
 				const toolingTools: string[] | undefined =
 					this.#opts.agentTooling === "swift"

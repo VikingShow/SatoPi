@@ -15,7 +15,7 @@ import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { SingleResult } from "@satopi/pi-coding-agent/task";
 import { logger, prompt } from "@satopi/pi-utils";
 import type { AgentSession } from "../../session/agent-session";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { AgentToolRestriction } from "../core/schema";
 import debateSystemPrompt from "../prompts/debate-system.md" with { type: "text" };
 
@@ -43,8 +43,8 @@ export interface DebateRoundtableConfig {
 	 */
 	convergenceThreshold: number;
 	toolRestriction?: AgentToolRestriction;
-	/** AgentRuntime for v3 agent spawning (required). */
-	runtime: AgentRuntime;
+	/** SwarmRuntime for v3 agent spawning (required). */
+	runtime: SwarmRuntime;
 }
 
 export interface DebateRoundtableResult {
@@ -86,8 +86,8 @@ function textSimilarity(a: string, b: string): number {
 export class DebateRoundtable {
 	readonly #config: Required<Omit<DebateRoundtableConfig, "toolRestriction">>;
 	readonly #toolRestriction?: AgentToolRestriction;
-	/** AgentRuntime for v3 agent spawning. */
-	#runtime: AgentRuntime;
+	/** SwarmRuntime for v3 agent spawning. */
+	#runtime: SwarmRuntime;
 
 	constructor(config: DebateRoundtableConfig) {
 		const { toolRestriction, ...requiredConfig } = config;
@@ -125,7 +125,7 @@ export class DebateRoundtable {
 
 			// Spawn agents in parallel for this round
 
-			// v3 path — AgentRuntime.spawn() for full AgentLoopConfig access
+			// v3 path — SwarmRuntime.spawn() for full AgentLoopConfig access
 			const debatePrompt = this.#debateAgentSystemPrompt();
 			const restrictedTools = this.#toolRestriction?.allowed ?? [];
 

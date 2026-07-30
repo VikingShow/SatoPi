@@ -18,7 +18,7 @@ import type { ProfileRegistry } from "../../agent/agent-profile";
 import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from "../../agent/role-asset";
 import type { MarkEnvironment } from "../../coordination/mark-environment";
 import { IrcBus } from "../../irc/bus";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "./swarm-runtime";
 import { ExperienceStore } from "../../experience/experience";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
@@ -50,7 +50,7 @@ export interface SwarmInfra {
 	fsm: WorkflowFsm;
 	experienceStore: ExperienceStore;
 	hookPipeline: HookPipeline;
-	runtime: AgentRuntime;
+	runtime: SwarmRuntime;
 	roleAssetManager: RoleAssetManagerType;
 	markEnvironment: MarkEnvironment;
 	ircBus: IrcBus;

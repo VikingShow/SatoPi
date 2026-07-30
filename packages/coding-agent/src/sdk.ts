@@ -624,7 +624,7 @@ export interface CreateAgentSessionOptions {
 	getFollowUpMessages?: () => Promise<AgentMessage[]>;
 
 	/** AgentRuntime for swarm-managed sessions; injected into tool context for agent_invoke. */
-	agentRuntime?: AgentRuntime;
+	agentRuntime?: unknown;
 }
 
 /** Result from createAgentSession */

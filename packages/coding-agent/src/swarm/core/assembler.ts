@@ -20,6 +20,7 @@ import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "./swarm-runtime";
 
 import { ContextPipeline } from "../context-manager/context-pipeline";
 import { ExperienceSource } from "../context-manager/sources/experience-source";
@@ -74,7 +75,7 @@ export interface CreateOrchestratorRuntimeOptions {
 }
 
 export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
-	runtime: AgentRuntime;
+	runtime: SwarmRuntime;
 	hookPipeline: HookPipeline;
 	markEnvironment: MarkEnvironment;
 } {
@@ -110,7 +111,7 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 // Assembler
 // ============================================================================
 
-export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
+export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
 	const contextPipeline = new ContextPipeline();

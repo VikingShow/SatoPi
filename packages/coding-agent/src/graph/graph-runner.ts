@@ -33,7 +33,7 @@ import type { GraphRunState } from "./types";
 import type { IrcBus } from "../irc/bus";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
-import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "./behaviors/index";
 import type { ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
@@ -80,7 +80,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#sessionManager!: SwarmSessionManager;
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
-	#runtime!: AgentRuntime;
+	#runtime!: SwarmRuntime;
 	#graph!: GraphDefinition;
 	#waves!: string[][];
 	#abortController: AbortController | null = null;
@@ -633,7 +633,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		return this.#graphStageStarted;
 	}
 
-	get runtime(): AgentRuntime {
+	get runtime(): SwarmRuntime {
 		return this.#runtime;
 	}
 	get graph(): GraphDefinition {

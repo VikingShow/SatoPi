@@ -1,5 +1,5 @@
 /**
- * Swarm agent execution — in-process via AgentRuntime.spawn().
+ * Swarm agent execution — in-process via SwarmRuntime.spawn().
  *
  * Each agent runs with its task instructions as the user prompt.
  *
@@ -20,7 +20,7 @@ import type {
 	SingleResult,
 } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { SwarmAgent } from "../core/schema";
 import type { StateTracker } from "../core/state";
 import type { ActivityLogger } from "../../infra/activity-logger";
@@ -35,7 +35,7 @@ const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 /**
  * Injectable agent execution strategy.
  *
- * The default path uses AgentRuntime.spawn() in-process.
+ * The default path uses SwarmRuntime.spawn() in-process.
  * Callers can inject a custom executor through SwarmExecutorOptions.executor
  * to support remote agents, sandboxed environments, or testing mocks.
  */
@@ -71,10 +71,10 @@ export interface SwarmExecutorOptions {
 	 */
 	executor?: AgentExecutor;
 	/**
-	 * v3 AgentRuntime for in-process agent spawning.
+	 * v3 SwarmRuntime for in-process agent spawning.
 	 * Required for swarm agent execution.
 	 */
-	runtime?: AgentRuntime;
+	runtime?: SwarmRuntime;
 	/**
 	 * Optional tool hooks passed through to the runtime.
 	 * beforeToolCall can block write/edit/bash calls (e.g. deliberation phase).
@@ -117,20 +117,20 @@ async function executeSwarmAgent(
 	const { runtime } = options;
 
 	if (!runtime) {
-		throw new Error("AgentRuntime is required for swarm agent execution");
+		throw new Error("SwarmRuntime is required for swarm agent execution");
 	}
 
 	return executeWithRuntime(agent, index, options, runtime);
 }
 
 /**
- * Execute a swarm agent via AgentRuntime.spawn() (v3 in-process path).
+ * Execute a swarm agent via SwarmRuntime.spawn() (v3 in-process path).
  */
 async function executeWithRuntime(
 	agent: SwarmAgent,
 	index: number,
 	options: SwarmExecutorOptions,
-	runtime: AgentRuntime,
+	runtime: SwarmRuntime,
 ): Promise<SingleResult> {
 	const {
 		swarmName,

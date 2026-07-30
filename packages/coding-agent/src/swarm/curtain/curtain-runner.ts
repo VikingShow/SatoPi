@@ -14,7 +14,7 @@ import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import { IrcBus } from "../../irc/bus";
 import { enqueueMemoryConsolidation } from "../../memories";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "../core/swarm-runtime";
 import type { AgentSpec } from "../../graph/agent-spec";
 import type { LoopSwarmConfig } from "../core/schema";
 import type { StateTracker } from "../core/state";
@@ -53,8 +53,8 @@ export interface CurtainRunnerOpts {
 	profileRegistry?: ProfileRegistry;
 	/** Optional IRC bus for agent-to-agent communication (enables reporter election). */
 	ircBus?: IrcBus;
-	/** AgentRuntime for v3 agent spawning. */
-	runtime?: AgentRuntime;
+	/** SwarmRuntime for v3 agent spawning. */
+	runtime?: SwarmRuntime;
 	/** Optional remote Hindsight handle — pushes lessons cross-session. Null/absent → local only. */
 	hindsightClient?: SwarmHindsightClient | null;
 	/** Optional semantic memory handle — pushes lessons to Mnemopi. Null/absent → skipped. */
@@ -254,8 +254,8 @@ async function runReporterAgent(
 		/** Elected reporter agent ID override (from ReporterElection). Falls back to "reporter". */
 		reporterOverride?: string | null;
 	},
-	/** Optional AgentRuntime for v3 agent spawning. */
-	runtime?: AgentRuntime,
+	/** Optional SwarmRuntime for v3 agent spawning. */
+	runtime?: SwarmRuntime,
 ): Promise<string | null> {
 	const {
 		modelRegistry: _modelRegistry,
@@ -290,7 +290,7 @@ async function runReporterAgent(
 
 		let reportOutput: string | null = null;
 
-		// v3 path — AgentRuntime.spawn() is the only execution path.
+		// v3 path — SwarmRuntime.spawn() is the only execution path.
 		// Legacy streamAgentOutput() fallback removed (SP-2 convergence).
 		const [handle] = await runtime!.spawn([
 			{

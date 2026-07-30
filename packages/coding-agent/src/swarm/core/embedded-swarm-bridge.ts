@@ -29,7 +29,7 @@ import { RoleAssetManager, type RoleAssetManager as RoleAssetManagerType } from 
 import type { MarkEnvironment } from "../../coordination/mark-environment";
 import { IrcBus } from "../../irc/bus";
 import type { AgentSession } from "../../session/agent-session";
-import type { AgentRuntime } from "../agent-runtime";
+import type { SwarmRuntime } from "./swarm-runtime";
 import { CurtainBehavior } from "../../graph/behaviors/curtain-behavior";
 import type { PhaseBehavior, PhaseContext } from "../../graph/behaviors/index";
 import { ScriptBehavior } from "../../graph/behaviors/script-behavior";
@@ -125,7 +125,7 @@ export interface ISwarmOrchestrator {
 	readonly swarmState: Readonly<SwarmState>;
 	readonly currentPhase: Chapter | null;
 	readonly isRunning: boolean;
-	readonly runtime: AgentRuntime;
+	readonly runtime: SwarmRuntime;
 	/** Whether the Stage phase has been started (confirmScript was called and succeeded). */
 	readonly stageStarted: boolean;
 }
@@ -235,7 +235,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 	#sessionManager!: SwarmSessionManager;
 	#experienceStore!: ExperienceStore;
 	#hookPipeline!: HookPipeline;
-	#runtime!: AgentRuntime;
+	#runtime!: SwarmRuntime;
 	/** Stigmergic MarkEnvironment from orchestrator runtime. */
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: set from orch.markEnvironment
 	#offloadManager?: OffloadManager;
@@ -861,7 +861,7 @@ export class EmbeddedSwarmBridge implements ISwarmOrchestrator {
 		return this.#fsm?.phase ?? null;
 	}
 
-	get runtime(): AgentRuntime {
+	get runtime(): SwarmRuntime {
 		return this.#runtime;
 	}
 

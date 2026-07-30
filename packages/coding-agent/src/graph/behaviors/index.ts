@@ -5,13 +5,13 @@
  *
  * Each workflow phase (script, stage, curtain) is implemented as a
  * PhaseBehavior that wraps the phase-specific coordination logic. The
- * behaviors delegate to AgentRuntime, IrcBus, HookPipeline, and
+ * behaviors delegate to SwarmRuntime, IrcBus, HookPipeline, and
  * ContextPipeline for agent lifecycle and communication.
  */
 
 import type { IrcBus } from "../../irc/bus";
 import type { AgentSession } from "../../session/agent-session";
-import type { AgentRuntime } from "../../swarm/agent-runtime";
+import type { SwarmRuntime } from "../../swarm/core/swarm-runtime";
 import type { CommChannel } from "../../comm/comm-channel";
 import type { ContextPipeline } from "../../swarm/context-manager/context-pipeline";
 import type { LoopSwarmConfig } from "../../swarm/core/schema";
@@ -39,7 +39,7 @@ export interface PhaseContext {
 	ircBus: IrcBus;
 
 	/** Agent runtime — spawns agents and delivers steering messages. */
-	runtime: AgentRuntime;
+	runtime: SwarmRuntime;
 
 	/** Context pipeline — assembles agent context from registered sources. */
 	contextPipeline: ContextPipeline;
