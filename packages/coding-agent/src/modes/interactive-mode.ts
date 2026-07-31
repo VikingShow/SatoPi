@@ -26,8 +26,8 @@ import type {
 } from "@satopi/pi-tui";
 import {
 	Container,
-	Input,
 	clearRenderCache,
+	Input,
 	Loader,
 	Markdown,
 	ProcessTerminal,
@@ -53,6 +53,7 @@ import {
 	setProjectDir,
 } from "@satopi/pi-utils";
 import chalk from "chalk";
+import { ProfileRegistry } from "../agent/agent-profile";
 import { reset as resetCapabilities } from "../capability";
 import type { CollabGuestLink } from "../collab/guest";
 import type { CollabHost } from "../collab/host";
@@ -97,7 +98,6 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
@@ -163,8 +163,8 @@ import { MCPCommandController } from "./controllers/mcp-command-controller";
 import { OmfgController } from "./controllers/omfg-controller";
 import { SelectorController } from "./controllers/selector-controller";
 import { SessionFocusController } from "./controllers/session-focus-controller";
-import { SwarmModeController } from "./controllers/swarm-mode-controller";
 import { SSHCommandController } from "./controllers/ssh-command-controller";
+import { SwarmModeController } from "./controllers/swarm-mode-controller";
 import { TanCommandController } from "./controllers/tan-command-controller";
 import { TodoCommandController } from "./controllers/todo-command-controller";
 import {
@@ -898,7 +898,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#cleanupUnsubscribe = postmortem.register("session-teardown", async reason => {
 			// Persist profiles on signal/crash exit; the keypress path saves in shutdown()
 			if (this.#profileCwd) {
-				await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+				await ProfileRegistry.global()
+					.save(this.#profileCwd)
+					.catch(() => {});
 			}
 			await this.#signalTeardown!(reason);
 		});
@@ -1233,7 +1235,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Save profiles for the old workspace before switching so queued
 		// edits and metadata are not lost (P1-4).
 		if (this.#profileCwd) {
-			await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+			await ProfileRegistry.global()
+				.save(this.#profileCwd)
+				.catch(() => {});
 		}
 		setProjectDir(newCwd);
 		this.#profileCwd = newCwd;
@@ -4015,7 +4019,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Use the cwd captured at init time; getProjectDir() may have
 		// changed during the session via /move or session resume.
 		if (this.#profileCwd) {
-			await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+			await ProfileRegistry.global()
+				.save(this.#profileCwd)
+				.catch(() => {});
 		}
 
 		// Surface an explicit "Closing session…" line so the user sees a reason
@@ -4721,7 +4727,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					});
 					this.ui.setFocus(input);
 					this.ui.requestRender();
-					void promise.then(async (value) => {
+					void promise.then(async value => {
 						handle.hide();
 						if (value && value.trim()) {
 							await this.swarmModeController?.addMember(value.trim());
@@ -4808,13 +4814,21 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Hide existing crew overlay if any
 		this.#crewStartOverlayHandle?.hide();
 
+		// Mount as a normal (non-fullscreen) overlay anchored top-left so the
+		// status line and editor stay visible below it. maxHeight leaves 1 status
+		// row + 1 breathing row under the editor's current line count. The editor
+		// keeps focus: the input-controller's empty-editor key chain arbitrates
+		// crew navigation (j/k/f/t/r/Esc) while typing still works. The view
+		// implements OverlayFocusOwner so setFocus(editor) is not redirected.
+		const rows = process.stdout.rows || 40;
+		const editorLines = Math.max(1, this.editor.getLines().length);
 		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
 			anchor: "top-left",
 			width: "100%",
-			maxHeight: "100%",
+			maxHeight: Math.max(10, rows - editorLines - 2),
 			margin: 0,
-			fullscreen: true,
 		});
+		this.ui.setFocus(this.editor);
 		this.#updateSwarmModeStatus();
 	}
 

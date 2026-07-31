@@ -84,6 +84,8 @@ export class SwarmModeController {
 	#graphRunner: GraphRunner | null = null;
 	/** Active crew views, keyed by crewId. */
 	#crewViews = new Map<string, CrewViewHandle>();
+	/** Highest round recorded per crew; doubles as the active round for the current turn. */
+	#crewRounds = new Map<string, number>();
 
 	/** Per-agent conversation views, keyed by agentId. */
 	#agentViews = new Map<string, Component>();
@@ -324,6 +326,8 @@ export class SwarmModeController {
 			};
 			const view = new CrewTranscriptView(state, this.#deps.theme, () => this.leaveCrew());
 			this.#crewViews.set(crewId, { crewId, component: view });
+			// Fresh view starts before round 1 — the first human message opens round 1
+			this.#crewRounds.set(crewId, 0);
 		}
 
 		this.#deps.onRequestRender?.();
@@ -407,14 +411,19 @@ export class SwarmModeController {
 		// Persist the human message to transcript
 		await this.#crewManager.persistMessage(this.#activeCrewId, "human", text);
 
+		// Each human message starts a new round — remember it as the active round for this turn
+		const activeRound = (this.#crewRounds.get(this.#activeCrewId) ?? 0) + 1;
+		this.#crewRounds.set(this.#activeCrewId, activeRound);
+
 		const crewView = this.#crewViews.get(this.#activeCrewId);
 		if (crewView) {
 			(crewView.component as CrewTranscriptView).addEntry({
 				agentId: "human",
 				body: text,
 				timestamp: Date.now(),
-				round: 1,
+				round: activeRound,
 			});
+			this.#syncCrewRound(this.#activeCrewId);
 		}
 
 		this.#deps.onRequestRender?.();
@@ -525,6 +534,17 @@ export class SwarmModeController {
 	// ========================================================================
 
 	/**
+	 * Keep the crew view's totalRounds in sync with the tracked round state.
+	 * Safe no-op when no view exists for the crew.
+	 */
+	#syncCrewRound(crewId: string): void {
+		const view = this.#crewViews.get(crewId);
+		if (!view) return;
+		const totalRounds = Math.max(1, this.#crewRounds.get(crewId) ?? 0);
+		(view.component as CrewTranscriptView).updateState({ totalRounds });
+	}
+
+	/**
 	 * Called when a crew member agent finishes a turn.
 	 * Persists the response to the crew transcript.
 	 */
@@ -539,8 +559,10 @@ export class SwarmModeController {
 				agentId,
 				body: finalResponse,
 				timestamp: Date.now(),
-				round: 1,
+				// Replies join the round the current turn started in
+				round: this.#crewRounds.get(this.#activeCrewId) ?? 1,
 			});
+			this.#syncCrewRound(this.#activeCrewId);
 		}
 
 		this.#deps.onRequestRender?.();

@@ -37,7 +37,7 @@ interface TreeNode {
 const MIN_SIDEBAR_WIDTH_PCT = 15;
 const MAX_SIDEBAR_WIDTH_PCT = 60;
 const RESIZE_STEP_PCT = 5;
-const DEFAULT_SIDEBAR_WIDTH_PCT = 35;
+const DEFAULT_SIDEBAR_WIDTH_PCT = 40;
 
 export interface SwarmSidebarConfig {
 	onSelectAgent?: (agentId: string) => void;
@@ -209,18 +209,29 @@ export class SwarmSidebar implements Component {
 	// ── Render ─────────────────────────────────────────────────────────────
 
 	render(width: number): readonly string[] {
+		// Overlays are content-sized: the sidebar must emit enough rows itself or
+		// the frame stops at the tree with blank space below. Fill the viewport
+		// (same idiom as the fullscreen session picker) and size the visible tree
+		// from the terminal height instead of a fixed cap.
+		const termRows = process.stdout.rows || 24;
 		const panel = swarmPanel(
 			"Agents",
 			({ innerWidth, theme: t }) => {
 				const tree = this.#buildTree();
 				const lines: string[] = [];
 
-				if (tree.length === 0) {
-					return [t.fg("dim", "  No active agents or crews")];
-				}
-
 				const flat = this.#flattenTree(tree);
-				const maxVisible = Math.min(flat.length, 20);
+				// Tree rows are budgeted from the terminal height: the framed
+				// panel takes 2 rows for its top/bottom bars and 2 for the
+				// trailing spacer + keybinding hint, with one row reserved for
+				// the "+N more" overflow marker. No fixed cap — the tree grows
+				// to fill the viewport.
+				const treeBudget = Math.max(1, termRows - 5);
+				const maxVisible = Math.min(flat.length, treeBudget);
+
+				if (tree.length === 0) {
+					lines.push(t.fg("dim", "  No active agents or crews"));
+				}
 
 				for (let i = 0; i < maxVisible; i++) {
 					const { node, prefix } = flat[i];
@@ -263,6 +274,12 @@ export class SwarmSidebar implements Component {
 
 				lines.push("");
 				lines.push(t.fg("dim", ` j/k nav  Enter sel/open  Space select  Ctrl+B close  \u2190\u2192 resize`));
+
+				// Fill the remaining content rows so the bordered panel spans the
+				// whole terminal height (2 rows are the frame's top/bottom bars).
+				for (let i = lines.length; i < termRows - 2; i++) {
+					lines.push("");
+				}
 				return lines;
 			},
 			this.#theme,
