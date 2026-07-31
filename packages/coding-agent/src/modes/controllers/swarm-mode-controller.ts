@@ -403,9 +403,10 @@ export class SwarmModeController {
 		}
 		const model = availableModels[0];
 
-		for (const profileId of profileIds) {
+		// Spawn all agents in parallel — session creation is fast, prompts are fire-and-forget
+		const spawns = profileIds.map(async (profileId) => {
 			const profile = profileRegistry.get(profileId);
-			if (!profile) continue;
+			if (!profile) return;
 
 			const name = profile.identity.name;
 			const archetype = profile.identity.archetype;
@@ -423,7 +424,6 @@ export class SwarmModeController {
 						`Your expertise domains: ${domains || "general"}.`,
 						"You are participating in a multi-agent crew chat.",
 						"Respond to messages from the user and other agents concisely and helpfully.",
-						"Use your domain expertise when answering questions.",
 					],
 					toolNames: ["read", "grep", "glob"],
 					modelRegistry,
@@ -466,20 +466,26 @@ export class SwarmModeController {
 					}
 				});
 
-				// Wake the agent with a crew-join prompt
-				await session.prompt(
+				// Start the agent loop (fire-and-forget — do NOT await the LLM response)
+				session.prompt(
 					`You have joined the crew chat as ${name} (${archetype}). ` +
 					`Wait for messages from the user or other agents. Respond when addressed.`,
+				).catch(err =>
+					logger.error("[SwarmModeController] Crew member prompt failed", {
+						profileId, error: String(err),
+					}),
 				);
 
 				logger.info("[SwarmModeController] Crew member spawned", { profileId, name });
 			} catch (err) {
 				logger.error("[SwarmModeController] Failed to spawn crew member", {
-					profileId,
-					error: String(err),
+					profileId, error: String(err),
 				});
 			}
-		}
+		});
+
+		// Wait for all sessions to be created (not for their LLM prompts to complete)
+		await Promise.all(spawns);
 	}
 
 	// ========================================================================
