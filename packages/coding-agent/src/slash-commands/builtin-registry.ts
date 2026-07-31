@@ -1224,10 +1224,25 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	},
 	{
 		name: "swarm",
-		description: "Open Swarm dashboard",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.showSwarmDashboard();
-			runtime.ctx.editor.setText("");
+		description: "Swarm operations",
+		subcommands: [
+			{ name: "start", description: "Start a new agent crew" },
+		],
+		allowArgs: true,
+		handleTui: async (command, runtime) => {
+			const { verb, rest } = parseSubcommand(command.args);
+			if (!verb || verb === "dashboard") {
+				runtime.ctx.showSwarmDashboard();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "start") {
+				const name = rest || `Crew ${new Date().toLocaleTimeString()}`;
+				await runtime.ctx.showSwarmCrewStart(name);
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			return usage("Usage: /swarm [start [name] | dashboard]", runtime);
 		},
 	},
 	{

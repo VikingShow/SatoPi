@@ -17,6 +17,7 @@ import { AgentRegistry } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
 import type { AgentSession } from "../session/agent-session";
 import type { AgentSpec } from "./agent-spec";
+import type { SwarmModeController } from "../modes/controllers/swarm-mode-controller";
 
 // ============================================================================
 // Types
@@ -37,6 +38,8 @@ export interface SpawnAgentOptions {
 	settings: Settings;
 	/** Optional CommChannel for crew-based communication. */
 	commChannel?: CommChannel;
+	/** Optional SwarmModeController for Crew-based agent response capture. */
+	swarmModeController?: SwarmModeController;
 	/** Optional external steering queue — when set, spawnAgent pushes here instead of a local queue. */
 	steeringQueue?: Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>;
 	/** Optional external aside queue — when set, spawnAgent pushes here instead of a local queue. */
@@ -74,6 +77,7 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession>
 		modelRegistry,
 		settings,
 		commChannel,
+		swarmModeController,
 		phase,
 		sessionFactory,
 		steeringQueue: extSteeringQueue,
@@ -228,6 +232,33 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession>
 	// 13. Wire CommChannel membership
 	if (commChannel) {
 		commChannel.addMember(agentId);
+	}
+
+	// 14. Wire Crew response capture (before starting the agent)
+	if (swarmModeController) {
+		session.subscribe(event => {
+			if (event.type === "agent_end") {
+				// Extract final assistant response text
+				const msgs = event.messages;
+				let lastAssistantText = "";
+				for (let i = msgs.length - 1; i >= 0; i--) {
+					const msg = msgs[i];
+					if (msg.role === "assistant") {
+						const content = msg.content;
+						if (typeof content === "string") {
+							lastAssistantText = content;
+						} else if (Array.isArray(content)) {
+							lastAssistantText = content
+								.filter((c): c is { type: "text"; text: string } => c.type === "text")
+								.map(c => c.text)
+								.join("\n");
+						}
+						break;
+					}
+				}
+				swarmModeController.onAgentTurnComplete(agentId, lastAssistantText).catch(() => {});
+			}
+		});
 	}
 
 	// 14. After-spawn hook

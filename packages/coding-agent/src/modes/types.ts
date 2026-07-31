@@ -37,6 +37,7 @@ import type { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import type { TranscriptContainer } from "./components/transcript-container";
 import type { EventController } from "./controllers/event-controller";
+import type { SwarmModeController } from "./controllers/swarm-mode-controller";
 import type { LoopLimitRuntime } from "./loop-limit";
 import type { OAuthManualInputManager } from "./oauth-manual-input";
 import type { Theme } from "./theme/theme";
@@ -135,6 +136,7 @@ export interface InteractiveModeContext {
 	lspServers?: LspStartupServerInfo[];
 	collabHost?: CollabHost;
 	collabGuest?: CollabGuestLink;
+	swarmModeController?: SwarmModeController;
 	eventController: EventController;
 	eventBus?: EventBus;
 
@@ -357,6 +359,8 @@ export interface InteractiveModeContext {
 	showAgentsDashboard(): void;
 	showSwarmDashboard(): void;
 	showSwarmSidebar(): void;
+	/** Show profile selection dialog for creating a new crew. */
+	showSwarmCrewStart(name?: string): Promise<void>;
 	showModelSelector(options?: { temporaryOnly?: boolean }): void;
 	showPluginSelector(mode?: "install" | "uninstall"): void;
 	showUserMessageSelector(): void;

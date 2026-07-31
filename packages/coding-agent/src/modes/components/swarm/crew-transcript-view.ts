@@ -68,6 +68,16 @@ export class CrewTranscriptView implements Component {
 		this.#theme = theme;
 	}
 
+	/** Append an entry to the transcript. */
+	addEntry(entry: CrewTranscriptEntry): void {
+		this.#state.entries.push(entry);
+	}
+
+	/** Update mutable transcript state fields. */
+	updateState(state: Partial<CrewTranscriptState>): void {
+		Object.assign(this.#state, state);
+	}
+
 	render(width: number): readonly string[] {
 		const panel = swarmPanel(
 			"Crew Transcript",
@@ -207,7 +217,7 @@ export class CrewTranscriptView implements Component {
 // ============================================================================
 
 /** Stable palette used to colour agent tags. */
-const AGENT_PALETTE: ThemeColor[] = [
+export const AGENT_PALETTE: ThemeColor[] = [
 	"accent",
 	"success",
 	"warning",
@@ -218,15 +228,14 @@ const AGENT_PALETTE: ThemeColor[] = [
 	"warning",
 ];
 
-/** Map agent ids to a consistent colour from the palette via hash. */
-function agentColor(agentId: string, t: Theme): (text: string) => string {
+export function agentColor(agentId: string, t: Theme): (text: string) => string {
 	const idx = hashStr(agentId) % AGENT_PALETTE.length;
 	const color = AGENT_PALETTE[idx];
 	return (text: string) => t.fg(color, text);
 }
 
 /** Simple DJB2-ish hash returning an unsigned 32-bit integer. */
-function hashStr(s: string): number {
+export function hashStr(s: string): number {
 	let hash = 5381;
 	for (let i = 0; i < s.length; i++) {
 		hash = ((hash << 5) + hash + s.charCodeAt(i)) >>> 0;
@@ -234,8 +243,7 @@ function hashStr(s: string): number {
 	return hash;
 }
 
-/** Format a UNIX-epoch-millis timestamp as HH:MM:SS. */
-function formatTime(ts: number, t: Theme): string {
+export function formatTime(ts: number, t: Theme): string {
 	const d = new Date(ts);
 	const hh = String(d.getHours()).padStart(2, "0");
 	const mm = String(d.getMinutes()).padStart(2, "0");

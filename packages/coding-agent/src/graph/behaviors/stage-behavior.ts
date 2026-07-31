@@ -50,6 +50,20 @@ interface AgentTracking {
 	/** Whether this agent has been flagged with an error. */
 	hasError: boolean;
 }
+// ============================================================================
+// Stable profile ID mappings — ensures agent identities survive across swarm runs
+// ============================================================================
+
+const ROLE_TO_PROFILE: Record<string, string> = {
+	planner:      "swarm-planner",
+	implementer:  "swarm-implementer",
+	reviewer:     "swarm-reviewer",
+	architect:    "swarm-architect",
+	debugger:     "swarm-debugger",
+	tester:       "swarm-tester",
+	reflector:    "swarm-reflector",
+};
+
 
 // ============================================================================
 // StageBehavior
@@ -110,8 +124,8 @@ export class StageBehavior implements PhaseBehavior {
 		// If no tasks were parsed, create a single default worker
 		const roles = roleSet.size > 0 ? [...roleSet] : ["worker"];
 
-		// Generate agent IDs from roles
-		const agentIds = roles.map((_role, i) => `agent-${i + 1}`);
+		// Generate stable profile-based agent IDs instead of temporary agent-N IDs
+		const agentIds = roles.map(role => ROLE_TO_PROFILE[role] ?? `worker-${role}`);
 
 		// 3. Create swarm group channel (Human as observer)
 		const channel = ctx.ircBus.groupChannel("swarm", ["human", ...agentIds], ctx.activityLogger);
@@ -142,7 +156,8 @@ export class StageBehavior implements PhaseBehavior {
 			return {
 				id: agentIds[i],
 				role,
-				roleSource: "library" as const,
+				profileId: ROLE_TO_PROFILE[role] ?? `worker-${role}`,
+				roleSource: "profile" as const,
 				task: initialTask,
 				todoPhases: roleTasks.map(t => ({ title: t.title, files: t.files, dependsOn: t.dependsOn })),
 				phase: this.phase,

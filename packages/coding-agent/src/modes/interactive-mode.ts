@@ -161,6 +161,7 @@ import { MCPCommandController } from "./controllers/mcp-command-controller";
 import { OmfgController } from "./controllers/omfg-controller";
 import { SelectorController } from "./controllers/selector-controller";
 import { SessionFocusController } from "./controllers/session-focus-controller";
+import { SwarmModeController } from "./controllers/swarm-mode-controller";
 import { SSHCommandController } from "./controllers/ssh-command-controller";
 import { TanCommandController } from "./controllers/tan-command-controller";
 import { TodoCommandController } from "./controllers/todo-command-controller";
@@ -560,7 +561,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	#swarmSidebarHandle?: OverlayHandle;
 	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
+	#crewStartOverlayHandle: OverlayHandle | undefined;
 	#swarmStatusBar: SwarmStatusBar | undefined;
+	/** Multi-agent Crew chat controller. Created in init(), available when swarm mode is active. */
+	swarmModeController?: SwarmModeController;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
@@ -839,6 +843,20 @@ export class InteractiveMode implements InteractiveModeContext {
 	async init(options: InteractiveModeInitOptions = {}): Promise<void> {
 		if (this.isInitialized) return;
 
+
+		// Initialize SwarmModeController for multi-agent crew chat
+		this.swarmModeController = new SwarmModeController({
+			crewsDir: `${getProjectDir()}/.stp/sessions/crews`,
+			ircBus: IrcBus.global(),
+			profileRegistry: ProfileRegistry.global(),
+			theme,
+			onRequestRender: () => this.ui.requestRender(),
+			onNotice: (level, message) => {
+				if (level === "error") this.showError(message);
+				else this.showWarning(message);
+			},
+		});
+		await this.swarmModeController.init();
 		this.keybindings = logger.time("InteractiveMode.init:keybindings", () => KeybindingsManager.create());
 
 		// Route SIGINT/SIGTERM/SIGHUP/uncaughtException through the same teardown
@@ -2056,6 +2074,23 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	#updateSwarmModeStatus(): void {
+		// Check for active crew first (new swarm crew architecture)
+		const activeCrewId = this.swarmModeController?.activeCrewId;
+		if (activeCrewId) {
+			const crew = this.swarmModeController?.getActiveCrew();
+			const crewName = crew?.name ?? activeCrewId;
+			this.statusLine.setSwarmModeStatus({
+				phase: "idle",
+				agentCount: crew?.members?.length ?? 0,
+				runningCount: 0,
+				completedCount: 0,
+				failedCount: 0,
+				crewName,
+			});
+			this.ui.requestRender();
+			return;
+		}
+
 		const phase = currentSwarmPhase;
 		if (phase === "idle" || !this.session.embeddedSwarm) {
 			this.statusLine.setSwarmModeStatus(null);
@@ -4656,6 +4691,47 @@ export class InteractiveMode implements InteractiveModeContext {
 				sidebar.markUnread(agentId);
 			}
 		});
+	}
+
+	/** Show the profile selection dialog for creating a new crew. */
+	async showSwarmCrewStart(name?: string): Promise<void> {
+		if (!this.swarmModeController) {
+			this.showError("Swarm mode controller is not initialized");
+			return;
+		}
+
+		const crewName = name?.trim() || `Crew ${new Date().toLocaleTimeString()}`;
+
+		try {
+			const crewId = await this.swarmModeController.createCrewWithDialog(crewName);
+			this.showStatus(`Crew "${crewName}" created`);
+			// After crew creation, mount the crew view
+			this.#mountCrewView(crewId);
+		} catch (err) {
+			if ((err as Error).message !== "Cancelled") {
+				this.showError(`Failed to create crew: ${(err as Error).message}`);
+			}
+		}
+	}
+
+	/** Mount the crew view as an overlay after crew creation. */
+	#mountCrewView(crewId: string): void {
+		if (!this.swarmModeController) return;
+
+		const view = this.swarmModeController.getCrewView(crewId);
+		if (!view) return;
+
+		// Hide existing crew overlay if any
+		this.#crewStartOverlayHandle?.hide();
+
+		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: "100%",
+			margin: 0,
+			fullscreen: true,
+		});
+		this.#updateSwarmModeStatus();
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

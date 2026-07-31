@@ -16,6 +16,7 @@ import { createPromptActionAutocompleteProvider } from "../../modes/prompt-actio
 import { parseQueueShorthand, splitQueuedMessages } from "../../modes/queue-input";
 import { invokeSkillCommandFromText, isKnownSkillCommand } from "../../modes/skill-command";
 import type { InteractiveModeContext } from "../../modes/types";
+import type { SwarmModeController } from "./swarm-mode-controller";
 import manualContinuePrompt from "../../prompts/system/manual-continue.md" with { type: "text" };
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
 import { executeBuiltinSlashCommand } from "../../slash-commands/builtin-registry";
@@ -787,6 +788,14 @@ export class InputController {
 				this.ctx.loopPrompt = text;
 			}
 
+			// If a Crew is active, route to SwarmModeController instead of Main agent
+			if (this.ctx.swarmModeController?.isCrewActive()) {
+				await this.ctx.swarmModeController.handleUserInput(text);
+				this.ctx.editor.addToHistory(text);
+				this.ctx.editor.setText("");
+				this.ctx.ui.requestRender();
+				return;
+			}
 			// Queue input during compaction
 			if (this.ctx.session.isCompacting) {
 				const images = inputImages && inputImages.length > 0 ? [...inputImages] : undefined;

@@ -247,11 +247,21 @@ const swarmSegment: StatusLineSegment = {
 			stage: "accent",
 			curtain: "success",
 		} as const;
-		const phaseColor = (phaseColors as Record<string, string>)[sm.phase] ?? "dim";
-		const phaseLabel = sm.phase === "script-debate" ? "debate" : sm.phase;
 
 		const parts: string[] = [];
 		const icon = theme.icon.agents ?? "\u25c6";
+
+		// Crew name takes priority over phase label
+		if (sm.crewName) {
+			parts.push(theme.fg("accent" as ThemeColor, `${icon} crew: ${sm.crewName}`));
+			if (sm.agentCount > 0) {
+				parts.push(theme.fg("dim", `[${sm.agentCount} agents]`));
+			}
+			return { content: parts.join(" "), visible: true };
+		}
+
+		const phaseColor = (phaseColors as Record<string, string>)[sm.phase] ?? "dim";
+		const phaseLabel = sm.phase === "script-debate" ? "debate" : sm.phase;
 		parts.push(theme.fg(phaseColor as ThemeColor, `${icon} ${phaseLabel}`));
 
 		const counts: string[] = [];

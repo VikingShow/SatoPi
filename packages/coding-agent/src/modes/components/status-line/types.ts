@@ -80,6 +80,8 @@ export interface SegmentContext {
 		runningCount: number;
 		completedCount: number;
 		failedCount: number;
+		/** Active crew name, if a crew is focused. */
+		crewName?: string;
 	} | null;
 	collab: CollabStatus | null;
 	// Cached values for performance (computed once per render)
