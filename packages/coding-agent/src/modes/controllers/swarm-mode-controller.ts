@@ -17,6 +17,7 @@ import type { AgentProfile, ProfileRegistry } from "../../agent/agent-profile";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import { createAgentSession } from "../../sdk";
+import { setCurrentSwarmPhase } from "../../swarm/core/state";
 import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
 import { CrewManager } from "../../crew/crew-manager";
 import type { IrcBus } from "../../irc/bus";
@@ -269,6 +270,8 @@ export class SwarmModeController {
 			this.#deps.theme,
 			async (selected) => {
 				this.#pendingDialog = undefined;
+				// Reset stale swarm phase from previous sessions
+				setCurrentSwarmPhase("idle");
 				const crewId = await this.#crewManager.createCrew(name, selected);
 				await this.focusCrew(crewId);
 				// Spawn agent sessions for each selected crew member
