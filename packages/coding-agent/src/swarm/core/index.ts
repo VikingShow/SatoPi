@@ -31,4 +31,3 @@ export {
 	type TodoItem,
 	type TransitionRecord,
 } from "./state";
-export { VerificationHook, type VerificationResult } from "./verification-hook";

@@ -1,10 +1,11 @@
 /**
- * Unit tests for StateTracker — robustness fixes.
+ * Unit tests for StateTracker — live API surface.
  *
  * Tests:
- *   - getWorstAgent: candidates semantics (was excludeIds, now candidate filter)
- *   - unregisterAgent: removes agent, prevents ID reuse pollution
- *   - resetAgentStatuses: clears all agent state for retry
+ *   - registerAgent: registers agents idempotently, records model name
+ *   - updateAgent / updatePipeline: in-memory mutations
+ *   - getBestAgent: iteration-based best-agent selection
+ *   - writeChain integrity: persistence survives logSwarmState rejection
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -26,194 +27,104 @@ afterEach(async () => {
 });
 
 // ============================================================================
-// getWorstAgent — candidates semantics
+// registerAgent
 // ============================================================================
 
-describe("getWorstAgent", () => {
-	it("finds worst among ALL agents when no candidates given", async () => {
+describe("registerAgent", () => {
+	it("registers an agent with default fields", async () => {
 		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2", "worker-3"], 5, "loop");
+		await st.registerAgent("worker-1");
 
-		await st.incrementPraise(["worker-1"]); // score: +1
-		await st.incrementCriticism(["worker-2"]); // score: -1
-		// worker-3: score 0
-
-		const worst = st.getWorstAgent();
-		expect(worst).toBe("worker-2"); // lowest score
+		const agent = st.state.agents["worker-1"];
+		expect(agent).toBeDefined();
+		expect(agent!.status).toBe("pending");
+		expect(agent!.iteration).toBe(0);
+		expect(agent!.wave).toBe(0);
 	});
 
-	it("finds worst among ONLY the given candidates", async () => {
+	it("is idempotent — re-registering preserves the existing agent", async () => {
 		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2", "worker-3", "worker-4"], 5, "loop");
+		await st.registerAgent("worker-1");
+		await st.updateAgent("worker-1", { status: "completed", iteration: 2 });
 
-		await st.incrementPraise(["worker-1"]); // score: +1
-		await st.incrementCriticism(["worker-2"]); // score: -1
-		await st.incrementConflict("worker-3"); // score: -1
-		// worker-4: score 0
+		await st.registerAgent("worker-1");
 
-		// Only search among worker-1 and worker-4 (the best two)
-		const worst = st.getWorstAgent(["worker-1", "worker-4"]);
-		expect(worst).toBe("worker-4"); // score 0 < score 1
+		expect(st.state.agents["worker-1"]!.status).toBe("completed");
+		expect(st.state.agents["worker-1"]!.iteration).toBe(2);
 	});
 
-	it("returns null when candidates list is empty", async () => {
+	it("records an optional model name", async () => {
 		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1"], 5, "loop");
+		await st.registerAgent("worker-1", "claude-sonnet");
 
-		const worst = st.getWorstAgent([]);
-		expect(worst).toBeNull();
+		expect(st.state.agents["worker-1"]!.modelName).toBe("claude-sonnet");
+	});
+});
+
+// ============================================================================
+// updateAgent / updatePipeline
+// ============================================================================
+
+describe("updateAgent / updatePipeline", () => {
+	it("updateAgent mutates the registered agent", async () => {
+		const st = new StateTracker(tmpDir, "test");
+		await st.registerAgent("worker-1");
+		await st.updateAgent("worker-1", { status: "running", iteration: 1 });
+
+		expect(st.state.agents["worker-1"]!.status).toBe("running");
+		expect(st.state.agents["worker-1"]!.iteration).toBe(1);
+	});
+
+	it("updateAgent is a no-op for unknown agents", async () => {
+		const st = new StateTracker(tmpDir, "test");
+		await st.updateAgent("ghost", { status: "completed" });
+
+		expect(st.state.agents.ghost).toBeUndefined();
+	});
+
+	it("updatePipeline merges swarm-level fields", async () => {
+		const st = new StateTracker(tmpDir, "test");
+		await st.updatePipeline({ phase: "stage", status: "running", iteration: 2 });
+
+		expect(st.state.phase).toBe("stage");
+		expect(st.state.status).toBe("running");
+		expect(st.state.iteration).toBe(2);
+	});
+});
+
+// ============================================================================
+// getBestAgent
+// ============================================================================
+
+describe("getBestAgent", () => {
+	it("returns the agent with the highest iteration count", async () => {
+		const st = new StateTracker(tmpDir, "test");
+		await st.registerAgent("worker-1");
+		await st.registerAgent("worker-2");
+		await st.updateAgent("worker-2", { iteration: 3 });
+
+		expect(st.getBestAgent()).toBe("worker-2");
+	});
+
+	it("honors excludeIds", async () => {
+		const st = new StateTracker(tmpDir, "test");
+		await st.registerAgent("worker-1");
+		await st.registerAgent("worker-2");
+		await st.updateAgent("worker-2", { iteration: 3 });
+
+		expect(st.getBestAgent(["worker-2"])).toBe("worker-1");
 	});
 
 	it("returns null when no agents are registered", async () => {
 		const st = new StateTracker(tmpDir, "test");
-		await st.init([], 5, "loop");
-
-		const worst = st.getWorstAgent();
-		expect(worst).toBeNull();
+		expect(st.getBestAgent()).toBeNull();
 	});
 
-	it("handles tie — returns first encountered worst", async () => {
+	it("returns null when every agent is excluded", async () => {
 		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2"], 5, "loop");
-
-		await st.incrementCriticism(["worker-1", "worker-2"]); // both score: -1
-
-		const worst = st.getWorstAgent();
-		expect(worst).not.toBeNull();
-		// Both have the same score; either is acceptable
-		expect(["worker-1", "worker-2"]).toContain(worst!);
-	});
-
-	it("does NOT return agents outside candidates (regression test for excludeIds bug)", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2", "cloner-1"], 5, "loop");
-
-		await st.incrementPraise(["worker-1", "worker-2"]); // workers: +1
-		await st.incrementCriticism(["cloner-1"]); // cloner-1: -1 (worst overall)
-
-		// Search only among workers — cloner-1 should NOT be returned
-		// even though it has the lowest score globally.
-		const worst = st.getWorstAgent(["worker-1", "worker-2"]);
-		expect(worst).not.toBe("cloner-1");
-		expect(["worker-1", "worker-2"]).toContain(worst!);
-	});
-});
-
-// ============================================================================
-// unregisterAgent
-// ============================================================================
-
-describe("unregisterAgent", () => {
-	it("removes an agent from state", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2"], 5, "loop");
-
-		await st.unregisterAgent("worker-1");
-
-		// Agent should no longer exist
-		expect(st.state.agents["worker-1"]).toBeUndefined();
-		expect(st.state.agents["worker-2"]).toBeDefined();
-	});
-
-	it("is a no-op for non-existent agent", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1"], 5, "loop");
-
-		// Should not throw
-		await st.unregisterAgent("nonexistent");
-
-		expect(st.state.agents["worker-1"]).toBeDefined();
-	});
-
-	it("prevents quality counter pollution on ID reuse", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1"], 5, "loop");
-
-		// Accumulate bad scores for worker-1
-		await st.incrementCriticism(["worker-1"]);
-		await st.incrementConflict("worker-1");
-		expect(st.getAgentScore("worker-1")).toBe(-2);
-
-		// Scale-down: unregister worker-1
-		await st.unregisterAgent("worker-1");
-
-		// Scale-up: re-register worker-1 (simulating ID reuse)
 		await st.registerAgent("worker-1");
 
-		// Counters should be clean
-		expect(st.getAgentScore("worker-1")).toBe(0);
-		expect(st.state.agents["worker-1"]!.criticismCount).toBe(0);
-		expect(st.state.agents["worker-1"]!.conflictCount).toBe(0);
-	});
-});
-
-// ============================================================================
-// resetAgentStatuses
-// ============================================================================
-
-describe("resetAgentStatuses", () => {
-	it("clears all agent counters and statuses", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2"], 5, "loop");
-
-		// Pollute state
-		await st.incrementPraise(["worker-1"]);
-		await st.incrementCriticism(["worker-2"]);
-		await st.incrementConflict("worker-1");
-		await st.updateAgent("worker-1", { status: "completed", completedAt: 12345, iteration: 3 });
-		await st.updatePipeline({ status: "completed", completedAt: 99999, iteration: 5 });
-
-		// Reset
-		await st.resetAgentStatuses();
-
-		// All agents should be clean
-		for (const agent of Object.values(st.state.agents)) {
-			expect(agent.status).toBe("pending");
-			expect(agent.iteration).toBe(0);
-			expect(agent.praiseCount).toBe(0);
-			expect(agent.criticismCount).toBe(0);
-			expect(agent.conflictCount).toBe(0);
-			expect(agent.completedAt).toBeUndefined();
-			expect(agent.mentorId).toBeUndefined();
-			expect(agent.role).toBeUndefined();
-		}
-
-		// Pipeline should be back to running
-		expect(st.state.status).toBe("running");
-		expect(st.state.iteration).toBe(0);
-		expect(st.state.completedAt).toBeUndefined();
-	});
-
-	it("preserves agent registration (IDs remain)", async () => {
-		const st = new StateTracker(tmpDir, "test");
-		await st.init(["worker-1", "worker-2", "worker-3"], 5, "loop");
-
-		await st.resetAgentStatuses();
-
-		expect(Object.keys(st.state.agents).sort()).toEqual(["worker-1", "worker-2", "worker-3"]);
-	});
-
-	it("persisted state via session.jsonl matches in-memory after reset", async () => {
-		const sm = await SwarmSessionManager.create(tmpDir);
-		const st = new StateTracker(tmpDir, "test");
-		st.setSessionManager(sm);
-
-		await st.init(["worker-1"], 5, "loop");
-		await st.incrementPraise(["worker-1"]);
-		await st.resetAgentStatuses();
-		await sm.flush();
-
-		// Read persisted state from session.jsonl
-		const latest = await SwarmSessionManager.readLatestState(tmpDir);
-		expect(latest).not.toBeNull();
-		expect(latest!.agents).toBeDefined();
-
-		const agents = latest!.agents as Record<string, any>;
-		expect(agents["worker-1"]).toBeDefined();
-		expect(agents["worker-1"].praiseCount).toBe(0);
-		expect(agents["worker-1"].status).toBe("pending");
-
-		await sm.close();
+		expect(st.getBestAgent(["worker-1"])).toBeNull();
 	});
 });
 
@@ -227,8 +138,8 @@ describe("writeChain integrity (SP-6)", () => {
 		const sm = await SwarmSessionManager.create(tmpDir);
 		st.setSessionManager(sm);
 
-		// Initialize first — this triggers a #persist() through the real logSwarmState.
-		await st.init(["worker-1"], 5, "loop");
+		// Register first — this triggers a #persist() through the real logSwarmState.
+		await st.registerAgent("worker-1");
 
 		// Spy: first call throws to simulate a disk failure. Subsequent calls
 		// fall through to the default vi.fn() which returns undefined (void).
@@ -269,7 +180,8 @@ describe("writeChain integrity (SP-6)", () => {
 		const sm = await SwarmSessionManager.create(tmpDir);
 		st.setSessionManager(sm);
 
-		await st.init(["alpha", "beta"], 5, "loop");
+		await st.registerAgent("alpha");
+		await st.registerAgent("beta");
 
 		// First logSwarmState call (from the second updateAgent) throws.
 		const logSpy = vi.spyOn(sm, "logSwarmState");

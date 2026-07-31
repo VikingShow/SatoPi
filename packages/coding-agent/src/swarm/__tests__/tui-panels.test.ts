@@ -59,9 +59,6 @@ describe("renderAgentPanel", () => {
 					status: "running",
 					iteration: 0,
 					wave: 0,
-					praiseCount: 0,
-					criticismCount: 0,
-					conflictCount: 0,
 				},
 			},
 		});
@@ -77,9 +74,6 @@ describe("renderAgentPanel", () => {
 					status: "running",
 					iteration: 0,
 					wave: 0,
-					praiseCount: 0,
-					criticismCount: 0,
-					conflictCount: 0,
 				},
 			},
 		});
@@ -95,9 +89,6 @@ describe("renderAgentPanel", () => {
 					status: "completed",
 					iteration: 0,
 					wave: 0,
-					praiseCount: 0,
-					criticismCount: 0,
-					conflictCount: 0,
 				},
 			},
 		});

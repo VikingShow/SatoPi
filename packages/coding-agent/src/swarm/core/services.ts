@@ -14,7 +14,7 @@ import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 
-/** Controls the swarm loop lifecycle. Implemented by SwarmRunManager. */
+/** Controls the swarm loop lifecycle. Implemented by GraphRunnerAsRunManager. */
 export interface RunManager {
 	setSessionManager?(sm: SwarmSessionManager): void;
 	start(agentCount?: number): Promise<{ success: boolean; error?: string }>;

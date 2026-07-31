@@ -3,25 +3,14 @@
  *
  * This is the event-driven PhaseBehavior wrapper used by the theatre
  * graph engine (GraphRunner → PhaseBehaviorNodeAdapter).  It provides
- * an enter → handleAgentEvent → checkCompletion → exit lifecycle rather
- * than the monolithic blocking run() of {@link StageController}.
- *
- * ## Relationship with StageController
- *
- * {@link StageController} is the **canonical** stage execution
- * implementation.  It performs profile-based agent selection, complexity
- * analysis, credit-aware role assignment, and retry-with-backoff task
- * execution — the full-featured path used by SwarmRunner, EmbeddedBridge,
- * and StageNodeBehavior.
+ * an enter → handleAgentEvent → checkCompletion → exit lifecycle.
  *
  * StageBehavior is a **simplified adapter** that:
  *   - Creates one agent per unique task role (no profile selection)
- *   - Delegates task-queue setup to {@link createTaskQueueFromPlan}
+ *   - Parses the plan via {@link TaskQueue.parseFromPlan} and drives the
+ *     resulting TaskQueue directly
  *   - Uses AgentRuntime + IrcBus + TaskQueue directly for the
  *     event-driven lifecycle that the graph engine requires
- *
- * Both paths share {@link createTaskQueueFromPlan} and
- * {@link assignAgentRoles} exported from stage-controller.ts.
  *
  * Data flow:
  *   1. enter() → parse plan → create channel → spawn worker agents
@@ -262,10 +251,14 @@ export class StageBehavior implements PhaseBehavior {
 					remainingActive: this.#agents.size - this.#completedAgents.size,
 				});
 				// Trigger lifecycle hook for profile credit updates
-				await ctx.hookPipeline?.trigger("agent:afterComplete", {
-					agentId: event.agentId,
-					success: true,
-				}, { phase: "stage", agentId: event.agentId });
+				await ctx.hookPipeline?.trigger(
+					"agent:afterComplete",
+					{
+						agentId: event.agentId,
+						success: true,
+					},
+					{ phase: "stage", agentId: event.agentId },
+				);
 				break;
 			}
 
@@ -298,10 +291,14 @@ export class StageBehavior implements PhaseBehavior {
 					typeof event.result === "string" ? event.result : "agent failed",
 				);
 				// Trigger lifecycle hook for profile credit updates
-				await ctx.hookPipeline?.trigger("agent:afterComplete", {
-					agentId: event.agentId,
-					success: false,
-				}, { phase: "stage", agentId: event.agentId });
+				await ctx.hookPipeline?.trigger(
+					"agent:afterComplete",
+					{
+						agentId: event.agentId,
+						success: false,
+					},
+					{ phase: "stage", agentId: event.agentId },
+				);
 				break;
 			}
 

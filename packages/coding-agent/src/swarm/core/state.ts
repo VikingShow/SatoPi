@@ -63,12 +63,6 @@ export interface AgentState {
 	startedAt?: number;
 	completedAt?: number;
 	error?: string;
-	/** Quality tracking: cumulative praise count across loop runs. */
-	praiseCount: number;
-	/** Quality tracking: cumulative criticism count across loop runs. */
-	criticismCount: number;
-	/** Quality tracking: number of file conflicts this agent was involved in. */
-	conflictCount: number;
 	/** Mentor agent ID, set on scale-up for new agents. */
 	mentorId?: string;
 	/** Role override — "reviewer" when elected, undefined for normal agents. */
@@ -159,31 +153,6 @@ export class StateTracker {
 		return this.#state;
 	}
 
-	async init(agentNames: string[], targetCount: number, mode: string): Promise<void> {
-		await fs.mkdir(path.join(this.#swarmDir, "state"), { recursive: true });
-		await fs.mkdir(path.join(this.#swarmDir, "logs"), { recursive: true });
-		await fs.mkdir(path.join(this.#swarmDir, "context"), { recursive: true });
-
-		this.#state.targetCount = targetCount;
-		this.#state.mode = mode;
-		this.#state.status = "running";
-		this.#state.startedAt = Date.now();
-
-		for (const name of agentNames) {
-			this.#state.agents[name] = {
-				name,
-				status: "pending",
-				iteration: 0,
-				wave: 0,
-				praiseCount: 0,
-				criticismCount: 0,
-				conflictCount: 0,
-			};
-		}
-
-		await this.#persist();
-	}
-
 	/**
 	 * Register a single agent at runtime (for loop mode where agents are
 	 * created dynamically by LoopController, not from YAML).
@@ -196,9 +165,6 @@ export class StateTracker {
 			status: "pending",
 			iteration: 0,
 			wave: 0,
-			praiseCount: 0,
-			criticismCount: 0,
-			conflictCount: 0,
 			modelName,
 		};
 		await this.#persist();
@@ -211,125 +177,27 @@ export class StateTracker {
 		await this.#persist();
 	}
 
-	/** Increment praise count for a set of workers. */
-	async incrementPraise(agentIds: string[]): Promise<void> {
-		for (const id of agentIds) {
-			const agent = this.#state.agents[id];
-			if (agent) agent.praiseCount++;
-		}
-		await this.#persist();
-	}
-
-	/** Increment criticism count for a set of workers. */
-	async incrementCriticism(agentIds: string[]): Promise<void> {
-		for (const id of agentIds) {
-			const agent = this.#state.agents[id];
-			if (agent) agent.criticismCount++;
-		}
-		await this.#persist();
-	}
-
-	/** Increment conflict count for a worker. */
-	async incrementConflict(agentId: string): Promise<void> {
-		const agent = this.#state.agents[agentId];
-		if (agent) agent.conflictCount++;
-		await this.#persist();
-	}
-
-	/** Get a quality score for a worker (praise - criticism - conflictCount). */
-	getAgentScore(agentId: string): number {
-		const agent = this.#state.agents[agentId];
-		if (!agent) return 0;
-		return agent.praiseCount - agent.criticismCount - agent.conflictCount;
-	}
-
-	/** Find the best-scoring worker (highest score), excluding given IDs. */
+	/**
+	 * Find the most-productive worker (highest per-agent iteration count),
+	 * excluding the given IDs. Iteration is the surviving per-agent work
+	 * metric — the praise/criticism/conflict quality counters were removed.
+	 */
 	getBestAgent(excludeIds?: string[]): string | null {
 		let bestId: string | null = null;
-		let bestScore = -Infinity;
+		let bestIteration = -Infinity;
 		const exclude = new Set(excludeIds ?? []);
 		for (const [id, agent] of Object.entries(this.#state.agents)) {
 			if (exclude.has(id)) continue;
-			const score = agent.praiseCount - agent.criticismCount - agent.conflictCount;
-			if (score > bestScore) {
-				bestScore = score;
+			if (agent.iteration > bestIteration) {
+				bestIteration = agent.iteration;
 				bestId = id;
 			}
 		}
 		return bestId;
 	}
 
-	/**
-	 * Find the worst-scoring worker.
-	 * @param candidates — if provided, only search among these agent IDs.
-	 *   If omitted, search all registered agents.
-	 */
-	getWorstAgent(candidates?: string[]): string | null {
-		let worstId: string | null = null;
-		let worstScore = Infinity;
-		const candidateSet = candidates ? new Set(candidates) : null;
-		for (const [id, agent] of Object.entries(this.#state.agents)) {
-			if (candidateSet && !candidateSet.has(id)) continue;
-			const score = agent.praiseCount - agent.criticismCount - agent.conflictCount;
-			if (score < worstScore) {
-				worstScore = score;
-				worstId = id;
-			}
-		}
-		return worstId;
-	}
-
-	/**
-	 * Remove an agent from the state tracker (for loop mode scale-down).
-	 * Prevents ID reuse from inheriting stale quality counters.
-	 */
-	async unregisterAgent(name: string): Promise<void> {
-		delete this.#state.agents[name];
-		await this.#persist();
-	}
-
-	/**
-	 * Reset all agents to a clean state for retry.
-	 * Clears status, iteration, timestamps, and quality counters so a
-	 * fresh loop run starts from a clean slate.
-	 */
-	async resetAgentStatuses(): Promise<void> {
-		for (const agent of Object.values(this.#state.agents)) {
-			agent.status = "pending";
-			agent.iteration = 0;
-			agent.wave = 0;
-			agent.startedAt = undefined;
-			agent.completedAt = undefined;
-			agent.error = undefined;
-			agent.praiseCount = 0;
-			agent.criticismCount = 0;
-			agent.conflictCount = 0;
-			agent.mentorId = undefined;
-			agent.role = undefined;
-		}
-		this.#state.status = "running";
-		this.#state.iteration = 0;
-		this.#state.completedAt = undefined;
-		this.#state.transitionHistory = [];
-		await this.#persist();
-	}
-
 	async updatePipeline(update: Partial<SwarmState>): Promise<void> {
 		Object.assign(this.#state, update);
-		await this.#persist();
-	}
-
-	/**
-	 * Append a transition record to the phase audit trail.
-	 *
-	 * Called on every successful phase change so the full
-	 * transition history is recoverable from persisted state.
-	 */
-	async logTransition(record: TransitionRecord): Promise<void> {
-		if (!this.#state.transitionHistory) {
-			this.#state.transitionHistory = [];
-		}
-		this.#state.transitionHistory.push(record);
 		await this.#persist();
 	}
 

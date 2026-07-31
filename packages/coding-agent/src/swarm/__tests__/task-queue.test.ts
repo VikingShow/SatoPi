@@ -1,9 +1,8 @@
 /**
- * task-queue.test.ts — Unit tests for createTaskQueueFromPlan() factory.
+ * task-queue.test.ts — Unit tests for TaskQueue plan parsing.
  *
  * Covers:
  * - Valid multi-phase plan (metadata parsing — type/role/est)
- * - Empty plan (default task fallback)
  * - Malformed plan (invalid DAG — missing dependency)
  * - Single-task plan
  * - Multi-task DAG plan with dependencies
@@ -13,12 +12,15 @@
  * the slugified ID of the referenced task. For clean DAG tests, keep
  * referenced task names bare (no parenthetical) so slugify(id) equals the
  * depends value.
+ *
+ * The former createTaskQueueFromPlan() wrapper (which added an "execute-plan"
+ * fallback task for empty plans) lived in the deleted stage-controller.ts;
+ * these tests now exercise TaskQueue.parseFromPlan directly.
  */
 
 import { describe, expect, test } from "bun:test";
 
 import { TaskQueue } from "../../graph/task-queue";
-import { createTaskQueueFromPlan } from "../stage/stage-controller";
 
 // ============================================================================
 // Helpers
@@ -28,11 +30,6 @@ import { createTaskQueueFromPlan } from "../stage/stage-controller";
 function planWithTasks(lines: string[]): string {
 	return `# Implementation Plan
 
-## Overview
-
-This plan covers the feature implementation.
-
-## Tasks
 ${lines.join("\n")}
 `;
 }
@@ -41,21 +38,22 @@ ${lines.join("\n")}
 // Tests
 // ============================================================================
 
-describe("createTaskQueueFromPlan", () => {
+describe("TaskQueue.parseFromPlan", () => {
 	// ── Case 1: valid multi-phase plan (metadata parsing) ─────────────────
 
 	test("parses a valid multi-phase plan with typed tasks and metadata", () => {
 		// Each task has type metadata and optional est/role.
 		// No depends here — metadata parsing is the focus.
 		const plan = planWithTasks([
-			"- [ ] setup-db (type: config, est: 15, role: dba)",
-			"- [ ] implement-auth (type: develop, files: src/auth/*.ts, est: 45)",
-			"- [ ] test-auth (type: test, est: 20)",
-			"- [ ] review-auth (type: review, est: 10)",
-			"- [ ] update-docs (type: docs, est: 5)",
+			"- [ ] setup-db (type: config) (role: dba) (est: 15m)",
+			"- [ ] implement-auth (type: develop) (role: developer) (est: 45m)",
+			"- [ ] test-auth (type: test) (role: tester) (est: 20m)",
+			"- [ ] review-auth (type: review) (role: reviewer) (est: 10m)",
+			"- [ ] update-docs (type: docs) (role: developer) (est: 5m)",
 		]);
 
-		const { queue, tasks } = createTaskQueueFromPlan(plan);
+		const tasks = TaskQueue.parseFromPlan(plan);
+		const queue = new TaskQueue(tasks);
 
 		expect(queue).toBeInstanceOf(TaskQueue);
 		expect(tasks.length).toBe(5);
@@ -77,40 +75,26 @@ describe("createTaskQueueFromPlan", () => {
 		expect(docsTask).toMatchObject({ type: "docs", assignedRole: "developer", estimatedMinutes: 5 });
 	});
 
-	// ── Case 2: empty plan ───────────────────────────────────────────────
-
-	test("falls back to default task when plan is empty", () => {
-		const { queue, tasks } = createTaskQueueFromPlan("");
-
-		expect(queue).toBeInstanceOf(TaskQueue);
-		expect(tasks.length).toBe(1);
-		expect(tasks[0]).toMatchObject({
-			id: "execute-plan",
-			title: "Execute the plan as described",
-			type: "develop",
-			dependsOn: [],
-		});
-	});
-
-	// ── Case 3: malformed plan — missing dependency target ────────────────
+	// ── Case 2: malformed plan — missing dependency target ────────────────
 
 	test("throws when a task depends on a non-existent task id", () => {
 		// Task B depends on "ghost-task" which doesn't exist in the plan.
 		const plan = planWithTasks(["- [ ] Task A", "- [ ] Task B (depends: ghost-task)"]);
 
-		// slugify("Task B (depends: ghost-task)") includes the parenthetical
-		// in the task ID, but the dependsOn value is just "ghost-task".
-		expect(() => createTaskQueueFromPlan(plan)).toThrow(
-			/Task "task-b-depends-ghost-task" depends on unknown task "ghost-task"/,
+		// slugify only uses the title (parentheticals are metadata), so the
+		// task id is "task-b" while the dependsOn value is "ghost-task".
+		expect(() => new TaskQueue(TaskQueue.parseFromPlan(plan))).toThrow(
+			/Task "task-b" depends on unknown task "ghost-task"/,
 		);
 	});
 
-	// ── Case 4: single-task plan ─────────────────────────────────────────
+	// ── Case 3: single-task plan ─────────────────────────────────────────
 
 	test("creates a queue with a single parsed task", () => {
-		const plan = planWithTasks(["- [ ] build-everything (type: develop, est: 120)"]);
+		const plan = planWithTasks(["- [ ] build-everything (type: develop) (est: 120m)"]);
 
-		const { queue, tasks } = createTaskQueueFromPlan(plan);
+		const tasks = TaskQueue.parseFromPlan(plan);
+		const queue = new TaskQueue(tasks);
 
 		expect(queue).toBeInstanceOf(TaskQueue);
 		expect(tasks.length).toBe(1);
@@ -121,14 +105,14 @@ describe("createTaskQueueFromPlan", () => {
 		expect(queue.isAllComplete).toBe(false);
 	});
 
-	// ── Case 5: multi-task DAG plan ─────────────────────────────────────
+	// ── Case 4: multi-task DAG plan ─────────────────────────────────────
 
 	test("creates a queue with a multi-task DAG and correct readiness", () => {
 		// Keep referenced tasks bare (no parenthetical) so their slugified ID
 		// matches the dependsOn value that other tasks reference.
-		// Only the leaf task (integration-tests) has a parenthetical for its
-		// depends — its own ID will include the parenthetical, but it is
-		// never referenced as a dependency.
+		// Only the leaf task (integration-tests) carries a depends parenthetical;
+		// its slugified ID is still "integration-tests" (parentheticals are
+		// metadata), and it is never referenced as a dependency.
 		const plan = planWithTasks([
 			"- [ ] design-api",
 			"- [ ] implement-controllers",
@@ -136,7 +120,8 @@ describe("createTaskQueueFromPlan", () => {
 			"- [ ] integration-tests (depends: implement-controllers, implement-models)",
 		]);
 
-		const { queue, tasks } = createTaskQueueFromPlan(plan);
+		const tasks = TaskQueue.parseFromPlan(plan);
+		const queue = new TaskQueue(tasks);
 
 		expect(tasks.length).toBe(4);
 		expect(queue.tasks.size).toBe(4);
@@ -158,7 +143,7 @@ describe("createTaskQueueFromPlan", () => {
 		// Bare names only — no parenthetical metadata to avoid slug issues
 		const plan = planWithTasks(["- [ ] load-data", "- [x] validate-schemas", "- [ ] generate-report"]);
 
-		const { queue } = createTaskQueueFromPlan(plan);
+		const queue = new TaskQueue(TaskQueue.parseFromPlan(plan));
 
 		// All 3 should be ready (no deps), ordered alphabetically by slug
 		expect(queue.readyQueue.length).toBe(3);

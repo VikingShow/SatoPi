@@ -38,7 +38,6 @@ export interface SwarmCommandArgs {
 	/** YAML path for run/plan, session name for resume. */
 	target: string;
 	flags: Record<string, unknown>;
-	engine?: "graph" | "legacy";
 }
 
 // ============================================================================
@@ -63,11 +62,16 @@ export async function runSwarmCommand(cmd: SwarmCommandArgs): Promise<void> {
 /**
  * Create the SharedServices bag and SessionFactory for a swarm run.
  * Returns both so callers can customize the session before starting.
+ *
+ * With `{ resume: true }` the session's entry reader spans every session
+ * file in the swarm dir (oldest first) instead of just the newest — see
+ * readAllSessionEntries for why resume needs that.
  */
 async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
+	opts?: { resume?: boolean },
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -141,7 +145,9 @@ async function createSwarmServices(
 			infra,
 			onPhaseChange: phase => setCurrentSwarmPhase(phase),
 			debateRoundtableFactory: config => new DebateRoundtable(config),
-			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+			readSessionEntries: opts?.resume
+				? () => readAllSessionEntries(swarmDir)
+				: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
 		await graphRunner.init();
 		const runManager = new GraphRunnerAsRunManager(graphRunner);
@@ -165,6 +171,43 @@ async function createSwarmServices(
 	};
 
 	return { shared, factory };
+}
+
+/**
+ * Read every session file in a swarm's `.session` dir, oldest file first.
+ *
+ * Each run rotates to a fresh session file (createSwarmInfra forces a new
+ * one), and SwarmSessionManager.readRawEntries only reads the newest file.
+ * Checkpoint recovery scans entries newest→oldest, so a resume against only
+ * the newest (empty) file would miss the previous run's graph_checkpoint.
+ * Merging all files oldest-first restores the global newest→oldest view.
+ */
+async function readAllSessionEntries(swarmDir: string): Promise<Array<Record<string, unknown>>> {
+	const sessionDir = path.join(swarmDir, ".session");
+	let files: string[];
+	try {
+		files = (await fs.readdir(sessionDir)).filter(f => f.endsWith(".jsonl")).map(f => path.join(sessionDir, f));
+	} catch {
+		return [];
+	}
+
+	const withMtime = await Promise.all(files.map(async f => ({ f, mtimeMs: (await fs.stat(f)).mtimeMs })));
+	withMtime.sort((a, b) => a.mtimeMs - b.mtimeMs);
+
+	const entries: Array<Record<string, unknown>> = [];
+	for (const { f } of withMtime) {
+		const text = await Bun.file(f).text();
+		for (const line of text.split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			try {
+				entries.push(JSON.parse(trimmed) as Record<string, unknown>);
+			} catch {
+				/* skip malformed line */
+			}
+		}
+	}
+	return entries;
 }
 
 // ============================================================================
@@ -464,10 +507,103 @@ async function sendToPlanner(bridge: GraphRunner, text: string): Promise<void> {
 }
 
 // ============================================================================
-// resume (placeholder)
+// resume — continue a graph run from its last checkpoint
 // ============================================================================
 
-async function runSwarmResume(_cmd: SwarmCommandArgs): Promise<void> {
-	process.stderr.write("resume not yet implemented\n");
-	process.exitCode = 1;
+async function runSwarmResume(cmd: SwarmCommandArgs): Promise<void> {
+	const sessionName = cmd.target;
+	const cwd = getProjectDir();
+
+	// Graph-mode sessions live in .stp/sessions/swarm-<name>; the original
+	// yaml must still exist in the workspace to rebuild the execution waves.
+	const swarmDir = path.join(cwd, ".stp", "sessions", `swarm-${sessionName}`);
+	try {
+		if (!(await fs.stat(swarmDir)).isDirectory()) throw new Error("not a directory");
+	} catch {
+		process.stderr.write(`No swarm session "${sessionName}" found (expected ${swarmDir}).\n`);
+		process.exitCode = 1;
+		return;
+	}
+
+	const yamlPath = await resolveGraphYamlForSession(cwd, sessionName);
+	if (!yamlPath) {
+		process.stderr.write(`Cannot resume "${sessionName}": no ${sessionName}.graph.yaml found in the workspace.\n`);
+		process.exitCode = 1;
+		return;
+	}
+
+	const def: SwarmDefinition = {
+		name: sessionName,
+		workspace: cwd,
+		mode: "loop",
+		targetCount: 0,
+		agents: new Map(),
+		agentOrder: [],
+		loopConfig: undefined,
+	};
+
+	// Resume reads across all session files so checkpoint recovery sees the
+	// previous run's graph_checkpoint (each run rotates to a fresh file).
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, { resume: true });
+
+	try {
+		const registry = new SessionRegistry(shared, factory, 1);
+		const session = await registry.createSession(sessionName);
+
+		process.stderr.write(`Resuming swarm "${sessionName}"…\n`);
+
+		const result = await session.runManager.resume();
+		if (!result.success) {
+			process.stderr.write(`Resume failed: ${result.error ?? "unknown error"}\n`);
+			process.exitCode = 1;
+			return;
+		}
+
+		// GraphRunnerAsRunManager resumes the graph from its checkpoint.
+		process.stderr.write(`Graph "${sessionName}" resumed.\n`);
+	} finally {
+		await shared.profileRegistry.save(cwd);
+	}
+}
+
+/**
+ * Locate the `<name>.graph.yaml` backing a graph-mode swarm session.
+ * Sessions are keyed by yaml basename (`.stp/sessions/swarm-<name>`), so
+ * resume must re-find the original yaml to rebuild execution waves. Prefers
+ * the shallowest match; skips vendor/build directories.
+ */
+async function resolveGraphYamlForSession(cwd: string, sessionName: string): Promise<string | null> {
+	const wanted = `${sessionName}.graph.yaml`;
+	const matches: string[] = [];
+	const skipped: Record<string, true> = {
+		".git": true,
+		".stp": true,
+		node_modules: true,
+		dist: true,
+		build: true,
+		".bun": true,
+	};
+
+	async function walk(dir: string, depth: number): Promise<void> {
+		if (depth > 8) return;
+		let entries: fs.Dirent[];
+		try {
+			entries = await fs.readdir(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				if (skipped[entry.name]) continue;
+				await walk(path.join(dir, entry.name), depth + 1);
+			} else if (entry.name === wanted) {
+				matches.push(path.join(dir, entry.name));
+			}
+		}
+	}
+
+	await walk(cwd, 0);
+	if (matches.length === 0) return null;
+	matches.sort((a, b) => a.split("/").length - b.split("/").length);
+	return matches[0];
 }

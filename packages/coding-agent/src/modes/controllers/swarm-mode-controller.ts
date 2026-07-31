@@ -2,7 +2,7 @@
  * SwarmModeController — Bridges TUI and Crew infrastructure for multi-agent chat.
  *
  * This controller is the single entry point for all swarm-mode operations.
- * It owns the active Crew, manages agent views, and routes user input.
+ * It owns the active Crew and routes user input.
  *
  * Lifecycle:
  *   1. InteractiveMode creates a SwarmModeController on startup
@@ -11,26 +11,31 @@
  *   4. Agent responses are captured and persisted to Crew transcript
  */
 
+import * as path from "node:path";
+import type { Model } from "@satopi/pi-ai";
 import type { Component } from "@satopi/pi-tui";
 import { logger } from "@satopi/pi-utils";
 import type { AgentProfile, ProfileRegistry } from "../../agent/agent-profile";
 import type { ModelRegistry } from "../../config/model-registry";
+import { resolveModelOverride } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
-import { createAgentSession } from "../../sdk";
-import { setCurrentSwarmPhase } from "../../swarm/core/state";
-import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
 import { CrewManager } from "../../crew/crew-manager";
-import type { IrcBus } from "../../irc/bus";
+import { DebateRoundtable } from "../../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../../graph/graph-runner";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
-import type { Theme } from "../theme/theme";
-import type { ISwarmOrchestrator } from "../../graph/orchestrator-interface";
-import type { GraphRunner } from "../../graph/graph-runner";
-import { parseMentions, createCrewMentionResolver } from "../mention-parser";
+import type { IrcBus } from "../../irc/bus";
+import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
+import { createAgentSession } from "../../sdk";
+import { setCurrentSwarmPhase } from "../../swarm/core/state";
+import { createSwarmInfra } from "../../swarm/core/swarm-infra";
+import { SwarmSessionManager } from "../../swarm/session/swarm-session-manager";
+import type { CrewTranscriptState } from "../components/swarm/crew-transcript-view";
 import { CrewTranscriptView } from "../components/swarm/crew-transcript-view";
-import type { CrewTranscriptEntry, CrewTranscriptState } from "../components/swarm/crew-transcript-view";
-import { ProfileSelectDialog } from "../components/swarm/profile-select-dialog";
 import type { ProfileSelectItem } from "../components/swarm/profile-select-dialog";
+import { ProfileSelectDialog } from "../components/swarm/profile-select-dialog";
+import { createCrewMentionResolver, parseMentions } from "../mention-parser";
+import type { Theme } from "../theme/theme";
 
 // ============================================================================
 // Types
@@ -49,6 +54,8 @@ export interface SwarmModeControllerDeps {
 	profileRegistry: ProfileRegistry;
 	modelRegistry?: ModelRegistry;
 	settings?: Settings;
+	/** Current model of the host session, used as the crew-member default when no crew.memberModel setting resolves. */
+	currentModel?: Model;
 	/** Project workspace directory. */
 	workspace?: string;
 	/** Active TUI theme. */
@@ -57,8 +64,6 @@ export interface SwarmModeControllerDeps {
 	onRequestRender?: () => void;
 	/** Called when a notice/status message should be shown to the user. */
 	onNotice?: (level: "info" | "warn" | "error", message: string) => void;
-	/** Swarm orchestrator bridge (GraphRunner). Null until a graph is attached. */
-	orchestrator?: ISwarmOrchestrator | null;
 	/** Called when the user leaves the current crew (via Escape / /swarm off). */
 	onLeaveCrew?: () => void;
 }
@@ -86,9 +91,6 @@ export class SwarmModeController {
 	#crewViews = new Map<string, CrewViewHandle>();
 	/** Highest round recorded per crew; doubles as the active round for the current turn. */
 	#crewRounds = new Map<string, number>();
-
-	/** Per-agent conversation views, keyed by agentId. */
-	#agentViews = new Map<string, Component>();
 
 	/** Pending profile selection dialog shown during crew creation. */
 	#pendingDialog: Component | undefined;
@@ -175,9 +177,14 @@ export class SwarmModeController {
 
 	/**
 	 * Attach a theatre graph to the active crew.
-	 * Updates crew state and broadcasts a notification to the crew channel.
+	 *
+	 * Builds a real GraphRunner bridge (swarm infra + graph engine), attaches
+	 * it to the crew channel for phase-transition broadcasts, and records the
+	 * active graph on the crew state. Plan.md writes by crew members are
+	 * forwarded to the bridge via the beforeToolCall hook installed in
+	 * #spawnCrewMembers.
 	 */
-	attachGraph(graphPath: string): void {
+	async attachGraph(graphPath: string): Promise<void> {
 		if (!this.#activeCrewId) {
 			this.#deps.onNotice?.("warn", "No active crew — create or focus a crew first");
 			return;
@@ -187,29 +194,122 @@ export class SwarmModeController {
 			this.#deps.onNotice?.("error", `Crew "${this.#activeCrewId}" not found`);
 			return;
 		}
-		crew.state.activeGraph = { graphPath, phase: "idle" };
-		const runner = (this.#deps.orchestrator as GraphRunner) ?? null;
-		this.#graphRunner = runner;
-		if (runner) {
-			runner.attachCrew(this.#activeCrewId, crew.channel);
+
+		// Re-attach replaces any previous bridge.
+		if (this.#graphRunner) {
+			await this.detachGraph().catch(err =>
+				logger.error("[SwarmModeController] Failed to detach previous graph", { error: String(err) }),
+			);
 		}
-		crew.channel.send("system", `[System] Graph "${graphPath}" activated`).catch(() => {});
-		this.#deps.onNotice?.("info", `Graph "${graphPath}" attached to crew "${crew.state.name}"`);
+
+		const { modelRegistry, settings, profileRegistry, workspace } = this.#deps;
+		if (!modelRegistry || !settings) {
+			this.#deps.onNotice?.("error", "Cannot attach graph: missing modelRegistry or settings");
+			return;
+		}
+		const ws = workspace ?? process.cwd();
+
+		// Resolve the builtin theatre graph to its packaged location; other paths
+		// are resolved relative to the project workspace.
+		const resolvedPath =
+			graphPath === "builtin/theatre.graph.yaml"
+				? path.resolve(import.meta.dir, "..", "..", "graph", "builtin", "theatre.graph.yaml")
+				: path.resolve(ws, graphPath);
+
+		try {
+			// GraphRunner derives its swarmDir identically in graph mode, so the
+			// session reader must target the same directory.
+			const graphName = path.basename(resolvedPath, ".graph.yaml");
+			const swarmDir = path.join(ws, ".stp", "sessions", `swarm-${graphName}`);
+			const infra = await createSwarmInfra({
+				workspace: ws,
+				swarmDir,
+				swarmName: graphName,
+				modelRegistry,
+				settings,
+				profileRegistry,
+				startPhase: "script",
+			});
+
+			const runner = new GraphRunner({
+				workspace: ws,
+				graphPath: resolvedPath,
+				swarmDir,
+				modelRegistry,
+				settings,
+				profileRegistry,
+				maxWorkers: (settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
+				maxRounds: (settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
+				autoApplaud: (settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
+				infra,
+				onPhaseChange: phase => setCurrentSwarmPhase(phase),
+				debateRoundtableFactory: config => new DebateRoundtable(config),
+				readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+			});
+			await runner.init();
+
+			runner.attachCrew(this.#activeCrewId, crew.channel);
+			this.#graphRunner = runner;
+			crew.state.activeGraph = { graphPath, phase: "idle" };
+			await crew.channel.send("system", `[System] Graph "${graphPath}" activated`).catch(() => {});
+			this.#deps.onNotice?.("info", `Graph "${graphPath}" attached to crew "${crew.state.name}"`);
+		} catch (err) {
+			logger.error("[SwarmModeController] Failed to attach graph", { error: String(err) });
+			this.#deps.onNotice?.("error", `Failed to attach graph: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
+	/**
+	 * Launch the Stage phase on the attached graph via the bridge.
+	 *
+	 * Gated on plan readiness: confirmScript would otherwise run the engine
+	 * with an empty plan and the Script node would never complete
+	 * (ScriptBehavior only auto-confirms when plan content already exists).
+	 */
+	async launchGraph(): Promise<void> {
+		if (!this.#graphRunner) {
+			this.#deps.onNotice?.("error", "No graph attached — run /graph theatre first");
+			return;
+		}
+		if (!this.#graphRunner.isPlanReady()) {
+			this.#deps.onNotice?.(
+				"error",
+				"No plan yet — have the crew write plan.md first (a plan needs headings and at least 200 chars)",
+			);
+			return;
+		}
+		try {
+			const errors = await this.#graphRunner.confirmScript();
+			if (errors.length > 0) {
+				for (const error of errors) this.#deps.onNotice?.("error", error);
+				return;
+			}
+			this.#deps.onNotice?.("info", "Stage launched — graph execution started");
+		} catch (err) {
+			logger.error("[SwarmModeController] Failed to launch graph", { error: String(err) });
+			this.#deps.onNotice?.("error", `Failed to launch graph: ${err instanceof Error ? err.message : String(err)}`);
+		}
 	}
 
 	/** Detach the active graph from the current crew. */
-	detachGraph(): void {
+	async detachGraph(): Promise<void> {
 		if (!this.#activeCrewId) {
 			this.#deps.onNotice?.("warn", "No active crew — nothing to detach");
 			return;
 		}
+		const runner = this.#graphRunner;
+		this.#graphRunner = null;
+		if (runner) {
+			runner.detachCrew();
+			await runner
+				.dispose()
+				.catch(err => logger.error("[SwarmModeController] Failed to dispose graph bridge", { error: String(err) }));
+		}
 		const crew = this.#crewManager.getCrew(this.#activeCrewId);
 		if (crew) {
 			delete crew.state.activeGraph;
-			crew.channel.send("system", "[System] Graph detached — returning to free discussion").catch(() => {});
+			await crew.channel.send("system", "[System] Graph detached — returning to free discussion").catch(() => {});
 		}
-		this.#graphRunner?.detachCrew();
-		this.#graphRunner = null;
 		this.#deps.onNotice?.("info", "Graph detached");
 	}
 
@@ -262,7 +362,9 @@ export class SwarmModeController {
 	async createCrewWithDialog(name: string): Promise<string> {
 		const profiles = this.getAvailableProfiles();
 		if (profiles.length < 2) {
-			throw new Error(`Need at least 2 agent profiles (credit >= 30 recommended but not required); found ${profiles.length}`);
+			throw new Error(
+				`Need at least 2 agent profiles (credit >= 30 recommended but not required); found ${profiles.length}`,
+			);
 		}
 
 		// Build dialog items from profiles
@@ -282,7 +384,7 @@ export class SwarmModeController {
 		const dialog = new ProfileSelectDialog(
 			items,
 			this.#deps.theme,
-			async (selected) => {
+			async selected => {
 				try {
 					this.#pendingDialog = undefined;
 					// Reset stale swarm phase from previous sessions
@@ -360,7 +462,6 @@ export class SwarmModeController {
 		const crew = this.#crewManager.getCrew(this.#activeCrewId);
 		if (!crew) return;
 
-		const channel = crew.channel;
 		const memberIds = new Set(crew.state.members.map((m: { agentId: string }) => m.agentId));
 
 		// Build resolver from crew members
@@ -382,7 +483,8 @@ export class SwarmModeController {
 					prompts.push(
 						ref.session.prompt(mention.text).catch(err =>
 							logger.error("[SwarmModeController] Agent prompt failed", {
-								agentId: mention.agentId, error: String(err),
+								agentId: mention.agentId,
+								error: String(err),
 							}),
 						),
 					);
@@ -397,7 +499,8 @@ export class SwarmModeController {
 					prompts.push(
 						ref.session.prompt(parsed.broadcast).catch(err =>
 							logger.error("[SwarmModeController] Broadcast prompt failed", {
-								agentId: memberId, error: String(err),
+								agentId: memberId,
+								error: String(err),
 							}),
 						),
 					);
@@ -407,6 +510,14 @@ export class SwarmModeController {
 
 		// Fire all prompts in parallel (don't await — agent responses arrive via agent_end events)
 		Promise.all(prompts).catch(() => {});
+
+		// Forward the message to the attached graph bridge so the active phase
+		// behavior (Script/Curtain) can consume human input (e.g. confirm/applaud).
+		if (this.#graphRunner) {
+			await this.#graphRunner
+				.steer(text)
+				.catch(err => logger.error("[SwarmModeController] Graph steer failed", { error: String(err) }));
+		}
 
 		// Persist the human message to transcript
 		await this.#crewManager.persistMessage(this.#activeCrewId, "human", text);
@@ -449,10 +560,20 @@ export class SwarmModeController {
 			logger.warn("[SwarmModeController] Cannot spawn crew members: no models available");
 			return;
 		}
-		const model = availableModels[0];
+		// Model selection: per-profile model is not part of AgentProfile (yet), so
+		// resolve the shared crew.memberModel setting (model selector, default
+		// "smartest") first, fall back to the host session's current model when
+		// provided via deps, then to the first available model.
+		const configuredMemberModel = resolveModelOverride(
+			// Empty/undefined selector resolves to no model and falls through the chain.
+			[settings.get("crew.memberModel") ?? ""],
+			modelRegistry,
+			settings,
+		).model;
+		const model = configuredMemberModel ?? this.#deps.currentModel ?? availableModels[0];
 
 		// Spawn all agents in parallel — session creation is fast, prompts are fire-and-forget
-		const spawns = profileIds.map(async (profileId) => {
+		const spawns = profileIds.map(async profileId => {
 			const profile = profileRegistry.get(profileId);
 			if (!profile) return;
 
@@ -467,13 +588,23 @@ export class SwarmModeController {
 					agentId: profileId,
 					agentDisplayName: name,
 					model,
-					systemPrompt: [
-						`You are ${name}, a ${archetype} agent.`,
-						`Your expertise domains: ${domains || "general"}.`,
-						"You are participating in a multi-agent crew chat.",
-						"Respond to messages from the user and other agents concisely and helpfully.",
-					],
-					toolNames: ["read", "grep", "glob"],
+					systemPrompt:
+						// Crew-member contract. Future work: move to a prompts/*.md file once
+						// prompt-file management lands for crew members (repo rule: prompts live
+						// in .md); a plain inline template is intentional for now.
+						`You are ${name}, a ${archetype} agent.
+
+Your expertise domains: ${domains || "general"}.
+
+You are a persistent crew member (agent kind "main") of a multi-agent crew — not a one-shot subagent. You stay in the crew across turns, and your replies are recorded in the shared crew transcript. Your agent id is ${profileId}; crewmates and the human may address you with @${profileId}.
+
+Your role in this crew: ${profile.identity.description}.
+
+Rules:
+- Reply concisely; no preamble or filler.
+- Use your tools (read, grep, glob, edit, write, bash, todo) whenever the task requires inspecting or changing files.
+- Watch for @mentions of your agent id; when replying to a specific crewmate, address them by @mention.`,
+					toolNames: ["read", "grep", "glob", "edit", "write", "bash", "todo"],
 					modelRegistry,
 					settings,
 					hasIrcInterrupts: true,
@@ -514,13 +645,36 @@ export class SwarmModeController {
 					}
 				});
 
+				// Install the plan.md capture hook for graph mode: crew members have
+				// write tools, so their plan.md writes feed the attached GraphRunner
+				// bridge. Reads the CURRENT bridge on every call — writes before
+				// /graph theatre (or after /graph off) are simply dropped. Chains
+				// any pre-existing hook so its policy (e.g. blocking) still applies.
+				const previousToolHook = session.agent.beforeToolCall;
+				session.agent.beforeToolCall = async (ctx, signal) => {
+					const previous = previousToolHook ? await previousToolHook(ctx, signal) : undefined;
+					if (previous !== undefined) return previous;
+					if (ctx.toolCall.name === "write") {
+						const args = ctx.args as { path?: string; content?: string };
+						if (
+							typeof args.path === "string" &&
+							args.path.includes("plan.md") &&
+							typeof args.content === "string"
+						) {
+							this.#graphRunner?.onPlanUpdated(args.content);
+						}
+					}
+					return undefined;
+				};
+
 				// Agent is registered and wired — will start on first IRC message
 				logger.info("[SwarmModeController] Crew member registered", { profileId, name });
 
 				logger.info("[SwarmModeController] Crew member spawned", { profileId, name });
 			} catch (err) {
 				logger.error("[SwarmModeController] Failed to spawn crew member", {
-					profileId, error: String(err),
+					profileId,
+					error: String(err),
 				});
 			}
 		});
@@ -569,22 +723,6 @@ export class SwarmModeController {
 	}
 
 	// ========================================================================
-	// Agent Views
-	// ========================================================================
-
-	/** Open a per-agent conversation view. */
-	openAgentView(agentId: string): void {
-		// TODO: Phase 1.6 — create AgentConversationView
-		this.#deps.onNotice?.("info", `Agent view for ${agentId} — coming in Phase 2`);
-	}
-
-	/** Close a per-agent conversation view. */
-	closeAgentView(agentId: string): void {
-		this.#agentViews.delete(agentId);
-		this.#deps.onRequestRender?.();
-	}
-
-	// ========================================================================
 	// Member Management
 	// ========================================================================
 
@@ -608,7 +746,6 @@ export class SwarmModeController {
 
 	async dispose(): Promise<void> {
 		this.#crewViews.clear();
-		this.#agentViews.clear();
 
 		// Dispose each crew member's agent session and unregister from AgentRegistry
 		const registry = AgentRegistry.global();
@@ -629,6 +766,16 @@ export class SwarmModeController {
 				}
 				registry.unregister(member.agentId);
 			}
+		}
+
+		// Dispose any attached graph bridge (detach crew wiring, then dispose).
+		const runner = this.#graphRunner;
+		this.#graphRunner = null;
+		if (runner) {
+			runner.detachCrew();
+			await runner
+				.dispose()
+				.catch(err => logger.error("[SwarmModeController] Failed to dispose graph bridge", { error: String(err) }));
 		}
 
 		this.#activeCrewId = null;

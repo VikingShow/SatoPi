@@ -1259,6 +1259,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 			{ name: "list", description: "List available graph definition files" },
 			{ name: "compile", description: "Compile Mermaid or loop YAML to a graph definition", usage: "<path>" },
 			{ name: "theatre", description: "Attach the builtin theatre graph to the active crew" },
+			{ name: "launch", description: "Launch Stage on the attached graph (crew plan.md must exist)" },
 			{ name: "off", description: "Detach the active graph from the current crew" },
 		],
 		allowArgs: true,
@@ -1320,11 +1321,15 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				await runtime.output("Use /graph theatre from the TUI to attach the builtin theatre graph.");
 				return commandConsumed();
 			}
+			if (verb === "launch") {
+				await runtime.output("Use /graph launch from the TUI to launch Stage on the attached graph.");
+				return commandConsumed();
+			}
 			if (verb === "off") {
 				await runtime.output("Use /graph off from the TUI to detach the active graph.");
 				return commandConsumed();
 			}
-			return usage("Usage: /graph [run|list|compile <path>|theatre|off]", runtime);
+			return usage("Usage: /graph [run|list|compile <path>|theatre|launch|off]", runtime);
 		},
 		handleTui: async (command, runtime) => {
 			const { verb, rest } = parseSubcommand(command.args);
@@ -1387,16 +1392,21 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				runtime.ctx.editor.setText("");
 			}
 			if (verb === "theatre") {
-				runtime.ctx.swarmModeController?.attachGraph("builtin/theatre.graph.yaml");
+				await runtime.ctx.swarmModeController?.attachGraph("builtin/theatre.graph.yaml");
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "launch") {
+				await runtime.ctx.swarmModeController?.launchGraph();
 				runtime.ctx.editor.setText("");
 				return;
 			}
 			if (verb === "off") {
-				runtime.ctx.swarmModeController?.detachGraph();
+				await runtime.ctx.swarmModeController?.detachGraph();
 				runtime.ctx.editor.setText("");
 				return;
 			}
-			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>|theatre|off]");
+			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>|theatre|launch|off]");
 			runtime.ctx.editor.setText("");
 		},
 	},

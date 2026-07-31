@@ -5,7 +5,7 @@
  */
 
 import type { Component } from "@satopi/pi-tui";
-import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
+import type { AgentRef } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
 import { formatStatusIcon } from "../../../tools/render-utils";
 import type { Theme } from "../../theme/theme";
@@ -106,15 +106,6 @@ export function renderAgentPanel(
 		theme,
 	);
 }
-
-/**
- * Legacy convenience: reads from `AgentRegistry.global()` so callers don't
- * need to thread the registry reference themselves.
- */
-export function renderAgentPanelFromGlobalRegistry(swarmState: SwarmState | null | undefined, theme: Theme): Component {
-	return renderAgentPanel(AgentRegistry.global().list(), swarmState, theme);
-}
-
 // ============================================================================
 // Internal
 // ============================================================================

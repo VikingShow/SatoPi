@@ -11,25 +11,20 @@
  *   5. CrewManager: create and restore crews
  *   6. CrewManager: addMember and removeMember
  *   7. SwarmModeController.createCrew: rejects <2 agents
- *   8. CrewEntryBlock: renders collapsed by default
  */
 
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { ProfileRegistry as ProfileRegistryType } from "../../agent/agent-profile";
 import { ProfileRegistry } from "../../agent/agent-profile";
-import type { AgentRef, AgentKind, AgentStatus } from "../../registry/agent-registry";
 import { CrewManager } from "../../crew/crew-manager";
 import { IrcBus } from "../../irc/bus";
-import {
-	parseMentions,
-	createCrewMentionResolver,
-} from "../../modes/mention-parser";
 import { SwarmModeController, type SwarmModeControllerDeps } from "../../modes/controllers/swarm-mode-controller";
-import { CrewEntryBlock, type CrewEntryBlockInput } from "../../modes/components/swarm/crew-entry-block";
+import { createCrewMentionResolver, parseMentions } from "../../modes/mention-parser";
 import { getThemeByName, setThemeInstance, type Theme } from "../../modes/theme/theme";
+import type { AgentKind, AgentRef, AgentStatus } from "../../registry/agent-registry";
 
 // ============================================================================
 // Helpers
@@ -56,9 +51,7 @@ function makeRef(id: string, displayName: string): AgentRef {
 describe("parseMentions", () => {
 	test("splits @agent mentions and leaves no broadcast when text starts with @mention", () => {
 		const resolveAgent = (mention: string): string | null =>
-			mention === "architect" ? "architect"
-			: mention === "impl" ? "impl"
-			: null;
+			mention === "architect" ? "architect" : mention === "impl" ? "impl" : null;
 
 		const result = parseMentions("@architect design API @impl start coding", resolveAgent);
 
@@ -69,8 +62,7 @@ describe("parseMentions", () => {
 	});
 
 	test("extracts broadcast text before the first @mention", () => {
-		const resolveAgent = (mention: string): string | null =>
-			mention === "reviewer" ? "reviewer" : null;
+		const resolveAgent = (mention: string): string | null => (mention === "reviewer" ? "reviewer" : null);
 
 		const result = parseMentions("hello everyone @reviewer please check this", resolveAgent);
 
@@ -89,8 +81,7 @@ describe("parseMentions", () => {
 	});
 
 	test("strips @mentions inside backtick code blocks", () => {
-		const resolveAgent = (mention: string): string | null =>
-			mention === "architect" ? "architect" : null;
+		const resolveAgent = (mention: string): string | null => (mention === "architect" ? "architect" : null);
 
 		const result = parseMentions("run `@architect` please", resolveAgent);
 
@@ -134,9 +125,7 @@ describe("createCrewMentionResolver", () => {
 
 	test("matches case-insensitive agent ID", () => {
 		const memberIds = new Set(["architect"]);
-		const agentRefs = new Map<string, AgentRef>([
-			["architect", makeRef("architect", "Architect")],
-		]);
+		const agentRefs = new Map<string, AgentRef>([["architect", makeRef("architect", "Architect")]]);
 
 		const resolve = createCrewMentionResolver(memberIds, agentRefs);
 
@@ -146,9 +135,7 @@ describe("createCrewMentionResolver", () => {
 
 	test("matches by display name (case-insensitive)", () => {
 		const memberIds = new Set(["agent-1"]);
-		const agentRefs = new Map<string, AgentRef>([
-			["agent-1", makeRef("agent-1", "Senior Architect")],
-		]);
+		const agentRefs = new Map<string, AgentRef>([["agent-1", makeRef("agent-1", "Senior Architect")]]);
 
 		const resolve = createCrewMentionResolver(memberIds, agentRefs);
 
@@ -158,9 +145,7 @@ describe("createCrewMentionResolver", () => {
 
 	test("matches by unambiguous ID prefix", () => {
 		const memberIds = new Set(["architect-v2"]);
-		const agentRefs = new Map<string, AgentRef>([
-			["architect-v2", makeRef("architect-v2", "Architect v2")],
-		]);
+		const agentRefs = new Map<string, AgentRef>([["architect-v2", makeRef("architect-v2", "Architect v2")]]);
 
 		const resolve = createCrewMentionResolver(memberIds, agentRefs);
 
@@ -169,9 +154,7 @@ describe("createCrewMentionResolver", () => {
 
 	test("returns null for non-members", () => {
 		const memberIds = new Set(["architect"]);
-		const agentRefs = new Map<string, AgentRef>([
-			["architect", makeRef("architect", "Architect")],
-		]);
+		const agentRefs = new Map<string, AgentRef>([["architect", makeRef("architect", "Architect")]]);
 
 		const resolve = createCrewMentionResolver(memberIds, agentRefs);
 
@@ -363,16 +346,12 @@ describe("SwarmModeController.createCrew", () => {
 
 	test("rejects fewer than 2 agents", async () => {
 		const ctrl = makeController();
-		await expect(ctrl.createCrew("Solo Crew", ["agent-1"])).rejects.toThrow(
-			"A crew requires at least 2 agents",
-		);
+		await expect(ctrl.createCrew("Solo Crew", ["agent-1"])).rejects.toThrow("A crew requires at least 2 agents");
 	});
 
 	test("rejects empty agent list", async () => {
 		const ctrl = makeController();
-		await expect(ctrl.createCrew("Empty Crew", [])).rejects.toThrow(
-			"A crew requires at least 2 agents",
-		);
+		await expect(ctrl.createCrew("Empty Crew", [])).rejects.toThrow("A crew requires at least 2 agents");
 	});
 
 	test("creates crew with 2+ agents and focuses it", async () => {
@@ -410,140 +389,5 @@ describe("SwarmModeController.createCrew", () => {
 		await ctrl.removeMember("agent-1");
 		crew = ctrl.getActiveCrew();
 		expect(crew!.members.some(m => m.agentId === "agent-1")).toBe(false);
-	});
-});
-
-// ============================================================================
-// CrewEntryBlock rendering
-// ============================================================================
-
-describe("CrewEntryBlock", () => {
-	let theme: Theme;
-
-	beforeAll(async () => {
-		const loaded = await getThemeByName("satopi");
-		if (!loaded) throw new Error("theme unavailable");
-		setThemeInstance(loaded);
-		theme = loaded;
-	});
-
-	function makeInput(overrides?: Partial<CrewEntryBlockInput>): CrewEntryBlockInput {
-		return {
-			agentId: "test-agent",
-			displayName: "Test Agent",
-			body: "This is a test response.\nIt has multiple lines.",
-			timestamp: Date.now(),
-			...overrides,
-		};
-	}
-
-	test("renders collapsed by default", () => {
-		const block = new CrewEntryBlock(makeInput(), theme);
-		const lines = block.render(80);
-
-		expect(lines.length).toBeGreaterThan(0);
-		// Collapsed view shows a truncated preview (first 2 lines of body)
-		const joined = lines.join("\n");
-		expect(joined).toContain("This is a test response.");
-
-		// Should contain an expand hint
-		expect(joined).toContain("Expand");
-	});
-
-	test("renders full body when expanded", () => {
-		const block = new CrewEntryBlock(makeInput(), theme);
-
-		// Toggle to expanded via handleInput (Enter key)
-		block.handleInput("\r");
-
-		const lines = block.render(80);
-		const joined = lines.join("\n");
-
-		expect(joined).toContain("This is a test response.");
-		expect(joined).toContain("It has multiple lines.");
-		// Expanded view should NOT have expand hint
-		expect(joined).not.toContain("Expand");
-	});
-
-	test("renders tool call summary in collapsed view", () => {
-		const input = makeInput({
-			toolCalls: [
-				{ name: "read", summary: "read file.ts" },
-				{ name: "grep", summary: "search for pattern" },
-			],
-		});
-		const block = new CrewEntryBlock(input, theme);
-		const lines = block.render(80);
-		const joined = lines.join("\n");
-
-		expect(joined).toContain("2 tool calls");
-		expect(joined).toContain("read()");
-		expect(joined).toContain("grep()");
-	});
-
-	test("renders tool calls in expanded view", () => {
-		const input = makeInput({
-			toolCalls: [
-				{ name: "bash", summary: "npm install" },
-			],
-		});
-		const block = new CrewEntryBlock(input, theme);
-		block.handleInput("\r"); // expand
-
-		const lines = block.render(80);
-		const joined = lines.join("\n");
-
-		expect(joined).toContain("bash()");
-		expect(joined).toContain("npm install");
-	});
-
-	test("renders credit badge when creditScore is provided", () => {
-		const input = makeInput({ creditScore: 85 });
-		const block = new CrewEntryBlock(input, theme);
-		const lines = block.render(80);
-		const joined = lines.join("\n");
-
-		expect(joined).toContain("credit:85");
-	});
-
-	test("renders without error with minimal input", () => {
-		const input: CrewEntryBlockInput = {
-			agentId: "minimal-agent",
-			displayName: "Minimal",
-			body: "",
-			timestamp: 0,
-		};
-		const block = new CrewEntryBlock(input, theme);
-		const lines = block.render(40);
-
-		expect(lines.length).toBeGreaterThan(0);
-	});
-
-	test("handleInput toggles collapse state on Enter", () => {
-		const block = new CrewEntryBlock(makeInput(), theme);
-
-		// Initially collapsed
-		let lines = block.render(80);
-		expect(lines.join("\n")).toContain("Expand");
-
-		// Expand on Enter
-		block.handleInput("\r");
-		lines = block.render(80);
-		expect(lines.join("\n")).not.toContain("Expand");
-
-		// Collapse on Enter again
-		block.handleInput("\r");
-		lines = block.render(80);
-		expect(lines.join("\n")).toContain("Expand");
-	});
-
-	test("renders status icons correctly", () => {
-		const statuses: Array<CrewEntryBlockInput["status"]> = ["completed", "running", "failed", "pending"];
-		for (const status of statuses) {
-			const input = makeInput({ status });
-			const block = new CrewEntryBlock(input, theme);
-			const lines = block.render(80);
-			expect(lines.length).toBeGreaterThan(0);
-		}
 	});
 });

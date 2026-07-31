@@ -491,7 +491,7 @@ describe("StageBehavior", () => {
 		behavior = new StageBehavior();
 		ctx = mockPhaseContext({
 			planContent:
-				"## Tasks\n- [ ] build-api (type: develop, role: backend-dev)\n- [ ] test-api (type: test, role: tester)",
+				"## Tasks\n- [ ] build-api (type: develop) (role: backend-dev)\n- [ ] test-api (type: test) (role: tester)",
 		});
 	});
 

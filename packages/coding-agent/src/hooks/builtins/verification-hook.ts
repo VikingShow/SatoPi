@@ -9,9 +9,39 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { VerificationHook } from "../../swarm/core/verification-hook";
 import type { Chapter } from "../../types/chapter";
 import type { HandlerArgs, HookContext, HookRegistration } from "../types";
+
+// ---------------------------------------------------------------------------
+// Verification runner contract
+// ---------------------------------------------------------------------------
+
+/** Result of a single verification command execution. */
+export interface VerificationCommandResult {
+	/** The shell command that was executed. */
+	command: string;
+	/** Process exit code (0 = success). */
+	exitCode: number;
+	/** Combined stdout + stderr output. */
+	output: string;
+}
+
+/** Aggregate result of a verification run. */
+export interface VerificationResult {
+	/** True when all commands exited with code 0. */
+	passed: boolean;
+	/** Per-command results, in execution order. */
+	results: VerificationCommandResult[];
+}
+
+/**
+ * Structural contract for a verification runner.
+ * (Formerly the concrete VerificationHook class in swarm/core — that class had
+ * zero production callers, so only this interface is retained.)
+ */
+export interface VerificationHook {
+	run(commands: string[]): Promise<VerificationResult>;
+}
 
 // ---------------------------------------------------------------------------
 // Active phases for this hook

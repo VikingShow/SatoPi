@@ -306,3 +306,16 @@ Unify the agent type system (eliminate `persistent`), restructure session persis
   - Files: `plan.md` → `docs/swarm/refactoring-plan-2026-07-30.md`
   - Change: Move to docs. Clean working tree.
   - Acceptance: Plan archived. Git working tree clean (no untracked plan.md in root).
+
+---
+
+## 2026-07-31 — Phase 2 completion (swarm TUI optimization follow-up)
+
+Phase 2 of `docs/swarm/tui-crew-optimization-plan.md` executed on 2026-07-31:
+
+- **Crew members upgraded** (`swarm-mode-controller.ts`): model chain `crew.memberModel` (default `smartest`) → session model → first available; tools `read/grep/glob/edit/write/bash/todo`; richer persistent-main-agent system prompt. `openAgentView` TODO stub removed.
+- **Magic keyword fixes** (`agent-session.ts`): single plan.md capture hook (`#installSwarmPlanCaptureHook`) with pending-buffer flush; per-run swarmDir (`swarm-<session>-run<ts>`); idle bridge disposed before a new run (`isRunning` gate).
+- **Dead code deleted**: `swarm/stage/stage-controller.ts`, `swarm/stage/role-roundtable.ts`, `swarm/infra/swarm-hooks.ts`, `swarm/core/verification-hook.ts` (interface moved to `hooks/builtins/verification-hook.ts`), `swarm/session/session-types.ts` (merged into `session-registry.ts`), `agent-conversation-view.ts`, `crew-entry-block.ts`; StateTracker loop-mode API removed (kept `getBestAgent`, `transitionHistory`); `renderAgentPanelFromGlobalRegistry` removed; `swarm.engine` setting and `--engine legacy` CLI flag removed.
+- **`stp swarm resume` implemented** (`swarm-cli.ts`): checkpoint recovery via `GraphRunner.resumeGraphRun`, reads all session files oldest-first so prior-run checkpoints are visible.
+- **`/graph theatre` wired to a real GraphRunner** (`swarm-mode-controller.ts` + `builtin-registry.ts`): attach builds infra + GraphRunner (builtin theatre.graph.yaml), attaches to the crew channel, member plan.md writes feed `onPlanUpdated` via a chained per-session hook, human input forwards to `bridge.steer()`, new `/graph launch` verb gates on `isPlanReady()` then `confirmScript()`.
+- **Verification**: `bun test src/swarm/__tests__` 400/400 pass (incl. previously pre-existing failures in task-queue/behaviors/unified-abstraction-e2e fixed); `bun run check` 12 pre-existing errors remaining (all in untouched files, down from 24 baseline).

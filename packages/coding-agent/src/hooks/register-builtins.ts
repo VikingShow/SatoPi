@@ -15,13 +15,13 @@ import type { ProfileRegistry } from "../agent/agent-profile";
 import type { MarkEnvironment } from "../coordination";
 import type { ExperienceStore } from "../experience/experience";
 import type { IOffloadManager } from "../offload/manager";
-import type { VerificationHook } from "../swarm/core/verification-hook";
 import type { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
 import { createExperienceHook } from "./builtins/experience-hook";
 import { createMnemopiHook } from "./builtins/mnemopi-hook";
 import { createOffloadHook } from "./builtins/offload-hook";
 import { createProfileHook } from "./builtins/profile-hook";
 import { createStigmergyHook } from "./builtins/stigmergy-hook";
+import type { VerificationHook } from "./builtins/verification-hook";
 import { createVerificationHook } from "./builtins/verification-hook";
 import type { HookPipeline } from "./hook-pipeline";
 

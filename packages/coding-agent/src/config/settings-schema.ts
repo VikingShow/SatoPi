@@ -1773,15 +1773,14 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	"swarm.engine": {
-		type: "enum",
-		values: ["graph", "legacy"],
-		default: "graph",
+	"crew.memberModel": {
+		type: "string",
+		default: "smartest",
 		ui: {
 			tab: "magic",
-			group: "Swarm",
-			label: "Swarm Engine",
-			description: "Swarm execution engine (graph = Theatre Graph, legacy deprecated).",
+			group: "Crew",
+			label: "Crew Member Model",
+			description: "Model selector used to spawn crew members (e.g. smartest, or provider/model-id).",
 		},
 	},
 

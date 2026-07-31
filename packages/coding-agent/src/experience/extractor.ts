@@ -12,7 +12,24 @@
  *   - Review verdicts (alignment issues, safety flags)
  */
 
-import type { StageResult } from "../swarm/stage/stage-controller";
+import type { SingleResult } from "../task/types";
+
+// ============================================================================
+// Stage result contract — consumed by lesson extraction
+// ============================================================================
+
+/** Result of a stage execution, as produced by the Stage phase. */
+export interface StageResult {
+	status: "completed" | "failed" | "aborted";
+	agentResults: Map<string, SingleResult[]>;
+	errors: string[];
+	/** Selected agents with their assigned roles. */
+	agents: Array<{ id: string; role: string }>;
+	/** Task queue progress snapshot. */
+	taskProgress: { total: number; completed: number };
+	/** Non-fatal degradation events accumulated during stage execution. */
+	degradedMode: string[];
+}
 
 // ============================================================================
 // Types

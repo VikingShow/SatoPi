@@ -305,7 +305,7 @@ import {
 import { invalidateHostMetadata } from "../ssh/connection-manager";
 import { setCurrentSwarmPhase } from "../swarm/core/state";
 import { createSwarmInfra } from "../swarm/core/swarm-infra";
-import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
+import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-registry";
 import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import type { SingleResult } from "../task/types";
@@ -1762,6 +1762,12 @@ export class AgentSession {
 	#advisorRecorderClosed: Promise<void> = Promise.resolve();
 	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
 	#embeddedSwarm: ISwarmOrchestrator | null = null;
+	/** In-flight #initializeEmbeddedSwarm promise — guards against double init on overlapping swarm prompts. */
+	#swarmInitPromise: Promise<void> | null = null;
+	/** plan.md writes captured while the swarm bridge is not yet ready (last write wins). */
+	#pendingPlanCaptures: string[] = [];
+	/** True once the plan.md capture hook is installed on this session's agent (exactly once). */
+	#swarmPlanCaptureHookInstalled = false;
 	#swarmServices = new Map<string, SessionServices>();
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
@@ -8211,35 +8217,31 @@ export class AgentSession {
 				attribution: "user",
 				timestamp,
 			});
-
-			// Register plan.md capture hook SYNCHRONOUSLY — BEFORE the
-			// fire-and-forget init. The model starts processing immediately
-			// and may write plan.md before the bridge is ready.
-			const planCapture = this.#embeddedSwarm;
-			if (!planCapture) {
-				this.agent.beforeToolCall = ctx => {
-					const bridge = this.#embeddedSwarm;
-					if (!bridge) return undefined;
-					if (ctx.toolCall.name === "write") {
-						const args = ctx.args as { path?: string; content?: string };
-						if (
-							typeof args.path === "string" &&
-							args.path.includes("plan.md") &&
-							typeof args.content === "string"
-						) {
-							this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-							bridge.onPlanUpdated(args.content);
-						}
-					}
-					return undefined;
-				};
+			// The plan.md capture hook lives on the session (installed exactly once
+			// in #initializeEmbeddedSwarm) and reads the CURRENT #embeddedSwarm on
+			// every call — plan.md writes are forwarded to the live bridge, or
+			// buffered while no bridge is ready yet. If a previous swarm run left
+			// an idle bridge behind, recycle it so this run gets a fresh
+			// GraphRunner + swarmDir instead of reusing the old run's state.
+			const existingBridge = this.#embeddedSwarm;
+			if (existingBridge && !existingBridge.isRunning) {
+				this.#embeddedSwarm = null;
+				existingBridge
+					.dispose()
+					.catch(err => logger.error("Failed to dispose stale swarm bridge", { error: String(err) }));
 			}
 
-			// Initialize embedded swarm bridge (fire-and-forget — must not block the prompt)
-			if (!this.#embeddedSwarm) {
-				this.#initializeEmbeddedSwarm().catch(err => {
-					logger.error("Failed to init embedded swarm bridge", { error: String(err) });
-				});
+			// Initialize embedded swarm bridge (fire-and-forget — must not block
+			// the prompt). While it initializes, plan.md writes are buffered by
+			// the capture hook and flushed once the bridge is ready.
+			if (!this.#embeddedSwarm && !this.#swarmInitPromise) {
+				this.#swarmInitPromise = this.#initializeEmbeddedSwarm()
+					.catch(err => {
+						logger.error("Failed to init embedded swarm bridge", { error: String(err) });
+					})
+					.finally(() => {
+						this.#swarmInitPromise = null;
+					});
 			}
 		}
 		if (
@@ -8259,56 +8261,94 @@ export class AgentSession {
 		return keywordNotices;
 	}
 
-	async #initializeEmbeddedSwarm(): Promise<void> {
-		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
-		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
-
-		const profileRegistry = ProfileRegistry.global();
-		const infra = await createSwarmInfra({
-			workspace: process.cwd(),
-			swarmDir,
-			swarmName: sessionId,
-			modelRegistry: this.#modelRegistry,
-			settings: this.settings,
-			profileRegistry,
-			startPhase: "script",
-		});
-
-		const builtinGraphPath = path.resolve(import.meta.dir, "..", "graph", "builtin", "theatre.graph.yaml");
-		const bridge = new GraphRunner({
-			workspace: process.cwd(),
-			graphPath: builtinGraphPath,
-			swarmDir,
-			modelRegistry: this.#modelRegistry,
-			settings: this.settings,
-			profileRegistry,
-			maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
-			maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
-			autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
-			infra,
-			onPhaseChange: phase => setCurrentSwarmPhase(phase),
-			debateRoundtableFactory: config => new DebateRoundtable(config),
-			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
-		});
-
-		// Register beforeToolCall BEFORE bridge.init() — catch plan writes early
-		const planCapture = bridge;
+	/**
+	 * Install the plan.md capture hook — exactly once per session. Called from
+	 * #initializeEmbeddedSwarm (the only place that owns the bridge) before its
+	 * first await, so plan.md writes during the init window are captured, not
+	 * dropped. The hook reads the CURRENT #embeddedSwarm on every call: writes
+	 * are forwarded to the live bridge, or buffered in #pendingPlanCaptures
+	 * while no bridge is ready (init window / between runs). The buffer is
+	 * flushed by #initializeEmbeddedSwarm once the new bridge is installed.
+	 */
+	#installSwarmPlanCaptureHook(): void {
+		if (this.#swarmPlanCaptureHookInstalled) return;
+		this.#swarmPlanCaptureHookInstalled = true;
 		this.agent.beforeToolCall = ctx => {
-			if (ctx.toolCall.name === "write") {
-				const args = ctx.args as { path?: string; content?: string };
-				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-					this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-					planCapture.onPlanUpdated(args.content);
-				}
+			if (ctx.toolCall.name !== "write") return undefined;
+			const args = ctx.args as { path?: string; content?: string };
+			if (typeof args.path !== "string" || !args.path.includes("plan.md") || typeof args.content !== "string") {
+				return undefined;
+			}
+			this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
+			const bridge = this.#embeddedSwarm;
+			if (bridge) {
+				bridge.onPlanUpdated(args.content);
+			} else {
+				// Bridge not ready yet — keep only the latest write (last write wins).
+				this.#pendingPlanCaptures = [args.content];
 			}
 			return undefined;
 		};
+	}
 
-		await bridge.init();
-		this.emitNotice("info", "Swarm orchestration mode active.", "swarm");
-		this.setToolContextAgentRuntime(bridge.runtime);
-		this.#embeddedSwarm = bridge;
-		logger.info("[AgentSession] GraphRunner initialized (swarm keyword)", { sessionId, swarmDir });
+	async #initializeEmbeddedSwarm(): Promise<void> {
+		// Install the single plan.md capture hook before the first await — the
+		// model may write plan.md while createSwarmInfra/bridge.init() run.
+		this.#installSwarmPlanCaptureHook();
+
+		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
+		const runSuffix = Date.now().toString(36);
+		const swarmName = `${sessionId}-run${runSuffix}`;
+		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${swarmName}`;
+
+		try {
+			const profileRegistry = ProfileRegistry.global();
+			const infra = await createSwarmInfra({
+				workspace: process.cwd(),
+				swarmDir,
+				swarmName,
+				modelRegistry: this.#modelRegistry,
+				settings: this.settings,
+				profileRegistry,
+				startPhase: "script",
+			});
+
+			const builtinGraphPath = path.resolve(import.meta.dir, "..", "graph", "builtin", "theatre.graph.yaml");
+			const bridge = new GraphRunner({
+				workspace: process.cwd(),
+				graphPath: builtinGraphPath,
+				swarmDir,
+				modelRegistry: this.#modelRegistry,
+				settings: this.settings,
+				profileRegistry,
+				maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
+				maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
+				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
+				infra,
+				onPhaseChange: phase => setCurrentSwarmPhase(phase),
+				debateRoundtableFactory: config => new DebateRoundtable(config),
+				readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+			});
+
+			await bridge.init();
+			this.emitNotice("info", "Swarm orchestration mode active.", "swarm");
+			this.setToolContextAgentRuntime(bridge.runtime);
+			this.#embeddedSwarm = bridge;
+
+			// Flush plan.md writes captured while the bridge was initializing.
+			const pending = this.#pendingPlanCaptures;
+			this.#pendingPlanCaptures = [];
+			for (const content of pending) {
+				bridge.onPlanUpdated(content);
+			}
+
+			logger.info("[AgentSession] GraphRunner initialized (swarm keyword)", { sessionId, swarmDir });
+		} catch (err) {
+			// A failed init can never flush its captures — drop them so a later
+			// run doesn't receive stale plan content from this one.
+			this.#pendingPlanCaptures = [];
+			throw err;
+		}
 	}
 
 	/**

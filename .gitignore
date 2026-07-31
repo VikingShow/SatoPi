@@ -84,3 +84,6 @@ packages/coding-agent/bench/boot-baseline.json
 *.swarm-workspace/
 
 plan.md
+
+# test-generated agent profile dump
+packages/coding-agent/profiles.json
