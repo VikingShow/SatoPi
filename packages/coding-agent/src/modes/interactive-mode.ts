@@ -4815,25 +4815,26 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#crewStartOverlayHandle?.hide();
 
 		// Mount as a normal (non-fullscreen) overlay anchored top-left so the
-		// status line and editor stay visible below it. maxHeight leaves 1 status
-		// row + 1 breathing row under the editor's current line count. The editor
-		// keeps focus: the input-controller's empty-editor key chain arbitrates
-		// crew navigation (j/k/f/t/r/Esc) while typing still works. The view
-		// implements OverlayFocusOwner so setFocus(editor) is not redirected.
-		// The overlay engine paints against the TUI's own viewport height
-		// (terminal.rows), which is NOT always process.stdout.rows: stdout may
-		// not be a TTY (rows undefined), or the terminal may report in-band
-		// DEC 2048 resize geometry that supersedes it. Sizing maxHeight from
-		// process.stdout.rows alone let the overlay outgrow the viewport and
-		// paint over the editor's rows at the bottom, hiding the input box.
-		// Derive the budget from the same viewport the engine composites
-		// against, so the overlay can never reach the editor.
-		const rows = this.ui.terminal.rows;
+		// status line and editor stay visible below it.
+		//
+		// Height budget: the overlay must never cover the editor. The editor
+		// sits at the END of the content frame — which is NOT always the bottom
+		// of the viewport. With a short frame (fresh session, welcome screen),
+		// the frame is shorter than the terminal and the editor renders at the
+		// content bottom (mid-screen), while rows below the frame stay blank.
+		// Budgeting maxHeight from terminal rows alone let the overlay extend
+		// past the editor's real position and hide the input box. Derive the
+		// ceiling from the last frame's length minus the editor's own rows, so
+		// the overlay ends one row above the editor wherever it sits; the frame
+		// only grows from here (chat history, notices), which moves the editor
+		// DOWN — never back under the overlay.
+		const frameLength = this.ui.lastFrameLength;
 		const editorLines = Math.max(1, this.editor.getLines().length);
+		const editorTop = Math.max(0, frameLength - editorLines);
 		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
 			anchor: "top-left",
 			width: "100%",
-			maxHeight: Math.max(10, rows - editorLines - 2),
+			maxHeight: Math.max(10, editorTop - 1),
 			margin: 0,
 		});
 		this.ui.setFocus(this.editor);

@@ -473,6 +473,15 @@ export class SwarmModeController {
 		const resolveAgent = createCrewMentionResolver(memberIds, agentRefs);
 
 		const parsed = parseMentions(text, resolveAgent);
+		logger.info("[handleUserInput] diag", {
+			text: text.slice(0, 40),
+			memberIds: [...memberIds],
+			agentRefs: [...agentRefs.keys()],
+			broadcast: parsed.broadcast?.slice(0, 40),
+			registryIds: AgentRegistry.global()
+				.list()
+				.map(r => r.id),
+		});
 
 		// Route directed messages — start agent loop with user's message as prompt
 		const prompts: Promise<unknown>[] = [];
@@ -496,6 +505,11 @@ export class SwarmModeController {
 		if (parsed.broadcast) {
 			for (const [memberId, ref] of agentRefs) {
 				if (ref.session) {
+					logger.info("[SwarmModeController] broadcast diag", {
+						memberId,
+						textLength: parsed.broadcast.length,
+						status: ref.session.status,
+					});
 					prompts.push(
 						ref.session.prompt(parsed.broadcast).catch(err =>
 							logger.error("[SwarmModeController] Broadcast prompt failed", {
@@ -619,6 +633,12 @@ Rules:
 					session,
 					parentId: "Main",
 					sessionFile: null,
+				});
+				logger.info("[spawn] registered diag", {
+					id: profileId,
+					registryIds: AgentRegistry.global()
+						.list()
+						.map(r => r.id),
 				});
 
 				// Wire agent response capture to crew transcript
