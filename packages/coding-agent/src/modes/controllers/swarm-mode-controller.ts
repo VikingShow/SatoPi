@@ -473,15 +473,6 @@ export class SwarmModeController {
 		const resolveAgent = createCrewMentionResolver(memberIds, agentRefs);
 
 		const parsed = parseMentions(text, resolveAgent);
-		logger.info("[handleUserInput] diag", {
-			text: text.slice(0, 40),
-			memberIds: [...memberIds],
-			agentRefs: [...agentRefs.keys()],
-			broadcast: parsed.broadcast?.slice(0, 40),
-			registryIds: AgentRegistry.global()
-				.list()
-				.map(r => r.id),
-		});
 
 		// Route directed messages — start agent loop with user's message as prompt
 		const prompts: Promise<unknown>[] = [];
@@ -505,11 +496,6 @@ export class SwarmModeController {
 		if (parsed.broadcast) {
 			for (const [memberId, ref] of agentRefs) {
 				if (ref.session) {
-					logger.info("[SwarmModeController] broadcast diag", {
-						memberId,
-						textLength: parsed.broadcast.length,
-						status: ref.session.status,
-					});
 					prompts.push(
 						ref.session.prompt(parsed.broadcast).catch(err =>
 							logger.error("[SwarmModeController] Broadcast prompt failed", {
@@ -625,21 +611,32 @@ Rules:
 				});
 
 				const session = result.session;
-				AgentRegistry.global().register({
-					id: profileId,
-					displayName: name,
-					kind: "main" as const,
-					profileId,
-					session,
-					parentId: "Main",
-					sessionFile: null,
-				});
-				logger.info("[spawn] registered diag", {
-					id: profileId,
-					registryIds: AgentRegistry.global()
-						.list()
-						.map(r => r.id),
-				});
+				// createAgentSession (src/sdk.ts createAgentSession) ALREADY
+				// pre-registers the agent ref (id=agentId, kind="main",
+				// displayName from agentDisplayName) and attaches the session,
+				// wrapping dispose so teardown unregisters the ref. Registering
+				// AGAIN here hit the duplicate path: the old ref (this same
+				// session) was disposed, whose dispose wrapper then unregistered
+				// the member — leaving crew members invisible to
+				// AgentRegistry.get() (no @mention/broadcast delivery). Use the
+				// pre-registered ref and only backfill profileId (the sdk
+				// pre-register does not carry it).
+				const registeredRef = AgentRegistry.global().get(profileId);
+				if (registeredRef) {
+					registeredRef.profileId = profileId;
+				} else {
+					// Defensive fallback (unreachable with the sdk path): register
+					// the member ref manually rather than dropping it silently.
+					AgentRegistry.global().register({
+						id: profileId,
+						displayName: name,
+						kind: "main" as const,
+						profileId,
+						session,
+						parentId: "Main",
+						sessionFile: null,
+					});
+				}
 
 				// Wire agent response capture to crew transcript
 				session.subscribe(event => {
