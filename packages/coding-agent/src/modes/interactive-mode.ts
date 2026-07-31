@@ -865,6 +865,10 @@ export class InteractiveMode implements InteractiveModeContext {
 				if (level === "error") this.showError(message);
 				else this.showWarning(message);
 			},
+			onLeaveCrew: () => {
+				this.#crewStartOverlayHandle?.hide();
+				this.#updateSwarmModeStatus();
+			},
 		});
 		await this.swarmModeController.init();
 		this.keybindings = logger.time("InteractiveMode.init:keybindings", () => KeybindingsManager.create());
@@ -1226,6 +1230,11 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * reflect `newCwd` before this is called.
 	 */
 	async applyCwdChange(newCwd: string): Promise<void> {
+		// Save profiles for the old workspace before switching so queued
+		// edits and metadata are not lost (P1-4).
+		if (this.#profileCwd) {
+			await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+		}
 		setProjectDir(newCwd);
 		this.#profileCwd = newCwd;
 		await ProfileRegistry.initGlobal(newCwd);
@@ -4000,6 +4009,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#btwController.dispose();
 		this.#omfgController.dispose();
 		this.#focusController.dispose();
+		await this.swarmModeController?.dispose();
 
 		// Persist agent profiles to disk before session teardown.
 		// Use the cwd captured at init time; getProjectDir() may have

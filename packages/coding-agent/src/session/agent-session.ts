@@ -6254,6 +6254,11 @@ export class AgentSession {
 		this.#embeddedSwarm
 			?.dispose()
 			.catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
+		// NOTE: `process.cwd()` may differ from the TUI's `#profileCwd` when
+		// called from a swarm session whose embedded process has its own
+		// working directory. This is acceptable — the embedded swarm path
+		// carries its own cwd context, and `applyCwdChange` already saves the
+		// prior workspace's profiles before switching (P1-5).
 		ProfileRegistry.global()
 			.save(process.cwd())
 			.catch(err => logger.error("Failed to save ProfileRegistry on dispose", { error: String(err) }));

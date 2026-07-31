@@ -1227,6 +1227,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		description: "Swarm operations",
 		subcommands: [
 			{ name: "start", description: "Start a new agent crew" },
+			{ name: "off", description: "Leave the current crew" },
 		],
 		allowArgs: true,
 		handleTui: async (command, runtime) => {
@@ -1242,7 +1243,12 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				runtime.ctx.editor.setText("");
 				return;
 			}
-			runtime.ctx.showError("Usage: /swarm [start [name] | dashboard]");
+			if (verb === "off") {
+				runtime.ctx.swarmModeController?.leaveCrew();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showError("Usage: /swarm [start [name] | off | dashboard]");
 		},
 	},
 	{

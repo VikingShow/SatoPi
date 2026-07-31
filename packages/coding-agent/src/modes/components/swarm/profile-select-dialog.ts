@@ -39,6 +39,7 @@ export class ProfileSelectDialog implements Component {
 	readonly #onConfirm: (selected: string[]) => void;
 	readonly #onCancel: () => void;
 	#cursorIdx = 0;
+	#invalidAttempt = false;
 	#closed = false;
 
 	constructor(
@@ -114,15 +115,23 @@ export class ProfileSelectDialog implements Component {
 
 		// Footer divider
 		out.push(`${t.fg(bc, "\u251c")}${t.fg(bc, "\u2500".repeat(inner))}${t.fg(bc, "\u2524")}`);
-
 		// Footer
 		const n = this.#items.filter((x) => x.selected).length;
 		const hint = n >= MIN_SELECTED
 			? ` ${n} selected \u2014 Enter to confirm `
-			: ` Select at least ${MIN_SELECTED} agents `;
+			: ` Select at least ${MIN_SELECTED} (${n} selected) `;
 		const footer = `${hint}${t.fg("dim", "Esc/q to cancel")}`;
 		const fPad = Math.max(0, inner - visibleLen(footer));
 		out.push(`${t.fg(bc, "\u2502")}${footer}${" ".repeat(fPad)}${t.fg(bc, "\u2502")}`);
+
+		// Invalid-attempt warning (flashed for one render cycle)
+		if (this.#invalidAttempt) {
+			this.#invalidAttempt = false;
+			const warn = ` Select at least ${MIN_SELECTED} agents before confirming `;
+			const wPad = Math.max(0, inner - visibleLen(warn));
+			out.push(`${t.fg(bc, "\u251c")}${t.fg(bc, "\u2500".repeat(inner))}${t.fg(bc, "\u2524")}`);
+			out.push(`${t.fg(bc, "\u2502")}${t.fg("warning", warn)}${" ".repeat(wPad)}${t.fg(bc, "\u2502")}`);
+		}
 
 		// Bottom border
 		out.push(t.fg(bc, `${"\u2514"}${"\u2500".repeat(inner)}${"\u2518"}`));
@@ -150,6 +159,8 @@ export class ProfileSelectDialog implements Component {
 			if (selected.length >= MIN_SELECTED) {
 				this.#closed = true;
 				this.#onConfirm(selected);
+			} else {
+				this.#invalidAttempt = true;
 			}
 		} else if (matchesKey(data, "escape") || data === "q") {
 			this.#closed = true;

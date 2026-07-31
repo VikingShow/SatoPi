@@ -57,15 +57,17 @@ export interface CrewTranscriptState {
 export class CrewTranscriptView implements Component {
 	readonly #state: CrewTranscriptState;
 	readonly #theme: Theme;
+	readonly #onClose?: () => void;
 	#showFilterPopup = false;
 	#showTools = true;
 	#filteredAgentIds = new Set<string>();
 	/** Current round filter: 0 = all, N = round N only. */
 	#roundFilter = 0;
 
-	constructor(state: CrewTranscriptState, theme: Theme) {
+	constructor(state: CrewTranscriptState, theme: Theme, onClose?: () => void) {
 		this.#state = state;
 		this.#theme = theme;
+		this.#onClose = onClose;
 	}
 
 	/** Append an entry to the transcript. */
@@ -177,6 +179,9 @@ export class CrewTranscriptView implements Component {
 
 	handleInput(data: string): void {
 		switch (data) {
+			case "\x1b":
+				this.#onClose?.();
+				break;
 			case "f":
 			case "F":
 				this.#showFilterPopup = !this.#showFilterPopup;

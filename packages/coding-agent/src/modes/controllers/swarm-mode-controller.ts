@@ -59,6 +59,8 @@ export interface SwarmModeControllerDeps {
 	onNotice?: (level: "info" | "warn" | "error", message: string) => void;
 	/** Swarm orchestrator bridge (GraphRunner). Null until a graph is attached. */
 	orchestrator?: ISwarmOrchestrator | null;
+	/** Called when the user leaves the current crew (via Escape / /swarm off). */
+	onLeaveCrew?: () => void;
 }
 
 export interface CrewViewHandle {
@@ -125,6 +127,16 @@ export class SwarmModeController {
 	/** Get the active crew ID, if any. */
 	get activeCrewId(): string | null {
 		return this.#activeCrewId;
+	}
+
+	/** Leave the current crew and return to normal chat mode. */
+	leaveCrew(): void {
+		if (!this.#activeCrewId) return;
+		logger.info("[SwarmModeController] Leaving crew", { crewId: this.#activeCrewId });
+		this.#activeCrewId = null;
+		this.#deps.onLeaveCrew?.();
+		this.#deps.onNotice?.("info", "Left crew — back to normal chat");
+		this.#deps.onRequestRender?.();
 	}
 
 	/** Get the CrewManager instance. */
@@ -269,17 +281,21 @@ export class SwarmModeController {
 			items,
 			this.#deps.theme,
 			async (selected) => {
-				this.#pendingDialog = undefined;
-				// Reset stale swarm phase from previous sessions
-				setCurrentSwarmPhase("idle");
-				const crewId = await this.#crewManager.createCrew(name, selected);
-				await this.focusCrew(crewId);
-				// Spawn agent sessions for each selected crew member
-				await this.#spawnCrewMembers(selected).catch(err =>
-					logger.error("Failed to spawn crew members", { error: String(err) }),
-				);
-				this.#deps.onNotice?.("info", `Crew "${name}" created with ${selected.length} agents`);
-				resolve(crewId);
+				try {
+					this.#pendingDialog = undefined;
+					// Reset stale swarm phase from previous sessions
+					setCurrentSwarmPhase("idle");
+					const crewId = await this.#crewManager.createCrew(name, selected);
+					await this.focusCrew(crewId);
+					// Spawn agent sessions for each selected crew member
+					await this.#spawnCrewMembers(selected).catch(err =>
+						logger.error("Failed to spawn crew members", { error: String(err) }),
+					);
+					this.#deps.onNotice?.("info", `Crew "${name}" created with ${selected.length} agents`);
+					resolve(crewId);
+				} catch (err) {
+					reject(err);
+				}
 			},
 			() => {
 				this.#pendingDialog = undefined;
@@ -306,7 +322,7 @@ export class SwarmModeController {
 				totalRounds: 1,
 				entries: [],
 			};
-			const view = new CrewTranscriptView(state, this.#deps.theme);
+			const view = new CrewTranscriptView(state, this.#deps.theme, () => this.leaveCrew());
 			this.#crewViews.set(crewId, { crewId, component: view });
 		}
 
@@ -571,6 +587,28 @@ export class SwarmModeController {
 	async dispose(): Promise<void> {
 		this.#crewViews.clear();
 		this.#agentViews.clear();
+
+		// Dispose each crew member's agent session and unregister from AgentRegistry
+		const registry = AgentRegistry.global();
+		for (const crew of this.#crewManager.listCrews()) {
+			const entry = this.#crewManager.getCrew(crew.id);
+			if (!entry) continue;
+			for (const member of entry.state.members) {
+				const ref = registry.get(member.agentId);
+				if (ref?.session) {
+					try {
+						await ref.session.dispose();
+					} catch (err) {
+						logger.error("[SwarmModeController] Failed to dispose crew member session", {
+							agentId: member.agentId,
+							error: String(err),
+						});
+					}
+				}
+				registry.unregister(member.agentId);
+			}
+		}
+
 		this.#activeCrewId = null;
 		await this.#crewManager.disposeAll();
 	}
