@@ -11,6 +11,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import type { CommChannel } from "../comm/comm-channel";
 import * as path from "node:path";
 import type { AssistantMessage } from "@satopi/pi-ai";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
@@ -126,6 +127,12 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	/** Whether confirmScript() has started Stage execution. */
 	#graphStageStarted = false;
+	/** Crew channel for phase transition broadcasts. */
+	#crewChannel: CommChannel | null = null;
+	/** Current crew ID, set when a crew is attached. */
+	#crewId: string | null = null;
+	/** Original onPhaseChange callback, preserved for restore on detach. */
+	#originalOnPhaseChange: ((phase: Chapter) => void) | undefined;
 
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
@@ -236,6 +243,18 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		logger.info("[GraphRunner] Disposed");
 	}
 
+	/** Attach this orchestrator to a Crew channel for phase transition broadcasts. */
+	attachCrew(crewId: string, channel: CommChannel): void {
+		this.#crewId = crewId;
+		this.#crewChannel = channel;
+	}
+
+	/** Detach from the current Crew channel. */
+	detachCrew(): void {
+		this.#crewId = null;
+		this.#crewChannel = null;
+	}
+
 	// ── PhaseContext builder ───────────────────────────────────────────────
 
 	#buildPhaseContext(planContent?: string): PhaseContext {
@@ -333,6 +352,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				this.#phase = "idle";
 				this.#config.onPhaseChange?.("idle");
 				await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
+				if (this.#crewChannel) {
+					this.#crewChannel.send("system", "Phase: idle — Workflow complete");
+				}
 				this.#activityLogger.logPhase(
 					"idle",
 					undefined,
@@ -346,6 +368,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			this.#phase = "idle";
 			this.#config.onPhaseChange?.("idle");
 			await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
+			if (this.#crewChannel) {
+				this.#crewChannel.send("system", "Phase: idle — Workflow complete");
+			}
 			return;
 		}
 	}
@@ -548,6 +573,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#phase = "stage";
 		this.#config.onPhaseChange?.("stage");
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
+		if (this.#crewChannel) {
+			this.#crewChannel.send("system", "Phase: stage — Execution phase started — dispatching tasks");
+		}
 		this.#abortController = new AbortController();
 		this.#graphStageStarted = true;
 
@@ -605,6 +633,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#phase = "curtain";
 		this.#config.onPhaseChange?.("curtain");
 		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
+		if (this.#crewChannel) {
+			this.#crewChannel.send("system", "Phase: curtain — Reflection phase started — summarizing delivery");
+		}
 
 		const curtainCtx = this.#buildPhaseContext();
 		const curtainEnterResult = await this.#curtainBehavior.enter(curtainCtx);
@@ -739,6 +770,40 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		await this.#runCurtainLifecycle(curtainCtx);
 
 		return { success: true };
+	}
+
+	// ── Crew Integration ────────────────────────────────────────────────────
+
+	/**
+	 * Attach a crew channel so that phase transitions are broadcast
+	attachCrew(crewId: string, channel: CommChannel): void {
+		this.#crewChannel = channel;
+		this.#crewId = crewId;
+		// Wrap the phase-change callback so transitions also broadcast to crew
+		const original = this.#config.onPhaseChange;
+		this.#originalOnPhaseChange = original;
+		this.#config.onPhaseChange = (phase: Chapter) => {
+			original?.(phase);
+			channel.send("system", `[System] Graph phase → ${phase}`).catch(() => {});
+		};
+		logger.info("[GraphRunner] Crew attached", { crewId });
+		// Broadcast initial phase
+		channel.send("system", `[System] Graph attached — current phase: ${this.#phase}`).catch(() => {});
+	}
+
+	/** Detach the crew channel and restore original phase callback. */
+	detachCrew(): void {
+		if (this.#crewChannel) {
+			this.#crewChannel.send("system", "[System] Graph execution disconnecting").catch(() => {});
+			this.#crewChannel = null;
+			this.#crewId = null;
+			// Restore the original callback
+			if (this.#originalOnPhaseChange !== undefined) {
+				this.#config.onPhaseChange = this.#originalOnPhaseChange;
+				this.#originalOnPhaseChange = undefined;
+			}
+			logger.info("[GraphRunner] Crew detached");
+		}
 	}
 
 	// ── Accessors ──────────────────────────────────────────────────────────

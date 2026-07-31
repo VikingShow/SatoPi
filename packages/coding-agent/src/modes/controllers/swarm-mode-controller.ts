@@ -21,6 +21,7 @@ import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { Theme } from "../theme/theme";
 import type { ISwarmOrchestrator } from "../../graph/orchestrator-interface";
+import type { GraphRunner } from "../../graph/graph-runner";
 import { parseMentions, createCrewMentionResolver } from "../mention-parser";
 import { CrewTranscriptView } from "../components/swarm/crew-transcript-view";
 import type { CrewTranscriptEntry, CrewTranscriptState } from "../components/swarm/crew-transcript-view";
@@ -62,7 +63,6 @@ export interface CrewViewHandle {
 // ============================================================================
 // SwarmModeController
 // ============================================================================
-
 export class SwarmModeController {
 	readonly #deps: SwarmModeControllerDeps;
 	readonly #crewManager: CrewManager;
@@ -70,6 +70,8 @@ export class SwarmModeController {
 	/** Currently active Crew ID, or null when no Crew is focused. */
 	#activeCrewId: string | null = null;
 
+	/** Active GraphRunner when a graph is attached to the active crew. */
+	#graphRunner: GraphRunner | null = null;
 	/** Active crew views, keyed by crewId. */
 	#crewViews = new Map<string, CrewViewHandle>();
 
@@ -143,6 +145,57 @@ export class SwarmModeController {
 	/** List all available crews. */
 	listCrews() {
 		return this.#crewManager.listCrews();
+	}
+
+	// ========================================================================
+	// Graph Management
+	// ========================================================================
+
+	/**
+	 * Attach a theatre graph to the active crew.
+	 * Updates crew state and broadcasts a notification to the crew channel.
+	 */
+	attachGraph(graphPath: string): void {
+		if (!this.#activeCrewId) {
+			this.#deps.onNotice?.("warn", "No active crew — create or focus a crew first");
+			return;
+		}
+		const crew = this.#crewManager.getCrew(this.#activeCrewId);
+		if (!crew) {
+			this.#deps.onNotice?.("error", `Crew "${this.#activeCrewId}" not found`);
+			return;
+		}
+		crew.state.activeGraph = { graphPath, phase: "idle" };
+		const runner = (this.#deps.orchestrator as GraphRunner) ?? null;
+		this.#graphRunner = runner;
+		if (runner) {
+			runner.attachCrew(this.#activeCrewId, crew.channel);
+		}
+		crew.channel.send("system", `[System] Graph "${graphPath}" activated`).catch(() => {});
+		this.#deps.onNotice?.("info", `Graph "${graphPath}" attached to crew "${crew.state.name}"`);
+	}
+
+	/** Detach the active graph from the current crew. */
+	detachGraph(): void {
+		if (!this.#activeCrewId) {
+			this.#deps.onNotice?.("warn", "No active crew — nothing to detach");
+			return;
+		}
+		const crew = this.#crewManager.getCrew(this.#activeCrewId);
+		if (crew) {
+			delete crew.state.activeGraph;
+			crew.channel.send("system", "[System] Graph detached — returning to free discussion").catch(() => {});
+		}
+		this.#graphRunner?.detachCrew();
+		this.#graphRunner = null;
+		this.#deps.onNotice?.("info", "Graph detached");
+	}
+
+	/** Get the active graph state for the current crew, or null. */
+	get activeGraph(): { graphPath: string; phase: string } | null {
+		if (!this.#activeCrewId) return null;
+		const crew = this.#crewManager.getCrew(this.#activeCrewId);
+		return crew?.state.activeGraph ?? null;
 	}
 
 	/** Get the pending profile selection dialog, if any. */
@@ -252,6 +305,32 @@ export class SwarmModeController {
 		this.#crewViews.delete(crewId);
 		await this.#crewManager.disposeCrew(crewId);
 		this.#deps.onRequestRender?.();
+	}
+
+	// ========================================================================
+	// Graph Integration
+	// ========================================================================
+
+	/**
+	 * Attach the active graph orchestrator to the current crew channel
+	 * so phase transitions are broadcast as system messages.
+	 */
+	attachGraph(): void {
+		const orchestrator = this.#deps.orchestrator;
+		if (!orchestrator) return;
+		if (!this.#activeCrewId) return;
+
+		const crew = this.#crewManager.getCrew(this.#activeCrewId);
+		if (!crew) return;
+
+		orchestrator.attachCrew?.(this.#activeCrewId, crew.channel);
+	}
+
+	/**
+	 * Detach the graph orchestrator from the crew channel.
+	 */
+	detachGraph(): void {
+		this.#deps.orchestrator?.detachCrew?.();
 	}
 
 	// ========================================================================

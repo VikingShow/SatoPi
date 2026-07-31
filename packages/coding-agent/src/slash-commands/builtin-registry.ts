@@ -1252,6 +1252,8 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 			{ name: "run", description: "Open Swarm dashboard for the graph engine" },
 			{ name: "list", description: "List available graph definition files" },
 			{ name: "compile", description: "Compile Mermaid or loop YAML to a graph definition", usage: "<path>" },
+			{ name: "theatre", description: "Attach the builtin theatre graph to the active crew" },
+			{ name: "off", description: "Detach the active graph from the current crew" },
 		],
 		allowArgs: true,
 		handle: async (command, runtime) => {
@@ -1308,7 +1310,15 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				await runtime.output("Use /swarm to open the Swarm dashboard.");
 				return commandConsumed();
 			}
-			return usage("Usage: /graph [run|list|compile <path>]", runtime);
+			if (verb === "theatre") {
+				await runtime.output("Use /graph theatre from the TUI to attach the builtin theatre graph.");
+				return commandConsumed();
+			}
+			if (verb === "off") {
+				await runtime.output("Use /graph off from the TUI to detach the active graph.");
+				return commandConsumed();
+			}
+			return usage("Usage: /graph [run|list|compile <path>|theatre|off]", runtime);
 		},
 		handleTui: async (command, runtime) => {
 			const { verb, rest } = parseSubcommand(command.args);
@@ -1369,9 +1379,18 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					runtime.ctx.showStatus(`Compile failed: ${errorMessage(err)}`);
 				}
 				runtime.ctx.editor.setText("");
+			}
+			if (verb === "theatre") {
+				runtime.ctx.swarmModeController?.attachGraph("builtin/theatre.graph.yaml");
+				runtime.ctx.editor.setText("");
 				return;
 			}
-			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>]");
+			if (verb === "off") {
+				runtime.ctx.swarmModeController?.detachGraph();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>|theatre|off]");
 			runtime.ctx.editor.setText("");
 		},
 	},

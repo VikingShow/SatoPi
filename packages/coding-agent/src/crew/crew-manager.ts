@@ -27,6 +27,7 @@ export interface CrewState {
 	name: string;
 	members: CrewMember[];
 	createdAt: number;
+	activeGraph?: { graphPath: string; phase: string };
 }
 
 export interface CrewSummary {

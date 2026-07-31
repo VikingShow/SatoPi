@@ -91,6 +91,14 @@ export interface ISwarmOrchestrator {
 	 * 2. Use the round data to build a diff-based annotation summary
 	 */
 	debatePlan?(planContent: string): Promise<DebateRoundtableResult | undefined>;
+	/**
+	 * Attach this orchestrator to a Crew channel for phase transition broadcasts.
+	 */
+	attachCrew?(crewId: string, channel: unknown): void;
+	/**
+	 * Detach from the current Crew channel.
+	 */
+	detachCrew?(): void;
 	readonly stateTracker: StateTracker;
 	readonly activityLogger: ActivityLogger;
 	readonly swarmState: Readonly<SwarmState>;

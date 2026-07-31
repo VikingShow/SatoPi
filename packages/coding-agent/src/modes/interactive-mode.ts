@@ -26,6 +26,7 @@ import type {
 } from "@satopi/pi-tui";
 import {
 	Container,
+	Input,
 	clearRenderCache,
 	Loader,
 	Markdown,
@@ -4670,6 +4671,36 @@ export class InteractiveMode implements InteractiveModeContext {
 					this.ui.setFocus(this.editor);
 				},
 				sessionName: this.sessionName,
+				onAddMember: () => {
+					if (!this.swarmModeController) return;
+					// Close the sidebar first
+					this.showSwarmSidebar();
+					const input = new Input();
+					input.prompt = "Agent ID: ";
+					const { promise, resolve } = Promise.withResolvers<string | undefined>();
+					input.onSubmit = (value: string) => resolve(value);
+					input.onEscape = () => resolve(undefined);
+					const handle = this.ui.showOverlay(input, {
+						anchor: "bottom-center",
+						width: "60%",
+						margin: 1,
+					});
+					this.ui.setFocus(input);
+					this.ui.requestRender();
+					void promise.then(async (value) => {
+						handle.hide();
+						if (value && value.trim()) {
+							await this.swarmModeController?.addMember(value.trim());
+							this.ui.requestRender();
+						}
+						// Re-show the sidebar
+						this.showSwarmSidebar();
+					});
+				},
+				onRemoveMember: async (agentId: string) => {
+					await this.swarmModeController?.removeMember(agentId);
+					this.ui.requestRender();
+				},
 			},
 			theme,
 		);
@@ -4692,7 +4723,6 @@ export class InteractiveMode implements InteractiveModeContext {
 			}
 		});
 	}
-
 	/** Show the profile selection dialog for creating a new crew. */
 	async showSwarmCrewStart(name?: string): Promise<void> {
 		if (!this.swarmModeController) {

@@ -21,7 +21,7 @@ const AGENT_STATUS_ICON: Record<string, ToolUIStatus> = {
 // ── Tree node model ────────────────────────────────────────────────────────
 
 interface TreeNode {
-	type: "session" | "agent" | "crew" | "crew-member" | "swarm";
+	type: "session" | "agent" | "crew" | "crew-member" | "swarm" | "action";
 	id: string;
 	label: string;
 	status?: string;
@@ -47,6 +47,10 @@ export interface SwarmSidebarConfig {
 	sessionName?: string;
 	/** Called when Tab is pressed to return focus to transcript. */
 	onFocusTranscript?: () => void;
+	/** Called when Enter is pressed on "+ Add Member" action node. */
+	onAddMember?: () => void;
+	/** Called when Enter is pressed on "- Remove Member" action node. */
+	onRemoveMember?: (agentId: string) => void;
 }
 
 export class SwarmSidebar implements Component {
@@ -158,6 +162,18 @@ export class SwarmSidebar implements Component {
 							depth: 1,
 						});
 					}
+					crewNode.children!.push({
+						type: "action",
+						id: `crew:${crew.id}:action-add`,
+						label: "+ Add Member",
+						depth: 1,
+					});
+					crewNode.children!.push({
+						type: "action",
+						id: `crew:${crew.id}:action-remove`,
+						label: "- Remove Member (d on member)",
+						depth: 1,
+					});
 				}
 			}
 			nodes.push(crewNode);
@@ -234,6 +250,10 @@ export class SwarmSidebar implements Component {
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
 						lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+					} else if (node.type === "action") {
+						const actionIcon = node.label.startsWith("+") ? "+" : "-";
+						const icon = t.fg("accent", actionIcon + " ");
+						lines.push(`${prefix}${cursor}${multiMark}${icon}${t.fg("dim", node.label.slice(2).trim())}`);
 					}
 				}
 
@@ -320,6 +340,13 @@ export class SwarmSidebar implements Component {
 						this.#config.onRequestRender?.();
 					}
 				}
+			case "d":
+				if (currentIdx >= 0) {
+					const node = flat[currentIdx].node;
+					if (node.type === "crew-member" && node.agentId) {
+						this.#config.onRemoveMember?.(node.agentId);
+					}
+				}
 				break;
 			case "Enter":
 				if (currentIdx >= 0) {
@@ -354,6 +381,12 @@ export class SwarmSidebar implements Component {
 					} else if (node.type === "session") {
 						// Focus main session
 						this.#config.onClose?.();
+					} else if (node.type === "action") {
+						if (node.id.includes(":action-add")) {
+							this.#config.onAddMember?.();
+						} else if (node.id.includes(":action-remove")) {
+							// Prompt user: select a member by focusing them, then press d
+						}
 					}
 				}
 				break;
