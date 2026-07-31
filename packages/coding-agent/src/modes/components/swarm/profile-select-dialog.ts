@@ -9,7 +9,7 @@
  *   Esc / q  — cancel
  */
 
-import type { Component } from "@satopi/pi-tui";
+import { type Component, matchesKey } from "@satopi/pi-tui";
 import type { Theme } from "../../theme/theme";
 
 // ============================================================================
@@ -133,25 +133,25 @@ export class ProfileSelectDialog implements Component {
 	handleInput(data: string): void {
 		if (this.#closed) return;
 
-		if (data === "j" || data === "ArrowDown") {
-			if (this.#items.length > 0) {
-				this.#cursorIdx = Math.min(this.#items.length - 1, this.#cursorIdx + 1);
-			}
-		} else if (data === "k" || data === "ArrowUp") {
+		if (matchesKey(data, "up") || data === "k") {
 			if (this.#items.length > 0) {
 				this.#cursorIdx = Math.max(0, this.#cursorIdx - 1);
 			}
-		} else if (data === " ") {
+		} else if (matchesKey(data, "down") || data === "j") {
+			if (this.#items.length > 0) {
+				this.#cursorIdx = Math.min(this.#items.length - 1, this.#cursorIdx + 1);
+			}
+		} else if (matchesKey(data, "space") || data === " ") {
 			if (this.#cursorIdx >= 0 && this.#cursorIdx < this.#items.length) {
 				this.#items[this.#cursorIdx].selected = !this.#items[this.#cursorIdx].selected;
 			}
-		} else if (data === "Enter" || data === "\r" || data === "\n") {
+		} else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
 			const selected = this.#items.filter((x) => x.selected).map((x) => x.profileId);
 			if (selected.length >= MIN_SELECTED) {
 				this.#closed = true;
 				this.#onConfirm(selected);
 			}
-		} else if (data === "escape" || data === "\x1b" || data === "q") {
+		} else if (matchesKey(data, "escape") || data === "q") {
 			this.#closed = true;
 			this.#onCancel();
 		}
