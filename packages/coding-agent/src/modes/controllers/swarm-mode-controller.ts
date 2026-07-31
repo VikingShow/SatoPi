@@ -353,20 +353,40 @@ export class SwarmModeController {
 
 		const parsed = parseMentions(text, resolveAgent);
 
-		// Route directed messages
+		// Route directed messages — start agent loop with user's message as prompt
+		const prompts: Promise<unknown>[] = [];
 		for (const mention of parsed.mentions) {
 			if (mention.text) {
-				await this.#deps.ircBus.send(
-					{ from: "human", to: mention.agentId, body: mention.text },
-					{ expectsReply: true },
-				);
+				const ref = agentRefs.get(mention.agentId);
+				if (ref?.session) {
+					prompts.push(
+						ref.session.prompt(mention.text).catch(err =>
+							logger.error("[SwarmModeController] Agent prompt failed", {
+								agentId: mention.agentId, error: String(err),
+							}),
+						),
+					);
+				}
 			}
 		}
 
-		// Broadcast public message
+		// Broadcast messages go to all crew members
 		if (parsed.broadcast) {
-			await channel.send("human", parsed.broadcast);
+			for (const [memberId, ref] of agentRefs) {
+				if (ref.session) {
+					prompts.push(
+						ref.session.prompt(parsed.broadcast).catch(err =>
+							logger.error("[SwarmModeController] Broadcast prompt failed", {
+								agentId: memberId, error: String(err),
+							}),
+						),
+					);
+				}
+			}
 		}
+
+		// Fire all prompts in parallel (don't await — agent responses arrive via agent_end events)
+		Promise.all(prompts).catch(() => {});
 
 		// Persist the human message to transcript
 		await this.#crewManager.persistMessage(this.#activeCrewId, "human", text);
@@ -469,15 +489,8 @@ export class SwarmModeController {
 					}
 				});
 
-				// Start the agent loop (fire-and-forget — do NOT await the LLM response)
-				session.prompt(
-					`You have joined the crew chat as ${name} (${archetype}). ` +
-					`Wait for messages from the user or other agents. Respond when addressed.`,
-				).catch(err =>
-					logger.error("[SwarmModeController] Crew member prompt failed", {
-						profileId, error: String(err),
-					}),
-				);
+				// Agent is registered and wired — will start on first IRC message
+				logger.info("[SwarmModeController] Crew member registered", { profileId, name });
 
 				logger.info("[SwarmModeController] Crew member spawned", { profileId, name });
 			} catch (err) {
