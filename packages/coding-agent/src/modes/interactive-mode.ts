@@ -97,6 +97,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
+import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
@@ -542,6 +543,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#baseAutocompleteProvider: AutocompleteProvider | undefined;
 	/** Extension-registered provider factories, applied in registration order (#4919). */
 	#autocompleteProviderFactories: AutocompleteProviderFactory[] = [];
+	#profileCwd: string | undefined;
 	#cleanupUnsubscribe?: () => void;
 	#signalTeardown?: SessionTeardown;
 	readonly #version: string;
@@ -844,12 +846,19 @@ export class InteractiveMode implements InteractiveModeContext {
 	async init(options: InteractiveModeInitOptions = {}): Promise<void> {
 		if (this.isInitialized) return;
 
+		// Initialize the global ProfileRegistry: load from disk, seed defaults if needed, persist
+		const cwd = getProjectDir();
+		this.#profileCwd = cwd;
+		await ProfileRegistry.initGlobal(cwd);
 
 		// Initialize SwarmModeController for multi-agent crew chat
 		this.swarmModeController = new SwarmModeController({
 			crewsDir: `${getProjectDir()}/.stp/sessions/crews`,
 			ircBus: IrcBus.global(),
 			profileRegistry: ProfileRegistry.global(),
+			modelRegistry: this.session.modelRegistry,
+			settings: this.settings,
+			workspace: getProjectDir(),
 			theme,
 			onRequestRender: () => this.ui.requestRender(),
 			onNotice: (level, message) => {
@@ -882,7 +891,13 @@ export class InteractiveMode implements InteractiveModeContext {
 		// runs callbacks in REVERSE registration order — this callback (registered
 		// after the AgentSession constructor's `agent-session:<id>` recorder) runs
 		// FIRST and its dispose() would otherwise persist the generic "dispose".
-		this.#cleanupUnsubscribe = postmortem.register("session-teardown", reason => this.#signalTeardown!(reason));
+		this.#cleanupUnsubscribe = postmortem.register("session-teardown", async reason => {
+			// Persist profiles on signal/crash exit; the keypress path saves in shutdown()
+			if (this.#profileCwd) {
+				await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+			}
+			await this.#signalTeardown!(reason);
+		});
 
 		// Wire the report_tool_issue consent gate to the Yes/No dialog popup.
 		// The handler is process-global — subagent tools (which can't reach
@@ -1212,6 +1227,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	 */
 	async applyCwdChange(newCwd: string): Promise<void> {
 		setProjectDir(newCwd);
+		this.#profileCwd = newCwd;
+		await ProfileRegistry.initGlobal(newCwd);
 		// Re-scope project settings (`.claude/settings.yml` etc.) to the new
 		// directory in place so the active session and every settings reader pick
 		// up the destination project's configuration.
@@ -3984,6 +4001,13 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#omfgController.dispose();
 		this.#focusController.dispose();
 
+		// Persist agent profiles to disk before session teardown.
+		// Use the cwd captured at init time; getProjectDir() may have
+		// changed during the session via /move or session resume.
+		if (this.#profileCwd) {
+			await ProfileRegistry.global().save(this.#profileCwd).catch(() => {});
+		}
+
 		// Surface an explicit "Closing session…" line so the user sees a reason
 		// for the pause while `session.dispose()` flushes memory consolidate and
 		// other cleanups (issue #3641). The await on the next line yields the
@@ -4733,13 +4757,33 @@ export class InteractiveMode implements InteractiveModeContext {
 		const crewName = name?.trim() || `Crew ${new Date().toLocaleTimeString()}`;
 
 		try {
-			const crewId = await this.swarmModeController.createCrewWithDialog(crewName);
-			this.showStatus(`Crew "${crewName}" created`);
-			// After crew creation, mount the crew view
-			this.#mountCrewView(crewId);
+			const dialogPromise = this.swarmModeController.createCrewWithDialog(crewName);
+			const dialog = this.swarmModeController.pendingDialog;
+			if (!dialog) return;
+
+			// Render the profile selection overlay — the dialog itself handles input
+			const handle = this.ui.showOverlay(dialog, {
+				anchor: "center",
+				width: "60%",
+				margin: 2,
+			});
+
+			try {
+				const crewId = await dialogPromise;
+				handle.hide();
+				this.showStatus(`Crew "${crewName}" created`);
+				this.#mountCrewView(crewId);
+			} catch (err) {
+				handle.hide();
+				const msg = (err as Error).message;
+				if (msg !== "Cancelled") {
+					this.showError(`Failed to create crew: ${msg}`);
+				}
+			}
 		} catch (err) {
-			if ((err as Error).message !== "Cancelled") {
-				this.showError(`Failed to create crew: ${(err as Error).message}`);
+			const msg = (err as Error).message;
+			if (msg !== "Cancelled") {
+				this.showError(`Failed to create crew: ${msg}`);
 			}
 		}
 	}

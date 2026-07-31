@@ -6254,6 +6254,9 @@ export class AgentSession {
 		this.#embeddedSwarm
 			?.dispose()
 			.catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
+		ProfileRegistry.global()
+			.save(process.cwd())
+			.catch(err => logger.error("Failed to save ProfileRegistry on dispose", { error: String(err) }));
 	}
 
 	/**
@@ -8255,7 +8258,7 @@ export class AgentSession {
 		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
 		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
 
-		const profileRegistry = await ProfileRegistry.load(process.cwd());
+		const profileRegistry = ProfileRegistry.global();
 		const infra = await createSwarmInfra({
 			workspace: process.cwd(),
 			swarmDir,

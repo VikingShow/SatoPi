@@ -25,6 +25,21 @@ export const SWARM_ROLE_PROFILES: Record<string, SwarmRoleProfile> = {
 		identity: { name: "Reflector", archetype: "reflector" },
 		expertise: { domains: ["analysis", "learning"], specialties: ["retrospective", "lesson-extraction"] },
 	},
+	architect: {
+		profileId: "swarm-architect",
+		identity: { name: "Architect", archetype: "architect" },
+		expertise: { domains: ["architecture", "system-design"], specialties: ["api-design", "component-modeling"] },
+	},
+	debugger: {
+		profileId: "swarm-debugger",
+		identity: { name: "Debugger", archetype: "debugger" },
+		expertise: { domains: ["debugging", "diagnostics"], specialties: ["root-cause-analysis", "log-analysis"] },
+	},
+	tester: {
+		profileId: "swarm-tester",
+		identity: { name: "Tester", archetype: "tester" },
+		expertise: { domains: ["testing", "quality"], specialties: ["test-design", "regression-testing"] },
+	},
 };
 
 /** Resolve an AgentSpec to a swarm role profile (predefined or temporary). */

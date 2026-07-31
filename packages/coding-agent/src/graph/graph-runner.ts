@@ -243,17 +243,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		logger.info("[GraphRunner] Disposed");
 	}
 
-	/** Attach this orchestrator to a Crew channel for phase transition broadcasts. */
-	attachCrew(crewId: string, channel: CommChannel): void {
-		this.#crewId = crewId;
-		this.#crewChannel = channel;
-	}
-
-	/** Detach from the current Crew channel. */
-	detachCrew(): void {
-		this.#crewId = null;
-		this.#crewChannel = null;
-	}
 
 	// ── PhaseContext builder ───────────────────────────────────────────────
 
@@ -774,8 +763,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	// ── Crew Integration ────────────────────────────────────────────────────
 
-	/**
-	 * Attach a crew channel so that phase transitions are broadcast
+	// Attach a crew channel so that phase transitions are broadcast.
 	attachCrew(crewId: string, channel: CommChannel): void {
 		this.#crewChannel = channel;
 		this.#crewId = crewId;

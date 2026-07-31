@@ -24,6 +24,7 @@ export interface ProfileSelectItem {
 	successRate: number;
 	domains: string[];
 	selected: boolean;
+	warned: boolean;
 }
 
 // ============================================================================
@@ -78,7 +79,7 @@ export class ProfileSelectDialog implements Component {
 
 		// Items
 		if (this.#items.length === 0) {
-			const msg = "  No agents available (credit score >= 30 required)";
+			const msg = "  No agent profiles available (minimum 2 required)";
 			out.push(`${t.fg(bc, "\u2502")}${t.fg("dim", msg)}${" ".repeat(Math.max(0, inner - 50))}${t.fg(bc, "\u2502")}`);
 		} else {
 			const maxVis = Math.min(this.#items.length, 16);
@@ -104,7 +105,8 @@ export class ProfileSelectDialog implements Component {
 				const score = `${"\u2605"}${item.creditScore}`;
 				const rate = `${Math.round(item.successRate * 100)}%`;
 
-				const body = `${cursor}${check} ${t.fg(nc, name)} ${arch} ${t.fg(sc, score)} ${t.fg("dim", rate)}`;
+				const warnMarker = item.warned ? " \u26a0" : "";
+				const body = `${cursor}${check} ${t.fg(nc, name)} ${arch} ${t.fg(sc, score)} ${t.fg("dim", rate)}${warnMarker}`;
 				const pad = Math.max(0, inner - visibleLen(body));
 				out.push(`${t.fg(bc, "\u2502")}${body}${" ".repeat(pad)}${t.fg(bc, "\u2502")}`);
 			}

@@ -55,15 +55,14 @@ interface AgentTracking {
 // ============================================================================
 
 const ROLE_TO_PROFILE: Record<string, string> = {
-	planner:      "swarm-planner",
-	implementer:  "swarm-implementer",
-	reviewer:     "swarm-reviewer",
-	architect:    "swarm-architect",
-	debugger:     "swarm-debugger",
-	tester:       "swarm-tester",
-	reflector:    "swarm-reflector",
+	planner: "swarm-planner",
+	implementer: "swarm-implementer",
+	reviewer: "swarm-reviewer",
+	architect: "swarm-architect",
+	debugger: "swarm-debugger",
+	tester: "swarm-tester",
+	reflector: "swarm-reflector",
 };
-
 
 // ============================================================================
 // StageBehavior
@@ -262,6 +261,11 @@ export class StageBehavior implements PhaseBehavior {
 					agentId: event.agentId,
 					remainingActive: this.#agents.size - this.#completedAgents.size,
 				});
+				// Trigger lifecycle hook for profile credit updates
+				await ctx.hookPipeline?.trigger("agent:afterComplete", {
+					agentId: event.agentId,
+					success: true,
+				}, { phase: "stage", agentId: event.agentId });
 				break;
 			}
 
@@ -293,6 +297,11 @@ export class StageBehavior implements PhaseBehavior {
 					event.agentId,
 					typeof event.result === "string" ? event.result : "agent failed",
 				);
+				// Trigger lifecycle hook for profile credit updates
+				await ctx.hookPipeline?.trigger("agent:afterComplete", {
+					agentId: event.agentId,
+					success: false,
+				}, { phase: "stage", agentId: event.agentId });
 				break;
 			}
 

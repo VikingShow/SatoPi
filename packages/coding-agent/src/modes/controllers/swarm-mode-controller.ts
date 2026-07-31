@@ -14,6 +14,9 @@
 import type { Component } from "@satopi/pi-tui";
 import { logger } from "@satopi/pi-utils";
 import type { AgentProfile, ProfileRegistry } from "../../agent/agent-profile";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { Settings } from "../../config/settings";
+import { createAgentSession } from "../../sdk";
 import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
 import { CrewManager } from "../../crew/crew-manager";
 import type { IrcBus } from "../../irc/bus";
@@ -43,6 +46,10 @@ export interface SwarmModeControllerDeps {
 	activityLogger?: ActivityLogger;
 	/** Profile registry for agent identity/selection. */
 	profileRegistry: ProfileRegistry;
+	modelRegistry?: ModelRegistry;
+	settings?: Settings;
+	/** Project workspace directory. */
+	workspace?: string;
 	/** Active TUI theme. */
 	theme: Theme;
 	/** Called when the controller needs a TUI re-render. */
@@ -205,7 +212,9 @@ export class SwarmModeController {
 
 	/** Get available profiles for crew creation. */
 	getAvailableProfiles(): AgentProfile[] {
-		return this.#deps.profileRegistry.list().filter(p => p.credit.score >= 30); // minimum credit threshold
+		const qualified = this.#deps.profileRegistry.list().filter(p => p.credit.score >= 30);
+		if (qualified.length >= 2) return qualified;
+		return this.#deps.profileRegistry.list(); // fallback: show all profiles when < 2 meet threshold
 	}
 
 	// ========================================================================
@@ -238,7 +247,7 @@ export class SwarmModeController {
 	async createCrewWithDialog(name: string): Promise<string> {
 		const profiles = this.getAvailableProfiles();
 		if (profiles.length < 2) {
-			throw new Error(`Need at least 2 agents with credit >= 30 (found ${profiles.length})`);
+			throw new Error(`Need at least 2 agent profiles (credit >= 30 recommended but not required); found ${profiles.length}`);
 		}
 
 		// Build dialog items from profiles
@@ -250,6 +259,7 @@ export class SwarmModeController {
 			successRate: p.credit.successRate,
 			domains: p.expertise.domains,
 			selected: false,
+			warned: p.credit.score < 30,
 		}));
 
 		const { promise, resolve, reject } = Promise.withResolvers<string>();
@@ -261,6 +271,10 @@ export class SwarmModeController {
 				this.#pendingDialog = undefined;
 				const crewId = await this.#crewManager.createCrew(name, selected);
 				await this.focusCrew(crewId);
+				// Spawn agent sessions for each selected crew member
+				await this.#spawnCrewMembers(selected).catch(err =>
+					logger.error("Failed to spawn crew members", { error: String(err) }),
+				);
 				this.#deps.onNotice?.("info", `Crew "${name}" created with ${selected.length} agents`);
 				resolve(crewId);
 			},
@@ -307,31 +321,7 @@ export class SwarmModeController {
 		this.#deps.onRequestRender?.();
 	}
 
-	// ========================================================================
-	// Graph Integration
-	// ========================================================================
-
-	/**
-	 * Attach the active graph orchestrator to the current crew channel
-	 * so phase transitions are broadcast as system messages.
-	 */
-	attachGraph(): void {
-		const orchestrator = this.#deps.orchestrator;
-		if (!orchestrator) return;
-		if (!this.#activeCrewId) return;
-
-		const crew = this.#crewManager.getCrew(this.#activeCrewId);
-		if (!crew) return;
-
-		orchestrator.attachCrew?.(this.#activeCrewId, crew.channel);
-	}
-
-	/**
-	 * Detach the graph orchestrator from the crew channel.
-	 */
-	detachGraph(): void {
-		this.#deps.orchestrator?.detachCrew?.();
-	}
+	// Graph orchestrator wiring is handled by attachGraph(graphPath) / detachGraph() above
 
 	// ========================================================================
 	// Message Routing
@@ -389,6 +379,107 @@ export class SwarmModeController {
 		}
 
 		this.#deps.onRequestRender?.();
+	}
+
+	// ========================================================================
+	// Agent Spawning
+	// ========================================================================
+
+	/**
+	 * Spawn agent sessions for selected crew members.
+	 * Each agent is registered in AgentRegistry and wired for IRC-based crew chat.
+	 */
+	async #spawnCrewMembers(profileIds: string[]): Promise<void> {
+		const { modelRegistry, settings, profileRegistry } = this.#deps;
+		if (!modelRegistry || !settings) {
+			logger.warn("[SwarmModeController] Cannot spawn crew members: missing modelRegistry or settings");
+			return;
+		}
+
+		const availableModels = modelRegistry.getAvailable();
+		if (availableModels.length === 0) {
+			logger.warn("[SwarmModeController] Cannot spawn crew members: no models available");
+			return;
+		}
+		const model = availableModels[0];
+
+		for (const profileId of profileIds) {
+			const profile = profileRegistry.get(profileId);
+			if (!profile) continue;
+
+			const name = profile.identity.name;
+			const archetype = profile.identity.archetype;
+			const domains = profile.expertise.domains.join(", ");
+
+			try {
+				const result = await createAgentSession({
+					agentKind: "main",
+					profileId,
+					agentId: profileId,
+					agentDisplayName: name,
+					model,
+					systemPrompt: [
+						`You are ${name}, a ${archetype} agent.`,
+						`Your expertise domains: ${domains || "general"}.`,
+						"You are participating in a multi-agent crew chat.",
+						"Respond to messages from the user and other agents concisely and helpfully.",
+						"Use your domain expertise when answering questions.",
+					],
+					toolNames: ["read", "grep", "glob"],
+					modelRegistry,
+					settings,
+					hasIrcInterrupts: true,
+				});
+
+				const session = result.session;
+				AgentRegistry.global().register({
+					id: profileId,
+					displayName: name,
+					kind: "main" as const,
+					profileId,
+					session,
+					parentId: "Main",
+					sessionFile: null,
+				});
+
+				// Wire agent response capture to crew transcript
+				session.subscribe(event => {
+					if (event.type === "agent_end") {
+						const msgs = event.messages;
+						let lastAssistantText = "";
+						for (let i = msgs.length - 1; i >= 0; i--) {
+							const msg = msgs[i];
+							if (msg.role === "assistant") {
+								const content = msg.content;
+								if (typeof content === "string") {
+									lastAssistantText = content;
+								} else if (Array.isArray(content)) {
+									lastAssistantText = content
+										.filter((c): c is { type: "text"; text: string } => c.type === "text")
+										.map(c => c.text)
+										.join("\n");
+								}
+								break;
+							}
+						}
+						this.onAgentTurnComplete(profileId, lastAssistantText).catch(() => {});
+					}
+				});
+
+				// Wake the agent with a crew-join prompt
+				await session.prompt(
+					`You have joined the crew chat as ${name} (${archetype}). ` +
+					`Wait for messages from the user or other agents. Respond when addressed.`,
+				);
+
+				logger.info("[SwarmModeController] Crew member spawned", { profileId, name });
+			} catch (err) {
+				logger.error("[SwarmModeController] Failed to spawn crew member", {
+					profileId,
+					error: String(err),
+				});
+			}
+		}
 	}
 
 	// ========================================================================

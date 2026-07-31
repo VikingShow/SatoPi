@@ -85,7 +85,7 @@ async function createSwarmServices(
 	// for the swarm session. Null when Mnemopi is unavailable or unconfigured.
 	const mnemopiClient = await createSwarmMnemopiClient(settings, cwd);
 
-	const profileRegistry = await ProfileRegistry.load(cwd);
+	const profileRegistry = await ProfileRegistry.initGlobal(cwd);
 	const markEnvironment = new MarkEnvironment();
 	const roleAssetManager = new RoleAssetManager(cwd);
 	await roleAssetManager.init();

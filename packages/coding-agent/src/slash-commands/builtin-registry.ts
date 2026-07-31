@@ -1242,7 +1242,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				runtime.ctx.editor.setText("");
 				return;
 			}
-			return usage("Usage: /swarm [start [name] | dashboard]", runtime);
+			runtime.ctx.showError("Usage: /swarm [start [name] | dashboard]");
 		},
 	},
 	{
