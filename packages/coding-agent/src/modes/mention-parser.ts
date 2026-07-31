@@ -47,10 +47,7 @@ const MENTION_RE = /@([a-zA-Z0-9_-]+)/g;
  *   Receives the raw mention text (without @). Returns the agent ID or null if
  *   no matching agent is found in the current crew.
  */
-export function parseMentions(
-	text: string,
-	resolveAgent: (mention: string) => string | null,
-): ParsedInput {
+export function parseMentions(text: string, resolveAgent: (mention: string) => string | null): ParsedInput {
 	// Strip code blocks so @ inside backticks aren't parsed
 	const cleanText = stripCodeBlocks(text);
 
@@ -92,9 +89,7 @@ export function parseMentions(
 
 		// Content ends at next mention start, or end of string
 		const nextMatch = matchPositions[i + 1];
-		const contentEnd = nextMatch
-			? text.indexOf(`@${nextMatch.rawMention}`, mentionStart + 1)
-			: text.length;
+		const contentEnd = nextMatch ? text.indexOf(`@${nextMatch.rawMention}`, mentionStart + 1) : text.length;
 
 		const mentionText = text.slice(contentStart, contentEnd === -1 ? text.length : contentEnd).trim();
 
@@ -105,7 +100,6 @@ export function parseMentions(
 	}
 
 	return { mentions, broadcast };
-
 }
 
 // ============================================================================

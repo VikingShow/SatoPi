@@ -70,9 +70,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 
 	describe("Graph loading and validation", () => {
 		it("loads builtin theatre.graph.yaml", async () => {
-			const def = await loadGraphDefinition(
-				path.resolve(import.meta.dir, "../../graph/builtin/theatre.graph.yaml"),
-			);
+			const def = await loadGraphDefinition(path.resolve(import.meta.dir, "../../graph/builtin/theatre.graph.yaml"));
 			expect(def.name).toBe("theatre");
 			expect(def.nodes.script?.type).toBe("script");
 			expect(def.nodes.stage?.type).toBe("stage");

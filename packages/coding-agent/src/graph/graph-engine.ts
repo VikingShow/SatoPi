@@ -155,9 +155,7 @@ function buildUpstreamOutputs(
 		// Filter by edge artifact globs.
 		const edge = edgeMap.get(`${depId}→${targetNodeId}`);
 		if (edge?.artifacts && edge.artifacts.length > 0) {
-			artifactPaths = artifactPaths.filter((p) =>
-				edge.artifacts!.some((pattern) => matchGlob(pattern, p)),
-			);
+			artifactPaths = artifactPaths.filter(p => edge.artifacts!.some(pattern => matchGlob(pattern, p)));
 		}
 
 		outputs[depId] = {

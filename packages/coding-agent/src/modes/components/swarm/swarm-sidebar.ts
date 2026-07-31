@@ -263,7 +263,7 @@ export class SwarmSidebar implements Component {
 						lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
 					} else if (node.type === "action") {
 						const actionIcon = node.label.startsWith("+") ? "+" : "-";
-						const icon = t.fg("accent", actionIcon + " ");
+						const icon = t.fg("accent", `${actionIcon} `);
 						lines.push(`${prefix}${cursor}${multiMark}${icon}${t.fg("dim", node.label.slice(2).trim())}`);
 					}
 				}
@@ -357,6 +357,7 @@ export class SwarmSidebar implements Component {
 						this.#config.onRequestRender?.();
 					}
 				}
+				break;
 			case "d":
 				if (currentIdx >= 0) {
 					const node = flat[currentIdx].node;

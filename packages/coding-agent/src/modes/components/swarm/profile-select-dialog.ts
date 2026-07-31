@@ -81,13 +81,12 @@ export class ProfileSelectDialog implements Component {
 		// Items
 		if (this.#items.length === 0) {
 			const msg = "  No agent profiles available (minimum 2 required)";
-			out.push(`${t.fg(bc, "\u2502")}${t.fg("dim", msg)}${" ".repeat(Math.max(0, inner - 50))}${t.fg(bc, "\u2502")}`);
+			out.push(
+				`${t.fg(bc, "\u2502")}${t.fg("dim", msg)}${" ".repeat(Math.max(0, inner - 50))}${t.fg(bc, "\u2502")}`,
+			);
 		} else {
 			const maxVis = Math.min(this.#items.length, 16);
-			const start = Math.max(0, Math.min(
-				this.#cursorIdx - Math.floor(maxVis / 2),
-				this.#items.length - maxVis,
-			));
+			const start = Math.max(0, Math.min(this.#cursorIdx - Math.floor(maxVis / 2), this.#items.length - maxVis));
 
 			for (let i = start; i < start + maxVis; i++) {
 				const item = this.#items[i];
@@ -97,9 +96,12 @@ export class ProfileSelectDialog implements Component {
 				const cursor = isCur ? t.fg("accent", "\u25b6") : " ";
 				const check = on ? t.fg("accent", "\u2713") : " ";
 				const nc = isCur || on ? ("accent" as const) : ("dim" as const);
-				const sc = item.creditScore >= 70 ? ("accent" as const)
-					: item.creditScore >= 50 ? ("dim" as const)
-					: ("warning" as const);
+				const sc =
+					item.creditScore >= 70
+						? ("accent" as const)
+						: item.creditScore >= 50
+							? ("dim" as const)
+							: ("warning" as const);
 
 				const name = item.name.padEnd(16).slice(0, 16);
 				const arch = (item.archetype || "-").padEnd(10).slice(0, 10);
@@ -116,10 +118,11 @@ export class ProfileSelectDialog implements Component {
 		// Footer divider
 		out.push(`${t.fg(bc, "\u251c")}${t.fg(bc, "\u2500".repeat(inner))}${t.fg(bc, "\u2524")}`);
 		// Footer
-		const n = this.#items.filter((x) => x.selected).length;
-		const hint = n >= MIN_SELECTED
-			? ` ${n} selected \u2014 Enter to confirm `
-			: ` Select at least ${MIN_SELECTED} (${n} selected) `;
+		const n = this.#items.filter(x => x.selected).length;
+		const hint =
+			n >= MIN_SELECTED
+				? ` ${n} selected \u2014 Enter to confirm `
+				: ` Select at least ${MIN_SELECTED} (${n} selected) `;
 		const footer = `${hint}${t.fg("dim", "Esc/q to cancel")}`;
 		const fPad = Math.max(0, inner - visibleLen(footer));
 		out.push(`${t.fg(bc, "\u2502")}${footer}${" ".repeat(fPad)}${t.fg(bc, "\u2502")}`);
@@ -155,7 +158,7 @@ export class ProfileSelectDialog implements Component {
 				this.#items[this.#cursorIdx].selected = !this.#items[this.#cursorIdx].selected;
 			}
 		} else if (matchesKey(data, "enter") || matchesKey(data, "return")) {
-			const selected = this.#items.filter((x) => x.selected).map((x) => x.profileId);
+			const selected = this.#items.filter(x => x.selected).map(x => x.profileId);
 			if (selected.length >= MIN_SELECTED) {
 				this.#closed = true;
 				this.#onConfirm(selected);

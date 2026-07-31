@@ -11,13 +11,13 @@
  */
 
 import * as fs from "node:fs/promises";
-import type { CommChannel } from "../comm/comm-channel";
 import * as path from "node:path";
 import type { AssistantMessage } from "@satopi/pi-ai";
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { ProfileRegistry } from "../agent/agent-profile";
 import type { RoleAssetManager } from "../agent/role-asset";
+import type { CommChannel } from "../comm/comm-channel";
 import { MarkEnvironment } from "../coordination/mark-environment";
 import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
@@ -40,8 +40,8 @@ import { buildExecutionWaves } from "./dag";
 import { GateController } from "./gate-controller";
 import { GraphEngine, type GraphEngineConfig, type NodeExecutionContext, type NodeExecutor } from "./graph-engine";
 import { type NodeBehaviorFactoryConfig, selectNodeBehavior } from "./node-behavior";
-import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { ISwarmOrchestrator } from "./orchestrator-interface";
+import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import { getSessionPlanPath } from "./plan-paths";
 import { type GraphDefinition, loadGraphDefinition, type NodeContext, type NodeResult } from "./schema";
 import type { GraphRunState } from "./types";
@@ -129,8 +129,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#graphStageStarted = false;
 	/** Crew channel for phase transition broadcasts. */
 	#crewChannel: CommChannel | null = null;
-	/** Current crew ID, set when a crew is attached. */
-	#crewId: string | null = null;
 	/** Original onPhaseChange callback, preserved for restore on detach. */
 	#originalOnPhaseChange: ((phase: Chapter) => void) | undefined;
 
@@ -242,7 +240,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		}
 		logger.info("[GraphRunner] Disposed");
 	}
-
 
 	// ── PhaseContext builder ───────────────────────────────────────────────
 
@@ -453,7 +450,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 			if (!node.gate) {
 				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-				return { nodeId, success: behaviorResult.success, output: behaviorResult.output, artifacts: behaviorResult.artifacts, error: behaviorResult.error };
+				return {
+					nodeId,
+					success: behaviorResult.success,
+					output: behaviorResult.output,
+					artifacts: behaviorResult.artifacts,
+					error: behaviorResult.error,
+				};
 			}
 
 			let lastGateResult = await this.#gateController.runGate(
@@ -766,7 +769,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// Attach a crew channel so that phase transitions are broadcast.
 	attachCrew(crewId: string, channel: CommChannel): void {
 		this.#crewChannel = channel;
-		this.#crewId = crewId;
 		// Wrap the phase-change callback so transitions also broadcast to crew
 		const original = this.#config.onPhaseChange;
 		this.#originalOnPhaseChange = original;
@@ -784,7 +786,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		if (this.#crewChannel) {
 			this.#crewChannel.send("system", "[System] Graph execution disconnecting").catch(() => {});
 			this.#crewChannel = null;
-			this.#crewId = null;
 			// Restore the original callback
 			if (this.#originalOnPhaseChange !== undefined) {
 				this.#config.onPhaseChange = this.#originalOnPhaseChange;

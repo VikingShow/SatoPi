@@ -4729,7 +4729,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					this.ui.requestRender();
 					void promise.then(async value => {
 						handle.hide();
-						if (value && value.trim()) {
+						if (value?.trim()) {
 							await this.swarmModeController?.addMember(value.trim());
 							this.ui.requestRender();
 						}
@@ -4820,7 +4820,15 @@ export class InteractiveMode implements InteractiveModeContext {
 		// keeps focus: the input-controller's empty-editor key chain arbitrates
 		// crew navigation (j/k/f/t/r/Esc) while typing still works. The view
 		// implements OverlayFocusOwner so setFocus(editor) is not redirected.
-		const rows = process.stdout.rows || 40;
+		// The overlay engine paints against the TUI's own viewport height
+		// (terminal.rows), which is NOT always process.stdout.rows: stdout may
+		// not be a TTY (rows undefined), or the terminal may report in-band
+		// DEC 2048 resize geometry that supersedes it. Sizing maxHeight from
+		// process.stdout.rows alone let the overlay outgrow the viewport and
+		// paint over the editor's rows at the bottom, hiding the input box.
+		// Derive the budget from the same viewport the engine composites
+		// against, so the overlay can never reach the editor.
+		const rows = this.ui.terminal.rows;
 		const editorLines = Math.max(1, this.editor.getLines().length);
 		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
 			anchor: "top-left",

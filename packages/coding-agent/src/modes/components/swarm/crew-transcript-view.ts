@@ -36,11 +36,17 @@ const PANEL_CHROME_ROWS = 2;
 /** Floor for the view's rendered height on very short terminals. */
 const MIN_VIEW_ROWS = 10;
 /** Terminal height fallback when process.stdout.rows is unavailable. */
-const FALLBACK_TERMINAL_ROWS = 40;
+const FALLBACK_TERMINAL_ROWS = 24;
 
-/** Terminal height in rows, with a safe fallback for non-TTY contexts. */
+/**
+ * Terminal height in rows. Mirrors ProcessTerminal's own resolution
+ * (process.stdout.rows → $LINES → 24) so the panel's fill-height padding
+ * matches the viewport the overlay engine actually paints against. Using a
+ * larger fallback here than the engine's would pad the panel past the
+ * viewport; the host's maxHeight clamp keeps the editor safe either way.
+ */
 function getTerminalRows(): number {
-	return process.stdout.rows || FALLBACK_TERMINAL_ROWS;
+	return process.stdout.rows || Number(Bun.env.LINES) || FALLBACK_TERMINAL_ROWS;
 }
 
 // ============================================================================

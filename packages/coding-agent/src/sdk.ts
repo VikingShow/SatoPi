@@ -2948,7 +2948,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			},
 		});
 
-               toolContextStore.setParentAgent(agent);
+		toolContextStore.setParentAgent(agent);
 
 		agent.hasIrcInterrupts = options.hasIrcInterrupts ? () => true : undefined;
 		cursorEventEmitter = event => agent.emitExternalEvent(event);

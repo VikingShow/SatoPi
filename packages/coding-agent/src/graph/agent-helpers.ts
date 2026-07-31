@@ -13,11 +13,11 @@ import type { ResolvedRole, RoleProvider } from "../agent/role-provider";
 import type { CommChannel } from "../comm/comm-channel";
 import type { ContextPipeline, PhaseInfo } from "../context/context-pipeline";
 import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { SwarmModeController } from "../modes/controllers/swarm-mode-controller";
 import { AgentRegistry } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
 import type { AgentSession } from "../session/agent-session";
 import type { AgentSpec } from "./agent-spec";
-import type { SwarmModeController } from "../modes/controllers/swarm-mode-controller";
 
 // ============================================================================
 // Types

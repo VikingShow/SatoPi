@@ -166,7 +166,6 @@ export class OffloadManager implements IOffloadManager {
 	}
 }
 
-
 // ---------------------------------------------------------------------------
 // No-op implementation — fallback when SessionStorage is unavailable
 // ---------------------------------------------------------------------------
@@ -187,7 +186,6 @@ export class NoopOffloadManager implements IOffloadManager {
 	async getOffloadSummaries(): Promise<Map<string, string>> {
 		return new Map();
 	}
-
 }
 
 // ---------------------------------------------------------------------------

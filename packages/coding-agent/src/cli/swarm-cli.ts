@@ -3,6 +3,8 @@
  *
  * Handles `stp swarm run|plan|resume` subcommands for managing swarm runs.
  */
+
+import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as readline from "node:readline";
@@ -586,7 +588,7 @@ async function resolveGraphYamlForSession(cwd: string, sessionName: string): Pro
 
 	async function walk(dir: string, depth: number): Promise<void> {
 		if (depth > 8) return;
-		let entries: fs.Dirent[];
+		let entries: Dirent[];
 		try {
 			entries = await fs.readdir(dir, { withFileTypes: true });
 		} catch {
