@@ -410,6 +410,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				tools: node.tools,
 				type: node.type ?? "custom",
 				dependsOn: node.depends_on ?? [],
+				subgraphPath: node.subgraph_path,
 			},
 			workspace: this.#config.workspace,
 			modelRegistry: this.#config.modelRegistry,
@@ -423,6 +424,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			profileRegistry: this.#config.profileRegistry,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
+			executeNode: this,
 		};
 
 		try {

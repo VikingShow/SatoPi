@@ -333,3 +333,17 @@ nodes:
 - 全量 graph+swarm：430 pass / 0 fail
 
 **验证**：`bun run check:types` ✅，biome ✅（8 文件，1 无害 warning）
+
+### 阶段二：子图 ✅ 已完成（2026-08-02）
+
+**已落地内容**：
+1. **types.ts**：`NodeType` 加 `"subgraph"`；`GraphNode.subgraph_path`；`NodeDefinition.subgraphPath`；`NodeContext.executeNode`（可选 executor，GraphRunner 注入）
+2. **schema.ts**：`VALID_NODE_TYPES` 加 `subgraph`；解析 `subgraph_path`；校验 subgraph 节点必须有 `subgraph_path`
+3. **subgraph-behavior.ts**（新文件）：`SubgraphNodeBehavior`——prepare 加载子图 yaml，execute 用嵌套 `GraphEngine` 执行子图；`SubgraphNodeExecutor` 实现子图节点执行（复用 `ctx.runtime.spawn`，支持嵌套子图递归）；子图用内存 checkpoint（随父节点完成）
+4. **node-behavior.ts**：`behaviorRegistry` 注册 `subgraph` → `SubgraphNodeBehavior`
+5. **graph-runner.ts**：`ctx.node` 组装加 `subgraphPath`；`ctx.executeNode = this`
+
+**关键设计**：子图嵌套执行复用父级 `AgentSpawner`，子图内条件路由由嵌套 GraphEngine 自己处理；子图间共享全局单例（AgentRegistry/IrcBus/ProfileRegistry）无冲突。
+
+**测试**：`subgraph.test.ts` 3 个测试（schema 解析、缺 subgraph_path 校验、嵌套执行端到端）
+- 全量 graph+swarm：433 pass / 0 fail

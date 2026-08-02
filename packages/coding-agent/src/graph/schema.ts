@@ -96,6 +96,7 @@ interface RawGraphNode {
 	context_sources?: string[];
 	max_context_tokens?: number;
 	routes?: RawRouteSpec;
+	subgraph_path?: string;
 }
 
 interface RawRouteCondition {
@@ -150,7 +151,13 @@ interface RawGraphDefinition {
 // Constants
 // ============================================================================
 
-const VALID_NODE_TYPES: Record<string, true> = { script: true, stage: true, curtain: true, custom: true };
+const VALID_NODE_TYPES: Record<string, true> = {
+	script: true,
+	stage: true,
+	curtain: true,
+	custom: true,
+	subgraph: true,
+};
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;
 
@@ -271,6 +278,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			context_sources: rawNode.context_sources,
 			max_context_tokens: rawNode.max_context_tokens,
 			routes: rawNode.routes ? normalizeRouteSpec(rawNode.routes) : undefined,
+			subgraph_path: rawNode.subgraph_path,
 		};
 	}
 
@@ -518,6 +526,16 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 				errors.push({
 					path: `nodes.${name}.routes.default`,
 					message: `Route default cannot target node '${name}' itself`,
+				});
+			}
+		}
+
+		// Subgraph validation: type: subgraph requires subgraph_path.
+		if (node.type === "subgraph") {
+			if (!node.subgraph_path || node.subgraph_path.trim().length === 0) {
+				errors.push({
+					path: `nodes.${name}.subgraph_path`,
+					message: "Subgraph nodes require a non-empty 'subgraph_path'",
 				});
 			}
 		}

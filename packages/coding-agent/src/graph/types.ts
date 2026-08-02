@@ -130,7 +130,7 @@ export type GateAction = { type: "retry"; delayMs: number } | { type: "block"; r
 // ============================================================================
 
 /** Node type determines which behavior controller drives execution. */
-export type NodeType = "script" | "stage" | "curtain" | "custom";
+export type NodeType = "script" | "stage" | "curtain" | "custom" | "subgraph";
 
 /** Execution strategy for wave scheduling. */
 export type Strategy = "waves" | "dynamic";
@@ -226,6 +226,8 @@ export interface GraphNode {
 	max_context_tokens?: number;
 	/** Conditional routing — after execution, route to the first matching target. */
 	routes?: RouteSpec;
+	/** Path to a subgraph YAML file (relative to the parent graph file). Required for `type: subgraph`. */
+	subgraph_path?: string;
 }
 
 /**
@@ -358,6 +360,8 @@ export interface NodeDefinition {
 	timeout?: string;
 	/** Explicit AgentProfile binding. */
 	profileId?: string;
+	/** Path to a subgraph YAML file (for `type: subgraph` nodes). */
+	subgraphPath?: string;
 }
 
 /**
@@ -424,6 +428,12 @@ export interface NodeContext {
 	stateTracker?: StateTracker;
 	/** Activity logger for event auditing. */
 	activityLogger?: ActivityLogger;
+	/**
+	 * Optional node executor — lets a subgraph behavior recursively run a
+	 * nested GraphEngine while reusing the parent graph's per-node execution
+	 * (gate, retry, behavior dispatch). Provided by GraphRunner.
+	 */
+	executeNode?: import("./graph-engine").NodeExecutor;
 }
 
 // ============================================================================
