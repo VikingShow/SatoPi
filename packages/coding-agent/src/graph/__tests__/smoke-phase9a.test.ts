@@ -41,6 +41,7 @@ function makeSession(output: string, exitCode = 0) {
 	return {
 		prompt: mock().mockResolvedValue(true),
 		wait: mock().mockResolvedValue({ output, exitCode }),
+		subscribe: mock().mockReturnValue(() => {}),
 	};
 }
 
