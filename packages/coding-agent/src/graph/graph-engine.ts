@@ -15,7 +15,7 @@ import type { CheckpointStore } from "./checkpoint";
 import { evaluateCondition } from "./condition";
 import type { NodeRunner, SchedulerNodeInfo } from "./graph-executor";
 import { DynamicScheduler, WaveScheduler } from "./graph-executor";
-import type { GraphDefinition, GraphEdge, NodeExecutionOutput, NodeResult, NodeStatus, RouteDecision } from "./types";
+import type { GraphDefinition, GraphEdge, NodeExecutionOutput, NodeResult, NodeRunState, RouteDecision } from "./types";
 
 // ============================================================================
 // NodeExecutor — per-node execution contract
@@ -329,13 +329,24 @@ export class GraphEngine {
 		const nodeResults = new Map<string, NodeResult>();
 		const decisions: RouteDecision[] = [];
 
-		// Recover prior checkpoint so we can skip already-completed nodes.
+		// Recover prior checkpoint so we can skip already-completed nodes and
+		// rebuild their results for conditional-routing reconstruction.
 		const priorCheckpoint = await this.#checkpointStore.recover(this.#graphName);
 		const completedNodeIds = new Set<string>();
 		if (priorCheckpoint) {
 			for (const [nid, ns] of Object.entries(priorCheckpoint.nodes)) {
 				if (ns.status === "completed") {
 					completedNodeIds.add(nid);
+					if (ns.result) {
+						nodeResults.set(nid, {
+							nodeId: nid,
+							success: ns.result.success,
+							output: ns.result.output,
+							error: ns.result.error,
+							exitCode: ns.result.exitCode,
+							metadata: ns.result.metadata,
+						});
+					}
 				}
 			}
 			if (priorCheckpoint.decisions) {
@@ -498,9 +509,11 @@ export class GraphEngine {
 				return { nodeId, success: false, error: "Graph run aborted" };
 			}
 
-			// Skip already-completed nodes from checkpoint recovery.
+			// Skip already-completed nodes from checkpoint recovery. Return the
+			// rebuilt result (if any) so the scheduler's completedResults map gets
+			// it — critical for conditional-routing gates that read upstream output.
 			if (track.completedNodeIds.has(nodeId)) {
-				return { nodeId, success: true };
+				return nodeResults.get(nodeId) ?? { nodeId, success: true };
 			}
 
 			const node = graph.nodes[nodeId];
@@ -520,7 +533,7 @@ export class GraphEngine {
 				if (routeDecision) {
 					decisions.push(routeDecision);
 				}
-				this.#writeCheckpoint("running", track.completedNodeIds, 0, decisions);
+				this.#writeCheckpoint("running", track.completedNodeIds, 0, decisions, nodeResults);
 				return result;
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
@@ -552,12 +565,23 @@ export class GraphEngine {
 		completedNodeIds: Set<string>,
 		currentWave: number,
 		decisions?: RouteDecision[],
+		nodeResults?: Map<string, NodeResult>,
 	): void {
-		const nodes: Record<string, { nodeId: string; status: NodeStatus }> = {};
+		const nodes: Record<string, NodeRunState> = {};
 		for (const nodeId of Object.keys(this.#graph.nodes)) {
+			const result = completedNodeIds.has(nodeId) ? nodeResults?.get(nodeId) : undefined;
 			nodes[nodeId] = {
 				nodeId,
 				status: completedNodeIds.has(nodeId) ? "completed" : "pending",
+				result: result
+					? {
+							success: result.success,
+							output: result.output,
+							error: result.error,
+							exitCode: result.exitCode,
+							metadata: result.metadata,
+						}
+					: undefined,
 			};
 		}
 

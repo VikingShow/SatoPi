@@ -242,7 +242,7 @@ export interface GraphNode {
 
 /** Definition of a loop body node. v1 supports a single custom node. */
 export interface LoopBodySpec {
-	/** Body node type — `custom` in v1. */
+	/** Body node type — `custom` (single agent) or `subgraph` (nested graph). */
 	type?: NodeType;
 	/** Human-readable label. */
 	label?: string;
@@ -252,6 +252,8 @@ export interface LoopBodySpec {
 	role?: string;
 	/** Tools for the body agent. */
 	tools?: string[];
+	/** Subgraph YAML path (required when type is `subgraph`). */
+	subgraph_path?: string;
 }
 
 /**
@@ -487,6 +489,15 @@ export interface NodeRunState {
 	error?: string;
 	/** References to output artifacts produced by this node (file paths, artifact URIs). */
 	outputRefs?: string[];
+	/** Serializable snapshot of the node's execution result — enables conditional
+	 * routing to reconstruct upstream outputs after checkpoint recovery. */
+	result?: {
+		success: boolean;
+		output?: string;
+		error?: string;
+		exitCode?: number;
+		metadata?: Record<string, unknown>;
+	};
 }
 
 export interface GraphRunState {

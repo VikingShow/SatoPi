@@ -66,10 +66,10 @@ function tokenize(input: string): Token[] {
 			let next = end + 1;
 
 			if (input[end + 1] === ".") {
-				// ${node}.field(.sub)*
+				// ${node}.field(.sub)* — may include array indices like a[0]
 				node = input.slice(i + 2, end).trim();
 				let j = end + 2;
-				while (j < n && /[a-zA-Z0-9_\-.]/.test(input[j]!)) j++;
+				while (j < n && /[a-zA-Z0-9_\-.[\]]/.test(input[j]!)) j++;
 				field = input.slice(end + 2, j);
 				next = j;
 			} else {
@@ -81,10 +81,10 @@ function tokenize(input: string): Token[] {
 				field = inner.slice(dot + 1).trim();
 			}
 
-			if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(node)) {
+			if (!/^[a-zA-Z_][a-zA-Z0-9_\-.]*$/.test(node)) {
 				throw new Error(`Invalid field node reference '${node}'`);
 			}
-			if (!/^[a-zA-Z_][a-zA-Z0-9_\-.]*$/.test(field) || !field) {
+			if (!/^[a-zA-Z_][a-zA-Z0-9_\-.[\]]*$/.test(field) || !field) {
 				throw new Error(`Invalid field name '${field}'`);
 			}
 			tokens.push({ kind: "field", node, field });
@@ -215,7 +215,7 @@ class Parser {
 		let left = this.#parseAnd();
 		while (true) {
 			const tok = this.#peek();
-			if (tok.kind !== "op" || tok.value !== "||") break;
+			if (tok.kind !== "op" || (tok.value !== "||" && tok.value !== "or")) break;
 			this.#next();
 			const right = this.#parseAnd();
 			left = left || right;
@@ -227,7 +227,7 @@ class Parser {
 		let left = this.#parseNot();
 		while (true) {
 			const tok = this.#peek();
-			if (tok.kind !== "op" || tok.value !== "&&") break;
+			if (tok.kind !== "op" || (tok.value !== "&&" && tok.value !== "and")) break;
 			this.#next();
 			const right = this.#parseNot();
 			left = left && right;
@@ -380,11 +380,19 @@ export function evaluateCondition(expr: string, ctx: ConditionContext): boolean 
 	parser.resolveField = (node, field) => {
 		const out = ctx[node];
 		if (!out) return undefined;
-		// Walk dot-chain paths: field may be "a" or "a.b.c".
+		// Walk the path: field may be "a", "a.b.c", or contain array indices
+		// like "a[0]" or "a.b[2].c". Extract identifier and [n] segments only.
 		let current: unknown = out;
-		for (const part of field.split(".")) {
-			if (current === null || typeof current !== "object") return undefined;
-			current = (current as Record<string, unknown>)[part];
+		const segments = field.match(/[a-zA-Z0-9_]+|\[\d+\]/g) ?? [];
+		for (const seg of segments) {
+			const idxMatch = seg.match(/^\[(\d+)\]$/);
+			if (idxMatch) {
+				if (!Array.isArray(current)) return undefined;
+				current = current[Number(idxMatch[1])];
+			} else {
+				if (current === null || typeof current !== "object") return undefined;
+				current = (current as Record<string, unknown>)[seg];
+			}
 			if (current === undefined) return undefined;
 		}
 		return current;

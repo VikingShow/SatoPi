@@ -66,6 +66,12 @@ describe("condition expression evaluator", () => {
 			expect(evaluateCondition(`${build1} || ${testOk}`, ctx)).toBe(true);
 		});
 
+		it("supports 'and' / 'or' keywords", () => {
+			expect(evaluateCondition(`${build0} and ${testOk}`, ctx)).toBe(true);
+			expect(evaluateCondition(`${build1} or ${testOk}`, ctx)).toBe(true);
+			expect(evaluateCondition(`${build1} and ${testOk}`, ctx)).toBe(false);
+		});
+
 		it("! negation", () => {
 			// build.success is absent → falsy → !falsy = true.
 			expect(evaluateCondition(`!${fieldRef("build", "success")}`, ctx)).toBe(true);
@@ -82,6 +88,15 @@ describe("condition expression evaluator", () => {
 		it("compares against strings and numbers", () => {
 			expect(evaluateCondition(`${fieldRef("a", "kind")} == 'dev'`, { a: { kind: "dev" } })).toBe(true);
 			expect(evaluateCondition(`${fieldRef("a", "count")} >= 5`, { a: { count: 7 } })).toBe(true);
+		});
+	});
+
+	describe("array indices", () => {
+		const ctx = { results: { metadata: { loopResults: [{ success: true }, { success: false }] } } };
+
+		it("accesses ${node}.field[0]", () => {
+			expect(evaluateCondition("${results}.metadata.loopResults[0].success", ctx)).toBe(true);
+			expect(evaluateCondition("${results}.metadata.loopResults[1].success", ctx)).toBe(false);
 		});
 	});
 

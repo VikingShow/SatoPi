@@ -85,6 +85,52 @@ graph:
 		const errors = validateGraphDefinition(def);
 		expect(errors.some(e => e.path.includes("loop_max_iterations"))).toBe(true);
 	});
+
+	it("accepts loop_body of type subgraph with subgraph_path", () => {
+		const def = parseGraphYaml(`
+graph:
+  name: loop-sub
+  description: loop with subgraph body
+  version: 1
+  revision: 0
+  nodes:
+    batch:
+      label: Batch
+      description: process batch
+      type: loop
+      role: processor
+      tools: []
+      depends_on: []
+      loop_over: "[1, 2]"
+      loop_body:
+        type: subgraph
+        subgraph_path: "./inner.graph.yaml"
+`);
+		expect(validateGraphDefinition(def)).toHaveLength(0);
+	});
+
+	it("rejects loop_body of type subgraph without subgraph_path", () => {
+		const def = parseGraphYaml(`
+graph:
+  name: loop-sub-bad
+  description: loop with bad subgraph body
+  version: 1
+  revision: 0
+  nodes:
+    batch:
+      label: Batch
+      description: process batch
+      type: loop
+      role: processor
+      tools: []
+      depends_on: []
+      loop_over: "[1]"
+      loop_body:
+        type: subgraph
+`);
+		const errors = validateGraphDefinition(def);
+		expect(errors.some(e => e.path.includes("subgraph_path"))).toBe(true);
+	});
 });
 
 // ============================================================================
@@ -269,5 +315,59 @@ describe("loop execution", () => {
 		const result = await behavior.execute(ctx, []);
 		expect((result.metadata as Record<string, unknown>).loopIterations).toBe(2);
 		expect(spawned).toHaveLength(2);
+	});
+
+	it("executes a subgraph body for each loop iteration", async () => {
+		// Write an inner subgraph with a single custom node.
+		const dir = "/tmp/satopi-loop-subgraph-body";
+		const { rm, mkdir } = await import("node:fs/promises");
+		await rm(dir, { recursive: true, force: true });
+		await mkdir(dir, { recursive: true });
+		await Bun.write(
+			`${dir}/inner.graph.yaml`,
+			`graph:
+  name: inner
+  description: inner subgraph
+  version: 1
+  revision: 0
+  nodes:
+    step:
+      label: Step
+      description: inner step
+      role: stepworker
+      tools: []
+      depends_on: []
+`,
+		);
+
+		const spawned: Array<{ role: string }> = [];
+		const spawner = {
+			async spawn(specs: Array<{ id: string; role: string; task: string }>) {
+				for (const s of specs) spawned.push({ role: s.role });
+				return specs.map(s => ({
+					id: s.id,
+					async wait() {
+						return { output: `inner of ${s.role}`, exitCode: 0 };
+					},
+				}));
+			},
+		};
+
+		const behavior = new LoopNodeBehavior();
+		const ctx = makeCtx(
+			{
+				loopOver: "[1, 2]",
+				loopBody: { type: "subgraph", subgraph_path: "./inner.graph.yaml" },
+			},
+			spawner,
+		);
+		// graphDir is used to resolve the subgraph path.
+		ctx.graphDir = dir;
+
+		const result = await behavior.execute(ctx, []);
+		expect(result.success).toBe(true);
+		expect((result.metadata as Record<string, unknown>).loopIterations).toBe(2);
+		// Each iteration spawns the inner subgraph's worker once → 2 total.
+		expect(spawned.filter(s => s.role === "stepworker")).toHaveLength(2);
 	});
 });

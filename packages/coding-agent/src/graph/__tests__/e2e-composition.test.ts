@@ -212,9 +212,98 @@ graph:
 			graphName: "recover",
 		});
 		const result2 = await engine2.run(executor);
-		// On recovery, completed nodes are skipped (run stays empty) — build and
-		// deploy are marked completed in the checkpoint.
+		// On recovery, completed nodes are skipped — nothing re-runs, so `run`
+		// stays empty, and no errors are produced.
+		expect(run.size).toBe(0);
 		expect(result2.executionErrors).toHaveLength(0);
+	});
+
+	it("resumes a partially-completed conditional graph and only runs the missing node", async () => {
+		const def = parseGraphYaml(`
+graph:
+  name: partial
+  description: partial recovery test
+  version: 1
+  revision: 0
+  strategy: dynamic
+  nodes:
+    build:
+      label: Build
+      description: build
+      role: builder
+      tools: []
+      depends_on: []
+      routes:
+        conditions:
+          - when: "\${build}.exitCode == 0"
+            to: deploy
+        default: rollback
+    deploy:
+      label: Deploy
+      description: deploy
+      role: deployer
+      tools: []
+      depends_on: [build]
+    rollback:
+      label: Rollback
+      description: rollback
+      role: ops
+      tools: []
+      depends_on: [build]
+`);
+
+		// First run: build completes with exitCode 0, but deploy is interrupted
+		// (simulate by writing a checkpoint manually with only build completed).
+		const run = new Set<string>();
+		const executor: NodeExecutor = {
+			async execute(nodeId: string, _ctx: NodeExecutionContext): Promise<NodeResult> {
+				run.add(nodeId);
+				if (nodeId === "build") return { nodeId, success: true, output: "ok", exitCode: 0 };
+				return { nodeId, success: true, output: "ran" };
+			},
+		};
+
+		// Pre-seed a checkpoint where only build completed with result.
+		const seededCheckpoint = {
+			graphName: "partial",
+			runId: "graph-partial-1",
+			startedAt: 1,
+			nodes: {
+				build: {
+					nodeId: "build",
+					status: "completed",
+					result: { success: true, output: "ok", exitCode: 0 },
+				},
+				deploy: { nodeId: "deploy", status: "pending" },
+				rollback: { nodeId: "rollback", status: "pending" },
+			},
+			currentWave: 0,
+			status: "running",
+		} as never;
+
+		const checkpointStore = {
+			write(_s: unknown): boolean {
+				return true;
+			},
+			async recover() {
+				return seededCheckpoint;
+			},
+		};
+
+		const engine = new GraphEngine({
+			graph: def,
+			waves: buildWaves(def),
+			checkpointStore,
+			graphName: "partial",
+		});
+		const result = await engine.run(executor);
+
+		// build is skipped (completed in checkpoint). deploy should run because
+		// the gate rebuilds build's result (exitCode 0) and routes to deploy.
+		expect(run.has("build")).toBe(false);
+		expect(run.has("deploy")).toBe(true);
+		expect(run.has("rollback")).toBe(false);
+		expect(result.executionErrors).toHaveLength(0);
 	});
 });
 

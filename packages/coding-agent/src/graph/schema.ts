@@ -111,6 +111,7 @@ interface RawLoopBodySpec {
 	description?: string;
 	role?: string;
 	tools?: string[];
+	subgraph_path?: string;
 }
 
 interface RawRouteCondition {
@@ -214,6 +215,7 @@ function normalizeLoopBodySpec(raw: RawLoopBodySpec): LoopBodySpec {
 		description: raw.description,
 		role: raw.role,
 		tools: raw.tools,
+		subgraph_path: raw.subgraph_path,
 	};
 	return body;
 }
@@ -585,11 +587,23 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 					message: "Loop nodes require a 'loop_body' definition",
 				});
 			}
-			if (node.loop_body && node.loop_body.type !== undefined && node.loop_body.type !== "custom") {
-				errors.push({
-					path: `nodes.${name}.loop_body.type`,
-					message: `Invalid loop body type '${node.loop_body.type}'. v1 supports 'custom' only`,
-				});
+			if (node.loop_body) {
+				const bodyType = node.loop_body.type ?? "custom";
+				if (bodyType !== "custom" && bodyType !== "subgraph") {
+					errors.push({
+						path: `nodes.${name}.loop_body.type`,
+						message: `Invalid loop body type '${bodyType}'. Supported: 'custom', 'subgraph'`,
+					});
+				}
+				if (
+					bodyType === "subgraph" &&
+					(!node.loop_body.subgraph_path || node.loop_body.subgraph_path.trim().length === 0)
+				) {
+					errors.push({
+						path: `nodes.${name}.loop_body.subgraph_path`,
+						message: "Loop body of type 'subgraph' requires a 'subgraph_path'",
+					});
+				}
 			}
 			if (node.loop_max_iterations !== undefined && node.loop_max_iterations < 1) {
 				errors.push({

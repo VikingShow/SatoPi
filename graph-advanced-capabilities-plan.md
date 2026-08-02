@@ -369,11 +369,11 @@ nodes:
 
 | # | 限制 | 说明 | 状态 |
 |---|---|---|---|
-| 1 | **条件图 checkpoint 恢复不完整** | 条件路由（DynamicScheduler）的 skipped/failed 节点状态和每个节点的 NodeResult 不持久化。恢复后条件节点重新评估，若上游结果无法重建可能误判。**需要状态重建（持久化 NodeResult）才能完整修复** | 已知，待 v2 |
-| 2 | **loop body 仅支持 custom** | schema 校验 loop_body.type 只能是 custom。subgraph body 是 v2 特性 | 已知，v2 |
+| 1 | ~~条件图 checkpoint 恢复不完整~~ | 已实现完整状态持久化（NodeResult 快照 + 重建），恢复后条件路由决策一致 | ✅ 已修复 |
+| 2 | ~~loop body 仅支持 custom~~ | 已支持 subgraph body（loop 迭代时每个 item 触发子图） | ✅ 已修复 |
 | 3 | **子图内不支持 script/stage/curtain** | 这些类型需要完整 swarm 基础设施，子图嵌套不携带。会明确报错而非静默 | 已修复（明确拒绝） |
-| 4 | **条件表达式不支持数组索引** | `${node}.metadata.loopResults[0].success` 不支持。支持点链路径（`${node}.metadata.loopIterations`） | 点链已支持，数组索引待 v2 |
-| 5 | **`and`/`or` 关键字被 tokenize 但未 parse** | tokenizer 识别 `and`/`or` 但 parser 只认 `&&`/`||`。使用 `and`/`or` 会报 "Unexpected trailing input" | 已确认，建议只用 `&&`/`||` |
+| 4 | ~~条件表达式不支持数组索引~~ | 已支持 `${node}.field[n]` 数组下标 + 点链路径 | ✅ 已修复 |
+| 5 | ~~`and`/`or` 关键字被 tokenize 但未 parse~~ | 已支持 `and`/`or` 等价于 `&&`/`||` | ✅ 已修复 |
 
 ---
 
@@ -398,3 +398,36 @@ nodes:
 - `conditional-routing.test.ts`：routes 基于节点 metadata 路由
 - `loop-node-behavior.test.ts`：metadata 暴露、break 引用 metadata
 - `condition.test.ts`：点链路径 `${loop.item}`
+
+---
+
+## 加固实施日志（2026-08-02）
+
+### 完整状态持久化与恢复
+
+**问题**：条件路由图中断恢复时，DynamicScheduler 无法重建每个节点的 NodeResult，条件节点重新评估可能误判。
+
+**修复**：
+1. `NodeRunState` 扩展携带 `result` 快照（success/output/error/exitCode/metadata）
+2. `#writeCheckpoint` 写入完整 NodeResult
+3. 恢复时重建 `nodeResults`（含 checkpoint 结果）
+4. `runNode` 跳过 completed 节点时返回重建结果 → DynamicScheduler 的 completedResults 获得上游结果 → 条件 gate 决策一致
+
+**验证**：e2e 测试新增"部分恢复"——build 从 checkpoint 恢复后，gate 重建 exitCode=0 正确路由到 deploy，且 build 不重跑。
+
+### loop body 支持 subgraph
+
+**修复**：
+1. `LoopBodySpec` 加 `subgraph_path`
+2. schema 校验放宽为 `custom`/`subgraph`，subgraph 需 subgraph_path
+3. `LoopNodeBehavior.#executeBody` 对 subgraph body 委托 `SubgraphNodeBehavior`，每个迭代注入当前 item
+
+**验证**：loop-node-behavior 测试新增 subgraph body 执行（2 迭代 → 2 次子图 worker）。
+
+### 条件表达式边界完善
+
+**修复**：
+1. **数组索引**：`${node}.metadata.loopResults[0].success` 支持 `[n]` 下标（tokenizer 扩展 + resolveField 路径解析）
+2. **and/or 关键字**：`&&`/`||` 之外支持 `and`/`or`
+
+**验证**：condition 测试新增数组索引 + and/or 用例。

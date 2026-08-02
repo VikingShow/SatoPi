@@ -20,6 +20,7 @@ import { jaccardSimilarity } from "../swarm/core/convergence";
 import type { AgentSpec } from "./agent-spec";
 import { evaluateCondition } from "./condition";
 import type { NodeBehavior } from "./schema";
+import { SubgraphNodeBehavior } from "./subgraph-behavior";
 import type { GateResult, GateSpec, LoopBodySpec, NodeContext, NodeResult } from "./types";
 
 export class LoopNodeBehavior implements NodeBehavior {
@@ -124,9 +125,35 @@ export class LoopNodeBehavior implements NodeBehavior {
 		// Per-iteration cleanup handled in execute().
 	}
 
-	/** Execute one loop-body iteration, spawning a single agent via the shared runtime. */
+	/** Execute one loop-body iteration. Custom bodies spawn one agent; subgraph
+	 * bodies delegate to {@link SubgraphNodeBehavior}. */
 	async #executeBody(ctx: NodeContext, index: number, item: unknown): Promise<NodeResult> {
 		const body = ctx.node.loopBody ?? ({} as LoopBodySpec);
+
+		// Subgraph body: delegate to SubgraphNodeBehavior with the current item
+		// injected into the task description.
+		if (body.type === "subgraph") {
+			const subgraph = new SubgraphNodeBehavior();
+			const subgraphCtx: NodeContext = {
+				...ctx,
+				node: {
+					...ctx.node,
+					type: "subgraph",
+					subgraphPath: body.subgraph_path,
+					label: body.label ?? `loop-body-${index}`,
+					description: buildBodyTask(body, ctx, index, item),
+				},
+			};
+			try {
+				await subgraph.prepare(subgraphCtx);
+				return await subgraph.execute(subgraphCtx, []);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return { nodeId: `loop-${ctx.node.id}-${index}`, success: false, error: msg };
+			}
+		}
+
+		// Custom body: spawn a single agent.
 		const task = buildBodyTask(body, ctx, index, item);
 
 		const spec: AgentSpec = {
