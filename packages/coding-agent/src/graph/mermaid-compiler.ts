@@ -347,12 +347,26 @@ export function graphToMermaid(graph: GraphDefinition): string {
 
 		for (const edge of graph.edges) {
 			const label =
-				edge.artifacts && edge.artifacts.length > 0
-					? `|"${escapeLabel(edge.artifacts[0])}"| `
-					: edge.label
-						? `|"${escapeLabel(edge.label)}"| `
-						: "";
+				edge.condition !== undefined
+					? `|"if ${escapeLabel(edge.condition)}"| `
+					: edge.artifacts && edge.artifacts.length > 0
+						? `|"${escapeLabel(edge.artifacts[0])}"| `
+						: edge.label
+							? `|"${escapeLabel(edge.label)}"| `
+							: "";
 			lines.push(`    ${edge.from} --> ${label}${edge.to}`);
+		}
+	}
+
+	// Route edges — render node.routes as conditional edges from the source.
+	for (const [id, node] of Object.entries(graph.nodes)) {
+		if (!node.routes) continue;
+		lines.push("");
+		for (const cond of node.routes.conditions) {
+			lines.push(`    ${id} -->|"if ${escapeLabel(cond.when)}"| ${cond.to}`);
+		}
+		if (node.routes.default) {
+			lines.push(`    ${id} -->|"default"| ${node.routes.default}`);
 		}
 	}
 

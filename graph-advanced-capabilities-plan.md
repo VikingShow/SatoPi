@@ -312,3 +312,24 @@ nodes:
 阶段二（子图）:     types → schema → subgraph-behavior → graph-engine 嵌套 → 测试
 阶段三（循环）:     types → schema → loop-behavior → 测试
 ```
+
+---
+
+## 实施日志
+
+### 阶段一：条件分支 ✅ 已完成（2026-08-02）
+
+**已落地内容**：
+1. **types.ts**：新增 `RouteSpec`/`RouteCondition`/`RouteDecision` 类型；`GraphNode.routes`、`GraphEdge.condition`、`NodeResult.exitCode`/`metadata`、`GraphRunState.decisions`
+2. **condition.ts**（新文件）：安全的 DSL 条件表达式引擎（tokenize → parser → eval），支持 `${node}.field` 引用、比较/字符串/逻辑运算符、`isNull` 检查；`evaluateCondition` + `validateCondition`
+3. **schema.ts**：解析 `routes`/`condition` 字段；校验 route target 存在、无自环、条件语法；`buildGraphDependencyMap` 并入 route targets（循环检测覆盖）
+4. **graph-executor.ts**：`DynamicScheduler` 增加 `ConditionalGate` 支持——节点入队前检查条件门，不满足则标记 skipped；路由源失败不 abort（default 分支处理失败场景）；`#isReady` 对路由源失败的下游视为 ready
+5. **graph-engine.ts**：`#usesConditionalRouting()` 检测是否需要动态调度；根据 strategy/routes/condition 选择 `DynamicScheduler`（含 gate + routeSources）或 `WaveScheduler`；`evaluateNodeRoutes` 计算路由决策并写入 checkpoint
+6. **mermaid-compiler.ts**：`graphToMermaid` 渲染条件边（`|"if cond"|`）和 routes 边
+
+**测试**：
+- `condition.test.ts`：12 个表达式引擎测试
+- `conditional-routing.test.ts`：7 个 schema + 动态调度集成测试（success 路由、default 路由、waves 兼容）
+- 全量 graph+swarm：430 pass / 0 fail
+
+**验证**：`bun run check:types` ✅，biome ✅（8 文件，1 无害 warning）

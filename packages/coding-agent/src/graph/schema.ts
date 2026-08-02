@@ -7,6 +7,7 @@
  */
 
 import type { AgentSpec } from "./agent-spec";
+import { validateCondition } from "./condition";
 import { detectCycles } from "./dag";
 import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 
@@ -29,6 +30,8 @@ import type {
 	NodeType,
 	RawGateSpec,
 	RawRetrySpec,
+	RouteCondition,
+	RouteSpec,
 	Strategy,
 } from "./types";
 import { VALID_GATE_MODES, VALID_GATE_TYPES } from "./types";
@@ -92,6 +95,18 @@ interface RawGraphNode {
 	continue_on_failure?: boolean;
 	context_sources?: string[];
 	max_context_tokens?: number;
+	routes?: RawRouteSpec;
+}
+
+interface RawRouteCondition {
+	when: string;
+	to: string;
+	label?: string;
+}
+
+interface RawRouteSpec {
+	conditions: RawRouteCondition[];
+	default?: string;
 }
 
 interface RawGraphEdge {
@@ -99,6 +114,7 @@ interface RawGraphEdge {
 	to: string;
 	artifacts?: string[];
 	label?: string;
+	condition?: string;
 }
 
 interface RawGraphHook {
@@ -147,6 +163,26 @@ function normalizeNodeOutput(raw: RawNodeOutput): NodeOutput {
 		throw new Error("node output requires an 'id' field");
 	}
 	return { id: raw.id, description: raw.description };
+}
+
+function normalizeRouteSpec(raw: RawRouteSpec): RouteSpec {
+	if (!Array.isArray(raw.conditions) || raw.conditions.length === 0) {
+		throw new Error("routes requires a non-empty 'conditions' array");
+	}
+	const conditions: RouteCondition[] = raw.conditions.map((c, i) => {
+		if (!c.when || typeof c.when !== "string") {
+			throw new Error(`routes.conditions[${i}]: 'when' is required`);
+		}
+		if (!c.to || typeof c.to !== "string") {
+			throw new Error(`routes.conditions[${i}]: 'to' is required`);
+		}
+		const syntaxError = validateCondition(c.when);
+		if (syntaxError) {
+			throw new Error(`routes.conditions[${i}].when: invalid condition '${c.when}': ${syntaxError}`);
+		}
+		return { when: c.when, to: c.to, label: c.label };
+	});
+	return { conditions, default: raw.default };
 }
 
 // ============================================================================
@@ -234,6 +270,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			continue_on_failure: rawNode.continue_on_failure,
 			context_sources: rawNode.context_sources,
 			max_context_tokens: rawNode.max_context_tokens,
+			routes: rawNode.routes ? normalizeRouteSpec(rawNode.routes) : undefined,
 		};
 	}
 
@@ -250,6 +287,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			to: e.to,
 			artifacts: e.artifacts,
 			label: e.label,
+			condition: e.condition,
 		};
 	});
 
@@ -329,6 +367,21 @@ export function buildGraphDependencyMap(def: GraphDefinition): Map<string, Set<s
 	for (const [name, node] of Object.entries(def.nodes)) {
 		for (const dep of node.depends_on) {
 			deps.get(name)!.add(dep);
+		}
+	}
+
+	// Conditional routes: each route target depends on the routing node.
+	// This keeps conditional edges inside cycle detection.
+	for (const [name, node] of Object.entries(def.nodes)) {
+		const routes = node.routes;
+		if (!routes) continue;
+		for (const cond of routes.conditions) {
+			if (deps.has(cond.to)) {
+				deps.get(cond.to)!.add(name);
+			}
+		}
+		if (routes.default && deps.has(routes.default)) {
+			deps.get(routes.default)!.add(name);
 		}
 	}
 
@@ -430,6 +483,44 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 				});
 			}
 		}
+
+		// Routes validation
+		if (node.routes) {
+			for (let i = 0; i < node.routes.conditions.length; i++) {
+				const cond = node.routes.conditions[i];
+				if (!nodeNames.has(cond.to)) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].to`,
+						message: `Route target '${cond.to}' is not a known node`,
+					});
+				}
+				if (cond.to === name) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].to`,
+						message: `Route cannot target node '${name}' itself`,
+					});
+				}
+				const syntaxError = validateCondition(cond.when);
+				if (syntaxError) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].when`,
+						message: `Invalid condition '${cond.when}': ${syntaxError}`,
+					});
+				}
+			}
+			if (node.routes.default && !nodeNames.has(node.routes.default)) {
+				errors.push({
+					path: `nodes.${name}.routes.default`,
+					message: `Route default '${node.routes.default}' is not a known node`,
+				});
+			}
+			if (node.routes.default === name) {
+				errors.push({
+					path: `nodes.${name}.routes.default`,
+					message: `Route default cannot target node '${name}' itself`,
+				});
+			}
+		}
 	}
 
 	// Edge validation
@@ -453,6 +544,15 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 					path: `edges[${i}]`,
 					message: `Edge cannot connect node '${edge.from}' to itself`,
 				});
+			}
+			if (edge.condition !== undefined) {
+				const syntaxError = validateCondition(edge.condition);
+				if (syntaxError) {
+					errors.push({
+						path: `edges[${i}].condition`,
+						message: `Invalid condition '${edge.condition}': ${syntaxError}`,
+					});
+				}
 			}
 		}
 	}

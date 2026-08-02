@@ -98,13 +98,30 @@ export class WaveScheduler implements SchedulingStrategy {
 }
 
 // ============================================================================
-// DynamicScheduler — semaphore-gated ready queue
+// DynamicScheduler — semaphore-gated ready queue with conditional routing
 // ============================================================================
+
+/**
+ * Evaluates whether a node's conditional edges permit it to run.
+ *
+ * A node may declare conditional routing (node.routes) or be the target of
+ * conditional edges (edge.condition). Before a node is enqueued, this hook
+ * evaluates those conditions against the completed upstream node results.
+ *
+ * Return values:
+ * - `true`  — the node should run (no conditions, or a condition matched).
+ * - `false` — the node is gated by an unmet condition and should be skipped.
+ */
+export type ConditionalGate = (nodeId: string, completedResults: Map<string, NodeResult>) => boolean;
 
 /**
  * Semaphore-gated scheduler.  Nodes enter the ready queue as soon as all
  * upstream dependencies have completed (successfully or with
  * continueOnFailure).  At most `maxConcurrency` nodes execute at once.
+ *
+ * When a {@link ConditionalGate} is supplied, a node whose upstream
+ * conditions are unsatisfied is skipped rather than enqueued — this is what
+ * powers conditional edges (`node.routes` / `edge.condition`).
  */
 export class DynamicScheduler implements SchedulingStrategy {
 	/** Per-node dependency tracking. */
@@ -115,6 +132,10 @@ export class DynamicScheduler implements SchedulingStrategy {
 	#nodes: Record<string, SchedulerNodeInfo>;
 	/** Maximum concurrent executions. */
 	#maxConcurrency: number;
+	/** Optional conditional gate — when absent, all ready nodes run. */
+	#conditionalGate: ConditionalGate | undefined;
+	/** Node ids that are routing sources — their failure is not a hard abort. */
+	#routeSources: Set<string>;
 	/** Current in-flight count (the semaphore). */
 	#inFlight = 0;
 
@@ -122,21 +143,34 @@ export class DynamicScheduler implements SchedulingStrategy {
 	 * @param deps — dependency graph (nodeId → set of nodeIds it depends on)
 	 * @param nodes — per-node metadata keyed by nodeId
 	 * @param maxConcurrency — max nodes running simultaneously
+	 * @param conditionalGate — optional gate for conditional edge routing
+	 * @param routeSources — node ids that route via conditions; failure does not abort the run
 	 */
-	constructor(deps: Map<string, Set<string>>, nodes: Record<string, SchedulerNodeInfo>, maxConcurrency: number) {
+	constructor(
+		deps: Map<string, Set<string>>,
+		nodes: Record<string, SchedulerNodeInfo>,
+		maxConcurrency: number,
+		conditionalGate?: ConditionalGate,
+		routeSources?: Set<string>,
+	) {
 		this.#deps = deps;
 		this.#nodes = nodes;
 		this.#maxConcurrency = Math.max(1, maxConcurrency);
+		this.#conditionalGate = conditionalGate;
+		this.#routeSources = routeSources ?? new Set();
 		this.#dependents = this.#buildDependents(deps);
 	}
 
 	async schedule(_waves: string[][], runner: NodeRunner): Promise<void> {
 		// Track per-node state
-		// "pending" | "running" | "completed" | "failed"
+		// "pending" | "running" | "completed" | "failed" | "skipped"
 		const status = new Map<string, string>();
 		for (const nodeId of this.#deps.keys()) {
 			status.set(nodeId, "pending");
 		}
+
+		// Completed node results, keyed by nodeId — read by the conditional gate.
+		const completedResults = new Map<string, NodeResult>();
 
 		// Counter-based completion: resolved when settledCount === totalCount
 		const totalCount = this.#deps.size;
@@ -176,8 +210,18 @@ export class DynamicScheduler implements SchedulingStrategy {
 
 		// Kick off initial ready nodes
 		for (const nodeId of this.#deps.keys()) {
-			if (this.#isReady(nodeId, status)) {
-				this.#enqueue(nodeId, runner, status, completions, promises, () => aborted, onAbort, onSettle);
+			if (this.#isReady(nodeId, status) && this.#passesGate(nodeId, completedResults)) {
+				this.#enqueue(
+					nodeId,
+					runner,
+					status,
+					completedResults,
+					completions,
+					promises,
+					() => aborted,
+					onAbort,
+					onSettle,
+				);
 			}
 		}
 
@@ -214,8 +258,14 @@ export class DynamicScheduler implements SchedulingStrategy {
 			if (depStatus === "pending" || depStatus === "running") {
 				return false;
 			}
-			// "failed" is allowed only if the dep had continueOnFailure
-			if (depStatus === "failed" && !(this.#nodes[dep]?.continueOnFailure ?? false)) {
+			// "failed" is allowed when the dep had continueOnFailure, or when the
+			// dep is a routing source — its routes decide which downstream runs
+			// (e.g. default = rollback), so failure must not strand dependents.
+			if (
+				depStatus === "failed" &&
+				!(this.#nodes[dep]?.continueOnFailure ?? false) &&
+				!this.#routeSources.has(dep)
+			) {
 				return false;
 			}
 		}
@@ -230,6 +280,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		nodeId: string,
 		runner: NodeRunner,
 		status: Map<string, string>,
+		completedResults: Map<string, NodeResult>,
 		completions: Map<string, () => void>,
 		promises: Map<string, Promise<void>>,
 		isAborted: () => boolean,
@@ -240,13 +291,14 @@ export class DynamicScheduler implements SchedulingStrategy {
 		promises.set(nodeId, promise);
 		completions.set(nodeId, resolve);
 
-		this.#tryStart(nodeId, runner, status, completions, promises, isAborted, onAbort, onSettle);
+		this.#tryStart(nodeId, runner, status, completedResults, completions, promises, isAborted, onAbort, onSettle);
 	}
 
 	#tryStart(
 		nodeId: string,
 		runner: NodeRunner,
 		status: Map<string, string>,
+		completedResults: Map<string, NodeResult>,
 		completions: Map<string, () => void>,
 		promises: Map<string, Promise<void>>,
 		isAborted: () => boolean,
@@ -259,9 +311,28 @@ export class DynamicScheduler implements SchedulingStrategy {
 			return;
 		}
 
+		// A node whose upstream conditions are unmet is skipped — it settles
+		// without running so the master wait can complete.
+		if (!this.#passesGate(nodeId, completedResults)) {
+			status.set(nodeId, "skipped");
+			completions.get(nodeId)!();
+			onSettle();
+			return;
+		}
+
 		if (this.#inFlight >= this.#maxConcurrency) {
 			queueMicrotask(() =>
-				this.#tryStart(nodeId, runner, status, completions, promises, isAborted, onAbort, onSettle),
+				this.#tryStart(
+					nodeId,
+					runner,
+					status,
+					completedResults,
+					completions,
+					promises,
+					isAborted,
+					onAbort,
+					onSettle,
+				),
 			);
 			return;
 		}
@@ -269,13 +340,14 @@ export class DynamicScheduler implements SchedulingStrategy {
 		this.#inFlight++;
 		status.set(nodeId, "running");
 
-		this.#executeNode(nodeId, runner, status, completions, promises, isAborted, onAbort, onSettle);
+		this.#executeNode(nodeId, runner, status, completedResults, completions, promises, isAborted, onAbort, onSettle);
 	}
 
 	async #executeNode(
 		nodeId: string,
 		runner: NodeRunner,
 		status: Map<string, string>,
+		completedResults: Map<string, NodeResult>,
 		completions: Map<string, () => void>,
 		promises: Map<string, Promise<void>>,
 		isAborted: () => boolean,
@@ -291,6 +363,7 @@ export class DynamicScheduler implements SchedulingStrategy {
 		}
 
 		runner.onNodeComplete(nodeId, result);
+		completedResults.set(nodeId, result);
 
 		this.#inFlight--;
 
@@ -298,21 +371,32 @@ export class DynamicScheduler implements SchedulingStrategy {
 			status.set(nodeId, "completed");
 		} else {
 			status.set(nodeId, "failed");
-			if (!(this.#nodes[nodeId]?.continueOnFailure ?? false)) {
+			// A routing source's failure is not a hard abort — its routes decide
+			// which downstream runs (e.g. default = rollback). Only non-routing
+			// nodes abort the run on failure.
+			if (!this.#routeSources.has(nodeId) && !(this.#nodes[nodeId]?.continueOnFailure ?? false)) {
 				onAbort(new Error(`Dynamic schedule aborted: node "${nodeId}" failed (continueOnFailure=false)`));
 			}
 		}
 
-		// Cascade: check if any dependent nodes are now ready
+		// Cascade: check if any dependent nodes are now ready.
+		// A dependent whose upstream conditions are unmet is skipped.
 		const dependents = this.#dependents[nodeId] ?? [];
 		for (const depId of dependents) {
-			if (status.get(depId) === "pending" && this.#isReady(depId, status)) {
-				this.#enqueue(depId, runner, status, completions, promises, isAborted, onAbort, onSettle);
+			if (status.get(depId) !== "pending") continue;
+			if (this.#isReady(depId, status)) {
+				this.#enqueue(depId, runner, status, completedResults, completions, promises, isAborted, onAbort, onSettle);
 			}
 		}
 
 		// Resolve this node's deferred and signal settlement
 		completions.get(nodeId)!();
 		onSettle();
+	}
+
+	/** Check whether a node's conditional gate permits it to run. */
+	#passesGate(nodeId: string, completedResults: Map<string, NodeResult>): boolean {
+		if (!this.#conditionalGate) return true;
+		return this.#conditionalGate(nodeId, completedResults);
 	}
 }

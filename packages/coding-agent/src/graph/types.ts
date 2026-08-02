@@ -136,6 +136,46 @@ export type NodeType = "script" | "stage" | "curtain" | "custom";
 export type Strategy = "waves" | "dynamic";
 
 // ============================================================================
+// Conditional routing types
+// ============================================================================
+
+/**
+ * A single conditional route from a node.
+ *
+ * Routes give a node runtime branching: after the node executes, the first
+ * route whose `when` condition evaluates truthy selects its `to` target. If
+ * no condition matches, the node's `default` target is used (when present).
+ *
+ * Route targets participate in the dependency graph — a route target depends
+ * on the routing node, so conditional edges are covered by cycle detection.
+ */
+export interface RouteCondition {
+	/** Condition expression, e.g. `${build}.exitCode == 0`. Evaluated against upstream node outputs. */
+	when: string;
+	/** Target node to route to when this condition matches. */
+	to: string;
+	/** Optional visualization label. */
+	label?: string;
+}
+
+export interface RouteSpec {
+	/** Conditional routes evaluated top-down; first match wins. */
+	conditions: RouteCondition[];
+	/** Fallback target when no condition matches (optional). */
+	default?: string;
+}
+
+/** A routing decision recorded at runtime. */
+export interface RouteDecision {
+	/** Source node that performed the routing. */
+	from: string;
+	/** Selected target node. */
+	to: string;
+	/** Which condition matched (or "default"). */
+	matched: string;
+}
+
+// ============================================================================
 // Graph core types
 // ============================================================================
 
@@ -184,6 +224,8 @@ export interface GraphNode {
 	context_sources?: string[];
 	/** Maximum context tokens for the agent executing this node. */
 	max_context_tokens?: number;
+	/** Conditional routing — after execution, route to the first matching target. */
+	routes?: RouteSpec;
 }
 
 /**
@@ -198,6 +240,8 @@ export interface GraphEdge {
 	artifacts?: string[];
 	/** Edge label for debugging and visualization. */
 	label?: string;
+	/** Condition expression — this edge is only active when it evaluates truthy. */
+	condition?: string;
 }
 
 /**
@@ -332,6 +376,10 @@ export interface NodeResult {
 	error?: string;
 	/** Per-agent results for downstream consumption. */
 	agentResults?: Array<{ agentId: string; output: string; error?: string }>;
+	/** Exit code produced by the node's gate/command (for conditional routing). */
+	exitCode?: number;
+	/** Arbitrary decision metadata readable by route conditions. */
+	metadata?: Record<string, unknown>;
 }
 
 /**
@@ -408,4 +456,6 @@ export interface GraphRunState {
 	currentWave: number;
 	/** Overall run status. */
 	status: GraphRunStatus;
+	/** Routing decisions made during the run (for conditional edge recovery). */
+	decisions?: RouteDecision[];
 }
