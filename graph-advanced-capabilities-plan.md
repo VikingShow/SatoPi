@@ -362,3 +362,39 @@ nodes:
 
 **测试**：`loop-node-behavior.test.ts` 8 个测试（schema 解析、缺 loop_body、max_iterations 校验、字面数组迭代、max 上限、break 条件、上游引用、失败传播）+ condition.test.ts 新增点内语法测试
 - 全量 graph+swarm：442 pass / 0 fail
+
+---
+
+## 已知限制（审查后确认）
+
+| # | 限制 | 说明 | 状态 |
+|---|---|---|---|
+| 1 | **条件图 checkpoint 恢复不完整** | 条件路由（DynamicScheduler）的 skipped/failed 节点状态和每个节点的 NodeResult 不持久化。恢复后条件节点重新评估，若上游结果无法重建可能误判。**需要状态重建（持久化 NodeResult）才能完整修复** | 已知，待 v2 |
+| 2 | **loop body 仅支持 custom** | schema 校验 loop_body.type 只能是 custom。subgraph body 是 v2 特性 | 已知，v2 |
+| 3 | **子图内不支持 script/stage/curtain** | 这些类型需要完整 swarm 基础设施，子图嵌套不携带。会明确报错而非静默 | 已修复（明确拒绝） |
+| 4 | **条件表达式不支持数组索引** | `${node}.metadata.loopResults[0].success` 不支持。支持点链路径（`${node}.metadata.loopIterations`） | 点链已支持，数组索引待 v2 |
+| 5 | **`and`/`or` 关键字被 tokenize 但未 parse** | tokenizer 识别 `and`/`or` 但 parser 只认 `&&`/`||`。使用 `and`/`or` 会报 "Unexpected trailing input" | 已确认，建议只用 `&&`/`||` |
+
+---
+
+## 审查修复日志（2026-08-02）
+
+**修复的问题**：
+1. **P0 子图内 loop 节点被当 custom 处理** → `SubgraphNodeExecutor.execute` 增加 loop 分支，委托 `LoopNodeBehavior`；script/stage/curtain 明确拒绝
+2. **P0 子图路径解析基准错误** → 新增 `NodeContext.graphDir`，子图路径相对父图目录解析（GraphRunner 设置）
+3. **P1 子图缺 metadata** → `SubgraphNodeBehavior.execute` 返回 `metadata`（subgraphName/completedCount/totalNodes/errorCount）
+4. **P1 嵌套 NodeContext 缺字段** → `#buildNodeContext` 补 gate/timeout/loop 字段/ircBus/executeNode/graphDir
+5. **P1 loop break_when 缺 metadata** → `evaluateLoopBreak` ctx 加 `metadata`
+6. **P1 `buildUpstreamOutputs` 丢 metadata** → 有 metadata 时 result 变为 `{ output, ...metadata }`，下游可访问
+7. **P1 loop_over 缺非空校验** → schema 校验 + `resolveIterationSource` 报错
+8. **P1 `resolveIterationSource` 错误信息模糊** → 明确单引号/字符串 result 的错误
+9. **P1 条件引擎不支持嵌套访问** → field 支持点链路径（`${node}.metadata.field`），resolveField 逐层深入
+10. **P1 条件 gate `!anyEvaluable` 反向** → 改为恒 false（条件源未 settled 时节点不可达）
+11. **P2 正则字符类范围错误** → `[a-zA-Z0-9_.-]` 修复为 `[a-zA-Z0-9_\-.]`
+12. **P2 mermaid 不支持 subgraph/loop 形状** → SHAPE_MAP 加 `loop: ">]"`、`subgraph: "[/]"`
+
+**新增测试**：
+- `subgraph.test.ts`：子图内含 loop 节点执行
+- `conditional-routing.test.ts`：routes 基于节点 metadata 路由
+- `loop-node-behavior.test.ts`：metadata 暴露、break 引用 metadata
+- `condition.test.ts`：点链路径 `${loop.item}`

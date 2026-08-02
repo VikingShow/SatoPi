@@ -462,6 +462,8 @@ export interface NodeContext {
 	stateTracker?: StateTracker;
 	/** Activity logger for event auditing. */
 	activityLogger?: ActivityLogger;
+	/** Directory of the currently executing graph file — used to resolve subgraph_path relative paths. */
+	graphDir?: string;
 	/**
 	 * Optional node executor — lets a subgraph behavior recursively run a
 	 * nested GraphEngine while reusing the parent graph's per-node execution

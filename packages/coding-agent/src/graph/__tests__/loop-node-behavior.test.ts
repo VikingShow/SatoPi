@@ -235,4 +235,39 @@ describe("loop execution", () => {
 		expect(result.success).toBe(false);
 		expect(result.error).toBeDefined();
 	});
+
+	it("exposes loop metadata (loopIterations) for downstream routing", async () => {
+		const { spawner } = makeSpawner((_item, idx) => `out-${idx}`);
+		const behavior = new LoopNodeBehavior();
+		const ctx = makeCtx(
+			{
+				loopOver: "[1, 2, 3]",
+				loopBody: { type: "custom", role: "worker", description: "process" },
+			},
+			spawner,
+		);
+
+		const result = await behavior.execute(ctx, []);
+		const metadata = result.metadata as Record<string, unknown>;
+		expect(metadata.loopIterations).toBe(3);
+		expect(metadata.loopResults).toHaveLength(3);
+	});
+
+	it("break_when can reference loop.result.success from the current iteration", async () => {
+		const { spawner, spawned } = makeSpawner((_item, idx) => `out-${idx}`);
+		const behavior = new LoopNodeBehavior();
+		const ctx = makeCtx(
+			{
+				loopOver: "[1, 2, 3, 4]",
+				loopBody: { type: "custom", role: "worker", description: "process" },
+				// Break when the current iteration's item equals 2 (index 1).
+				loopBreakWhen: "${loop.item} == 2",
+			},
+			spawner,
+		);
+
+		const result = await behavior.execute(ctx, []);
+		expect((result.metadata as Record<string, unknown>).loopIterations).toBe(2);
+		expect(spawned).toHaveLength(2);
+	});
 });

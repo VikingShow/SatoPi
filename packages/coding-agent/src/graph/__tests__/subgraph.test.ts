@@ -205,6 +205,112 @@ graph:
 
 		expect(result.executionErrors).toHaveLength(0);
 	});
+
+	it("executes a loop node inside a subgraph", async () => {
+		// Parent graph with a subgraph node whose inner graph contains a loop.
+		const parent = parseGraphYaml(`
+graph:
+  name: parent-loop
+  description: parent with loop subgraph
+  version: 1
+  revision: 0
+  nodes:
+    analyze:
+      label: Analyze
+      description: delegate to subgraph
+      type: subgraph
+      subgraph_path: "./loop-inner.graph.yaml"
+      role: analyzer
+      tools: []
+      depends_on: []
+`);
+
+		// Inner subgraph: a single loop node iterating a literal array.
+		const subgraphYaml = `
+graph:
+  name: loop-inner
+  description: inner loop subgraph
+  version: 1
+  revision: 0
+  nodes:
+    batch:
+      label: Batch
+      description: process items
+      type: loop
+      role: processor
+      tools: []
+      depends_on: []
+      loop_over: "[1, 2]"
+      loop_body:
+        type: custom
+        role: worker
+        description: "process"
+`;
+
+		const dir = "/tmp/satopi-subgraph-loop-test";
+		const { rm, mkdir } = await import("node:fs/promises");
+		await rm(dir, { recursive: true, force: true });
+		await mkdir(dir, { recursive: true });
+		await Bun.write(`${dir}/loop-inner.graph.yaml`, subgraphYaml);
+
+		const spawned: Array<{ role: string }> = [];
+		const spawner = {
+			async spawn(specs: Array<{ id: string; role: string; task: string }>) {
+				for (const s of specs) spawned.push({ role: s.role });
+				return specs.map(s => ({
+					id: s.id,
+					async wait() {
+						return { output: `out of ${s.role}`, exitCode: 0 };
+					},
+				}));
+			},
+		};
+
+		const executor: NodeExecutor = {
+			async execute(nodeId: string, execCtx: NodeExecutionContext): Promise<NodeResult> {
+				if (nodeId === "analyze") {
+					const { SubgraphNodeBehavior } = await import("../subgraph-behavior");
+					const behavior = new SubgraphNodeBehavior();
+					const ctx = {
+						node: {
+							id: nodeId,
+							label: "Analyze",
+							description: "d",
+							role: "analyzer",
+							profileId: undefined,
+							tools: [],
+							type: "subgraph",
+							dependsOn: [],
+							subgraphPath: "./loop-inner.graph.yaml",
+						},
+						workspace: dir,
+						modelRegistry: undefined,
+						settings: undefined,
+						upstreamOutputs: execCtx.upstreamOutputs,
+						experience: "",
+						signal: execCtx.signal,
+						runtime: spawner,
+						agentRegistry: { list: () => [], findByProfileId: () => undefined },
+					};
+					await behavior.prepare(ctx as never);
+					return behavior.execute(ctx as never, []);
+				}
+				return { nodeId, success: true, output: "ran" };
+			},
+		};
+
+		const engine = new GraphEngine({
+			graph: parent,
+			waves: buildWaves(parent),
+			checkpointStore: { write: () => true, recover: async () => null },
+			graphName: "parent-loop",
+		});
+
+		const result = await engine.run(executor);
+		// The inner loop over [1,2] should spawn 2 workers.
+		expect(spawned.filter(s => s.role === "worker")).toHaveLength(2);
+		expect(result.executionErrors).toHaveLength(0);
+	});
 });
 
 // ============================================================================

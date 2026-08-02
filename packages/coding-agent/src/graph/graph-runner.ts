@@ -429,6 +429,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
 			executeNode: this,
+			graphDir: this.#config.graphPath ? path.dirname(this.#config.graphPath) : this.#config.workspace,
 		};
 
 		try {

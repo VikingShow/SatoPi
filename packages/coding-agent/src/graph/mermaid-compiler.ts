@@ -310,6 +310,8 @@ const SHAPE_MAP: Record<string, string> = {
 	stage: "()",
 	curtain: "{}",
 	script: "(())",
+	loop: ">]",
+	subgraph: "[/]",
 };
 
 function escapeLabel(label: string): string {

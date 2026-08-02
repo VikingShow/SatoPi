@@ -573,6 +573,12 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 
 		// Loop validation.
 		if (node.type === "loop") {
+			if (!node.loop_over || node.loop_over.trim().length === 0) {
+				errors.push({
+					path: `nodes.${name}.loop_over`,
+					message: "Loop nodes require a non-empty 'loop_over' definition",
+				});
+			}
 			if (!node.loop_body) {
 				errors.push({
 					path: `nodes.${name}.loop_body`,

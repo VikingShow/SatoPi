@@ -23,6 +23,7 @@ import type { AgentSpec } from "./agent-spec";
 import type { CheckpointStore } from "./checkpoint";
 import { buildExecutionWaves } from "./dag";
 import { GraphEngine, type GraphEngineConfig, type NodeExecutionContext, type NodeExecutor } from "./graph-engine";
+import { LoopNodeBehavior } from "./loop-node-behavior";
 import type { NodeBehavior } from "./schema";
 import { buildGraphDependencyMap, loadGraphDefinition } from "./schema";
 import type { GateResult, GateSpec, GraphDefinition, NodeContext, NodeResult } from "./types";
@@ -39,8 +40,11 @@ export class SubgraphNodeBehavior implements NodeBehavior {
 			throw new Error(`Node '${ctx.node.id}': subgraph_path not specified`);
 		}
 
-		// Subgraph path is relative to the parent graph's directory (workspace).
-		const absPath = path.isAbsolute(relPath) ? relPath : path.resolve(ctx.workspace, relPath);
+		// Subgraph path is relative to the parent graph's directory (graphDir
+		// when available, falling back to workspace). This keeps nested subgraph
+		// references correct even when the parent graph lives outside workspace.
+		const baseDir = ctx.graphDir ?? ctx.workspace;
+		const absPath = path.isAbsolute(relPath) ? relPath : path.resolve(baseDir, relPath);
 
 		try {
 			this.#subgraphDef = await loadGraphDefinition(absPath);
@@ -93,6 +97,12 @@ export class SubgraphNodeBehavior implements NodeBehavior {
 				success,
 				output,
 				error: success ? undefined : runResult.executionErrors.join("; "),
+				metadata: {
+					subgraphName: this.#subgraphName,
+					completedCount: runResult.completedCount,
+					totalNodes: runResult.totalNodes,
+					errorCount: runResult.executionErrors.length,
+				},
 			};
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -147,6 +157,30 @@ class SubgraphNodeExecutor implements NodeExecutor {
 				const msg = err instanceof Error ? err.message : String(err);
 				return { nodeId, success: false, error: msg };
 			}
+		}
+
+		// Loop nodes inside a subgraph are executed by LoopNodeBehavior.
+		if (node.type === "loop") {
+			const loopBehavior = new LoopNodeBehavior();
+			const loopCtx = this.#buildNodeContext(nodeId, node, execCtx);
+			try {
+				await loopBehavior.prepare(loopCtx);
+				return await loopBehavior.execute(loopCtx, []);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return { nodeId, success: false, error: msg };
+			}
+		}
+
+		// script/stage/curtain need full swarm infrastructure, which a nested
+		// subgraph does not carry — reject them explicitly rather than silently
+		// spawning a single agent.
+		if (node.type === "script" || node.type === "stage" || node.type === "curtain") {
+			return {
+				nodeId,
+				success: false,
+				error: `Node type '${node.type}' is not supported inside a subgraph (custom, loop, subgraph only)`,
+			};
 		}
 
 		// Build the agent task from description + upstream outputs.
@@ -209,6 +243,13 @@ class SubgraphNodeExecutor implements NodeExecutor {
 				type: node.type ?? "custom",
 				dependsOn: node.depends_on ?? [],
 				subgraphPath: node.subgraph_path,
+				gate: node.gate,
+				timeout: node.timeout,
+				loopOver: node.loop_over,
+				loopBody: node.loop_body,
+				loopMaxIterations: node.loop_max_iterations,
+				loopBreakWhen: node.loop_break_when,
+				loopConvergenceThreshold: node.loop_convergence_threshold,
 			},
 			workspace: this.#parentCtx.workspace,
 			modelRegistry: this.#parentCtx.modelRegistry,
@@ -222,6 +263,9 @@ class SubgraphNodeExecutor implements NodeExecutor {
 			profileRegistry: this.#parentCtx.profileRegistry,
 			stateTracker: this.#parentCtx.stateTracker,
 			activityLogger: this.#parentCtx.activityLogger,
+			ircBus: this.#parentCtx.ircBus,
+			executeNode: this.#parentCtx.executeNode,
+			graphDir: this.#parentCtx.graphDir,
 		};
 	}
 }

@@ -10,14 +10,6 @@ import type { GraphDefinition, NodeResult } from "../types";
 // Helpers
 // ============================================================================
 
-function makeExecutor(results: Record<string, NodeResult>): NodeExecutor {
-	return {
-		async execute(nodeId: string, _ctx: NodeExecutionContext): Promise<NodeResult> {
-			return results[nodeId] ?? { nodeId, success: true, output: "(no result)" };
-		},
-	};
-}
-
 function makeCheckpoint() {
 	let state:
 		| Parameters<NonNullable<ConstructorParameters<typeof GraphEngine>[0]>["checkpointStore"]["write"]>[0]
@@ -320,6 +312,66 @@ graph:
 		const result = await engine.run(executor);
 		expect(run.has("a")).toBe(true);
 		expect(run.has("b")).toBe(true);
+		expect(result.executionErrors).toHaveLength(0);
+	});
+
+	it("routes based on a node's metadata", async () => {
+		// A node returns metadata; routes read ${node}.metadata.loopIterations.
+		const def = parseGraphYaml(`
+graph:
+  name: meta
+  description: metadata routing
+  version: 1
+  revision: 0
+  strategy: dynamic
+  nodes:
+    process:
+      label: Process
+      description: process
+      role: worker
+      tools: []
+      depends_on: []
+      routes:
+        conditions:
+          - when: "\${process}.metadata.loopIterations > 2"
+            to: many
+        default: few
+    many:
+      label: Many
+      description: many path
+      role: worker
+      tools: []
+      depends_on: [process]
+    few:
+      label: Few
+      description: few path
+      role: worker
+      tools: []
+      depends_on: [process]
+`);
+
+		const run = new Set<string>();
+		const executor: NodeExecutor = {
+			async execute(nodeId: string, _ctx: NodeExecutionContext): Promise<NodeResult> {
+				run.add(nodeId);
+				if (nodeId === "process") {
+					return { nodeId, success: true, output: "done", metadata: { loopIterations: 5 } };
+				}
+				return { nodeId, success: true, output: "ran" };
+			},
+		};
+
+		const engine = new GraphEngine({
+			graph: def,
+			waves: buildWaves(def),
+			checkpointStore: makeCheckpoint() as never,
+			graphName: "meta",
+		});
+
+		const result = await engine.run(executor);
+		expect(run.has("process")).toBe(true);
+		expect(run.has("many")).toBe(true);
+		expect(run.has("few")).toBe(false);
 		expect(result.executionErrors).toHaveLength(0);
 	});
 });

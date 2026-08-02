@@ -161,31 +161,46 @@ export class LoopNodeBehavior implements NodeBehavior {
 
 /**
  * Resolve the iteration source for a loop node. Supports:
- * - literal array: `"[1,2,3]"` or `"['a','b']"`
- * - field reference: `${upstreamNode}.items` (reads `result.items` from upstream output)
+ * - literal JSON array: `"[1,2,3]"` or `"[\"a\",\"b\"]"` (double quotes required)
+ * - field reference: `${upstreamNode}.items` or `${upstreamNode.items}` — reads
+ *   `result.items` from the upstream node's output
  */
 async function resolveIterationSource(source: string | undefined, ctx: NodeContext): Promise<unknown[]> {
-	if (!source) return [];
+	if (!source || source.trim().length === 0) {
+		throw new Error("loop_over is required and must not be empty");
+	}
 
-	// Literal array.
+	// Literal JSON array (double quotes).
 	if (source.trim().startsWith("[")) {
 		try {
 			const parsed = JSON.parse(source) as unknown;
 			if (Array.isArray(parsed)) return parsed;
 			throw new Error(`not an array`);
 		} catch {
-			throw new Error(`invalid array literal '${source}'`);
+			throw new Error(
+				`invalid array literal '${source}'. Use JSON syntax with double quotes, e.g. "[1,2,3]" or '["a","b"]'`,
+			);
 		}
 	}
 
-	// Field reference: ${node}.field
-	const match = source.match(/^\$\{([a-zA-Z_][a-zA-Z0-9_-]*)\}\.([a-zA-Z_][a-zA-Z0-9_-]*)$/);
+	// Field reference: ${node}.field or ${node.field}
+	const matchDot = source.match(/^\$\{([a-zA-Z_][a-zA-Z0-9_-]*)\}\.([a-zA-Z_][a-zA-Z0-9_-]*)$/);
+	const matchInner = source.match(/^\$\{([a-zA-Z_][a-zA-Z0-9_-]*)\.([a-zA-Z_][a-zA-Z0-9_-]*)\}$/);
+	const match = matchDot ?? matchInner;
 	if (match) {
 		const [, nodeId, field] = match;
 		const upstream = ctx.upstreamOutputs[nodeId];
 		if (!upstream) throw new Error(`upstream node '${nodeId}' not found`);
-		const value = (upstream.result as Record<string, unknown> | undefined)?.[field];
-		if (!Array.isArray(value)) throw new Error(`field '${nodeId}.${field}' did not resolve to an array`);
+		const result = upstream.result;
+		if (typeof result !== "object" || result === null) {
+			throw new Error(
+				`field '${nodeId}.${field}' is not accessible: upstream result is ${typeof result === "string" ? `a string "${String(result).slice(0, 50)}"` : String(result)}, not an object`,
+			);
+		}
+		const value = (result as Record<string, unknown>)[field];
+		if (!Array.isArray(value)) {
+			throw new Error(`field '${nodeId}.${field}' is not an array (got ${typeof value})`);
+		}
 		return value;
 	}
 
@@ -223,6 +238,7 @@ function evaluateLoopBreak(condition: string, item: unknown, index: number, resu
 				output: result.output,
 				error: result.error,
 				exitCode: result.exitCode,
+				metadata: result.metadata,
 			},
 		},
 	};

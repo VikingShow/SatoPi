@@ -163,7 +163,8 @@ function buildUpstreamOutputs(
 			nodeId: depId,
 			artifacts: artifactPaths,
 			summary: result.output ?? result.error ?? "",
-			result: result.output ?? "",
+			result:
+				result.metadata !== undefined ? { output: result.output ?? "", ...result.metadata } : (result.output ?? ""),
 		};
 	}
 	return outputs;
@@ -452,16 +453,15 @@ export class GraphEngine {
 			// Case 2: node is the target of incoming conditional edges.
 			const condEdges = conditionalIncoming.get(nodeId);
 			if (condEdges && condEdges.length > 0) {
-				let anyEvaluable = false;
 				for (const edge of condEdges) {
 					const srcResult = completedResults.get(edge.from);
 					if (!srcResult) continue;
-					anyEvaluable = true;
 					const ctx = buildConditionContext(edge.from, srcResult);
 					if (evaluateCondition(edge.condition!, ctx)) return true;
 				}
-				// Every conditional source settled but none matched → unreachable.
-				return !anyEvaluable;
+				// No conditional source has settled (all skipped/pending) or none
+				// matched — the node is unreachable. Skip it rather than running.
+				return false;
 			}
 
 			// Case 3: routing source or unconditional node — always runnable.
