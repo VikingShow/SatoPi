@@ -167,28 +167,6 @@ export class OffloadManager implements IOffloadManager {
 }
 
 // ---------------------------------------------------------------------------
-// No-op implementation — fallback when SessionStorage is unavailable
-// ---------------------------------------------------------------------------
-
-export class NoopOffloadManager implements IOffloadManager {
-	async summarizeL1(_agentId: string, _content: unknown): Promise<void> {
-		// Falls through — offload subsystem not wired
-	}
-	async forceFlush(): Promise<void> {
-		// Falls through — offload subsystem not wired
-	}
-	async getMmdContext(_agentId: string, _taskDescription: string): Promise<string | null> {
-		return null;
-	}
-	async getExperienceContext(_agentId: string, _taskDescription: string): Promise<string | null> {
-		return null;
-	}
-	async getOffloadSummaries(): Promise<Map<string, string>> {
-		return new Map();
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

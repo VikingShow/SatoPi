@@ -8,6 +8,7 @@
 import type { AgentTool, AgentToolContext, AgentToolResult } from "@satopi/pi-agent-core";
 import { type } from "arktype";
 import { ProfileRegistry } from "../agent/agent-profile";
+import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
 import type { AgentSession } from "../session/agent-session";
@@ -86,6 +87,10 @@ export const agentInvokeTool: AgentTool<typeof agentInvokeSchema, AgentInvokeDet
 					profileId,
 					session,
 				});
+				// Adopt into the lifecycle manager so the persistent agent is owned and
+				// cleaned up on teardown. main+profileId → idleTtlMs 0 → explicit
+				// dispose/release only, matching AgentLifecycleManager.adopt policy.
+				AgentLifecycleManager.global().adopt(agentId, { idleTtlMs: 0 });
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : String(err);
 				return {

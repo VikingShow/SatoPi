@@ -1,4 +1,5 @@
 import type { Component } from "@satopi/pi-tui";
+import { matchesKey } from "@satopi/pi-tui/keys";
 import type { CrewManager } from "../../../crew/crew-manager";
 import { AgentRegistry } from "../../../registry/agent-registry";
 import { formatStatusIcon } from "../../../tools/render-utils";
@@ -300,7 +301,7 @@ export class SwarmSidebar implements Component {
 		}
 
 		// Ctrl+B / Esc: close sidebar
-		if (data === "\x02" || data === "escape" || data === "q" || data === "\x1b") {
+		if (matchesKey(data, "ctrl+b") || matchesKey(data, "escape") || data === "q") {
 			this.#config.onClose?.();
 			return;
 		}

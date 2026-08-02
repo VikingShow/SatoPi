@@ -119,10 +119,26 @@ export interface RoleCreateInput {
 // Path helpers
 // ============================================================================
 
+/**
+ * Project-level roles directory: {workspace}/.stp/roles.
+ *
+ * No "agent" prefix here because the `.stp/` dir is already project-scoped
+ * (see getProjectAgentDir). Project roles take precedence over user roles and
+ * are typically committed to git for team sharing.
+ */
 function getProjectRolesDir(workspaceDir: string): string {
 	return path.join(getProjectAgentDir(workspaceDir), "roles");
 }
 
+/**
+ * User-level roles directory: ~/.stp/agent/roles.
+ *
+ * Placed under `agent/` for consistency with every other user-level config
+ * (sessions, tools, prompts, mcp.json, ssh.json — all under ~/.stp/agent/).
+ * This layout lets DirResolver flatten the prefix for XDG remapping
+ * (~/.stp/agent/roles → $XDG_DATA_HOME/stp/roles) and reserves a namespace
+ * for potential multi-product coexistence. See packages/utils/src/dirs.ts.
+ */
 function getUserRolesDir(): string {
 	return path.join(getAgentDir(), "roles");
 }
