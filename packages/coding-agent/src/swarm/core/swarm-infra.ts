@@ -100,7 +100,10 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		await roleAssetManager.init();
 	}
 
-	// 9. Orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
+	// 9. OffloadManager — L1→L3 context offloading (needed by OffloadHook in the runtime)
+	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
+
+	// 10. Orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
 	const orch = createOrchestratorRuntime({
 		modelRegistry,
 		settings,
@@ -110,10 +113,8 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		profileRegistry,
 		ircBus,
 		activeMmd,
+		offloadManager,
 	});
-
-	// 10. OffloadManager — L1→L3 context offloading
-	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
 
 	return {
 		sessionManager,

@@ -23,7 +23,7 @@ import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { IrcBus } from "../irc/bus";
-import { type IOffloadManager, NoopOffloadManager } from "../offload/manager";
+import type { IOffloadManager } from "../offload/manager";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
@@ -116,7 +116,8 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// ── Swarm keyword mode state ────────────────────────────────────────
 	#planContent = "";
 	#planReady = false;
-	#offloadManager: IOffloadManager;
+	// Assigned during init() from infra.offloadManager.
+	#offloadManager!: IOffloadManager;
 	#markEnvironment: MarkEnvironment;
 
 	// ── PhaseBehavior instances ─────────────────────────────────────────
@@ -134,7 +135,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
-		this.#offloadManager = new NoopOffloadManager();
 		this.#markEnvironment = new MarkEnvironment();
 	}
 
