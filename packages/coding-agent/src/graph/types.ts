@@ -130,7 +130,7 @@ export type GateAction = { type: "retry"; delayMs: number } | { type: "block"; r
 // ============================================================================
 
 /** Node type determines which behavior controller drives execution. */
-export type NodeType = "script" | "stage" | "curtain" | "custom" | "subgraph";
+export type NodeType = "script" | "stage" | "curtain" | "custom" | "subgraph" | "loop";
 
 /** Execution strategy for wave scheduling. */
 export type Strategy = "waves" | "dynamic";
@@ -228,6 +228,30 @@ export interface GraphNode {
 	routes?: RouteSpec;
 	/** Path to a subgraph YAML file (relative to the parent graph file). Required for `type: subgraph`. */
 	subgraph_path?: string;
+	/** Iteration source for `type: loop` — a literal array (`"[1,2,3]"`) or field ref (`"${node}.items"`). */
+	loop_over?: string;
+	/** Loop body node definition (single custom node in v1). */
+	loop_body?: LoopBodySpec;
+	/** Hard iteration cap for `type: loop` (default 10). */
+	loop_max_iterations?: number;
+	/** Optional break condition expression, e.g. `${loop.result}.success == false`. */
+	loop_break_when?: string;
+	/** Optional convergence threshold in [0,1] — stop early when consecutive iterations produce similar output. */
+	loop_convergence_threshold?: number;
+}
+
+/** Definition of a loop body node. v1 supports a single custom node. */
+export interface LoopBodySpec {
+	/** Body node type — `custom` in v1. */
+	type?: NodeType;
+	/** Human-readable label. */
+	label?: string;
+	/** Task description injected into the body agent. */
+	description?: string;
+	/** Role for the body agent. */
+	role?: string;
+	/** Tools for the body agent. */
+	tools?: string[];
 }
 
 /**
@@ -362,6 +386,16 @@ export interface NodeDefinition {
 	profileId?: string;
 	/** Path to a subgraph YAML file (for `type: subgraph` nodes). */
 	subgraphPath?: string;
+	/** Iteration source for `type: loop` — literal array or `${node}.field` ref. */
+	loopOver?: string;
+	/** Loop body node definition. */
+	loopBody?: LoopBodySpec;
+	/** Hard iteration cap for `type: loop`. */
+	loopMaxIterations?: number;
+	/** Optional break condition expression. */
+	loopBreakWhen?: string;
+	/** Optional convergence threshold in [0,1]. */
+	loopConvergenceThreshold?: number;
 }
 
 /**

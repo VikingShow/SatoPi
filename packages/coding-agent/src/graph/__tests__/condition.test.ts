@@ -24,6 +24,13 @@ describe("condition expression evaluator", () => {
 		it("returns false for missing nodes", () => {
 			expect(evaluateCondition(fieldRef("missing", "success"), {})).toBe(false);
 		});
+
+		it("supports dot-inside-braces form ${node.field}", () => {
+			const ctx = { loop: { item: 2, index: 1 } };
+			expect(evaluateCondition("${loop.item} == 2", ctx)).toBe(true);
+			expect(evaluateCondition("${loop.item} == 3", ctx)).toBe(false);
+			expect(evaluateCondition("${loop.index} >= 0", ctx)).toBe(true);
+		});
 	});
 
 	describe("string operators", () => {

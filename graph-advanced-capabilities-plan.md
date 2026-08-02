@@ -347,3 +347,18 @@ nodes:
 
 **测试**：`subgraph.test.ts` 3 个测试（schema 解析、缺 subgraph_path 校验、嵌套执行端到端）
 - 全量 graph+swarm：433 pass / 0 fail
+
+### 阶段三：循环/迭代 ✅ 已完成（2026-08-02）
+
+**已落地内容**：
+1. **types.ts**：`NodeType` 加 `"loop"`；`GraphNode` 加 `loop_over`/`loop_body`/`loop_max_iterations`/`loop_break_when`/`loop_convergence_threshold`；`LoopBodySpec` 类型；`NodeDefinition` 加对应 camelCase 字段
+2. **schema.ts**：`VALID_NODE_TYPES` 加 `loop`；解析循环字段；校验（loop_body 必须、body 仅 custom、max_iterations>=1、convergence 范围 [0,1]、break_when 语法）
+3. **loop-node-behavior.ts**（新文件）：`LoopNodeBehavior`——解析迭代源（字面数组或 `${node}.field` 上游引用）、逐迭代执行 body（复用 `ctx.runtime.spawn`）、`loop_break_when` 条件终止、可选收敛检测（Jaccard）、聚合结果
+4. **condition.ts**：field 引用支持 `${node.field}`（点内）和 `${node}.field`（点外）两种形式
+5. **node-behavior.ts**：注册 `loop` → `LoopNodeBehavior`
+6. **graph-runner.ts**：`ctx.node` 组装加循环字段
+
+**关键设计**：循环是节点级行为，调度器透明（与阶段一/二一致）。body 注入 `loop.item`/`loop.index` 上下文。收敛检测默认关闭，仅显式配置 `loop_convergence_threshold` 时启用。
+
+**测试**：`loop-node-behavior.test.ts` 8 个测试（schema 解析、缺 loop_body、max_iterations 校验、字面数组迭代、max 上限、break 条件、上游引用、失败传播）+ condition.test.ts 新增点内语法测试
+- 全量 graph+swarm：442 pass / 0 fail

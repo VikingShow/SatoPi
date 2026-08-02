@@ -28,6 +28,7 @@ import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
+import { LoopNodeBehavior } from "./loop-node-behavior";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
 import { SubgraphNodeBehavior } from "./subgraph-behavior";
@@ -335,6 +336,7 @@ const behaviorRegistry: Map<string, NodeBehaviorFactory> = new Map<string, NodeB
 	["stage", config => new PhaseBehaviorNodeAdapter(new StageBehavior(), config)],
 	["curtain", config => new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config)],
 	["subgraph", _config => new SubgraphNodeBehavior()],
+	["loop", _config => new LoopNodeBehavior()],
 ]);
 
 /**

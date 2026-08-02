@@ -54,24 +54,41 @@ function tokenize(input: string): Token[] {
 			continue;
 		}
 
-		// Field reference: ${nodeId}.field
+		// Field reference. Supports two forms:
+		//   ${node}.field     — closing brace right after the node name
+		//   ${node.field}     — dot inside the braces
 		if (ch === "$" && input[i + 1] === "{") {
 			const end = input.indexOf("}", i);
 			if (end === -1) throw new Error("Unterminated field reference");
-			const node = input.slice(i + 2, end).trim();
+
+			let node: string;
+			let field: string;
+			let next = end + 1;
+
+			if (input[end + 1] === ".") {
+				// ${node}.field
+				node = input.slice(i + 2, end).trim();
+				let j = end + 2;
+				while (j < n && /[a-zA-Z0-9_-]/.test(input[j]!)) j++;
+				field = input.slice(end + 2, j);
+				next = j;
+			} else {
+				// ${node.field}
+				const inner = input.slice(i + 2, end);
+				const dot = inner.indexOf(".");
+				if (dot === -1) throw new Error(`Field reference missing '.' in '${inner}'`);
+				node = inner.slice(0, dot).trim();
+				field = inner.slice(dot + 1).trim();
+			}
+
 			if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(node)) {
 				throw new Error(`Invalid field node reference '${node}'`);
 			}
-			// Expect ".field" after the closing brace.
-			if (input[end + 1] !== ".") {
-				throw new Error(`Field reference missing '.' after '${node}'`);
+			if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(field) || !field) {
+				throw new Error(`Invalid field name '${field}'`);
 			}
-			let j = end + 2;
-			while (j < n && /[a-zA-Z0-9_-]/.test(input[j]!)) j++;
-			const field = input.slice(end + 2, j);
-			if (!field) throw new Error(`Field reference missing field name for '${node}'`);
 			tokens.push({ kind: "field", node, field });
-			i = j;
+			i = next;
 			continue;
 		}
 

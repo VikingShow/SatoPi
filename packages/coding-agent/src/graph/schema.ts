@@ -24,6 +24,7 @@ import type {
 	GraphHook,
 	GraphNode,
 	GraphValidationError,
+	LoopBodySpec,
 	NodeContext,
 	NodeOutput,
 	NodeResult,
@@ -97,6 +98,19 @@ interface RawGraphNode {
 	max_context_tokens?: number;
 	routes?: RawRouteSpec;
 	subgraph_path?: string;
+	loop_over?: string;
+	loop_body?: RawLoopBodySpec;
+	loop_max_iterations?: number;
+	loop_break_when?: string;
+	loop_convergence_threshold?: number;
+}
+
+interface RawLoopBodySpec {
+	type?: string;
+	label?: string;
+	description?: string;
+	role?: string;
+	tools?: string[];
 }
 
 interface RawRouteCondition {
@@ -157,6 +171,7 @@ const VALID_NODE_TYPES: Record<string, true> = {
 	curtain: true,
 	custom: true,
 	subgraph: true,
+	loop: true,
 };
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;
@@ -190,6 +205,17 @@ function normalizeRouteSpec(raw: RawRouteSpec): RouteSpec {
 		return { when: c.when, to: c.to, label: c.label };
 	});
 	return { conditions, default: raw.default };
+}
+
+function normalizeLoopBodySpec(raw: RawLoopBodySpec): LoopBodySpec {
+	const body: LoopBodySpec = {
+		type: (raw.type ?? "custom") as NodeType | undefined,
+		label: raw.label,
+		description: raw.description,
+		role: raw.role,
+		tools: raw.tools,
+	};
+	return body;
 }
 
 // ============================================================================
@@ -279,6 +305,11 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			max_context_tokens: rawNode.max_context_tokens,
 			routes: rawNode.routes ? normalizeRouteSpec(rawNode.routes) : undefined,
 			subgraph_path: rawNode.subgraph_path,
+			loop_over: rawNode.loop_over,
+			loop_body: rawNode.loop_body ? normalizeLoopBodySpec(rawNode.loop_body) : undefined,
+			loop_max_iterations: rawNode.loop_max_iterations,
+			loop_break_when: rawNode.loop_break_when,
+			loop_convergence_threshold: rawNode.loop_convergence_threshold,
 		};
 	}
 
@@ -537,6 +568,45 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 					path: `nodes.${name}.subgraph_path`,
 					message: "Subgraph nodes require a non-empty 'subgraph_path'",
 				});
+			}
+		}
+
+		// Loop validation.
+		if (node.type === "loop") {
+			if (!node.loop_body) {
+				errors.push({
+					path: `nodes.${name}.loop_body`,
+					message: "Loop nodes require a 'loop_body' definition",
+				});
+			}
+			if (node.loop_body && node.loop_body.type !== undefined && node.loop_body.type !== "custom") {
+				errors.push({
+					path: `nodes.${name}.loop_body.type`,
+					message: `Invalid loop body type '${node.loop_body.type}'. v1 supports 'custom' only`,
+				});
+			}
+			if (node.loop_max_iterations !== undefined && node.loop_max_iterations < 1) {
+				errors.push({
+					path: `nodes.${name}.loop_max_iterations`,
+					message: "loop_max_iterations must be >= 1",
+				});
+			}
+			if (node.loop_convergence_threshold !== undefined) {
+				if (node.loop_convergence_threshold < 0 || node.loop_convergence_threshold > 1) {
+					errors.push({
+						path: `nodes.${name}.loop_convergence_threshold`,
+						message: "loop_convergence_threshold must be in range [0, 1]",
+					});
+				}
+			}
+			if (node.loop_break_when) {
+				const syntaxError = validateCondition(node.loop_break_when);
+				if (syntaxError) {
+					errors.push({
+						path: `nodes.${name}.loop_break_when`,
+						message: `Invalid condition '${node.loop_break_when}': ${syntaxError}`,
+					});
+				}
 			}
 		}
 	}
