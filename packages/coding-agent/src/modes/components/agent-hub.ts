@@ -26,6 +26,7 @@ import { IrcBus } from "../../irc/bus";
 import { AgentLifecycleManager } from "../../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, type AgentStatus, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
+import { getSessionDir } from "../../session/session-tree-paths";
 import { currentSwarmPhase } from "../../swarm/core/state";
 import { parseThinkingLevel } from "../../thinking";
 import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
@@ -102,17 +103,31 @@ function modelBadge(ref: AgentRef, observed: ObservableSession | undefined): str
 	return formatModelBadge(selector.slice(selector.indexOf("/") + 1), level);
 }
 
-async function registerPersistedSubagents(
-	registry: AgentRegistry,
-	sessionFile: string | null | undefined,
-): Promise<void> {
-	if (!sessionFile?.endsWith(".jsonl")) return;
-	const root = sessionFile.slice(0, -6);
-	await registerPersistedSubagentsFromDir(registry, root, undefined);
+/** One persisted agent/advisor transcript found by the recursive scan. */
+export interface PersistedAgentInfo {
+	id: string;
+	displayName: string;
+	kind: "sub" | "advisor";
+	parentId: string | undefined;
+	sessionFile: string;
 }
 
-async function registerPersistedSubagentsFromDir(
-	registry: AgentRegistry,
+/**
+ * Recursively collect persisted agent transcripts under a session's artifact
+ * directory (`<session>.jsonl` → `<session>/<agentId>.jsonl`, nested under
+ * id-named subdirectories, swarm agents under `<session>/swarm-<name>/agents/`).
+ * Read-only — does not touch the AgentRegistry.
+ */
+export async function collectPersistedAgents(sessionFile: string | null | undefined): Promise<PersistedAgentInfo[]> {
+	if (!sessionFile?.endsWith(".jsonl")) return [];
+	const root = getSessionDir(sessionFile);
+	const found: PersistedAgentInfo[] = [];
+	await collectPersistedAgentsFromDir(found, root, undefined);
+	return found;
+}
+
+async function collectPersistedAgentsFromDir(
+	found: PersistedAgentInfo[],
 	dir: string,
 	parentId: string | undefined,
 ): Promise<void> {
@@ -123,9 +138,15 @@ async function registerPersistedSubagentsFromDir(
 		return;
 	}
 	for (const entry of entries) {
+		// Swarm/crew agent transcripts live under `<sessionDir>/swarm-<name>/agents/`:
+		// walk those as extra roots so crew members are enumerable too.
+		if (entry.isDirectory() && entry.name.startsWith("swarm-")) {
+			await collectPersistedAgentsFromDir(found, path.join(dir, entry.name, "agents"), undefined);
+			continue;
+		}
 		if (!entry.isFile() || !entry.name.endsWith(".jsonl") || entry.name.includes(".bak")) continue;
 		const sessionFile = path.join(dir, entry.name);
-		// The advisor transcript is observability-only: register it as a non-peer
+		// The advisor transcript is observability-only: collect it as a non-peer
 		// `advisor` kind under its owning session so the Hub can show its read-only
 		// transcript, but it never joins agent-facing rosters and is not revivable.
 		if (isAdvisorTranscriptName(entry.name)) {
@@ -134,40 +155,78 @@ async function registerPersistedSubagentsFromDir(
 			// → a named advisor, keyed and labeled by its slug.
 			const slug =
 				entry.name === ADVISOR_TRANSCRIPT_FILENAME ? "" : entry.name.slice("__advisor.".length, -".jsonl".length);
-			const advisorId = slug ? `${owner}/advisor:${slug}` : `${owner}/advisor`;
-			const displayName = slug ? `advisor:${slug}` : "advisor";
-			const existing = registry.get(advisorId);
+			found.push({
+				id: slug ? `${owner}/advisor:${slug}` : `${owner}/advisor`,
+				displayName: slug ? `advisor:${slug}` : "advisor",
+				kind: "advisor",
+				parentId: owner,
+				sessionFile,
+			});
+			continue;
+		}
+		const id = entry.name.slice(0, -6);
+		found.push({ id, displayName: id, kind: "sub", parentId: parentId ?? MAIN_AGENT_ID, sessionFile });
+		await collectPersistedAgentsFromDir(found, path.join(dir, id), id);
+	}
+}
+
+/** Agent-count summary for a session's persisted tree (subagents only). */
+export async function summarizePersistedAgents(
+	sessionFile: string | null | undefined,
+): Promise<{ count: number; latestMtime: number }> {
+	const agents = await collectPersistedAgents(sessionFile);
+	let count = 0;
+	let latestMtime = 0;
+	for (const agent of agents) {
+		if (agent.kind !== "sub") continue;
+		count += 1;
+		try {
+			const stat = await fs.promises.stat(agent.sessionFile);
+			if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs;
+		} catch {
+			// File vanished between scan and stat — skip.
+		}
+	}
+	return { count, latestMtime };
+}
+
+/** Register a session's persisted agents as parked refs (idempotent). */
+export async function registerPersistedSubagents(
+	registry: AgentRegistry,
+	sessionFile: string | null | undefined,
+): Promise<void> {
+	for (const agent of await collectPersistedAgents(sessionFile)) {
+		if (agent.kind === "advisor") {
+			const existing = registry.get(agent.id);
 			// Never clobber a non-advisor ref that happens to share this id (a freak
 			// user task literally named `<owner>/advisor`): leave it, skip the advisor.
 			if (existing && existing.kind !== "advisor") continue;
-			if (existing?.sessionFile !== sessionFile) {
+			if (existing?.sessionFile !== agent.sessionFile) {
 				// The id is reused across `/new`; refresh it to the current session's file.
-				if (existing) registry.unregister(advisorId);
+				if (existing) registry.unregister(agent.id);
 				registry.register({
-					id: advisorId,
-					displayName,
+					id: agent.id,
+					displayName: agent.displayName,
 					kind: "advisor",
-					parentId: owner,
+					parentId: agent.parentId,
 					session: null,
-					sessionFile,
+					sessionFile: agent.sessionFile,
 					status: "parked",
 				});
 			}
 			continue;
 		}
-		const id = entry.name.slice(0, -6);
-		if (!registry.get(id)) {
+		if (!registry.get(agent.id)) {
 			registry.register({
-				id,
-				displayName: id,
+				id: agent.id,
+				displayName: agent.displayName,
 				kind: "sub",
-				parentId: parentId ?? MAIN_AGENT_ID,
+				parentId: agent.parentId,
 				session: null,
-				sessionFile,
+				sessionFile: agent.sessionFile,
 				status: "parked",
 			});
 		}
-		await registerPersistedSubagentsFromDir(registry, path.join(dir, id), id);
 	}
 }
 

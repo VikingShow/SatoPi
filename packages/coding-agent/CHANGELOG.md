@@ -13,6 +13,9 @@
 ### Changed
 
 - Crew members now spawn with a working tool set (`read/grep/glob/edit/write/bash/todo`), richer persistent-main-agent prompts, and per-profile model selection instead of the first available model for everyone.
+- Ctrl+B sidebar gains a collapsible `History` section: other sessions (title, `N agents` badge, latest agent activity) as resume targets — Enter resumes a session, Space expands its persisted agent tree, Enter on an agent cold-revives and focuses it. The current session's archived agents are registered as parked refs on sidebar open, so they surface in the live Swarms subtree (including swarm/crew agents, which the persisted scan now covers via `swarm-*/agents/`).
+- The session picker (`/resume`) shows per-session `N agents` badges with latest agent activity; pressing `l` on a selected session expands its persisted agent tree inline and Enter on an agent quick-jumps into it (register + revive + focus) while session Enter keeps resuming.
+- Shared persisted-agent scan layer (`collectPersistedAgents`/`summarizePersistedAgents` in agent-hub) reused by the sidebar, the picker, and the Agent Hub registration path.
 - The `swarm` magic keyword uses a single session-level plan.md capture hook with a pending-write buffer (no more dropped plan writes during bridge init), per-run swarm session directories, and idle bridges are disposed before a new run starts.
 
 

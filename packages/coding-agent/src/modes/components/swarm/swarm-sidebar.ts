@@ -1,10 +1,14 @@
+import * as path from "node:path";
 import type { Component } from "@satopi/pi-tui";
 import { matchesKey } from "@satopi/pi-tui/keys";
+import { formatAge } from "@satopi/pi-utils";
 import type { CrewManager } from "../../../crew/crew-manager";
 import { AgentRegistry } from "../../../registry/agent-registry";
+import type { SessionInfo } from "../../../session/session-listing";
 import { formatStatusIcon } from "../../../tools/render-utils";
 import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
 import type { Theme } from "../../theme/theme";
+import { type PersistedAgentInfo, summarizePersistedAgents } from "../agent-hub";
 import { swarmPanel } from "./swarm-panel-block";
 
 type ToolUIStatus = "done" | "error" | "aborted" | "running" | "pending";
@@ -19,15 +23,26 @@ const AGENT_STATUS_ICON: Record<string, ToolUIStatus> = {
 	pending: "pending",
 };
 
+/** Relative time for a persisted-agent tree's latest mtime, e.g. "2h ago". */
+function formatRelativeMtime(mtimeMs: number): string {
+	return formatAge((Date.now() - mtimeMs) / 1000);
+}
+
 // ── Tree node model ────────────────────────────────────────────────────────
 
 interface TreeNode {
-	type: "session" | "agent" | "crew" | "crew-member" | "swarm" | "action";
+	type: "session" | "agent" | "crew" | "crew-member" | "swarm" | "action" | "history" | "history-session";
 	id: string;
 	label: string;
 	status?: string;
 	crewId?: string;
 	agentId?: string;
+	/** For history rows: the session file the row represents or opens. */
+	sessionFile?: string;
+	/** For history session rows: persisted subagent count (once summarized). */
+	agentCount?: number;
+	/** For history session rows: latest persisted agent mtime in ms (once summarized). */
+	agentMtime?: number;
 	children?: TreeNode[];
 	expanded?: boolean;
 	depth: number;
@@ -39,6 +54,7 @@ const MIN_SIDEBAR_WIDTH_PCT = 15;
 const MAX_SIDEBAR_WIDTH_PCT = 60;
 const RESIZE_STEP_PCT = 5;
 const DEFAULT_SIDEBAR_WIDTH_PCT = 40;
+const HISTORY_SESSION_CAP = 10;
 
 export interface SwarmSidebarConfig {
 	onSelectAgent?: (agentId: string) => void;
@@ -52,6 +68,16 @@ export interface SwarmSidebarConfig {
 	onAddMember?: () => void;
 	/** Called when Enter is pressed on "- Remove Member" action node. */
 	onRemoveMember?: (agentId: string) => void;
+	/** Current session file, used to exclude it from the History section. */
+	sessionFile?: string | null;
+	/** Enumerates sessions for the History section (resume targets). */
+	listSessions?: () => Promise<SessionInfo[]>;
+	/** Called when Enter is pressed on a History session row. */
+	onResumeSession?: (sessionFile: string) => void;
+	/** Called when Enter is pressed on a persisted agent inside a History session. */
+	onOpenHistoryAgent?: (agent: PersistedAgentInfo) => void;
+	/** Lazily loads a session's persisted agent tree when its row is expanded. */
+	loadSessionAgents?: (sessionFile: string) => Promise<PersistedAgentInfo[]>;
 }
 
 export class SwarmSidebar implements Component {
@@ -61,6 +87,11 @@ export class SwarmSidebar implements Component {
 	#selectedPath: string[] = []; // breadcrumb of node ids
 	#expandedCrews = new Set<string>();
 	#expandedSwarms = new Set<string>();
+	#expandedHistory = new Set<string>();
+	#otherSessions: SessionInfo[] = [];
+	#sessionSummaries = new Map<string, { count: number; latestMtime: number }>();
+	#historyAgents = new Map<string, PersistedAgentInfo[]>();
+	#historyAgentsPending = new Set<string>();
 	#unreadAgents = new Set<string>();
 	#multiSelected = new Set<string>();
 	#unsubscribe?: () => void;
@@ -71,6 +102,32 @@ export class SwarmSidebar implements Component {
 		this.#unsubscribe = AgentRegistry.global().onChange(() => {
 			this.#config.onRequestRender?.();
 		});
+		void this.#loadSessions();
+	}
+
+	/**
+	 * Load the History section's session list (other sessions, newest first,
+	 * capped), then fetch each session's persisted-agent summary sequentially.
+	 */
+	async #loadSessions(): Promise<void> {
+		try {
+			const all = (await this.#config.listSessions?.()) ?? [];
+			const current = this.#config.sessionFile ?? null;
+			const others = all.filter(s => s.path !== current);
+			others.sort((a, b) => b.modified.getTime() - a.modified.getTime());
+			this.#otherSessions = others.slice(0, HISTORY_SESSION_CAP);
+			this.#config.onRequestRender?.();
+			for (const session of this.#otherSessions) {
+				try {
+					this.#sessionSummaries.set(session.path, await summarizePersistedAgents(session.path));
+					this.#config.onRequestRender?.();
+				} catch {
+					// Artifacts unreadable — show the session without a badge.
+				}
+			}
+		} catch {
+			// Session listing failed — leave the History section empty.
+		}
 	}
 
 	/** Mark an agent as having unread output. Requests a render to show the dot. */
@@ -180,7 +237,103 @@ export class SwarmSidebar implements Component {
 			nodes.push(crewNode);
 		}
 
+		// History: other sessions as resume targets, each expandable to its
+		// persisted agent tree.
+		if (this.#otherSessions.length > 0) {
+			const historyExpanded = this.#expandedHistory.has("history");
+			const historyNode: TreeNode = {
+				type: "history",
+				id: "history",
+				label: "History",
+				expanded: historyExpanded,
+				depth: 0,
+				children: [],
+			};
+			if (historyExpanded) {
+				for (const session of this.#otherSessions) {
+					const sessionExpanded = this.#expandedHistory.has(session.path);
+					const summary = this.#sessionSummaries.get(session.path);
+					const sessionNode: TreeNode = {
+						type: "history-session",
+						id: `history:session:${session.path}`,
+						label: session.title ?? path.basename(session.path),
+						sessionFile: session.path,
+						agentCount: summary?.count,
+						agentMtime: summary?.latestMtime,
+						expanded: sessionExpanded,
+						depth: 1,
+						children: [],
+					};
+					if (sessionExpanded) {
+						const agents = this.#historyAgents.get(session.path);
+						if (agents) {
+							for (const agent of agents) {
+								sessionNode.children!.push({
+									type: "agent",
+									id: `history:agent:${session.path}:${agent.id}`,
+									label: agent.displayName,
+									status: "parked",
+									agentId: agent.id,
+									sessionFile: agent.sessionFile,
+									depth: 2,
+								});
+							}
+						} else {
+							// Lazy load in flight — show a dim placeholder row.
+							sessionNode.children!.push({
+								type: "agent",
+								id: `history:session:${session.path}:loading`,
+								label: "Loading\u2026",
+								status: "pending",
+								depth: 2,
+							});
+							this.#ensureHistoryAgents(session.path);
+						}
+					}
+					historyNode.children!.push(sessionNode);
+				}
+			}
+			nodes.push(historyNode);
+		}
+
 		return nodes;
+	}
+
+	/** Kick off the lazy load of a session's persisted agents (idempotent). */
+	#ensureHistoryAgents(sessionFile: string): void {
+		if (this.#historyAgents.has(sessionFile) || this.#historyAgentsPending.has(sessionFile)) return;
+		const loader = this.#config.loadSessionAgents;
+		if (!loader) return;
+		this.#historyAgentsPending.add(sessionFile);
+		void loader(sessionFile)
+			.then(agents => {
+				this.#historyAgents.set(sessionFile, agents);
+				this.#historyAgentsPending.delete(sessionFile);
+				this.#config.onRequestRender?.();
+			})
+			.catch(() => {
+				this.#historyAgentsPending.delete(sessionFile);
+				this.#config.onRequestRender?.();
+			});
+	}
+
+	/** Toggle expand/collapse for a History root or session row. */
+	#toggleHistoryExpansion(node: TreeNode): void {
+		if (node.type === "history") {
+			if (this.#expandedHistory.has("history")) {
+				this.#expandedHistory.delete("history");
+			} else {
+				this.#expandedHistory.add("history");
+			}
+		} else if (node.sessionFile) {
+			if (this.#expandedHistory.has(node.sessionFile)) {
+				this.#expandedHistory.delete(node.sessionFile);
+			} else {
+				this.#expandedHistory.add(node.sessionFile);
+				this.#ensureHistoryAgents(node.sessionFile);
+			}
+		}
+		this.#config.onRequestRender?.();
 	}
 
 	// ── Flatten tree with branch prefixes ─────────────────────────────────
@@ -262,6 +415,21 @@ export class SwarmSidebar implements Component {
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
 						lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+					} else if (node.type === "history" || node.type === "history-session") {
+						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
+						const expandGlyph = t.fg("dim", expandIcon);
+						const countHint =
+							node.type === "history"
+								? t.fg("dim", ` (${node.children?.length ?? 0})`)
+								: node.agentCount !== undefined
+									? t.fg("dim", ` ${node.agentCount} agent${node.agentCount === 1 ? "" : "s"}`)
+									: "";
+						const mtimeHint = node.agentMtime
+							? t.fg("dim", ` \u00b7 ${formatRelativeMtime(node.agentMtime)}`)
+							: "";
+						lines.push(
+							`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}${mtimeHint}`,
+						);
 					} else if (node.type === "action") {
 						const actionIcon = node.label.startsWith("+") ? "+" : "-";
 						const icon = t.fg("accent", `${actionIcon} `);
@@ -274,7 +442,7 @@ export class SwarmSidebar implements Component {
 				}
 
 				lines.push("");
-				lines.push(t.fg("dim", ` j/k nav  Enter sel/open  Space select  Ctrl+B close  \u2190\u2192 resize`));
+				lines.push(t.fg("dim", ` j/k nav  Enter open/resume  Space select  Ctrl+B close  \u2190\u2192 resize`));
 
 				// Fill the remaining content rows so the bordered panel spans the
 				// whole terminal height (2 rows are the frame's top/bottom bars).
@@ -343,7 +511,19 @@ export class SwarmSidebar implements Component {
 		if (matchesKey(data, "space") || data === " ") {
 			if (currentIdx >= 0) {
 				const node = flat[currentIdx].node;
-				if (node.type === "agent" || node.type === "crew-member" || node.type === "crew" || node.type === "swarm") {
+				if (node.type === "history" || node.type === "history-session") {
+					// History rows expand/collapse on Space instead of multi-selecting.
+					this.#toggleHistoryExpansion(node);
+				} else if (
+					node.type === "agent" ||
+					node.type === "crew-member" ||
+					node.type === "crew" ||
+					node.type === "swarm"
+				) {
+					if (node.type === "agent" && !node.agentId) {
+						// Synthetic "Loading…" row — not selectable.
+						return;
+					}
 					if (this.#multiSelected.has(node.id)) {
 						this.#multiSelected.delete(node.id);
 					} else {
@@ -366,7 +546,22 @@ export class SwarmSidebar implements Component {
 		if (matchesKey(data, "enter") || matchesKey(data, "return")) {
 			if (currentIdx >= 0) {
 				const node = flat[currentIdx].node;
-				if (node.type === "crew") {
+				if (node.type === "history") {
+					// Toggle History expand/collapse
+					this.#toggleHistoryExpansion(node);
+				} else if (node.type === "history-session") {
+					// Resume the selected historical session
+					if (node.sessionFile) {
+						this.#config.onResumeSession?.(node.sessionFile);
+					}
+				} else if (node.type === "agent" && node.sessionFile) {
+					// Open a persisted agent from the History section: look up the
+					// cached info so the caller can register + focus it.
+					const info = this.#historyAgents.get(node.sessionFile)?.find(a => a.id === node.agentId);
+					if (info) {
+						this.#config.onOpenHistoryAgent?.(info);
+					}
+				} else if (node.type === "crew") {
 					// Toggle crew expand/collapse
 					const crewId = node.crewId;
 					if (crewId) {

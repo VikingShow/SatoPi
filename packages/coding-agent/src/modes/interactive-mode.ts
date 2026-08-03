@@ -109,7 +109,7 @@ import type { CompactMode } from "../session/compact-modes";
 import { HistoryStorage } from "../session/history-storage";
 import type { SessionContext } from "../session/session-context";
 import { getRecentSessions } from "../session/session-listing";
-import type { SessionManager } from "../session/session-manager";
+import { SessionManager } from "../session/session-manager";
 import type { ShakeMode } from "../session/shake-types";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
@@ -136,6 +136,7 @@ import { messageHasDisplayableThinking } from "../utils/thinking-display";
 import { popTerminalTitle, pushTerminalTitle, setSessionTerminalTitle } from "../utils/title-generator";
 import { VibeSessionRegistry } from "../vibe/runtime";
 import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
+import { collectPersistedAgents, type PersistedAgentInfo, registerPersistedSubagents } from "./components/agent-hub";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -4731,6 +4732,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.ui.requestRender();
 			return;
 		}
+		// Register the current session's archived agents as parked refs so they
+		// appear in the live Swarms subtree; re-render when they land.
+		void registerPersistedSubagents(AgentRegistry.global(), this.sessionManager.getSessionFile() ?? null).then(() =>
+			this.ui.requestRender(),
+		);
+
 		const sidebar = new SwarmSidebar(
 			{
 				onSelectAgent: (agentId: string) => {
@@ -4774,6 +4781,16 @@ export class InteractiveMode implements InteractiveModeContext {
 				onRemoveMember: async (agentId: string) => {
 					await this.swarmModeController?.removeMember(agentId);
 					this.ui.requestRender();
+				},
+				sessionFile: this.sessionManager.getSessionFile() ?? null,
+				listSessions: () => SessionManager.listAll(),
+				loadSessionAgents: (sf: string) => collectPersistedAgents(sf),
+				onResumeSession: (sessionPath: string) => {
+					void this.handleResumeSession(sessionPath);
+				},
+				onOpenHistoryAgent: async (agent: PersistedAgentInfo) => {
+					await registerPersistedSubagents(AgentRegistry.global(), agent.sessionFile);
+					await this.focusAgentSession(agent.id).catch(() => {});
 				},
 			},
 			theme,
