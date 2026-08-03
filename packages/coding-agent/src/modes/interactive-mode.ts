@@ -4703,6 +4703,15 @@ export class InteractiveMode implements InteractiveModeContext {
 		const sidebar = new SwarmSidebar(
 			{
 				onSelectAgent: (agentId: string) => {
+					// Entering a member's own session: hide the crew overlay so the
+					// focused session's transcript is actually visible (the overlay
+					// would otherwise keep covering the base screen, making the
+					// page look frozen). Input routing already switches to the
+					// focused session via #submitToFocusedSession.
+					if (this.#crewStartOverlayHandle) {
+						this.#crewStartOverlayHandle.hide();
+						this.#crewStartOverlayHandle = undefined;
+					}
 					void this.focusAgentSession(agentId).catch(() => {});
 				},
 				onClose: () => this.showSwarmSidebar(),
