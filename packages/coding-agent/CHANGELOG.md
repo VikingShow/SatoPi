@@ -7,6 +7,9 @@
 - `/graph theatre` now attaches a real `GraphRunner` (builtin theatre graph) to the active crew: phase transitions broadcast to the crew channel, crew-member `plan.md` writes feed the bridge via a per-session capture hook, and human messages forward to the active phase behavior. New `/graph launch` verb starts Stage execution, gated on plan readiness.
 - `stp swarm resume <name>` is implemented — restores a graph run from its persisted checkpoint (`GraphRunner.resumeGraphRun`), scanning all session files so prior-run checkpoints are found.
 - New `crew.memberModel` setting (default `smartest`) selects crew member models; falls back to the session model, then the first available.
+- Graph engine hardening: full state persistence & recovery — `NodeRunState` carries a serializable result snapshot and checkpoints rebuild upstream outputs, so conditional-routing gates make consistent decisions after an interrupted run resumes.
+- Loop bodies support subgraphs (`LoopBodySpec.subgraph_path`, `custom|subgraph`), with each iteration item injected into the subgraph run; condition DSL adds array indices (`${node}.field[n]`) and `and`/`or` keywords equivalent to `&&`/`||`.
+- End-to-end graph composition test covering loop + conditional routing + checkpoint recovery.
 ### Changed
 
 - Crew members now spawn with a working tool set (`read/grep/glob/edit/write/bash/todo`), richer persistent-main-agent prompts, and per-profile model selection instead of the first available model for everyone.
@@ -23,6 +26,10 @@
 - Fixed crew transcript scroll hint advertising `j/k:scroll` while the keys were never handled — j/k scrolling is now wired through the empty-editor arbitration.
 - Fixed the `swarm` magic keyword plan-capture race: plan.md writes between prompt dispatch and bridge initialization were silently dropped (double `beforeToolCall` registration); a single session hook with a buffer now flushes them after init.
 - Fixed `stp swarm resume` being a placeholder ("resume not yet implemented") — now performs checkpoint-based recovery.
+- Fixed crew mode input editor being hidden: the crew overlay's height budget now derives from the real content frame (`TUI.lastFrameLength`) instead of terminal rows, so it never covers the editor even when the frame is shorter than the viewport.
+- Fixed crew members silently not replying: `createAgentSession` already pre-registers the agent ref, and the duplicate `AgentRegistry.register` in crew spawning disposed the member's own session (whose teardown unregistered the ref) — spawning now reuses the pre-registered ref.
+- Fixed Ctrl+B sidebar appearing frozen: key dispatch matched literal strings (`"Enter"`, `"ArrowDown"`) while the TUI delivers raw sequences — Enter on an agent node now works via `matchesKey`; selecting an agent also hides the crew overlay so the member's session page is visible.
+- Fixed binary bundle failing to resolve `@satopi/pi-coding-agent/swarm/task-analyzer` — the exports map pointed at the pre-migration `src/swarm/script/` path; repointed to `src/graph/task-analyzer.ts`.
 ### Removed
 
 - Removed dead swarm modules: `stage-controller.ts`, `role-roundtable.ts`, `swarm-hooks.ts`, `verification-hook.ts` (interface moved to `hooks/builtins/`), `session-types.ts` (merged into `session-registry.ts`), and the orphaned `agent-conversation-view.ts` / `crew-entry-block.ts` TUI components.
