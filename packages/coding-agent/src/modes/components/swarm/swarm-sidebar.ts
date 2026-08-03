@@ -324,91 +324,87 @@ export class SwarmSidebar implements Component {
 		const currentId = this.#selectedPath.length > 0 ? this.#selectedPath[this.#selectedPath.length - 1] : undefined;
 		const currentIdx = currentId ? flat.findIndex(f => f.node.id === currentId) : -1;
 
-		switch (data) {
-			case "j":
-			case "ArrowDown":
-				if (flat.length > 0) {
-					const next = Math.min(flat.length - 1, currentIdx + 1);
-					this.#selectedPath = [flat[next].node.id];
+		if (matchesKey(data, "down") || data === "j") {
+			if (flat.length > 0) {
+				const next = Math.min(flat.length - 1, currentIdx + 1);
+				this.#selectedPath = [flat[next].node.id];
+				this.#config.onRequestRender?.();
+			}
+			return;
+		}
+		if (matchesKey(data, "up") || data === "k") {
+			if (flat.length > 0) {
+				const prev = Math.max(0, currentIdx - 1);
+				this.#selectedPath = [flat[prev].node.id];
+				this.#config.onRequestRender?.();
+			}
+			return;
+		}
+		if (matchesKey(data, "space") || data === " ") {
+			if (currentIdx >= 0) {
+				const node = flat[currentIdx].node;
+				if (node.type === "agent" || node.type === "crew-member" || node.type === "crew" || node.type === "swarm") {
+					if (this.#multiSelected.has(node.id)) {
+						this.#multiSelected.delete(node.id);
+					} else {
+						this.#multiSelected.add(node.id);
+					}
 					this.#config.onRequestRender?.();
 				}
-				break;
-			case "k":
-			case "ArrowUp":
-				if (flat.length > 0) {
-					const prev = Math.max(0, currentIdx - 1);
-					this.#selectedPath = [flat[prev].node.id];
-					this.#config.onRequestRender?.();
+			}
+			return;
+		}
+		if (data === "d") {
+			if (currentIdx >= 0) {
+				const node = flat[currentIdx].node;
+				if (node.type === "crew-member" && node.agentId) {
+					this.#config.onRemoveMember?.(node.agentId);
 				}
-				break;
-			case " ": // Space: toggle multi-select
-				if (currentIdx >= 0) {
-					const node = flat[currentIdx].node;
-					if (
-						node.type === "agent" ||
-						node.type === "crew-member" ||
-						node.type === "crew" ||
-						node.type === "swarm"
-					) {
-						if (this.#multiSelected.has(node.id)) {
-							this.#multiSelected.delete(node.id);
+			}
+			return;
+		}
+		if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+			if (currentIdx >= 0) {
+				const node = flat[currentIdx].node;
+				if (node.type === "crew") {
+					// Toggle crew expand/collapse
+					const crewId = node.crewId;
+					if (crewId) {
+						if (this.#expandedCrews.has(crewId)) {
+							this.#expandedCrews.delete(crewId);
 						} else {
-							this.#multiSelected.add(node.id);
+							this.#expandedCrews.add(crewId);
 						}
 						this.#config.onRequestRender?.();
 					}
-				}
-				break;
-			case "d":
-				if (currentIdx >= 0) {
-					const node = flat[currentIdx].node;
-					if (node.type === "crew-member" && node.agentId) {
-						this.#config.onRemoveMember?.(node.agentId);
+				} else if (node.type === "swarm") {
+					// Toggle swarm expand/collapse
+					if (this.#expandedSwarms.has(node.id)) {
+						this.#expandedSwarms.delete(node.id);
+					} else {
+						this.#expandedSwarms.add(node.id);
 					}
-				}
-				break;
-			case "Enter":
-				if (currentIdx >= 0) {
-					const node = flat[currentIdx].node;
-					if (node.type === "crew") {
-						// Toggle crew expand/collapse
-						const crewId = node.crewId;
-						if (crewId) {
-							if (this.#expandedCrews.has(crewId)) {
-								this.#expandedCrews.delete(crewId);
-							} else {
-								this.#expandedCrews.add(crewId);
-							}
-							this.#config.onRequestRender?.();
-						}
-					} else if (node.type === "swarm") {
-						// Toggle swarm expand/collapse
-						if (this.#expandedSwarms.has(node.id)) {
-							this.#expandedSwarms.delete(node.id);
-						} else {
-							this.#expandedSwarms.add(node.id);
-						}
-						this.#config.onRequestRender?.();
-					} else if (node.type === "agent" || node.type === "crew-member") {
-						if (node.agentId) {
-							this.#unreadAgents.delete(node.agentId);
-							this.#config.onSelectAgent?.(node.agentId);
-							if (this.#multiSelected.size === 0) {
-								this.#config.onClose?.();
-							}
-						}
-					} else if (node.type === "session") {
-						// Focus main session
-						this.#config.onClose?.();
-					} else if (node.type === "action") {
-						if (node.id.includes(":action-add")) {
-							this.#config.onAddMember?.();
-						} else if (node.id.includes(":action-remove")) {
-							// Prompt user: select a member by focusing them, then press d
+					this.#config.onRequestRender?.();
+				} else if (node.type === "agent" || node.type === "crew-member") {
+					if (node.agentId) {
+						this.#unreadAgents.delete(node.agentId);
+						this.#config.onSelectAgent?.(node.agentId);
+						if (this.#multiSelected.size === 0) {
+							this.#config.onClose?.();
 						}
 					}
+				} else if (node.type === "session") {
+					// Focus main session
+					this.#config.onClose?.();
+				} else if (node.type === "action") {
+					if (node.id.includes(":action-add")) {
+						this.#config.onAddMember?.();
+					} else if (node.id.includes(":action-remove")) {
+						// Prompt user: select a member by focusing them, then press d
+					}
 				}
-				break;
+			}
+			return;
 		}
 	}
 
