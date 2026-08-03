@@ -19,7 +19,6 @@ import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
 import { GraphRunner } from "../graph/graph-runner";
 import { getSessionPlanPath } from "../graph/plan-paths";
 import { registerBuiltinHooks } from "../hooks/register-builtins";
-import { NoopOffloadManager } from "../offload/manager";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
@@ -124,7 +123,7 @@ async function createSwarmServices(
 
 		// Register custom hooks (MnemopiAdapter)
 		registerBuiltinHooks(infra.hookPipeline, {
-			offloadManager: new NoopOffloadManager(),
+			offloadManager: infra.offloadManager,
 			profileRegistry: s.profileRegistry,
 			experienceStore: infra.experienceStore,
 			mnemopiAdapter: s.mnemopiClient

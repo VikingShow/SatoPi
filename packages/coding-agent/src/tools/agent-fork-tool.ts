@@ -60,7 +60,7 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 		"Each child agent inherits your context (system prompt, tools, message history)",
 		"and works on an assigned subtask. Results are merged when all children complete.",
 		"",
-		"⚠️ Fork depth is limited to 1 level — child agents cannot fork further.",
+		"Fork depth is configurable via the `magicKeywords.swarm.maxForkDepth` setting.",
 		"",
 		"Parameters:",
 		"- `reason`: Why you need to fork.",
@@ -101,9 +101,10 @@ export class AgentForkTool implements AgentTool<typeof forkSchema, ForkResult> {
 
 		const count = Math.min(params.count ?? 2, 4);
 		const task = params.task ?? "Complete the user's request using parallel agents";
+		const maxForkDepth = context?.forkMaxDepth ?? 1;
 
 		try {
-			const forkManager = new AgentForkManager(1);
+			const forkManager = new AgentForkManager(maxForkDepth);
 
 			const _forkResult = await forkManager.fork(parentAgent, task, {
 				count,

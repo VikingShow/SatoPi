@@ -26,7 +26,7 @@ export {
 	type OffloadHooksConfig,
 	type OffloadHooksResult,
 } from "./hooks";
-export { type IOffloadManager, NoopOffloadManager, OffloadManager } from "./manager";
+export { type IOffloadManager, OffloadManager } from "./manager";
 export {
 	type MmdInjectConfig,
 	MmdInjector,

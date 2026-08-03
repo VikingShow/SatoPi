@@ -2269,6 +2269,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
 		toolContextStore.setEventBus(eventBus);
+		toolContextStore.setForkMaxDepth((settings.get("magicKeywords.swarm.maxForkDepth") as number | undefined) ?? 1);
 
 		if (options.agentRuntime) {
 			toolContextStore.setAgentRuntime(options.agentRuntime as unknown as SwarmRuntime);

@@ -7,6 +7,7 @@
  */
 
 import type { AgentSpec } from "./agent-spec";
+import { validateCondition } from "./condition";
 import { detectCycles } from "./dag";
 import { normalizeGateSpec, normalizeRetrySpec } from "./schema-gate";
 
@@ -23,12 +24,15 @@ import type {
 	GraphHook,
 	GraphNode,
 	GraphValidationError,
+	LoopBodySpec,
 	NodeContext,
 	NodeOutput,
 	NodeResult,
 	NodeType,
 	RawGateSpec,
 	RawRetrySpec,
+	RouteCondition,
+	RouteSpec,
 	Strategy,
 } from "./types";
 import { VALID_GATE_MODES, VALID_GATE_TYPES } from "./types";
@@ -92,6 +96,33 @@ interface RawGraphNode {
 	continue_on_failure?: boolean;
 	context_sources?: string[];
 	max_context_tokens?: number;
+	routes?: RawRouteSpec;
+	subgraph_path?: string;
+	loop_over?: string;
+	loop_body?: RawLoopBodySpec;
+	loop_max_iterations?: number;
+	loop_break_when?: string;
+	loop_convergence_threshold?: number;
+}
+
+interface RawLoopBodySpec {
+	type?: string;
+	label?: string;
+	description?: string;
+	role?: string;
+	tools?: string[];
+	subgraph_path?: string;
+}
+
+interface RawRouteCondition {
+	when: string;
+	to: string;
+	label?: string;
+}
+
+interface RawRouteSpec {
+	conditions: RawRouteCondition[];
+	default?: string;
 }
 
 interface RawGraphEdge {
@@ -99,6 +130,7 @@ interface RawGraphEdge {
 	to: string;
 	artifacts?: string[];
 	label?: string;
+	condition?: string;
 }
 
 interface RawGraphHook {
@@ -134,7 +166,14 @@ interface RawGraphDefinition {
 // Constants
 // ============================================================================
 
-const VALID_NODE_TYPES: Record<string, true> = { script: true, stage: true, curtain: true, custom: true };
+const VALID_NODE_TYPES: Record<string, true> = {
+	script: true,
+	stage: true,
+	curtain: true,
+	custom: true,
+	subgraph: true,
+	loop: true,
+};
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;
 
@@ -147,6 +186,38 @@ function normalizeNodeOutput(raw: RawNodeOutput): NodeOutput {
 		throw new Error("node output requires an 'id' field");
 	}
 	return { id: raw.id, description: raw.description };
+}
+
+function normalizeRouteSpec(raw: RawRouteSpec): RouteSpec {
+	if (!Array.isArray(raw.conditions) || raw.conditions.length === 0) {
+		throw new Error("routes requires a non-empty 'conditions' array");
+	}
+	const conditions: RouteCondition[] = raw.conditions.map((c, i) => {
+		if (!c.when || typeof c.when !== "string") {
+			throw new Error(`routes.conditions[${i}]: 'when' is required`);
+		}
+		if (!c.to || typeof c.to !== "string") {
+			throw new Error(`routes.conditions[${i}]: 'to' is required`);
+		}
+		const syntaxError = validateCondition(c.when);
+		if (syntaxError) {
+			throw new Error(`routes.conditions[${i}].when: invalid condition '${c.when}': ${syntaxError}`);
+		}
+		return { when: c.when, to: c.to, label: c.label };
+	});
+	return { conditions, default: raw.default };
+}
+
+function normalizeLoopBodySpec(raw: RawLoopBodySpec): LoopBodySpec {
+	const body: LoopBodySpec = {
+		type: (raw.type ?? "custom") as NodeType | undefined,
+		label: raw.label,
+		description: raw.description,
+		role: raw.role,
+		tools: raw.tools,
+		subgraph_path: raw.subgraph_path,
+	};
+	return body;
 }
 
 // ============================================================================
@@ -234,6 +305,13 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			continue_on_failure: rawNode.continue_on_failure,
 			context_sources: rawNode.context_sources,
 			max_context_tokens: rawNode.max_context_tokens,
+			routes: rawNode.routes ? normalizeRouteSpec(rawNode.routes) : undefined,
+			subgraph_path: rawNode.subgraph_path,
+			loop_over: rawNode.loop_over,
+			loop_body: rawNode.loop_body ? normalizeLoopBodySpec(rawNode.loop_body) : undefined,
+			loop_max_iterations: rawNode.loop_max_iterations,
+			loop_break_when: rawNode.loop_break_when,
+			loop_convergence_threshold: rawNode.loop_convergence_threshold,
 		};
 	}
 
@@ -250,6 +328,7 @@ export function parseGraphYaml(content: string): GraphDefinition {
 			to: e.to,
 			artifacts: e.artifacts,
 			label: e.label,
+			condition: e.condition,
 		};
 	});
 
@@ -329,6 +408,21 @@ export function buildGraphDependencyMap(def: GraphDefinition): Map<string, Set<s
 	for (const [name, node] of Object.entries(def.nodes)) {
 		for (const dep of node.depends_on) {
 			deps.get(name)!.add(dep);
+		}
+	}
+
+	// Conditional routes: each route target depends on the routing node.
+	// This keeps conditional edges inside cycle detection.
+	for (const [name, node] of Object.entries(def.nodes)) {
+		const routes = node.routes;
+		if (!routes) continue;
+		for (const cond of routes.conditions) {
+			if (deps.has(cond.to)) {
+				deps.get(cond.to)!.add(name);
+			}
+		}
+		if (routes.default && deps.has(routes.default)) {
+			deps.get(routes.default)!.add(name);
 		}
 	}
 
@@ -430,6 +524,111 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 				});
 			}
 		}
+
+		// Routes validation
+		if (node.routes) {
+			for (let i = 0; i < node.routes.conditions.length; i++) {
+				const cond = node.routes.conditions[i];
+				if (!nodeNames.has(cond.to)) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].to`,
+						message: `Route target '${cond.to}' is not a known node`,
+					});
+				}
+				if (cond.to === name) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].to`,
+						message: `Route cannot target node '${name}' itself`,
+					});
+				}
+				const syntaxError = validateCondition(cond.when);
+				if (syntaxError) {
+					errors.push({
+						path: `nodes.${name}.routes.conditions[${i}].when`,
+						message: `Invalid condition '${cond.when}': ${syntaxError}`,
+					});
+				}
+			}
+			if (node.routes.default && !nodeNames.has(node.routes.default)) {
+				errors.push({
+					path: `nodes.${name}.routes.default`,
+					message: `Route default '${node.routes.default}' is not a known node`,
+				});
+			}
+			if (node.routes.default === name) {
+				errors.push({
+					path: `nodes.${name}.routes.default`,
+					message: `Route default cannot target node '${name}' itself`,
+				});
+			}
+		}
+
+		// Subgraph validation: type: subgraph requires subgraph_path.
+		if (node.type === "subgraph") {
+			if (!node.subgraph_path || node.subgraph_path.trim().length === 0) {
+				errors.push({
+					path: `nodes.${name}.subgraph_path`,
+					message: "Subgraph nodes require a non-empty 'subgraph_path'",
+				});
+			}
+		}
+
+		// Loop validation.
+		if (node.type === "loop") {
+			if (!node.loop_over || node.loop_over.trim().length === 0) {
+				errors.push({
+					path: `nodes.${name}.loop_over`,
+					message: "Loop nodes require a non-empty 'loop_over' definition",
+				});
+			}
+			if (!node.loop_body) {
+				errors.push({
+					path: `nodes.${name}.loop_body`,
+					message: "Loop nodes require a 'loop_body' definition",
+				});
+			}
+			if (node.loop_body) {
+				const bodyType = node.loop_body.type ?? "custom";
+				if (bodyType !== "custom" && bodyType !== "subgraph") {
+					errors.push({
+						path: `nodes.${name}.loop_body.type`,
+						message: `Invalid loop body type '${bodyType}'. Supported: 'custom', 'subgraph'`,
+					});
+				}
+				if (
+					bodyType === "subgraph" &&
+					(!node.loop_body.subgraph_path || node.loop_body.subgraph_path.trim().length === 0)
+				) {
+					errors.push({
+						path: `nodes.${name}.loop_body.subgraph_path`,
+						message: "Loop body of type 'subgraph' requires a 'subgraph_path'",
+					});
+				}
+			}
+			if (node.loop_max_iterations !== undefined && node.loop_max_iterations < 1) {
+				errors.push({
+					path: `nodes.${name}.loop_max_iterations`,
+					message: "loop_max_iterations must be >= 1",
+				});
+			}
+			if (node.loop_convergence_threshold !== undefined) {
+				if (node.loop_convergence_threshold < 0 || node.loop_convergence_threshold > 1) {
+					errors.push({
+						path: `nodes.${name}.loop_convergence_threshold`,
+						message: "loop_convergence_threshold must be in range [0, 1]",
+					});
+				}
+			}
+			if (node.loop_break_when) {
+				const syntaxError = validateCondition(node.loop_break_when);
+				if (syntaxError) {
+					errors.push({
+						path: `nodes.${name}.loop_break_when`,
+						message: `Invalid condition '${node.loop_break_when}': ${syntaxError}`,
+					});
+				}
+			}
+		}
 	}
 
 	// Edge validation
@@ -453,6 +652,15 @@ export function validateGraphDefinition(def: GraphDefinition): GraphValidationEr
 					path: `edges[${i}]`,
 					message: `Edge cannot connect node '${edge.from}' to itself`,
 				});
+			}
+			if (edge.condition !== undefined) {
+				const syntaxError = validateCondition(edge.condition);
+				if (syntaxError) {
+					errors.push({
+						path: `edges[${i}].condition`,
+						message: `Invalid condition '${edge.condition}': ${syntaxError}`,
+					});
+				}
 			}
 		}
 	}

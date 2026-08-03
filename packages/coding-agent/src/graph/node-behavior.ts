@@ -28,8 +28,10 @@ import type { AgentSpec } from "./agent-spec";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
+import { LoopNodeBehavior } from "./loop-node-behavior";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
 import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
+import { SubgraphNodeBehavior } from "./subgraph-behavior";
 
 // ============================================================================
 // CustomNodeBehavior (default)
@@ -329,10 +331,12 @@ export type NodeBehaviorFactory = (config: NodeBehaviorFactoryConfig) => NodeBeh
  * New node types can be added at runtime via {@link registerNodeBehavior}
  * without editing the selectNodeBehavior switch.
  */
-const behaviorRegistry: Map<string, NodeBehaviorFactory> = new Map([
+const behaviorRegistry: Map<string, NodeBehaviorFactory> = new Map<string, NodeBehaviorFactory>([
 	["script", config => new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config)],
 	["stage", config => new PhaseBehaviorNodeAdapter(new StageBehavior(), config)],
 	["curtain", config => new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config)],
+	["subgraph", _config => new SubgraphNodeBehavior()],
+	["loop", _config => new LoopNodeBehavior()],
 ]);
 
 /**

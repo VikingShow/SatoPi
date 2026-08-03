@@ -130,10 +130,50 @@ export type GateAction = { type: "retry"; delayMs: number } | { type: "block"; r
 // ============================================================================
 
 /** Node type determines which behavior controller drives execution. */
-export type NodeType = "script" | "stage" | "curtain" | "custom";
+export type NodeType = "script" | "stage" | "curtain" | "custom" | "subgraph" | "loop";
 
 /** Execution strategy for wave scheduling. */
 export type Strategy = "waves" | "dynamic";
+
+// ============================================================================
+// Conditional routing types
+// ============================================================================
+
+/**
+ * A single conditional route from a node.
+ *
+ * Routes give a node runtime branching: after the node executes, the first
+ * route whose `when` condition evaluates truthy selects its `to` target. If
+ * no condition matches, the node's `default` target is used (when present).
+ *
+ * Route targets participate in the dependency graph — a route target depends
+ * on the routing node, so conditional edges are covered by cycle detection.
+ */
+export interface RouteCondition {
+	/** Condition expression, e.g. `${build}.exitCode == 0`. Evaluated against upstream node outputs. */
+	when: string;
+	/** Target node to route to when this condition matches. */
+	to: string;
+	/** Optional visualization label. */
+	label?: string;
+}
+
+export interface RouteSpec {
+	/** Conditional routes evaluated top-down; first match wins. */
+	conditions: RouteCondition[];
+	/** Fallback target when no condition matches (optional). */
+	default?: string;
+}
+
+/** A routing decision recorded at runtime. */
+export interface RouteDecision {
+	/** Source node that performed the routing. */
+	from: string;
+	/** Selected target node. */
+	to: string;
+	/** Which condition matched (or "default"). */
+	matched: string;
+}
 
 // ============================================================================
 // Graph core types
@@ -184,6 +224,36 @@ export interface GraphNode {
 	context_sources?: string[];
 	/** Maximum context tokens for the agent executing this node. */
 	max_context_tokens?: number;
+	/** Conditional routing — after execution, route to the first matching target. */
+	routes?: RouteSpec;
+	/** Path to a subgraph YAML file (relative to the parent graph file). Required for `type: subgraph`. */
+	subgraph_path?: string;
+	/** Iteration source for `type: loop` — a literal array (`"[1,2,3]"`) or field ref (`"${node}.items"`). */
+	loop_over?: string;
+	/** Loop body node definition (single custom node in v1). */
+	loop_body?: LoopBodySpec;
+	/** Hard iteration cap for `type: loop` (default 10). */
+	loop_max_iterations?: number;
+	/** Optional break condition expression, e.g. `${loop.result}.success == false`. */
+	loop_break_when?: string;
+	/** Optional convergence threshold in [0,1] — stop early when consecutive iterations produce similar output. */
+	loop_convergence_threshold?: number;
+}
+
+/** Definition of a loop body node. v1 supports a single custom node. */
+export interface LoopBodySpec {
+	/** Body node type — `custom` (single agent) or `subgraph` (nested graph). */
+	type?: NodeType;
+	/** Human-readable label. */
+	label?: string;
+	/** Task description injected into the body agent. */
+	description?: string;
+	/** Role for the body agent. */
+	role?: string;
+	/** Tools for the body agent. */
+	tools?: string[];
+	/** Subgraph YAML path (required when type is `subgraph`). */
+	subgraph_path?: string;
 }
 
 /**
@@ -198,6 +268,8 @@ export interface GraphEdge {
 	artifacts?: string[];
 	/** Edge label for debugging and visualization. */
 	label?: string;
+	/** Condition expression — this edge is only active when it evaluates truthy. */
+	condition?: string;
 }
 
 /**
@@ -314,6 +386,18 @@ export interface NodeDefinition {
 	timeout?: string;
 	/** Explicit AgentProfile binding. */
 	profileId?: string;
+	/** Path to a subgraph YAML file (for `type: subgraph` nodes). */
+	subgraphPath?: string;
+	/** Iteration source for `type: loop` — literal array or `${node}.field` ref. */
+	loopOver?: string;
+	/** Loop body node definition. */
+	loopBody?: LoopBodySpec;
+	/** Hard iteration cap for `type: loop`. */
+	loopMaxIterations?: number;
+	/** Optional break condition expression. */
+	loopBreakWhen?: string;
+	/** Optional convergence threshold in [0,1]. */
+	loopConvergenceThreshold?: number;
 }
 
 /**
@@ -332,6 +416,10 @@ export interface NodeResult {
 	error?: string;
 	/** Per-agent results for downstream consumption. */
 	agentResults?: Array<{ agentId: string; output: string; error?: string }>;
+	/** Exit code produced by the node's gate/command (for conditional routing). */
+	exitCode?: number;
+	/** Arbitrary decision metadata readable by route conditions. */
+	metadata?: Record<string, unknown>;
 }
 
 /**
@@ -376,6 +464,14 @@ export interface NodeContext {
 	stateTracker?: StateTracker;
 	/** Activity logger for event auditing. */
 	activityLogger?: ActivityLogger;
+	/** Directory of the currently executing graph file — used to resolve subgraph_path relative paths. */
+	graphDir?: string;
+	/**
+	 * Optional node executor — lets a subgraph behavior recursively run a
+	 * nested GraphEngine while reusing the parent graph's per-node execution
+	 * (gate, retry, behavior dispatch). Provided by GraphRunner.
+	 */
+	executeNode?: import("./graph-engine").NodeExecutor;
 }
 
 // ============================================================================
@@ -393,6 +489,15 @@ export interface NodeRunState {
 	error?: string;
 	/** References to output artifacts produced by this node (file paths, artifact URIs). */
 	outputRefs?: string[];
+	/** Serializable snapshot of the node's execution result — enables conditional
+	 * routing to reconstruct upstream outputs after checkpoint recovery. */
+	result?: {
+		success: boolean;
+		output?: string;
+		error?: string;
+		exitCode?: number;
+		metadata?: Record<string, unknown>;
+	};
 }
 
 export interface GraphRunState {
@@ -408,4 +513,6 @@ export interface GraphRunState {
 	currentWave: number;
 	/** Overall run status. */
 	status: GraphRunStatus;
+	/** Routing decisions made during the run (for conditional edge recovery). */
+	decisions?: RouteDecision[];
 }

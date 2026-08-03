@@ -1772,6 +1772,16 @@ export const SETTINGS_SCHEMA = {
 			description: "Run a multi-agent debate to refine the plan before confirming",
 		},
 	},
+	"magicKeywords.swarm.maxForkDepth": {
+		type: "number",
+		default: 1,
+		ui: {
+			tab: "magic",
+			group: "Swarm",
+			label: "Max Fork Depth",
+			description: "Maximum agent_fork nesting depth. 1 = children cannot fork further (default).",
+		},
+	},
 
 	"crew.memberModel": {
 		type: "string",

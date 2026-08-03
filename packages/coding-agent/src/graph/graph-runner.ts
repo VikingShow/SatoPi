@@ -23,7 +23,7 @@ import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { IrcBus } from "../irc/bus";
-import { type IOffloadManager, NoopOffloadManager } from "../offload/manager";
+import type { IOffloadManager } from "../offload/manager";
 import { AgentRegistry } from "../registry/agent-registry";
 import type { AgentSession } from "../session/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
@@ -116,7 +116,8 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	// ── Swarm keyword mode state ────────────────────────────────────────
 	#planContent = "";
 	#planReady = false;
-	#offloadManager: IOffloadManager;
+	// Assigned during init() from infra.offloadManager.
+	#offloadManager!: IOffloadManager;
 	#markEnvironment: MarkEnvironment;
 
 	// ── PhaseBehavior instances ─────────────────────────────────────────
@@ -134,7 +135,6 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	constructor(config: GraphRunnerConfig) {
 		this.#config = config;
-		this.#offloadManager = new NoopOffloadManager();
 		this.#markEnvironment = new MarkEnvironment();
 	}
 
@@ -410,6 +410,11 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				tools: node.tools,
 				type: node.type ?? "custom",
 				dependsOn: node.depends_on ?? [],
+				subgraphPath: node.subgraph_path,
+				loopOver: node.loop_over,
+				loopBody: node.loop_body,
+				loopMaxIterations: node.loop_max_iterations,
+				loopBreakWhen: node.loop_break_when,
 			},
 			workspace: this.#config.workspace,
 			modelRegistry: this.#config.modelRegistry,
@@ -423,6 +428,8 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			profileRegistry: this.#config.profileRegistry,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
+			executeNode: this,
+			graphDir: this.#config.graphPath ? path.dirname(this.#config.graphPath) : this.#config.workspace,
 		};
 
 		try {

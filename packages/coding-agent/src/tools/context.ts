@@ -13,6 +13,7 @@ declare module "@satopi/pi-agent-core" {
 		toolCall?: ToolCallContext;
 		eventBus?: EventBus;
 		parentAgent?: Agent;
+		forkMaxDepth?: number;
 	}
 }
 
@@ -23,6 +24,7 @@ export class ToolContextStore {
 	#agentRuntime: SwarmRuntime | undefined;
 	#eventBus: EventBus | undefined;
 	#parentAgent: Agent | undefined;
+	#forkMaxDepth: number | undefined;
 
 	constructor(private readonly getBaseContext: () => CustomToolContext) {}
 
@@ -36,7 +38,12 @@ export class ToolContextStore {
 			toolCall,
 			eventBus: this.#eventBus,
 			parentAgent: this.#parentAgent,
+			forkMaxDepth: this.#forkMaxDepth,
 		};
+	}
+
+	setForkMaxDepth(depth: number | undefined): void {
+		this.#forkMaxDepth = depth;
 	}
 
 	setUIContext(uiContext: ExtensionUIContext, hasUI: boolean): void {
