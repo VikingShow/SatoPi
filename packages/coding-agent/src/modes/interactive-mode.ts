@@ -109,7 +109,7 @@ import type { CompactMode } from "../session/compact-modes";
 import { HistoryStorage } from "../session/history-storage";
 import type { SessionContext } from "../session/session-context";
 import { getRecentSessions } from "../session/session-listing";
-import type { SessionManager } from "../session/session-manager";
+import { SessionManager } from "../session/session-manager";
 import type { ShakeMode } from "../session/shake-types";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
@@ -136,6 +136,7 @@ import { messageHasDisplayableThinking } from "../utils/thinking-display";
 import { popTerminalTitle, pushTerminalTitle, setSessionTerminalTitle } from "../utils/title-generator";
 import { VibeSessionRegistry } from "../vibe/runtime";
 import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
+import { collectPersistedAgents, type PersistedAgentInfo, registerPersistedSubagents } from "./components/agent-hub";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -148,6 +149,7 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
+import { CrewTranscriptView } from "./components/swarm/crew-transcript-view";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
 import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
@@ -565,6 +567,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	#crewStartOverlayHandle: OverlayHandle | undefined;
+	/** Fill spacer pushed into the chat container while the crew view is
+	 *  mounted, so the editor sits at the viewport bottom instead of right
+	 *  after the (short) welcome content. */
+	#crewViewFillSpacer: Spacer | undefined;
 	#swarmStatusBar: SwarmStatusBar | undefined;
 	/** Multi-agent Crew chat controller. Created in init(), available when swarm mode is active. */
 	swarmModeController?: SwarmModeController;
@@ -597,8 +603,19 @@ export class InteractiveMode implements InteractiveModeContext {
 	get sessionName(): string | undefined {
 		return this.session.sessionName;
 	}
-	focusAgentSession(id: string): Promise<void> {
-		return this.#focusController.focusAgent(id);
+	async focusAgentSession(id: string): Promise<void> {
+		await this.#focusController.focusAgent(id);
+		// Entering an agent's session: temporarily hide the crew overlay so the
+		// focused transcript is visible; unfocus (any path) restores it via the
+		// onUnfocused hook below. Guarded on focusedAgentId: focusing MAIN is a
+		// no-op that unfocuses, and must not re-hide a just-restored overlay.
+		if (this.#focusController.focusedAgentId) {
+			this.#crewStartOverlayHandle?.setHidden(true);
+			// The crew fill spacer exists to pin the editor below the crew overlay;
+			// with the overlay hidden it only pads a gap between the focused
+			// transcript and the status bar — drop it, restore on unfocus.
+			this.#setCrewFillSpacer(false);
+		}
 	}
 	focusParentSession(): Promise<void> {
 		return this.#focusController.focusParent();
@@ -783,7 +800,18 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#commandController = new CommandController(this);
 		this.#todoCommandController = new TodoCommandController(this);
 		this.#selectorController = new SelectorController(this);
-		this.#focusController = new SessionFocusController(this);
+		this.#focusController = new SessionFocusController(this, undefined, undefined, () => {
+			// While a crew is active the main-session view is the crew page:
+			// every unfocus path (Esc/←←, focused agent dying) restores it.
+			// No-op outside crew mode (no overlay mounted).
+			if (!this.#crewStartOverlayHandle) return;
+			this.#crewStartOverlayHandle.setHidden(false);
+			// Restore the crew fill spacer (removed while viewing an agent session).
+			this.#setCrewFillSpacer(true);
+			// setHidden re-focuses the overlay component; the editor must keep input.
+			this.ui.setFocus(this.editor);
+			this.#updateSwarmModeStatus();
+		});
 		this.#inputController = new InputController(this);
 		this.#observerRegistry = new SessionObserverRegistry();
 	}
@@ -861,12 +889,10 @@ export class InteractiveMode implements InteractiveModeContext {
 			workspace: getProjectDir(),
 			theme,
 			onRequestRender: () => this.ui.requestRender(),
-			onNotice: (level, message) => {
-				if (level === "error") this.showError(message);
-				else this.showWarning(message);
-			},
 			onLeaveCrew: () => {
 				this.#crewStartOverlayHandle?.hide();
+				this.#crewStartOverlayHandle = undefined;
+				this.#setCrewFillSpacer(false);
 				this.#updateSwarmModeStatus();
 			},
 		});
@@ -4697,21 +4723,27 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#swarmSidebarHandle = undefined;
 			this.#swarmSidebarUnsubscribe?.();
 			this.#swarmSidebarUnsubscribe = undefined;
+			// Restore focus to the editor explicitly: hide() restores focus to
+			// the topmost visible overlay (the crew view), but Ctrl+B is bound
+			// on the editor's custom key handlers — with focus parked on the
+			// crew view the next Ctrl+B is swallowed and the sidebar can never
+			// reopen until the user manually refocuses the editor.
+			this.ui.setFocus(this.editor);
 			this.ui.requestRender();
 			return;
 		}
+		// Register the current session's archived agents as parked refs so they
+		// appear in the live Swarms subtree; re-render when they land.
+		void registerPersistedSubagents(AgentRegistry.global(), this.sessionManager.getSessionFile() ?? null).then(() =>
+			this.ui.requestRender(),
+		);
+
 		const sidebar = new SwarmSidebar(
 			{
 				onSelectAgent: (agentId: string) => {
-					// Entering a member's own session: hide the crew overlay so the
-					// focused session's transcript is actually visible (the overlay
-					// would otherwise keep covering the base screen, making the
-					// page look frozen). Input routing already switches to the
-					// focused session via #submitToFocusedSession.
-					if (this.#crewStartOverlayHandle) {
-						this.#crewStartOverlayHandle.hide();
-						this.#crewStartOverlayHandle = undefined;
-					}
+					// Entering a member's own session: focusAgentSession temporarily
+					// hides the crew overlay so the focused transcript is visible;
+					// unfocus (Esc/←←) restores the crew page.
 					void this.focusAgentSession(agentId).catch(() => {});
 				},
 				onClose: () => this.showSwarmSidebar(),
@@ -4749,6 +4781,16 @@ export class InteractiveMode implements InteractiveModeContext {
 				onRemoveMember: async (agentId: string) => {
 					await this.swarmModeController?.removeMember(agentId);
 					this.ui.requestRender();
+				},
+				sessionFile: this.sessionManager.getSessionFile() ?? null,
+				listSessions: () => SessionManager.listAll(),
+				loadSessionAgents: (sf: string) => collectPersistedAgents(sf),
+				onResumeSession: (sessionPath: string) => {
+					void this.handleResumeSession(sessionPath);
+				},
+				onOpenHistoryAgent: async (agent: PersistedAgentInfo) => {
+					await registerPersistedSubagents(AgentRegistry.global(), agent.sessionFile);
+					await this.focusAgentSession(agent.id).catch(() => {});
 				},
 			},
 			theme,
@@ -4812,6 +4854,21 @@ export class InteractiveMode implements InteractiveModeContext {
 			}
 		}
 	}
+	/** Re-mount the active crew's chat page (recovery when the overlay was lost). */
+	async resumeCrewView(): Promise<void> {
+		const controller = this.swarmModeController;
+		const crewId = controller?.activeCrewId;
+		if (!crewId) {
+			this.showStatus("No active crew");
+			return;
+		}
+		if (this.#crewStartOverlayHandle && !this.#crewStartOverlayHandle.isHidden()) {
+			this.ui.setFocus(this.editor);
+			return;
+		}
+		await controller.focusCrew(crewId);
+		this.#mountCrewView(crewId);
+	}
 
 	/** Mount the crew view as an overlay after crew creation. */
 	#mountCrewView(crewId: string): void {
@@ -4822,32 +4879,60 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Hide existing crew overlay if any
 		this.#crewStartOverlayHandle?.hide();
-
-		// Mount as a normal (non-fullscreen) overlay anchored top-left so the
-		// status line and editor stay visible below it.
-		//
-		// Height budget: the overlay must never cover the editor. The editor
-		// sits at the END of the content frame — which is NOT always the bottom
-		// of the viewport. With a short frame (fresh session, welcome screen),
-		// the frame is shorter than the terminal and the editor renders at the
-		// content bottom (mid-screen), while rows below the frame stay blank.
-		// Budgeting maxHeight from terminal rows alone let the overlay extend
-		// past the editor's real position and hide the input box. Derive the
-		// ceiling from the last frame's length minus the editor's own rows, so
-		// the overlay ends one row above the editor wherever it sits; the frame
-		// only grows from here (chat history, notices), which moves the editor
-		// DOWN — never back under the overlay.
-		const frameLength = this.ui.lastFrameLength;
+		// The content frame of a fresh session is shorter than the viewport, so
+		// the editor renders mid-screen (right after the welcome content) and a
+		// frame-based overlay budget would leave the crew panel almost no room.
+		// Push the editor to the viewport bottom with a fill spacer (removed on
+		// leave), then budget the overlay from the viewport: it ends
+		// `editorLines + 2` rows above the bottom and can never cover the
+		// editor.
+		const rows = this.ui.terminal.rows;
 		const editorLines = Math.max(1, this.editor.getLines().length);
-		const editorTop = Math.max(0, frameLength - editorLines);
+		const maxHeight = Math.max(10, rows - editorLines - 3);
+		this.#setCrewFillSpacer(true);
+		// Give the view the same height budget so its fill padding matches the
+		// engine's maxHeight clamp (otherwise the bottom border gets clipped).
+		if (view instanceof CrewTranscriptView) {
+			view.setTargetHeight(maxHeight);
+		}
 		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
 			anchor: "top-left",
 			width: "100%",
-			maxHeight: Math.max(10, editorTop - 1),
+			maxHeight,
 			margin: 0,
 		});
 		this.ui.setFocus(this.editor);
 		this.#updateSwarmModeStatus();
+	}
+
+	/**
+	 * Toggle the crew fill spacer that pins the status line + editor to the
+	 * viewport bottom while the crew overlay is mounted. When an agent session
+	 * is focused the overlay is hidden and the spacer is removed, so the
+	 * focused transcript sits flush above the status bar instead of leaving a
+	 * large empty gap.
+	 */
+	#setCrewFillSpacer(active: boolean): void {
+		if (active) {
+			if (!this.#crewViewFillSpacer) {
+				this.#crewViewFillSpacer = new Spacer(0);
+				// Move the status line + editor container to the end of the layout
+				// and put the spacer before them, so the status line and editor sit
+				// at the viewport bottom regardless of how short the content frame
+				// is (a fresh session's frame ends right after the welcome content,
+				// leaving the editor mid-screen otherwise).
+				this.ui.removeChild(this.statusLine);
+				this.ui.removeChild(this.editorContainer);
+				this.ui.addChild(this.#crewViewFillSpacer);
+				this.ui.addChild(this.statusLine);
+				this.ui.addChild(this.editorContainer);
+			}
+			const rows = this.ui.terminal.rows;
+			this.#crewViewFillSpacer.setLines(Math.max(0, rows - this.ui.lastFrameLength - 1));
+		} else if (this.#crewViewFillSpacer) {
+			this.ui.removeChild(this.#crewViewFillSpacer);
+			this.#crewViewFillSpacer = undefined;
+		}
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

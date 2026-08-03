@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import {
 	type Component,
 	Container,
@@ -13,11 +14,12 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@satopi/pi-tui";
-import { formatBytes } from "@satopi/pi-utils";
+import { formatAge, formatBytes, formatCount } from "@satopi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import type { SessionInfo, SessionStatus } from "../../session/session-listing";
 import { shortenPath } from "../../tools/render-utils";
+import { type PersistedAgentInfo, summarizePersistedAgents } from "./agent-hub";
 import { DynamicBorder } from "./dynamic-border";
 import { HookSelectorComponent } from "./hook-selector";
 
@@ -42,6 +44,12 @@ function formatSessionStatus(status: SessionStatus | undefined): string | undefi
 		default:
 			return undefined;
 	}
+}
+
+/** Compact relative age for an agent transcript's mtime, e.g. "2d ago". */
+function formatAgentAge(mtimeMs: number | undefined): string {
+	if (!mtimeMs || mtimeMs <= 0) return "";
+	return formatAge(Math.max(1, Math.round((Date.now() - mtimeMs) / 1000)));
 }
 
 /** Returns the IDs of sessions whose recorded prompts match a query, best first. */
@@ -286,6 +294,26 @@ class SessionList implements Component {
 	/** Re-render hook for async list updates (fuzzy scan chunks, history merge). */
 	onRequestRender?: () => void;
 
+	// ── Persisted-agent state ─────────────────────────────────────────────
+	// The per-row `N agents` badge and the inline agent list come from the
+	// session's persisted agent transcripts (agent-hub Phase 1 API). Badges
+	// are scanned on dataset load; the agent list is collected lazily on
+	// first expand. Both are cached per session path. Inert when no
+	// `loadSessionAgents` loader is wired (tests / un-wired callers).
+	readonly #loadSessionAgents?: (sessionFile: string) => Promise<PersistedAgentInfo[]>;
+	readonly #onOpenAgent?: (agent: PersistedAgentInfo) => void;
+	/** Persisted-agent summaries per session path (badge), filled asynchronously. */
+	#agentSummaries = new Map<string, { count: number; latestMtime: number }>();
+	/** Collected agent lists per session path, keyed by the owning session's path. */
+	#agentLists = new Map<string, { agents: PersistedAgentInfo[]; mtimes: Map<string, number> }>();
+	/** Session paths whose agent list collection is still in flight ("Loading…"). */
+	#loadingAgentPaths = new Set<string>();
+	/** Path of the session whose agent list is expanded inline (always the selected session). */
+	#expandedPath: string | undefined;
+	/** Cursor into the expanded agent list; undefined = selection on the session row. */
+	#agentCursor: number | undefined;
+	/** Maps a rendered line to the agent row it shows, for mouse quick-jump. */
+	#agentHitRows: (PersistedAgentInfo | undefined)[] = [];
 	// ── Incremental search state ──────────────────────────────────────────
 	// #filteredSessions is always composed from these three inputs (see
 	// #composeFiltered), so late-arriving fuzzy chunks and the debounced
@@ -311,13 +339,18 @@ class SessionList implements Component {
 		showCwd = false,
 		historyMatcher?: SessionHistoryMatcher,
 		getTerminalRows: () => number = () => 24,
+		loadSessionAgents?: (sessionFile: string) => Promise<PersistedAgentInfo[]>,
+		onOpenAgent?: (agent: PersistedAgentInfo) => void,
 	) {
 		this.#getTerminalRows = getTerminalRows;
 		this.#allSessions = sessions;
 		this.#showCwd = showCwd;
 		this.#historyMatcher = historyMatcher;
+		this.#loadSessionAgents = loadSessionAgents;
+		this.#onOpenAgent = onOpenAgent;
 		this.#filteredSessions = sessions;
 		this.#searchInput = new Input();
+		this.#scanAgentSummaries();
 
 		// Handle Enter in search input - select current item
 		this.#searchInput.onSubmit = () => {
@@ -353,9 +386,13 @@ class SessionList implements Component {
 		this.#showCwd = showCwd;
 		this.#selectedIndex = 0;
 		this.#filterSessions(this.#searchInput.getValue());
+		this.#scanAgentSummaries();
 	}
 
 	#filterSessions(query: string): void {
+		// A new query re-ranks the visible rows, so any inline agent expansion
+		// tied to the previous selection no longer applies.
+		this.#collapseAgentView();
 		this.#scanGeneration++;
 		if (this.#scanTimer !== undefined) {
 			clearTimeout(this.#scanTimer);
@@ -439,6 +476,15 @@ class SessionList implements Component {
 		this.#filteredSessions =
 			this.#historyIds.length > 0 ? mergeSessionRanking(this.#allSessions, base, this.#historyIds) : base;
 		this.#selectedIndex = Math.min(this.#selectedIndex, Math.max(0, this.#filteredSessions.length - 1));
+		// Keep the expansion invariant: the expanded session is always the
+		// selected one, so a late-arriving history-merge reorder can never
+		// strand the agent list under a different row.
+		if (
+			this.#expandedPath !== undefined &&
+			this.#filteredSessions[this.#selectedIndex]?.path !== this.#expandedPath
+		) {
+			this.#collapseAgentView();
+		}
 	}
 
 	/**
@@ -494,16 +540,125 @@ class SessionList implements Component {
 		}
 	}
 
+	// ── Persisted-agent summaries & inline expansion ──────────────────────
+
+	/**
+	 * Kick off persisted-agent summaries for the current dataset, once per
+	 * session path. Rows with agents render an `N agents` badge plus the latest
+	 * agent activity; zero-agent rows stay compact (no badge, no re-render).
+	 * Results are cached so scope toggles and re-entry never re-scan.
+	 */
+	#scanAgentSummaries(): void {
+		for (const session of this.#allSessions) {
+			if (this.#agentSummaries.has(session.path)) continue;
+			// Pre-seed with an empty summary so concurrent dataset loads don't
+			// double-scan; the real summary overwrites it when it lands.
+			this.#agentSummaries.set(session.path, { count: 0, latestMtime: 0 });
+			void summarizePersistedAgents(session.path)
+				.then(summary => {
+					if (summary.count <= 0) return;
+					this.#agentSummaries.set(session.path, summary);
+					this.onRequestRender?.();
+				})
+				.catch(() => {});
+		}
+	}
+
+	/** Expand/collapse the selected session's persisted agent list. */
+	#toggleExpanded(): void {
+		if (!this.#loadSessionAgents) return;
+		const session = this.#filteredSessions[this.#selectedIndex];
+		if (!session) return;
+		if (this.#expandedPath === session.path) {
+			this.#collapseAgentView();
+			return;
+		}
+		this.#expandedPath = session.path;
+		this.#agentCursor = undefined;
+		// Expanding is an explicit engagement with the current list order:
+		// block a pending history merge from reordering rows under the cursor.
+		this.#selectionMoved = true;
+		void this.#loadAgentList(session.path);
+		this.onRequestRender?.();
+	}
+
+	/** Collect (once) and cache a session's persisted agents with transcript mtimes. */
+	async #loadAgentList(path: string): Promise<void> {
+		const loader = this.#loadSessionAgents;
+		if (!loader || this.#agentLists.has(path) || this.#loadingAgentPaths.has(path)) return;
+		this.#loadingAgentPaths.add(path);
+		let agents: PersistedAgentInfo[];
+		try {
+			agents = await loader(path);
+		} catch {
+			// Failed collection: treat as an empty list so the picker stays usable.
+			agents = [];
+		}
+		this.#loadingAgentPaths.delete(path);
+		const mtimes = await this.#statAgentMtimes(agents);
+		this.#agentLists.set(path, { agents, mtimes });
+		this.onRequestRender?.();
+	}
+
+	async #statAgentMtimes(agents: PersistedAgentInfo[]): Promise<Map<string, number>> {
+		const mtimes = new Map<string, number>();
+		await Promise.all(
+			agents.map(async agent => {
+				try {
+					const stat = await fs.promises.stat(agent.sessionFile);
+					mtimes.set(agent.sessionFile, stat.mtimeMs);
+				} catch {
+					// Transcript vanished between collection and stat — leave it un-dated.
+				}
+			}),
+		);
+		return mtimes;
+	}
+
+	/** Drop the inline agent expansion (selection returns to the session row). */
+	#collapseAgentView(): void {
+		this.#expandedPath = undefined;
+		this.#agentCursor = undefined;
+	}
+
+	/** The loaded agent list of the currently expanded session, if any. */
+	#expandedAgents(): PersistedAgentInfo[] | undefined {
+		return this.#expandedPath === undefined ? undefined : this.#agentLists.get(this.#expandedPath)?.agents;
+	}
+
+	/** Move the selection by whole sessions (clamped), collapsing any agent expansion. */
+	#moveSelection(delta: -1 | 1): void {
+		this.#collapseAgentView();
+		this.#selectedIndex = Math.max(0, Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + delta));
+	}
+
 	/** Resolve a list-local rendered-line index to a filtered-session index. */
 	hitTestSession(line: number): number | undefined {
 		return this.#hitRows[line];
 	}
 
-	/** Wheel notch: move the selection one step (clamped, no wrap). */
+	/** Resolve a list-local rendered-line index to the agent row it shows, if any. */
+	hitTestAgent(line: number): PersistedAgentInfo | undefined {
+		return this.#agentHitRows[line];
+	}
+
+	/** Wheel notch: move the selection one session (clamped, no wrap). */
 	handleWheel(delta: -1 | 1): void {
 		if (this.#filteredSessions.length === 0) return;
 		this.#selectionMoved = true;
-		this.#selectedIndex = Math.max(0, Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + delta));
+		this.#moveSelection(delta);
+	}
+
+	/** Mouse click on an agent row: select its session and quick-jump into the agent. */
+	selectAndConfirmAgent(agent: PersistedAgentInfo): void {
+		if (this.#expandedPath === undefined) return;
+		const index = this.#filteredSessions.findIndex(session => session.path === this.#expandedPath);
+		if (index === -1) return;
+		this.#selectedIndex = index;
+		const agents = this.#agentLists.get(this.#expandedPath)?.agents ?? [];
+		const agentIndex = agents.indexOf(agent);
+		this.#agentCursor = agentIndex >= 0 ? agentIndex : undefined;
+		this.#onOpenAgent?.(agent);
 	}
 
 	/** Mouse click: select the session under the pointer and resume it. */
@@ -522,6 +677,7 @@ class SessionList implements Component {
 		const lines: string[] = [];
 		this.#hitRows = [];
 
+		this.#agentHitRows = [];
 		// Render search input
 		lines.push(...this.#searchInput.render(width));
 		lines.push(""); // Blank line after search
@@ -564,16 +720,17 @@ class SessionList implements Component {
 			Math.min(this.#selectedIndex - Math.floor(maxVisible / 2), this.#filteredSessions.length - maxVisible),
 		);
 		const endIndex = Math.min(startIndex + maxVisible, this.#filteredSessions.length);
-
 		// Render visible sessions (3 lines, or 4 when a title adds a preview line).
 		// Each session block is built into sessionLines, then wrapped by ScrollView
 		// so the right-edge scrollbar is proportional at the physical-line level.
 		const sessionLines: string[] = [];
-		const sessionRowIndex: number[] = [];
+		const sessionRowIndex: (number | undefined)[] = [];
+		const agentRowIndex: (PersistedAgentInfo | undefined)[] = [];
 		const overflow = this.#filteredSessions.length > maxVisible;
 		const rowWidth = Math.max(0, width - (overflow ? 1 : 0));
 		for (let i = startIndex; i < endIndex; i++) {
 			const blockStart = sessionLines.length;
+			let loadingInertLine = -1;
 			const session = this.#filteredSessions[i];
 			const isSelected = i === this.#selectedIndex;
 
@@ -609,6 +766,13 @@ class SessionList implements Component {
 			const dot = dim(theme.sep.dot);
 			const modified = formatDate(session.modified);
 			let metadata = `  ${dim(modified)} ${dot} ${dim(formatBytes(session.size))}`;
+			// Persisted-agent badge: `N agents` plus the latest agent activity,
+			// only when the session actually has agents (zero-agent rows stay
+			// compact). Filled asynchronously by #scanAgentSummaries.
+			const summary = this.#agentSummaries.get(session.path);
+			if (summary && summary.count > 0) {
+				metadata += ` ${dot} ${theme.fg("accent", formatCount("agent", summary.count))} ${dot} ${dim(formatAgentAge(summary.latestMtime))}`;
+			}
 			const status = formatSessionStatus(session.status);
 			if (status) {
 				metadata += ` ${dot} ${status}`;
@@ -622,8 +786,36 @@ class SessionList implements Component {
 			const metadataLine = truncateToWidth(metadata, rowWidth);
 
 			sessionLines.push(metadataLine);
+			// Expanded session: render its persisted agents inline (indented
+			// rows under the metadata), or a "Loading…" row while the list is
+			// being collected. Agent rows are dim/parked-styled with each
+			// transcript's mtime; Enter (or click) on one quick-jumps into
+			// that agent's session.
+			if (session.path === this.#expandedPath) {
+				const expanded = this.#agentLists.get(session.path);
+				if (expanded && expanded.agents.length > 0) {
+					for (let a = 0; a < expanded.agents.length; a++) {
+						const agent = expanded.agents[a]!;
+						const agentCursorMark =
+							this.#agentCursor === a ? theme.fg("accent", cursorSymbol) : padding(cursorWidth);
+						const age = formatAgentAge(expanded.mtimes.get(agent.sessionFile));
+						const agentLabel = truncateToWidth(agent.displayName ?? agent.id, maxWidth);
+						sessionLines.push(
+							truncateToWidth(
+								`  ${agentCursorMark}${theme.fg("dim", agentLabel)}${age ? ` ${dot} ${dim(age)}` : ""}`,
+								rowWidth,
+							),
+						);
+						agentRowIndex[sessionLines.length - 1] = agent;
+					}
+				} else if (this.#loadingAgentPaths.has(session.path)) {
+					loadingInertLine = sessionLines.length;
+					sessionLines.push(`  ${padding(cursorWidth)}${theme.fg("dim", "Loading…")}`);
+				}
+			}
 			sessionLines.push(""); // Blank line between sessions
 			for (let k = blockStart; k < sessionLines.length; k++) sessionRowIndex[k] = i;
+			if (loadingInertLine >= 0) sessionRowIndex[loadingInertLine] = undefined;
 		}
 
 		// Wrap the rendered window in a ScrollView for a proportional right-edge bar.
@@ -638,7 +830,10 @@ class SessionList implements Component {
 		sv.setScrollOffset(Math.round(startIndex * linesPerItem));
 		const sessionRegionStart = lines.length;
 		const svLines = sv.render(width);
-		for (let k = 0; k < svLines.length; k++) this.#hitRows[sessionRegionStart + k] = sessionRowIndex[k];
+		for (let k = 0; k < svLines.length; k++) {
+			this.#hitRows[sessionRegionStart + k] = sessionRowIndex[k];
+			this.#agentHitRows[sessionRegionStart + k] = agentRowIndex[k];
+		}
 		lines.push(...svLines);
 
 		return lines;
@@ -665,29 +860,61 @@ class SessionList implements Component {
 		// Up arrow
 		if (matchesSelectUp(keyData)) {
 			this.#selectionMoved = true;
-			this.#selectedIndex = Math.max(0, this.#selectedIndex - 1);
+			if (this.#agentCursor !== undefined) {
+				// Inside the expanded agent list: step up through the agents,
+				// back onto the session row at the top.
+				this.#agentCursor = this.#agentCursor > 0 ? this.#agentCursor - 1 : undefined;
+			} else {
+				this.#moveSelection(-1);
+			}
 			return;
 		}
 		// Down arrow
 		if (matchesSelectDown(keyData)) {
 			this.#selectionMoved = true;
-			this.#selectedIndex = Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + 1);
+			if (this.#agentCursor !== undefined) {
+				const agents = this.#expandedAgents();
+				if (agents && this.#agentCursor + 1 < agents.length) {
+					this.#agentCursor += 1;
+				} else {
+					// Past the last agent row: move to the next session.
+					this.#moveSelection(1);
+				}
+			} else if (this.#expandedPath !== undefined && (this.#expandedAgents()?.length ?? 0) > 0) {
+				// From the expanded session row, descend into its agents.
+				this.#agentCursor = 0;
+			} else {
+				this.#moveSelection(1);
+			}
 			return;
 		}
 		// Page up - jump up by maxVisible items
 		if (matchesKey(keyData, "pageUp")) {
 			this.#selectionMoved = true;
+			this.#collapseAgentView();
 			this.#selectedIndex = Math.max(0, this.#selectedIndex - this.#visibleCount());
 			return;
 		}
 		// Page down - jump down by maxVisible items
 		if (matchesKey(keyData, "pageDown")) {
 			this.#selectionMoved = true;
+			this.#collapseAgentView();
 			this.#selectedIndex = Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + this.#visibleCount());
 			return;
 		}
 		// Enter
 		if (matchesKey(keyData, "enter") || matchesKey(keyData, "return") || keyData === "\n") {
+			// On an agent row, Enter quick-jumps into that agent's session
+			// (register persisted refs + focus). On a session row it resumes,
+			// unchanged.
+			if (this.#agentCursor !== undefined) {
+				const agents = this.#expandedAgents();
+				const agent = agents?.[this.#agentCursor];
+				if (agent && this.#onOpenAgent) {
+					this.#onOpenAgent(agent);
+				}
+				return;
+			}
 			const selected = this.#filteredSessions[this.#selectedIndex];
 			if (selected && this.onSelect) {
 				this.onSelect(selected);
@@ -709,6 +936,13 @@ class SessionList implements Component {
 		// Tab - toggle folder / all-projects scope
 		if (matchesKey(keyData, "tab")) {
 			this.onToggleScope?.();
+			return;
+		}
+		// `l` expands/collapses the selected session's persisted agents. Space
+		// is deliberately NOT used: the search Input needs it for multi-token
+		// queries. Inert when no agent loader is wired (feature off).
+		if (matchesKey(keyData, "l")) {
+			this.#toggleExpanded();
 			return;
 		}
 		// Pass everything else to search input
@@ -736,6 +970,17 @@ export interface SessionSelectorOptions {
 	 * in-editor selector leaves it off and renders compactly.
 	 */
 	fillHeight?: boolean;
+	/**
+	 * Loads a session's persisted agent transcripts for the inline expansion
+	 * (`l` on a selected row). Wired by the resume picker; absent in tests and
+	 * un-wired callers, which keeps the agent feature fully inert there.
+	 */
+	loadSessionAgents?: (sessionFile: string) => Promise<PersistedAgentInfo[]>;
+	/**
+	 * Quick-jump out of an expanded agent row: register the agent's persisted
+	 * session and focus it (called after the picker is hidden).
+	 */
+	onOpenAgent?: (agent: PersistedAgentInfo) => void;
 }
 
 /**
@@ -772,6 +1017,8 @@ export class SessionSelectorComponent extends Container {
 	readonly #getTerminalRows: () => number;
 	readonly #fillHeight: boolean;
 	readonly #bottomBorder = new DynamicBorder();
+	/** Whether the agent expansion feature is wired (drives the footer hint). */
+	readonly #hasAgentFeature: boolean;
 
 	constructor(
 		sessions: SessionInfo[],
@@ -789,6 +1036,7 @@ export class SessionSelectorComponent extends Container {
 		this.#globalSessions = options.allSessions ?? null;
 		this.#getTerminalRows = options.getTerminalRows ?? (() => 24);
 		this.#fillHeight = options.fillHeight ?? false;
+		this.#hasAgentFeature = options.loadSessionAgents !== undefined;
 		// Add header
 		this.addChild(new Spacer(1));
 		this.#headerText = new Text(this.#headerLabel(), 1, 0);
@@ -800,7 +1048,19 @@ export class SessionSelectorComponent extends Container {
 		// Create session list in folder scope; the empty-state hint invites the
 		// user to Tab into all-projects rather than silently surfacing other
 		// projects' history (issue #3099).
-		this.#sessionList = new SessionList(sessions, false, options.historyMatcher, options.getTerminalRows);
+		this.#sessionList = new SessionList(
+			sessions,
+			false,
+			options.historyMatcher,
+			options.getTerminalRows,
+			options.loadSessionAgents,
+			agent => {
+				// Mirror the resume exit path: dispose the list (cancels pending
+				// search work) before handing off to the quick-jump callback.
+				this.#sessionList.dispose();
+				options.onOpenAgent?.(agent);
+			},
+		);
 		// Every exit path cancels the list's pending history merge, so a stale
 		// debounce timer can never run its SQLite lookup after the picker closed.
 		this.#sessionList.onSelect = session => {
@@ -967,7 +1227,8 @@ export class SessionSelectorComponent extends Container {
 	/** Blank · keybinding hint · bottom border. Rendered by {@link render}. */
 	#footerLines(width: number): string[] {
 		const scopeHint = this.#scope === "all" ? "current folder" : "all projects";
-		const hint = theme.fg("muted", `  [Del/⌫ delete · Enter select · Tab ${scopeHint} · Esc cancel]`);
+		const expandHint = this.#hasAgentFeature ? " · l expand" : "";
+		const hint = theme.fg("muted", `  [Del/⌫ delete${expandHint} · Enter select · Tab ${scopeHint} · Esc cancel]`);
 		return ["", hint, "", ...this.#bottomBorder.render(width)];
 	}
 
@@ -997,7 +1258,16 @@ export class SessionSelectorComponent extends Container {
 				return true;
 			}
 			if (!event.leftClick || event.row >= this.#footerStart) return true;
-			const index = this.#sessionList.hitTestSession(event.row - this.#listLineOffset);
+			const line = event.row - this.#listLineOffset;
+			// Clicks on an expanded agent row quick-jump into that agent; clicks
+			// on a session row resume it (unchanged). The loading row hit-tests
+			// as neither, so it stays inert.
+			const agent = this.#sessionList.hitTestAgent(line);
+			if (agent) {
+				this.#sessionList.selectAndConfirmAgent(agent);
+				return true;
+			}
+			const index = this.#sessionList.hitTestSession(line);
 			if (index !== undefined) this.#sessionList.selectAndConfirm(index);
 			return true;
 		});

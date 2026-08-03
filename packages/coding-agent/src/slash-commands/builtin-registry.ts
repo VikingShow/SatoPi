@@ -1227,6 +1227,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		description: "Swarm operations",
 		subcommands: [
 			{ name: "start", description: "Start a new agent crew" },
+			{ name: "back", description: "Return to the active crew's chat page" },
 			{ name: "off", description: "Leave the current crew" },
 		],
 		allowArgs: true,
@@ -1243,12 +1244,17 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				runtime.ctx.editor.setText("");
 				return;
 			}
+			if (verb === "back") {
+				await runtime.ctx.resumeCrewView();
+				runtime.ctx.editor.setText("");
+				return;
+			}
 			if (verb === "off") {
 				runtime.ctx.swarmModeController?.leaveCrew();
 				runtime.ctx.editor.setText("");
 				return;
 			}
-			runtime.ctx.showError("Usage: /swarm [start [name] | off | dashboard]");
+			runtime.ctx.showError("Usage: /swarm [start [name] | back | off | dashboard]");
 		},
 	},
 	{

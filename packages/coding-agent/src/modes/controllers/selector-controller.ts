@@ -35,6 +35,7 @@ import {
 	theme,
 } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
+import { AgentRegistry } from "../../registry/agent-registry";
 import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome } from "../../session/auth-storage";
 import type { SessionInfo } from "../../session/session-listing";
 import { SessionManager } from "../../session/session-manager";
@@ -60,7 +61,12 @@ import { repo } from "../../utils/git";
 import { setSessionTerminalTitle } from "../../utils/title-generator";
 import { type AdvisorConfigDeps, AdvisorConfigOverlayComponent } from "../components/advisor-config";
 import { AgentDashboard } from "../components/agent-dashboard";
-import { AgentHubOverlayComponent } from "../components/agent-hub";
+import {
+	AgentHubOverlayComponent,
+	collectPersistedAgents,
+	type PersistedAgentInfo,
+	registerPersistedSubagents,
+} from "../components/agent-hub";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import { CopySelectorComponent } from "../components/copy-selector";
 import { ExtensionDashboard } from "../components/extensions";
@@ -1153,6 +1159,15 @@ export class SelectorController {
 				loadAllSessions: () => SessionManager.listAll(),
 				getTerminalRows: () => this.ctx.ui.terminal.rows,
 				fillHeight: true,
+				loadSessionAgents: sessionFile => collectPersistedAgents(sessionFile),
+				onOpenAgent: async (agent: PersistedAgentInfo) => {
+					// Mirror the resume exit path: hide the picker first, then
+					// register the agent's persisted session as parked refs and
+					// focus its live view (cold-reviving the agent).
+					done();
+					await registerPersistedSubagents(AgentRegistry.global(), agent.sessionFile);
+					await this.ctx.focusAgentSession(agent.id);
+				},
 			},
 		);
 		selector.setOnRequestRender(() => this.ctx.ui.requestRender());

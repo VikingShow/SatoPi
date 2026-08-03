@@ -19,12 +19,17 @@ export class SessionFocusController {
 	/** Session currently attached while focused; undefined when unfocused. */
 	#attachedSession: AgentSession | undefined;
 	#registryUnsubscribe: (() => void) | undefined;
+	/** Invoked after every genuine unfocus (explicit, registry auto-unfocus, MAIN fallback). */
+	#onUnfocused: (() => void) | undefined;
 
 	constructor(
 		private ctx: InteractiveModeContext,
 		private registry: AgentRegistry = AgentRegistry.global(),
 		private lifecycle: () => AgentLifecycleManager = () => AgentLifecycleManager.global(),
-	) {}
+		onUnfocused?: () => void,
+	) {
+		this.#onUnfocused = onUnfocused;
+	}
 
 	get focusedAgentId(): string | undefined {
 		return this.#focusedAgentId;
@@ -65,6 +70,7 @@ export class SessionFocusController {
 		this.#attachedSession = undefined;
 		await this.#attach(this.ctx.session);
 		this.ctx.showStatus("Returned to main session");
+		this.#onUnfocused?.();
 	}
 
 	dispose(): void {

@@ -13,6 +13,9 @@
 ### Changed
 
 - Crew members now spawn with a working tool set (`read/grep/glob/edit/write/bash/todo`), richer persistent-main-agent prompts, and per-profile model selection instead of the first available model for everyone.
+- Ctrl+B sidebar gains a collapsible `History` section: other sessions (title, `N agents` badge, latest agent activity) as resume targets — Enter resumes a session, Space expands its persisted agent tree, Enter on an agent cold-revives and focuses it. The current session's archived agents are registered as parked refs on sidebar open, so they surface in the live Swarms subtree (including swarm/crew agents, which the persisted scan now covers via `swarm-*/agents/`).
+- The session picker (`/resume`) shows per-session `N agents` badges with latest agent activity; pressing `l` on a selected session expands its persisted agent tree inline and Enter on an agent quick-jumps into it (register + revive + focus) while session Enter keeps resuming.
+- Shared persisted-agent scan layer (`collectPersistedAgents`/`summarizePersistedAgents` in agent-hub) reused by the sidebar, the picker, and the Agent Hub registration path.
 - The `swarm` magic keyword uses a single session-level plan.md capture hook with a pending-write buffer (no more dropped plan writes during bridge init), per-run swarm session directories, and idle bridges are disposed before a new run starts.
 
 
@@ -28,7 +31,11 @@
 - Fixed `stp swarm resume` being a placeholder ("resume not yet implemented") — now performs checkpoint-based recovery.
 - Fixed crew mode input editor being hidden: the crew overlay's height budget now derives from the real content frame (`TUI.lastFrameLength`) instead of terminal rows, so it never covers the editor even when the frame is shorter than the viewport.
 - Fixed crew members silently not replying: `createAgentSession` already pre-registers the agent ref, and the duplicate `AgentRegistry.register` in crew spawning disposed the member's own session (whose teardown unregistered the ref) — spawning now reuses the pre-registered ref.
+- Fixed the Ctrl+B sidebar's bottom border being clipped off-screen: the panel filled to the full terminal height while the overlay's 1-cell margin leaves only `rows − 2` — content now fills to `rows − 4` with the tree budget reduced accordingly.
+- Ctrl+B History section interaction refined: Enter on a session row expands it (matching the rest of the tree), `r` resumes it; a session's persisted agents now render as a nested tree by `parentId` so sub-sessions (an agent's own agents) are expandable in place, with orphaned agents grouped at the root.
 - Fixed Ctrl+B sidebar appearing frozen: key dispatch matched literal strings (`"Enter"`, `"ArrowDown"`) while the TUI delivers raw sequences — Enter on an agent node now works via `matchesKey`; selecting an agent also hides the crew overlay so the member's session page is visible.
+- Fixed being unable to return to the crew chat page after entering an agent session from the Ctrl+B sidebar: the crew overlay is now temporarily hidden (`OverlayHandle.setHidden`) instead of destroyed, and every unfocus path (←←, or the focused agent being killed/retired) restores it. The crew-nav Esc handler no longer fires while an agent session is focused — Esc returns to the crew page instead of leaving the crew entirely. Added `/swarm back` to re-mount the active crew's chat page when the overlay was already lost.
+- Fixed a large empty gap between the message stream and the status bar while viewing a crew member's focused session: the crew fill spacer (which pins the editor below the crew overlay) is now removed while the overlay is hidden and restored on return.
 - Fixed binary bundle failing to resolve `@satopi/pi-coding-agent/swarm/task-analyzer` — the exports map pointed at the pre-migration `src/swarm/script/` path; repointed to `src/graph/task-analyzer.ts`.
 ### Removed
 
