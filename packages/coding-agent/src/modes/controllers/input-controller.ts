@@ -279,6 +279,11 @@ export class InputController {
 			this.ctx.ui.addInputListener(data => {
 				const controller = this.ctx.swarmModeController;
 				if (!controller?.isCrewActive()) return undefined;
+				// While an agent session is focused the crew keys must not hijack
+				// input: Esc on an agent page returns to the crew (unfocus) instead
+				// of leaving the crew, and j/k/f/t/r stay out of the focused
+				// session's own arbitration.
+				if (this.ctx.focusedAgentId) return undefined;
 				const view = controller.activeCrewView;
 				if (!(view instanceof CrewTranscriptView)) return undefined;
 				if (this.ctx.ui.getFocused() !== this.ctx.editor) return undefined;
