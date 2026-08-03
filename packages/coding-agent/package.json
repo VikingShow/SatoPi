@@ -535,8 +535,8 @@
       "import": "./src/infra/activity-logger.ts"
     },
     "./swarm/task-analyzer": {
-      "types": "./src/swarm/script/task-analyzer.ts",
-      "import": "./src/swarm/script/task-analyzer.ts"
+      "types": "./src/graph/task-analyzer.ts",
+      "import": "./src/graph/task-analyzer.ts"
     },
     "./task": {
       "types": "./src/task/index.ts",
