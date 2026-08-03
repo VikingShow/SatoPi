@@ -45,7 +45,7 @@ interface AgentSpecBase {
 	tools?: string[];
 	/**
 	 * Optional structured todo phases to inject into the agent session.
-	 * When set, AgentRuntime calls session.setTodoPhases() before prompt().
+	 * When set, spawnAgent() calls session.setTodoPhases() before prompt().
 	 */
 	todoPhases?: Array<{ title: string; files?: string[]; dependsOn?: string[] }>;
 }
@@ -75,7 +75,7 @@ export interface AgentSpecInline extends AgentSpecBase {
  * Declarative specification for spawning an agent.
  *
  * All phases (script, stage, curtain) use this discriminated union.
- * The AgentRuntime resolves the role, assembles context, builds
+ * spawnAgent() resolves the role, assembles context, builds
  * AgentLoopConfig, and launches the SatoPi Agent instance.
  */
 export type AgentSpec = AgentSpecLibrary | AgentSpecProfile | AgentSpecInline;

@@ -46,7 +46,7 @@ import { SubgraphNodeBehavior } from "./subgraph-behavior";
  *
  * Lifecycle:
  *   1. prepare → build one AgentSpec from NodeDefinition
- *   2. execute → spawn via AgentRuntime, wait for SingleResult
+ *   2. execute → spawn via the runtime, wait for SingleResult
  *   3. validate → if gate passed, check for test command; gate result
  *   4. cleanup  → abort any agent still running (no-op when wait() resolved)
  */

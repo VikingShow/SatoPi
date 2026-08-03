@@ -5,13 +5,13 @@
  * the orchestrator can drive through the standard PhaseBehavior lifecycle.
  *
  * Data flow:
- *   1. enter() → spawn Planner agent via AgentRuntime → create Human↔Planner channel
+ *   1. enter() → spawn Planner agent via the runtime → create Human↔Planner channel
  *   2. handleHumanMessage() → route user message to Planner for multi-turn dialogue
  *   3. handleAgentEvent() → track planner completion / output
  *   4. checkCompletion() → detect when the plan is ready (or confirm was called)
  *   5. exit() → clean up agent handle and conversation state
  *
- * This behavior does NOT import ScriptManager — it uses AgentRuntime,
+ * This behavior does NOT import ScriptManager — it uses the runtime,
  * IrcBus, and HookPipeline directly, following the v3 unified architecture.
  */
 
@@ -101,7 +101,7 @@ export class ScriptBehavior implements PhaseBehavior {
 		} else if (this.#planner && this.#planner.status === "completed") {
 			// Planner finished a previous turn — spawn a fresh follow-up
 			// with the accumulated conversation history.
-			// For simplicity, we send to the planner via AgentRuntime.
+			// For simplicity, we send to the planner via the runtime.
 			await ctx.runtime.sendHumanMessage("planner", msg.body);
 			logger.info("[ScriptBehavior] Queued follow-up message to Planner");
 		}

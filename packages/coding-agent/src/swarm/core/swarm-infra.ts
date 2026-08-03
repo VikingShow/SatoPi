@@ -5,7 +5,7 @@
  * during init() for both graph mode and swarm keyword mode:
  *   SwarmSessionManager, StateTracker, ActivityLogger,
  *   ExperienceStore, RoleAssetManager, and the orchestrator runtime
- *   (HookPipeline + MarkEnvironment + AgentRuntime).
+ *   (HookPipeline + MarkEnvironment + SwarmRuntime).
  *
  * GraphRunner calls this once, then adds its own specializations
  * (graph loading, node behaviors, gate controller, etc.).
@@ -103,7 +103,7 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 	// 9. OffloadManager — L1→L3 context offloading (needed by OffloadHook in the runtime)
 	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
 
-	// 10. Orchestrator runtime (MarkEnvironment + HookPipeline + builtins + AgentRuntime)
+	// 10. Orchestrator runtime (MarkEnvironment + HookPipeline + builtins + SwarmRuntime)
 	const orch = createOrchestratorRuntime({
 		modelRegistry,
 		settings,

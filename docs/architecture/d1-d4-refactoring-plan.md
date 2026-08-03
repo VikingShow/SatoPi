@@ -1,7 +1,9 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 已完成(本文档落盘),其余阶段待执行**
+> 状态: **阶段 0 ✅(文档落盘)· 阶段 1 ✅(D4 收尾)· 阶段 2 起待执行**
+>
+> 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
 ---
 
@@ -160,13 +162,14 @@ stp --smoke-test     # CLI 冒烟
 - **产出**: 本文档 `docs/architecture/d1-d4-refactoring-plan.md`
 - **验收**: 文档包含缺陷分析、六阶段计划、完整目录结构树、红线、验收标准
 
-### 阶段 1 — D4 轻量收尾(风险最低,先行)
+### 阶段 1 — D4 轻量收尾 ✅(已完成,2026-08-03)
 
 | 项 | 内容 |
 |---|---|
 | 入口 | 本文档已落盘 |
-| 步骤 | ① 删除 `graph/types.ts` AgentSpawner 残留接口(L429-433) ② 更新 `swarm-runtime.ts`(L4-8)、`agent-helpers.ts`(L7)、`assembler.ts`(L143)三处过时注释 ③ 全局 grep 验证 |
-| DoD | `bun run check` 通过;grep `AgentSpawner` 无定义/引用;grep `AgentRuntime` 仅剩历史注释 |
+| 步骤 | ① 删除 `graph/types.ts` AgentSpawner 残留接口(L429-433),`NodeContext.runtime` 类型改为 `SwarmRuntime` 动态引用 ② 更新 `swarm-runtime.ts`/`agent-helpers.ts`/`assembler.ts` 及 `swarm-infra.ts`/`subgraph-behavior.ts`/`stage-behavior.ts`/`script-behavior.ts`/`curtain-behavior.ts`/`node-behavior.ts`/`agent-spec.ts`/`mmd-source.ts`/`role-provider.ts`/`hooks/types.ts` 共 14 文件过时注释 ③ 全局 grep 验证 |
+| DoD | `bun run check` 通过;graph 测试 54 项全绿;全量测试基线对比改动前后失败 chunk 均为 36/123(零新增);grep `AgentSpawner` 仅剩测试注释;grep `AgentRuntime` 仅剩合法 API(`setToolContextAgentRuntime`/`setAgentRuntime`) |
+| 验证记录 | ① `bun run check` ✅ ② `bun test src/graph/` 54 pass/0 fail ✅ ③ 全量 `ci-test-ts.ts coding-agent-heavy --full` 改动后 36/123 vs git-stash 基线 36/123(一致,零新增) |
 | 验收 | 提交 `refactor(graph): remove AgentSpawner residual interface and stale comments` |
 
 ### 阶段 2 — D2 目录治理(同批两个子步)

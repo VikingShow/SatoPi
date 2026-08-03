@@ -12,7 +12,6 @@ import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
 import type { StateTracker } from "../swarm/core/state";
 
 // ============================================================================
@@ -423,16 +422,6 @@ export interface NodeResult {
 }
 
 /**
- * Minimal spawn contract for graph nodes. Satisfied by AgentRuntime (during
- * transition) or createAgentSession directly (post-Phase-5).
- */
-export interface AgentSpawner {
-	spawn(
-		specs: Array<{ id: string; role: string; task: string; profileId?: string; tools?: string[] }>,
-	): Promise<AgentSession[]>;
-}
-
-/**
  * Context assembled by GraphExecutor and injected into every NodeBehavior method.
  */
 export interface NodeContext {
@@ -450,8 +439,8 @@ export interface NodeContext {
 	experience: string;
 	/** AbortSignal for cooperative cancellation. */
 	signal: AbortSignal;
-	/** Agent runtime for spawning sub-agents. */
-	runtime: AgentSpawner;
+	/** Swarm runtime for spawning sub-agents (facade over spawnAgent). */
+	runtime: import("../swarm/core/swarm-runtime").SwarmRuntime;
 	/** Agent registry for persistent agent routing and lifecycle management. */
 	agentRegistry: AgentRegistry;
 	/** IRC bus for inter-agent messaging (swarm-aware behaviors only). */

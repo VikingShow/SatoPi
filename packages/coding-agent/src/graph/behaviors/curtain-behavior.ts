@@ -11,7 +11,7 @@
  *   4. checkCompletion() → detect when report is done and human has applauded
  *   5. exit() → clean up agent handles and channel
  *
- * This behavior does NOT import CurtainRunner — it uses AgentRuntime,
+ * This behavior does NOT import CurtainRunner — it uses the runtime's spawn,
  * IrcBus, and HookPipeline directly.
  */
 

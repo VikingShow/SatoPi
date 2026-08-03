@@ -9,7 +9,7 @@
  *   - Creates one agent per unique task role (no profile selection)
  *   - Parses the plan via {@link TaskQueue.parseFromPlan} and drives the
  *     resulting TaskQueue directly
- *   - Uses AgentRuntime + IrcBus + TaskQueue directly for the
+ *   - Uses the runtime + IrcBus + TaskQueue directly for the
  *     event-driven lifecycle that the graph engine requires
  *
  * Data flow:
@@ -207,7 +207,7 @@ export class StageBehavior implements PhaseBehavior {
 			});
 		}
 
-		// Also deliver via AgentRuntime for agent-level steering queue
+		// Also deliver via the runtime for agent-level steering queue
 		for (const [agentId, tracking] of this.#agents) {
 			if (tracking.handle.status === "running") {
 				await ctx.runtime
