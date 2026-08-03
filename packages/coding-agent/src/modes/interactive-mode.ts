@@ -148,9 +148,9 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
+import { CrewTranscriptView } from "./components/swarm/crew-transcript-view";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
-import { CrewTranscriptView } from "./components/swarm/crew-transcript-view";
 import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -602,8 +602,15 @@ export class InteractiveMode implements InteractiveModeContext {
 	get sessionName(): string | undefined {
 		return this.session.sessionName;
 	}
-	focusAgentSession(id: string): Promise<void> {
-		return this.#focusController.focusAgent(id);
+	async focusAgentSession(id: string): Promise<void> {
+		await this.#focusController.focusAgent(id);
+		// Entering an agent's session: temporarily hide the crew overlay so the
+		// focused transcript is visible; unfocus (any path) restores it via the
+		// onUnfocused hook below. Guarded on focusedAgentId: focusing MAIN is a
+		// no-op that unfocuses, and must not re-hide a just-restored overlay.
+		if (this.#focusController.focusedAgentId) {
+			this.#crewStartOverlayHandle?.setHidden(true);
+		}
 	}
 	focusParentSession(): Promise<void> {
 		return this.#focusController.focusParent();
@@ -788,7 +795,16 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#commandController = new CommandController(this);
 		this.#todoCommandController = new TodoCommandController(this);
 		this.#selectorController = new SelectorController(this);
-		this.#focusController = new SessionFocusController(this);
+		this.#focusController = new SessionFocusController(this, undefined, undefined, () => {
+			// While a crew is active the main-session view is the crew page:
+			// every unfocus path (Esc/←←, focused agent dying) restores it.
+			// No-op outside crew mode (no overlay mounted).
+			if (!this.#crewStartOverlayHandle) return;
+			this.#crewStartOverlayHandle.setHidden(false);
+			// setHidden re-focuses the overlay component; the editor must keep input.
+			this.ui.setFocus(this.editor);
+			this.#updateSwarmModeStatus();
+		});
 		this.#inputController = new InputController(this);
 		this.#observerRegistry = new SessionObserverRegistry();
 	}
@@ -868,6 +884,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			onRequestRender: () => this.ui.requestRender(),
 			onLeaveCrew: () => {
 				this.#crewStartOverlayHandle?.hide();
+				this.#crewStartOverlayHandle = undefined;
 				if (this.#crewViewFillSpacer) {
 					this.ui.removeChild(this.#crewViewFillSpacer);
 					this.#crewViewFillSpacer = undefined;
@@ -4714,15 +4731,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		const sidebar = new SwarmSidebar(
 			{
 				onSelectAgent: (agentId: string) => {
-					// Entering a member's own session: hide the crew overlay so the
-					// focused session's transcript is actually visible (the overlay
-					// would otherwise keep covering the base screen, making the
-					// page look frozen). Input routing already switches to the
-					// focused session via #submitToFocusedSession.
-					if (this.#crewStartOverlayHandle) {
-						this.#crewStartOverlayHandle.hide();
-						this.#crewStartOverlayHandle = undefined;
-					}
+					// Entering a member's own session: focusAgentSession temporarily
+					// hides the crew overlay so the focused transcript is visible;
+					// unfocus (Esc/←←) restores the crew page.
 					void this.focusAgentSession(agentId).catch(() => {});
 				},
 				onClose: () => this.showSwarmSidebar(),
@@ -4822,6 +4833,21 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.showError(`Failed to create crew: ${msg}`);
 			}
 		}
+	}
+	/** Re-mount the active crew's chat page (recovery when the overlay was lost). */
+	async resumeCrewView(): Promise<void> {
+		const controller = this.swarmModeController;
+		const crewId = controller?.activeCrewId;
+		if (!crewId) {
+			this.showStatus("No active crew");
+			return;
+		}
+		if (this.#crewStartOverlayHandle && !this.#crewStartOverlayHandle.isHidden()) {
+			this.ui.setFocus(this.editor);
+			return;
+		}
+		await controller.focusCrew(crewId);
+		this.#mountCrewView(crewId);
 	}
 
 	/** Mount the crew view as an overlay after crew creation. */

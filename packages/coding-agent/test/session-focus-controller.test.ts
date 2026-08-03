@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import { SessionFocusController } from "@satopi/pi-coding-agent/modes/controllers/session-focus-controller";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-lifecycle";
@@ -53,7 +53,7 @@ interface Harness {
 	};
 }
 
-function makeHarness(): Harness {
+function makeHarness(opts: { onUnfocused?: () => void } = {}): Harness {
 	const main = makeSessionStub();
 	const handledEvents: unknown[] = [];
 	const setSessionCalls: Array<[AgentSession, string | undefined]> = [];
@@ -95,7 +95,7 @@ function makeHarness(): Harness {
 
 	const registry = new AgentRegistry();
 	const lifecycle = new AgentLifecycleManager(registry);
-	const controller = new SessionFocusController(ctx, registry, () => lifecycle);
+	const controller = new SessionFocusController(ctx, registry, () => lifecycle, opts.onUnfocused);
 
 	return {
 		ctx,
@@ -205,5 +205,55 @@ describe("SessionFocusController", () => {
 			[worker.session, "Worker"],
 			[h.main.session, undefined],
 		]);
+	});
+});
+
+describe("onUnfocused hook", () => {
+	it("calls onUnfocused once when explicitly unfocusing a focused subagent", async () => {
+		const onUnfocused = vi.fn();
+		const h = makeHarness({ onUnfocused });
+		const worker = makeSessionStub();
+		registerSub(h.registry, "Worker", worker.session, MAIN_AGENT_ID);
+
+		await h.controller.focusAgent("Worker");
+		await h.controller.unfocus();
+
+		expect(onUnfocused).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onUnfocused once when the focused subagent is removed from the registry", async () => {
+		const onUnfocused = vi.fn();
+		const h = makeHarness({ onUnfocused });
+		const worker = makeSessionStub();
+		registerSub(h.registry, "Worker", worker.session, MAIN_AGENT_ID);
+
+		await h.controller.focusAgent("Worker");
+		h.registry.unregister("Worker");
+		await flushAsync();
+
+		expect(onUnfocused).toHaveBeenCalledTimes(1);
+		expect(h.controller.focusedAgentId).toBeUndefined();
+	});
+
+	it("calls onUnfocused once when focusing the main agent while a subagent is focused", async () => {
+		const onUnfocused = vi.fn();
+		const h = makeHarness({ onUnfocused });
+		const worker = makeSessionStub();
+		registerSub(h.registry, "Worker", worker.session, MAIN_AGENT_ID);
+
+		await h.controller.focusAgent("Worker");
+		await h.controller.focusAgent(MAIN_AGENT_ID);
+
+		expect(onUnfocused).toHaveBeenCalledTimes(1);
+		expect(h.controller.focusedAgentId).toBeUndefined();
+	});
+
+	it("does not call onUnfocused when unfocusing with nothing focused", async () => {
+		const onUnfocused = vi.fn();
+		const h = makeHarness({ onUnfocused });
+
+		await h.controller.unfocus();
+
+		expect(onUnfocused).not.toHaveBeenCalled();
 	});
 });
