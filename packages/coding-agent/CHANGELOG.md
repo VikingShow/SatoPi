@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-08-03
+
 ### Added
 
 - `/graph theatre` now attaches a real `GraphRunner` (builtin theatre graph) to the active crew: phase transitions broadcast to the crew channel, crew-member `plan.md` writes feed the bridge via a per-session capture hook, and human messages forward to the active phase behavior. New `/graph launch` verb starts Stage execution, gated on plan readiness.
