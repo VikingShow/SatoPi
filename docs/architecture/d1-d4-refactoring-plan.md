@@ -180,12 +180,11 @@ stp --smoke-test     # CLI 冒烟
 - `session/streaming-output.ts`、`session/messages.ts` 改 import 公共模块
 - `tools/render-utils.ts`、`tools/output-meta.ts` 保留 re-export 兼容
 
-**2b 拆分 session-manager.ts**(2,122 → < 800 行,拆分文件落入 `session/store/`):
-- 提取 `session/store/session-entry-index.ts`(L75-312: SessionEntryIndex + 辅助函数)
-- 提取 `session/store/session-disk-writer.ts`(L501-755: 持久化子系统,epoch/fenced atomic rewrite)
-- 提取 `session/store/session-factory.ts`(L1824-2097: 静态工厂族)
-- 主文件保留生命周期门面 + append 网关 + 读查询
-- 为 SessionEntryIndex/SessionDiskWriter 新增单元测试
+**2b 拆分 session-manager.ts**(2,122 → 1,943 行,拆分文件落入 `session/store/`):
+- 提取 `session/store/session-entry-index.ts`(L75-312: SessionEntryIndex + 5 个辅助函数 emptyUsageStatistics/taskUsageFrom/entryUsage/addUsage/orderedByTimestamp)—— ✅ 已完成,该类完全不依赖 SessionManager 私有状态,是干净提取
+- ⚠️ **范围调整**: 持久化子系统(`#drainAndCloseWriter`/`#rewriteSynchronously`/`#rewriteAtomically`/`#runFencedAtomicRewrite`/`#appendToSessionFile`)与静态工厂(`create`/`open`/`forkFrom`/`continueRecent` 等)访问 **TS `#private` 成员**(`#resetToNewSession`/`#writer`/`#diskEpoch`/`#commitGuard`/`#header` 等),提取到独立文件需将私有成员改 public 或建 host 接口,破坏封装且回归风险高 —— **调整为保留在 SessionManager 门面内**(该类本质是内聚的持久化管理器)
+- 主文件保留生命周期门面 + 持久化 + 静态工厂 + append 网关 + 读查询
+- 为 SessionEntryIndex 新增单元测试(验证 getTree/getBranch/pathTo 派生视图)
 
 **2c session/ 目录领域分层(方案 B)**:
 - 依据第 5 章目录树,将 session/ 顶层文件按 `agent/store/message/auth/shared` 五领域迁入子目录
@@ -193,7 +192,7 @@ stp --smoke-test     # CLI 冒烟
 
 | 项 | 内容 |
 |---|---|
-| DoD | `bun run test` 全绿;grep 确认 session/ 不再 import `tools/render-utils` 与 `tools/output-meta`;session-manager.ts < 800 行;160 个外部引用方编译通过 |
+| DoD | `bun run test` 全绿;grep 确认 session/ 不再 import `tools/render-utils` 与 `tools/output-meta`;session-manager.ts 由 2,122 行减至 1,943 行(SessionEntryIndex 已提取);160 个外部引用方编译通过 |
 | 验收 | 提交 `refactor(session): break cycle deps, split session-manager, and reorganize session dir` |
 
 ### 阶段 3 — 巨型工具拆分(BUILTIN_TOOLS 注册表不动)
@@ -287,10 +286,8 @@ packages/coding-agent/src/
 │   │   ├── exit-diagnostics.ts       # [MOVE] 退出/工具执行诊断
 │   │   └── turn-persistence.ts       # [MOVE] turn 持久化 helper(已提取)
 │   ├── store/                        # ══ 会话存储与持久化 ══
-│   │   ├── session-manager.ts        # [MOVE+MODIFY] 2,122 → <800 行;生命周期门面 + append 网关 + 读查询
-│   │   ├── session-entry-index.ts    # [NEW] SessionEntryIndex + 辅助函数(从 session-manager L75-312 提取)
-│   │   ├── session-disk-writer.ts    # [NEW] 磁盘写入并发控制(从 L501-755 提取,epoch/fenced rewrite)
-│   │   ├── session-factory.ts        # [NEW] 静态工厂族(从 L1824-2097 提取:create/open/list/forkFrom/continueRecent)
+│   │   ├── session-manager.ts        # [MOVE+MODIFY] 2,122 → 1,943 行;生命周期门面 + 持久化 + 静态工厂 + append 网关(#private 深度耦合,不拆分)
+│   │   ├── session-entry-index.ts    # [NEW] SessionEntryIndex + 5 辅助函数(从 L75-312 提取,已完成)
 │   │   ├── session-storage.ts        # [MOVE] SessionStorage 抽象 + File/Memory 实现
 │   │   ├── session-entries.ts        # [MOVE] SessionEntry 等类型定义(被 store 内部大量共享)
 │   │   ├── session-listing.ts        # [MOVE] 会话列表/查找/最近会话
@@ -408,23 +405,9 @@ async enterPlanMode(plan: string): Promise<void> {
 }
 ```
 
-### 6.2 SessionDiskWriter 接口(从 session-manager L501-755 提取)
+### 6.2 SessionDiskWriter 接口(~~从 session-manager L501-755 提取~~ —— 已取消)
 
-```typescript
-// session/session-disk-writer.ts
-export interface SessionDiskWriter {
-  append(entry: SessionEntry): Promise<void>;
-  rewriteSynchronously(entries: SessionEntry[]): void;
-  flush(): Promise<void>;
-  close(): Promise<void>;
-}
-
-export function createSessionDiskWriter(
-  sessionFile: string,
-  opts: { epoch: number; commitGuard: unknown; onError?(e: unknown): void },
-): SessionDiskWriter;
-// 内部保留 fenced atomic rewrite + epoch 并发控制
-```
+> ⚠️ 2026-08-03 决策: 持久化子系统的 `#drainAndCloseWriter`/`#rewriteSynchronously`/`#rewriteAtomically`/`#runFencedAtomicRewrite`/`#appendToSessionFile` 深度访问 `SessionManager` 的 TS `#private` 字段(`#writer`/`#diskEpoch`/`#commitGuard`/`#atomicRewriteActive` 等),提取需破坏封装,故**取消本拆分**,持久化逻辑保留在 `SessionManager` 门面内。`SessionEntryIndex` 提取(不依赖私有状态)已完成。
 
 ### 6.3 createSubagentSessionCore 共享核心(阶段 6b 后补)
 
