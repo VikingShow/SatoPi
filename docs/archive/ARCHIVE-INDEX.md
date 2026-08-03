@@ -19,13 +19,25 @@
 | `satopi-architecture-debt.md` | 2026-07-20 | 5条债务中4条已改善/修复（DEBT-04静默失败仍存在） |
 | `swarm-architecture-issues.md` | 2026-07-26 | 10个问题中8个已修复（ContextCompactor删除、Offload全局化、Profile offloadRefs、MarkEnvironment全局化等） |
 | `L3-Offload-Template-Limitation.md` | — | L3截断问题已通过 offload/compact.ts LLM路径修复 |
+| `swarm-architecture-research.md` | 2026-07-24 | 2026-07-30: 被 swarm-architecture-v3.md 取代 |
+| `swarm-data-flow-analysis.md` | 2026-07-25 | 2026-07-30: 被 swarm-architecture-v3.md 取代 |
+| `architecture-optimization-plan.md` | 2026-07-25 | 2026-07-30: 优化方案已过时，被后续实施取代 |
+| `satopi-architecture-unification-analysis-2026-07-27.md` | 2026-07-27 | 2026-07-30: 已合并入 swarm-architecture-v3.md |
+| `swarm-full-bridge-implementation-plan.md` | 2026-07-25 | 2026-07-30: 实施已完成 |
+| `swarm-full-bridge-plan.md` | 2026-07-25 | 2026-07-30: 已合并入实施计划 |
+| `swarm-full-bridge-process.md` | 2026-07-25 | 2026-07-30: 实施已完成 |
+| `swarm-magic-keyword-fusion-design.md` | 2026-07-26 | 2026-07-30: 设计已完成实施 |
+| `theatre-audit-report.md` | 2026-07-25 | 2026-07-30: 被 theatre-graph-final-plan.md 取代 |
+| `theatre-graph-feasibility.md` | 2026-07-26 | 2026-07-30: 被 theatre-graph-final-plan.md 取代 |
+| `satopi-comprehensive-review-2026-07-27.md` | 2026-07-27 | 2026-07-30: 被 satopi-comprehensive-review-2026-07-28-v2.md 取代 |
 | `satopi-offload-deep-dive.md` | 2026-07-20 | 描述旧 offload 架构（swarm/offload/），已重构到顶层 coding-agent/src/offload/ |
+| `swarm-crew-architecture.md` | 2026-07-27 | 2026-07-31: 设计已实现（Crew/Graph 正交已落地），但 Missing 表格与孤儿组件描述过时，由 tui-crew-optimization-plan.md 取代 |
+| `process-coding-agent-2026-07.md` | 2026-07 | 开发过程记录，声称已创建的 src/swarm/core/swarm-runner.ts 不存在（被 graph-runner.ts 取代），内容过时 |
 
 ## 仍有效的文档（保留在 docs/）
 
-| 文档 | 原因 |
-|------|------|
-| `swarm-architecture-v3.md` | v3 重构方案，已大部分实施完成 |
+| `swarm/refactoring-plan-2026-07-30.md` | 实际执行蓝本（约 90% 已完成），剩余项见 Phase 2 清单 |
+| `swarm/tui-crew-optimization-plan.md` | 当前 Crew TUI 优化计划（Phase 1 已实施） |
 | `satopi-gap-analysis-breakthrough-path.md` | 范式级 Gap 分析（Cloner投票、Jaccard收敛、IRC vs Stigmergy）仍相关 |
 | `satopi-v2-system-design.md` | Emergent Multi-Agent 五层架构设计，长期目标参考 |
 | `satopi-phase4-5-design.md` | Phase 4&5 设计，部分已实施 |
@@ -50,5 +62,7 @@
             - swarm-gui 删除 + HTTP API 层删除
             - loop-controller.ts (67KB) 删除
             - omp → stp rebrand
-2026-07-27  本归档
+2026-07-27  第一批归档（12份文档）
+2026-07-30  第二批归档：swarm 研究/数据流/全桥/融合/魔法关键词、theatre 审计/可行性、架构优化/统一分析、综合评审v1（11份文档）
+2026-07-31  第三批归档：swarm-crew-architecture（设计已实现）、process（内容过时）；新增 tui-crew-optimization-plan
 ```

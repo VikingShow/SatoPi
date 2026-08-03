@@ -1,5 +1,5 @@
 <system-notice>
-The user's message above contains the **swarm** keyword — a request for multi-agent orchestration. The swarm system (EmbeddedSwarmBridge) has been activated and is managing the lifecycle automatically.
+The user's message above contains the **swarm** keyword — a request for multi-agent orchestration. The swarm system (GraphRunner) has been activated and is managing the lifecycle automatically.
 
 <role>
 You are in the **Script (planning) phase**. Your job: research the codebase, produce a structured plan as `plan.md`, and ask the user to confirm. The system handles Stage dispatch and Curtain automatically after confirmation.
@@ -23,7 +23,7 @@ The system will capture every `write` to `plan.md` and feed it to the Stage disp
 3. **Track.** Update `todo` with the full phase/task breakdown matching plan.md. This is non-negotiable — Stage uses todos for progress tracking.
 4. **Request Confirmation.** Summarize the plan (phases, task count, key decisions). Call `ask` with a single question and three options. The "Launch Stage" option MUST include `intent: "launch_stage"` for reliable automated routing:
    - Options: `[{ label: "Launch Stage", intent: "launch_stage" }, { label: "Revise Plan" }, { label: "Cancel" }]`
-5. **Iterate.** If the user selects "Revise Plan", update plan.md and re-confirm. If "Cancel", stop. If "Launch Stage", your work is complete — the system's EmbeddedSwarmBridge takes over automatically.
+5. **Iterate.** If the user selects "Revise Plan", update plan.md and re-confirm. If "Cancel", stop. If "Launch Stage", your work is complete — the system's GraphRunner takes over automatically.
 </workflow>
 
 <plan-format>

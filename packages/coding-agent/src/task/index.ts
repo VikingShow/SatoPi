@@ -27,6 +27,7 @@ import planModeSubagentPrompt from "../prompts/system/plan-mode-subagent.md" wit
 import subagentUserPromptTemplate from "../prompts/system/subagent-user-prompt.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: "text" };
+import { getAgentSessionPath, getSessionDir } from "../session/session-tree-paths";
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/irc";
 import { formatBytes, formatDuration } from "../tools/render-utils";
@@ -1304,7 +1305,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 
 		// Derive artifacts directory
 		const sessionFile = this.session.getSessionFile();
-		const artifactsDir = sessionFile ? sessionFile.slice(0, -6) : null;
+		const artifactsDir = sessionFile ? getSessionDir(sessionFile) : null;
 		const tempArtifactsDir = artifactsDir ? null : path.join(os.tmpdir(), `omp-task-${Snowflake.next()}`);
 		const effectiveArtifactsDir = artifactsDir || tempArtifactsDir!;
 
@@ -1366,6 +1367,12 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				const outputManager =
 					this.session.agentOutputManager ?? new AgentOutputManager(this.session.getArtifactsDir ?? (() => null));
 				agentId = await outputManager.allocate(params.name?.trim() || generateTaskName());
+			}
+
+			// Compute subagent session file path using tree-nested layout under parent session
+			const subagentSessionFile = sessionFile ? getAgentSessionPath(sessionFile, agentId) : null;
+			if (subagentSessionFile) {
+				await fs.mkdir(path.dirname(subagentSessionFile), { recursive: true });
 			}
 
 			const availableSkills = [...(this.session.skills ?? [])];
@@ -1434,7 +1441,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				parentActiveModelPattern,
 				thinkingLevel: thinkingLevelOverride,
 				outputSchema: effectiveOutputSchema,
-				sessionFile,
+				sessionFile: sessionFile,
 				persistArtifacts: !!artifactsDir,
 				artifactsDir: effectiveArtifactsDir,
 				enableLsp: subagentLspEnabled,

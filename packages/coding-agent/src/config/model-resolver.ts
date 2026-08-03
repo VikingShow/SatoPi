@@ -27,7 +27,6 @@ import { DEFAULT_MODEL_PER_PROVIDER } from "@satopi/pi-catalog/provider-models";
 import { resolveBareVariantAlias, resolveVariantAlias } from "@satopi/pi-catalog/variant-collapse";
 import { fuzzyMatch } from "@satopi/pi-tui";
 import { logger } from "@satopi/pi-utils";
-import chalk from "chalk";
 import MODEL_PRIO from "../priority.json" with { type: "json" };
 import {
 	AUTO_THINKING,
@@ -1698,8 +1697,8 @@ export async function findInitialModel(options: {
 	if (cliProvider && cliModel) {
 		const found = modelRegistry.find(cliProvider, cliModel);
 		if (!found) {
-			console.error(chalk.red(`Model ${cliProvider}/${cliModel} not found`));
-			process.exit(1);
+			logger.error(`Model ${cliProvider}/${cliModel} not found`);
+			throw new Error(`Model ${cliProvider}/${cliModel} not found`);
 		}
 		return { model: found, thinkingLevel: undefined, fallbackMessage: undefined };
 	}
@@ -1760,7 +1759,7 @@ export async function restoreModelFromSession(
 
 	if (restoredModel && hasApiKey) {
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Restored model: ${savedProvider}/${savedModelId}`));
+			logger.info(`Restored model: ${savedProvider}/${savedModelId}`);
 		}
 		return { model: restoredModel, fallbackMessage: undefined };
 	}
@@ -1769,13 +1768,13 @@ export async function restoreModelFromSession(
 	const reason = !restoredModel ? "model no longer exists" : "no API key available";
 
 	if (shouldPrintMessages) {
-		console.error(chalk.yellow(`Warning: Could not restore model ${savedProvider}/${savedModelId} (${reason}).`));
+		logger.error(`Could not restore model ${savedProvider}/${savedModelId} (${reason}).`);
 	}
 
 	// If we already have a model, use it as fallback
 	if (currentModel) {
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
+			logger.info(`Falling back to: ${currentModel.provider}/${currentModel.id}`);
 		}
 		return {
 			model: currentModel,
@@ -1789,7 +1788,7 @@ export async function restoreModelFromSession(
 	const fallbackModel = pickDefaultAvailableModel(availableModels);
 	if (fallbackModel) {
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
+			logger.info(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`);
 		}
 
 		return {

@@ -31,7 +31,14 @@ export const BUILTIN_TOOL_NAMES = [
 	"learn",
 	"manage_skill",
 	"agent_invoke",
-] as const;
+	"agent_fork",
+	"agent_broadcast",
+	"agent_query_all",
+	"agent_query_majority",
+	"agent_roundtable",
+	"agent_peers",
+	"agent_create_crew",
+];
 
 export type BuiltinToolName = (typeof BUILTIN_TOOL_NAMES)[number];
 

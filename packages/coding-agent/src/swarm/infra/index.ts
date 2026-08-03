@@ -3,7 +3,6 @@
 //
 // - ActivityLogger: event logging/broadcast service used by every component
 // - MnemopiAdapter: adapter for the Mnemopi memory system
-// - SwarmHooks: createStageFeedback() — StageController callback factory
 //
 // For the actual hook pipeline system (HookPipeline, built-in hooks), see
 // ../hook-system/
@@ -13,7 +12,7 @@ export {
 	type ActivityEntry,
 	type ActivityEventType,
 	ActivityLogger,
-} from "./activity-logger";
+} from "../../infra/activity-logger";
 export {
 	type MnemopiAdapterConfig,
 	type MnemopiClient,
@@ -21,4 +20,3 @@ export {
 	type RecallResult,
 	SwarmMnemopiAdapter,
 } from "./mnemopi-adapter";
-export { createStageFeedback, type SwarmHooksConfig } from "./swarm-hooks";

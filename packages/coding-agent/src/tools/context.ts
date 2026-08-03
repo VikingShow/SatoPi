@@ -1,7 +1,7 @@
-import type { AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
+import type { Agent, AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
-import type { AgentRuntime } from "../swarm/agent-runtime";
+import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { EventBus } from "../utils/event-bus";
 
 declare module "@satopi/pi-agent-core" {
@@ -9,9 +9,11 @@ declare module "@satopi/pi-agent-core" {
 		ui?: ExtensionUIContext;
 		hasUI?: boolean;
 		toolNames?: string[];
-		agentRuntime?: AgentRuntime;
+		agentRuntime?: SwarmRuntime;
 		toolCall?: ToolCallContext;
 		eventBus?: EventBus;
+		parentAgent?: Agent;
+		forkMaxDepth?: number;
 	}
 }
 
@@ -19,8 +21,10 @@ export class ToolContextStore {
 	#uiContext: ExtensionUIContext | undefined;
 	#hasUI = false;
 	#toolNames: string[] = [];
-	#agentRuntime: AgentRuntime | undefined;
+	#agentRuntime: SwarmRuntime | undefined;
 	#eventBus: EventBus | undefined;
+	#parentAgent: Agent | undefined;
+	#forkMaxDepth: number | undefined;
 
 	constructor(private readonly getBaseContext: () => CustomToolContext) {}
 
@@ -33,7 +37,13 @@ export class ToolContextStore {
 			toolNames: this.#toolNames,
 			toolCall,
 			eventBus: this.#eventBus,
+			parentAgent: this.#parentAgent,
+			forkMaxDepth: this.#forkMaxDepth,
 		};
+	}
+
+	setForkMaxDepth(depth: number | undefined): void {
+		this.#forkMaxDepth = depth;
 	}
 
 	setUIContext(uiContext: ExtensionUIContext, hasUI: boolean): void {
@@ -41,7 +51,7 @@ export class ToolContextStore {
 		this.#hasUI = hasUI;
 	}
 
-	setAgentRuntime(runtime: AgentRuntime | undefined): void {
+	setAgentRuntime(runtime: SwarmRuntime | undefined): void {
 		this.#agentRuntime = runtime;
 	}
 	hasAgentRuntime(): boolean {
@@ -54,5 +64,9 @@ export class ToolContextStore {
 
 	setEventBus(eventBus: EventBus): void {
 		this.#eventBus = eventBus;
+	}
+
+	setParentAgent(agent: Agent): void {
+		this.#parentAgent = agent;
 	}
 }

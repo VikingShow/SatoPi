@@ -36,6 +36,7 @@ import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { ensureSupportedImageInput, ImageInputTooLargeError, loadImageInput } from "../../utils/image-loading";
 import { resizeImage } from "../../utils/image-resize";
 import { generateSessionTitle } from "../../utils/title-generator";
+import { CrewTranscriptView } from "../components/swarm/crew-transcript-view";
 
 /**
  * Slash commands that may carry secrets in their arguments should never be
@@ -175,6 +176,7 @@ export class InputController {
 	#focusedLeftTapListenerInstalled = false;
 	#btwBranchListenerInstalled = false;
 	#btwCopyListenerInstalled = false;
+	#crewNavListenerInstalled = false;
 	// Tap counter for the double-← gesture; reset whenever a quiet gap
 	// (>= LEFT_DOUBLE_TAP_MAX_GAP_MS) starts a fresh sequence. See
 	// #detectLeftDoubleTap.
@@ -263,6 +265,49 @@ export class InputController {
 				if (this.ctx.ui.getFocused() !== this.ctx.editor) return undefined;
 				if (this.ctx.editor.getText().trim()) return undefined;
 				void this.ctx.handleBtwCopyKey();
+				return { consume: true };
+			});
+		}
+		if (!this.#crewNavListenerInstalled) {
+			this.#crewNavListenerInstalled = true;
+			// Crew transcript navigation while a crew is active. The crew view is
+			// mounted as a non-fullscreen overlay with the editor kept focused, so
+			// these keys are arbitrated here — empty-editor only, typing always
+			// wins (matching the AgentTranscriptViewer convention). The editor's
+			// custom key-handler slot is unusable for plain letters: it swallows
+			// keys unconditionally and would break typing j/k/f/t/r mid-message.
+			this.ctx.ui.addInputListener(data => {
+				const controller = this.ctx.swarmModeController;
+				if (!controller?.isCrewActive()) return undefined;
+				const view = controller.activeCrewView;
+				if (!(view instanceof CrewTranscriptView)) return undefined;
+				if (this.ctx.ui.getFocused() !== this.ctx.editor) return undefined;
+				if (this.ctx.editor.getText().trim() !== "") return undefined;
+				if (matchesKey(data, "j")) {
+					view.scrollBy(1);
+				} else if (matchesKey(data, "k")) {
+					view.scrollBy(-1);
+				} else if (matchesKey(data, "f")) {
+					view.toggleFilter();
+				} else if (matchesKey(data, "t")) {
+					view.toggleTools();
+				} else if (matchesKey(data, "r")) {
+					view.cycleRound();
+				} else if (matchesKey(data, "escape")) {
+					// Same path as the view's own onClose: leaveCrew → onLeaveCrew hides the overlay.
+					controller.leaveCrew();
+				} else if (
+					view.isFilterPopupOpen() &&
+					data.length === 1 &&
+					data.toLowerCase() >= "a" &&
+					data.toLowerCase() <= "z"
+				) {
+					// Filter popup open: forward a-z quick-toggles to the view's own handler.
+					view.handleInput(data);
+				} else {
+					return undefined;
+				}
+				this.ctx.ui.requestRender();
 				return { consume: true };
 			});
 		}
@@ -447,6 +492,11 @@ export class InputController {
 		const planModeKeys = this.ctx.keybindings.getKeys("app.plan.toggle");
 		for (const key of planModeKeys) {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.ctx.handlePlanModeCommand());
+		}
+		for (const key of this.ctx.keybindings.getKeys("app.swarm.sidebar")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => {
+				this.ctx.showSwarmSidebar();
+			});
 		}
 
 		for (const key of this.ctx.keybindings.getKeys("app.session.new")) {
@@ -782,6 +832,14 @@ export class InputController {
 				this.ctx.loopPrompt = text;
 			}
 
+			// If a Crew is active, route to SwarmModeController instead of Main agent
+			if (this.ctx.swarmModeController?.isCrewActive()) {
+				await this.ctx.swarmModeController.handleUserInput(text);
+				this.ctx.editor.addToHistory(text);
+				this.ctx.editor.setText("");
+				this.ctx.ui.requestRender();
+				return;
+			}
 			// Queue input during compaction
 			if (this.ctx.session.isCompacting) {
 				const images = inputImages && inputImages.length > 0 ? [...inputImages] : undefined;

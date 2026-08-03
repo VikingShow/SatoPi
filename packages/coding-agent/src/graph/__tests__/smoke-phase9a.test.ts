@@ -18,8 +18,8 @@ import { parseInternalUrl } from "../../internal-urls/parse";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
-import { buildExecutionWaves } from "../../swarm/core/dag";
 import type { CheckpointStore } from "../checkpoint";
+import { buildExecutionWaves } from "../dag";
 import type { NodeExecutionContext } from "../graph-engine";
 import { GraphEngine } from "../graph-engine";
 import type { GraphDefinition, GraphRunState, NodeExecutionOutput, NodeResult } from "../types";
@@ -41,6 +41,7 @@ function makeSession(output: string, exitCode = 0) {
 	return {
 		prompt: mock().mockResolvedValue(true),
 		wait: mock().mockResolvedValue({ output, exitCode }),
+		subscribe: mock().mockReturnValue(() => {}),
 	};
 }
 
@@ -86,7 +87,7 @@ describe("Phase 9A: Smoke Tests", () => {
 			AgentRegistry.global().register({
 				id: "persist-steer-worker",
 				displayName: "persist-steer-worker",
-				kind: "persistent",
+				kind: "main",
 				profileId: "steer-worker",
 				session: session as unknown as AgentSession,
 				status: "idle",

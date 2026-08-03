@@ -1,82 +1,59 @@
 /**
  * assembler.ts — Unified service assembly for swarm CLI/TUI mode.
  *
- * Creates the full AgentRuntime dependency graph with proper DI:
- *   RoleProvider + ContextPipeline + AgentLauncher + IrcBus
- *   → AgentRuntime
+ * Creates the full SwarmRuntime dependency graph with proper DI:
+ *   RoleProvider + ContextPipeline + IrcBus
+ *   → SwarmRuntime
  *
  * All services are created fresh per session — no global singletons.
  * The IrcBus is the single exception (SatoPi owns it); we accept
  * the global instance and inject it explicitly.
- *
- * Usage:
- * ```ts
- * const runtime = assembleAgentRuntime({
- *   modelRegistry, settings, activityLogger,
- *   roleAssetManager, hookPipeline, ircBus,
- * });
- * scriptManager.setRuntime(runtime);
- * ```
  */
 
 import type { ProfileRegistry } from "../../agent/agent-profile";
 import type { RoleAssetManager } from "../../agent/role-asset";
 import { RoleProvider } from "../../agent/role-provider";
+import { CommChannel } from "../../comm/comm-channel";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
+import { ContextPipeline } from "../../context/context-pipeline";
+import { ExperienceSource } from "../../context/sources/experience-source";
+import { HindsightSource } from "../../context/sources/hindsight-source";
+import { MmdSource } from "../../context/sources/mmd-source";
+import { MnemopiSource } from "../../context/sources/mnemopi-source";
+import { OffloadSource } from "../../context/sources/offload-source";
+import { StigmergySource } from "../../context/sources/stigmergy-source";
 import { MarkEnvironment } from "../../coordination";
+import type { ExperienceStore } from "../../experience/experience";
+import { spawnAgent } from "../../graph/agent-helpers";
+import { HookPipeline } from "../../hooks/hook-pipeline";
+import { type BuiltinHookDeps, registerBuiltinHooks } from "../../hooks/register-builtins";
+import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
-import { AgentRuntime } from "../agent-runtime";
-import { AgentLauncher } from "../agent-runtime/agent-launcher";
-
-import { ContextPipeline } from "../context-manager/context-pipeline";
-import { ExperienceSource } from "../context-manager/sources/experience-source";
-import { HindsightSource } from "../context-manager/sources/hindsight-source";
-import { MmdSource } from "../context-manager/sources/mmd-source";
-import { MnemopiSource } from "../context-manager/sources/mnemopi-source";
-import { OffloadSource } from "../context-manager/sources/offload-source";
-import { StigmergySource } from "../context-manager/sources/stigmergy-source";
-import type { ExperienceStore } from "../curtain/experience";
-import { HookPipeline } from "../hook-system/hook-pipeline";
-import { type BuiltinHookDeps, registerBuiltinHooks } from "../hook-system/register-builtins";
-import type { ActivityLogger } from "../infra/activity-logger";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
+import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface AssemblerOptions {
-	/** Model registry for API key resolution and model selection. */
 	modelRegistry: ModelRegistry;
-	/** Settings for model and tool configuration. */
 	settings: Settings;
-	/** Activity logger for streaming output and event capture. */
 	activityLogger: ActivityLogger;
-	/** Role asset manager for library-based role resolution. */
 	roleAssetManager: RoleAssetManager;
-	/** Optional profile registry for profile-based role resolution. */
 	profileRegistry?: ProfileRegistry;
-	/** Hook pipeline for lifecycle events (already created by caller). */
 	hookPipeline: HookPipeline;
-	/** Optional IrcBus for agent-to-agent communication. */
 	ircBus?: IrcBus;
-	/** Optional tool registry for resolving tool names to real Tool instances. */
 	toolRegistry?: Map<string, Tool>;
-	/** Local experience store — enables ExperienceSource (past-run lessons). */
 	experienceStore?: ExperienceStore;
-	/** Remote Hindsight handle — enables HindsightSource (cross-session recall). Null when unconfigured. */
 	hindsightClient?: SwarmHindsightClient | null;
-	/** Semantic memory handle — enables MnemopiSource. Null when unavailable. */
 	mnemopiClient?: MnemopiClient | null;
-	/** MarkEnvironment for stigmergic coordination — enables StigmergySource. */
 	markEnvironment?: MarkEnvironment;
-	/** OffloadManager for context offload — enables OffloadSource (L1 summaries, MMD context). */
 	offloadManager?: IOffloadManager;
-	/** Active MMD content for MmdSource context injection. */
 	activeMmd?: string;
 }
 
@@ -84,7 +61,6 @@ export interface AssemblerOptions {
 // Orchestrator Runtime Factory
 // ============================================================================
 
-/** Options for createOrchestratorRuntime — the shared orchestrator bootstrap. */
 export interface CreateOrchestratorRuntimeOptions {
 	modelRegistry: ModelRegistry;
 	settings: Settings;
@@ -98,15 +74,8 @@ export interface CreateOrchestratorRuntimeOptions {
 	activeMmd?: string;
 }
 
-/**
- * Create the shared orchestration runtime — MarkEnvironment, HookPipeline
- * with builtins, and a fully-wired AgentRuntime — in one call.
- *
- * Both EmbeddedSwarmBridge and GraphRunner use this to eliminate duplicated
- * bootstrap code.
- */
 export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
-	runtime: AgentRuntime;
+	runtime: SwarmRuntime;
 	hookPipeline: HookPipeline;
 	markEnvironment: MarkEnvironment;
 } {
@@ -141,30 +110,9 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 // ============================================================================
 // Assembler
 // ============================================================================
-
-/**
- * Assemble a fully-wired AgentRuntime from shared services.
- *
- * This is the single entry point for creating an AgentRuntime in CLI/TUI mode.
- * It creates all internal services (RoleProvider, ContextPipeline, AgentLauncher,
- * IrcBus) and wires them into an AgentRuntime instance.
- *
- * The OffloadManager is NOT wired here — it's created later by SessionRegistry
- * once SessionStorage is available. The AgentLauncher handles the missing
- * OffloadManager gracefully (skips compaction).
- */
-export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
-	// 1. RoleProvider — resolves AgentSpec.role → ResolvedRole
+export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
-	// 2. ContextPipeline — assembles agent context from registered sources.
-	//    Memory sources are registered when their backing handle is available;
-	//    each source no-ops (or is skipped) when its dependency is absent, so an
-	//    unconfigured environment degrades gracefully.
-	//    AgentRuntime.spawnOne() uses spec.phase (when provided by the behavior)
-	//    as BuildContext.phase, so phase-filtered sources like ExperienceSource
-	//    ("script"/"script-debate" only) now fire correctly when the caller
-	//    passes the real phase. Fallback is "stage" for backward compat.
 	const contextPipeline = new ContextPipeline();
 	if (opts.experienceStore) {
 		contextPipeline.register(new ExperienceSource(opts.experienceStore));
@@ -185,25 +133,68 @@ export function assembleAgentRuntime(opts: AssemblerOptions): AgentRuntime {
 		contextPipeline.register(new OffloadSource(opts.offloadManager));
 	}
 
-	// 3. AgentLauncher — creates Agent instances with full hook wiring
-	const launcher = new AgentLauncher(opts.modelRegistry, opts.settings);
-
-	// 4. Wire IrcBus with activity logger and hook pipeline (ircBus is optional)
 	if (opts.ircBus) {
 		opts.ircBus.setActivityLogger(opts.activityLogger);
 		opts.ircBus.setHookPipeline(opts.hookPipeline);
 	}
 
-	// 5. AgentRuntime — the central agent lifecycle controller
-	return new AgentRuntime({
-		roleProvider,
+	const ircBus = opts.ircBus!;
+
+	// Runtime-level CommChannel (same role as AgentRuntime.#commChannel)
+	const commChannel = new CommChannel(
+		ircBus,
+		[], // members added as agents spawn
+		["human"], // human is always an observer
+		opts.activityLogger,
+		opts.hookPipeline,
+	);
+
+	// Per-agent steering queues — populated by sendHumanMessage, drained by the agent loop
+	const steeringQueues = new Map<
+		string,
+		Array<{ role: "user"; content: Array<{ type: "text"; text: string }>; timestamp: number }>
+	>();
+
+	const runtime: SwarmRuntime = {
 		contextPipeline,
-		launcher,
-		ircBus: opts.ircBus,
-		hookPipeline: opts.hookPipeline,
-		modelRegistry: opts.modelRegistry,
-		settings: opts.settings,
-		activityLogger: opts.activityLogger,
-		toolRegistry: opts.toolRegistry,
-	});
+		ircBus,
+
+		async spawn(specs) {
+			const sessions = await Promise.all(
+				specs.map(async spec => {
+					const steeringQueue: Array<{
+						role: "user";
+						content: Array<{ type: "text"; text: string }>;
+						timestamp: number;
+					}> = [];
+					steeringQueues.set(spec.id, steeringQueue);
+					return spawnAgent({
+						spec,
+						roleProvider,
+						contextPipeline,
+						hookPipeline: opts.hookPipeline,
+						modelRegistry: opts.modelRegistry,
+						settings: opts.settings,
+						commChannel,
+						steeringQueue,
+					});
+				}),
+			);
+			return sessions;
+		},
+
+		async sendHumanMessage(agentId, text) {
+			const queue = steeringQueues.get(agentId) ?? [];
+			queue.push({
+				role: "user",
+				content: [{ type: "text", text }],
+				timestamp: Date.now(),
+			});
+			steeringQueues.set(agentId, queue);
+			// Route through CommChannel for real-time IRC delivery
+			await commChannel.interrupt("human", agentId, text);
+		},
+	};
+
+	return runtime;
 }

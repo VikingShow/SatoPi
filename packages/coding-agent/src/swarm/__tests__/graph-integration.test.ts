@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { loadGraphDefinition, validateGraphDefinition } from "../graph/schema";
+import { loadGraphDefinition, validateGraphDefinition } from "../../graph/schema";
 
-const BUILTIN_THEATRE = path.resolve(import.meta.dir, "../graph/builtin/theatre.graph.yaml");
+const BUILTIN_THEATRE = path.resolve(import.meta.dir, "../../graph/builtin/theatre.graph.yaml");
 
 describe("Theatre Graph", () => {
 	describe("builtin theatre.graph.yaml", () => {

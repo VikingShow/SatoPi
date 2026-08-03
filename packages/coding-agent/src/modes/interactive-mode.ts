@@ -27,6 +27,7 @@ import type {
 import {
 	Container,
 	clearRenderCache,
+	Input,
 	Loader,
 	Markdown,
 	ProcessTerminal,
@@ -52,6 +53,7 @@ import {
 	setProjectDir,
 } from "@satopi/pi-utils";
 import chalk from "chalk";
+import { ProfileRegistry } from "../agent/agent-profile";
 import { reset as resetCapabilities } from "../capability";
 import type { CollabGuestLink } from "../collab/guest";
 import type { CollabHost } from "../collab/host";
@@ -74,7 +76,10 @@ import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { type GuidedGoalMessage, runGuidedGoalTurn } from "../goals/guided-setup";
 import type { Goal, GoalModeState } from "../goals/state";
+import { GraphRunner } from "../graph/graph-runner";
+import { TaskComplexityAnalyzer } from "../graph/task-analyzer";
 import { resolveLocalUrlToPath } from "../internal-urls";
+import { IrcBus } from "../irc/bus";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "../lsp/startup-events";
 import type { MCPManager } from "../mcp";
 import {
@@ -93,7 +98,7 @@ import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" wit
 import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
 	type: "text",
 };
-import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -110,8 +115,7 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } fr
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import { TaskComplexityAnalyzer } from "../swarm/script/task-analyzer";
+import { currentSwarmPhase } from "../swarm/core/state";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -131,6 +135,7 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../utils/session-colo
 import { messageHasDisplayableThinking } from "../utils/thinking-display";
 import { popTerminalTitle, pushTerminalTitle, setSessionTerminalTitle } from "../utils/title-generator";
 import { VibeSessionRegistry } from "../vibe/runtime";
+import { parseMentions, resolveMentionTargets } from "./agent-mention-autocomplete";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { ChatBlock, type ChatBlockHost } from "./components/chat-block";
@@ -144,6 +149,8 @@ import type { HookSelectorComponent, HookSelectorSlider } from "./components/hoo
 import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-review-overlay";
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
+import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
+import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
@@ -157,6 +164,7 @@ import { OmfgController } from "./controllers/omfg-controller";
 import { SelectorController } from "./controllers/selector-controller";
 import { SessionFocusController } from "./controllers/session-focus-controller";
 import { SSHCommandController } from "./controllers/ssh-command-controller";
+import { SwarmModeController } from "./controllers/swarm-mode-controller";
 import { TanCommandController } from "./controllers/tan-command-controller";
 import { TodoCommandController } from "./controllers/todo-command-controller";
 import {
@@ -170,7 +178,7 @@ import {
 } from "./loop-limit";
 import { OAuthManualInputManager } from "./oauth-manual-input";
 import {
-	countRunningPersistentAgents,
+	countRunningProfileAgents,
 	countRunningSubagentBadgeAgents,
 	getRunningSubagentBadgeRegistry,
 } from "./running-subagent-badge";
@@ -535,6 +543,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#baseAutocompleteProvider: AutocompleteProvider | undefined;
 	/** Extension-registered provider factories, applied in registration order (#4919). */
 	#autocompleteProviderFactories: AutocompleteProviderFactory[] = [];
+	#profileCwd: string | undefined;
 	#cleanupUnsubscribe?: () => void;
 	#signalTeardown?: SessionTeardown;
 	readonly #version: string;
@@ -552,7 +561,13 @@ export class InteractiveMode implements InteractiveModeContext {
 	#planReviewOverlay: PlanReviewOverlay | undefined;
 	#planReviewOverlayHandle: OverlayHandle | undefined;
 	#swarmDashboardOverlay: SwarmDashboardOverlay | undefined;
+	#swarmSidebarHandle?: OverlayHandle;
+	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
+	#crewStartOverlayHandle: OverlayHandle | undefined;
+	#swarmStatusBar: SwarmStatusBar | undefined;
+	/** Multi-agent Crew chat controller. Created in init(), available when swarm mode is active. */
+	swarmModeController?: SwarmModeController;
 	readonly lspServers: LspStartupServerInfo[] | undefined = undefined;
 	mcpManager?: MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
@@ -831,6 +846,31 @@ export class InteractiveMode implements InteractiveModeContext {
 	async init(options: InteractiveModeInitOptions = {}): Promise<void> {
 		if (this.isInitialized) return;
 
+		// Initialize the global ProfileRegistry: load from disk, seed defaults if needed, persist
+		const cwd = getProjectDir();
+		this.#profileCwd = cwd;
+		await ProfileRegistry.initGlobal(cwd);
+
+		// Initialize SwarmModeController for multi-agent crew chat
+		this.swarmModeController = new SwarmModeController({
+			crewsDir: `${getProjectDir()}/.stp/sessions/crews`,
+			ircBus: IrcBus.global(),
+			profileRegistry: ProfileRegistry.global(),
+			modelRegistry: this.session.modelRegistry,
+			settings: this.settings,
+			workspace: getProjectDir(),
+			theme,
+			onRequestRender: () => this.ui.requestRender(),
+			onNotice: (level, message) => {
+				if (level === "error") this.showError(message);
+				else this.showWarning(message);
+			},
+			onLeaveCrew: () => {
+				this.#crewStartOverlayHandle?.hide();
+				this.#updateSwarmModeStatus();
+			},
+		});
+		await this.swarmModeController.init();
 		this.keybindings = logger.time("InteractiveMode.init:keybindings", () => KeybindingsManager.create());
 
 		// Route SIGINT/SIGTERM/SIGHUP/uncaughtException through the same teardown
@@ -855,7 +895,15 @@ export class InteractiveMode implements InteractiveModeContext {
 		// runs callbacks in REVERSE registration order — this callback (registered
 		// after the AgentSession constructor's `agent-session:<id>` recorder) runs
 		// FIRST and its dispose() would otherwise persist the generic "dispose".
-		this.#cleanupUnsubscribe = postmortem.register("session-teardown", reason => this.#signalTeardown!(reason));
+		this.#cleanupUnsubscribe = postmortem.register("session-teardown", async reason => {
+			// Persist profiles on signal/crash exit; the keypress path saves in shutdown()
+			if (this.#profileCwd) {
+				await ProfileRegistry.global()
+					.save(this.#profileCwd)
+					.catch(() => {});
+			}
+			await this.#signalTeardown!(reason);
+		});
 
 		// Wire the report_tool_issue consent gate to the Yes/No dialog popup.
 		// The handler is process-global — subagent tools (which can't reach
@@ -942,6 +990,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		// the prompt while keeping the one-line gap above the editor.
 		this.ui.addChild(this.statusContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
+		this.#swarmStatusBar = new SwarmStatusBar();
+		this.ui.addChild(this.#swarmStatusBar);
 		this.ui.addChild(this.hookWidgetContainerAbove);
 		this.ui.addChild(this.editorContainer);
 		this.ui.addChild(this.hookWidgetContainerBelow);
@@ -1182,7 +1232,16 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * reflect `newCwd` before this is called.
 	 */
 	async applyCwdChange(newCwd: string): Promise<void> {
+		// Save profiles for the old workspace before switching so queued
+		// edits and metadata are not lost (P1-4).
+		if (this.#profileCwd) {
+			await ProfileRegistry.global()
+				.save(this.#profileCwd)
+				.catch(() => {});
+		}
 		setProjectDir(newCwd);
+		this.#profileCwd = newCwd;
+		await ProfileRegistry.initGlobal(newCwd);
 		// Re-scope project settings (`.claude/settings.yml` etc.) to the new
 		// directory in place so the active session and every settings reader pick
 		// up the destination project's configuration.
@@ -1213,6 +1272,26 @@ export class InteractiveMode implements InteractiveModeContext {
 		const { promise, resolve } = Promise.withResolvers<SubmittedUserInput>();
 		this.onInputCallback = input => {
 			this.onInputCallback = undefined;
+			// Route @mentions to target agents via IRC before normal processing
+			if (input.text && !input.synthetic && !input.customType) {
+				const mentions = parseMentions(input.text);
+				if (mentions.agentIds.length > 0 || mentions.allMentioned) {
+					const targets = resolveMentionTargets(mentions);
+					if (targets.length > 0) {
+						const cleanBody = mentions.cleanText || input.text;
+						IrcBus.global()
+							.sendToGroup(targets, {
+								from: this.session.getAgentId() ?? "Main",
+								body: cleanBody,
+							})
+							.catch(() => {});
+					}
+					// Use cleaned text (without @tokens) for normal processing
+					if (mentions.cleanText) {
+						input = { ...input, text: mentions.cleanText };
+					}
+				}
+			}
 			resolve(input);
 		};
 		this.#scheduleLoopAutoSubmit();
@@ -1638,7 +1717,8 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.syncRunningSubagentBadge();
 			});
 		}
-		const persistentCount = countRunningPersistentAgents(registry);
+		const persistentCount = countRunningProfileAgents(registry);
+		this.#updateSwarmModeStatus();
 		const subCount = countRunningSubagentBadgeAgents(registry);
 		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();
@@ -2021,6 +2101,62 @@ export class InteractiveMode implements InteractiveModeContext {
 				? { enabled: this.goalModeEnabled, paused: this.goalModePaused }
 				: undefined;
 		this.statusLine.setGoalModeStatus(status);
+		this.ui.requestRender();
+	}
+
+	#updateSwarmModeStatus(): void {
+		// Check for active crew first (new swarm crew architecture)
+		const activeCrewId = this.swarmModeController?.activeCrewId;
+		if (activeCrewId) {
+			const crew = this.swarmModeController?.getActiveCrew();
+			const crewName = crew?.name ?? activeCrewId;
+			this.statusLine.setSwarmModeStatus({
+				phase: "idle",
+				agentCount: crew?.members?.length ?? 0,
+				runningCount: 0,
+				completedCount: 0,
+				failedCount: 0,
+				crewName,
+			});
+			this.ui.requestRender();
+			return;
+		}
+
+		const phase = currentSwarmPhase;
+		if (phase === "idle" || !this.session.embeddedSwarm) {
+			this.statusLine.setSwarmModeStatus(null);
+			this.ui.requestRender();
+			return;
+		}
+
+		const refs = AgentRegistry.global()
+			.list()
+			.filter(r => r.kind !== "advisor" && r.kind !== "main");
+
+		let running = 0;
+		let completed = 0;
+		let failed = 0;
+		for (const ref of refs) {
+			switch (ref.status) {
+				case "running":
+					running++;
+					break;
+				case "aborted":
+					failed++;
+					break;
+				case "idle":
+				case "parked":
+					completed++;
+					break;
+			}
+		}
+
+		this.statusLine.setSwarmModeStatus(
+			refs.length > 0
+				? { phase, agentCount: refs.length, runningCount: running, completedCount: completed, failedCount: failed }
+				: null,
+		);
+
 		this.ui.requestRender();
 	}
 
@@ -2616,7 +2752,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Agent-count slider — same logic as handlePlanApproval
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		const maxWorkers = (this.session.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4;
 		const maxRounds = (this.session.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3;
 		const loopConfig: LoopSwarmConfig = {
@@ -2666,7 +2802,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 					selectedIndex: 0,
 					onChange: index => {
-						selectedAgentType = index === 0 ? "swift" : "persistent";
+						selectedAgentType = index === 0 ? "swift" : "main";
 					},
 				},
 			},
@@ -3568,7 +3704,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const startTierIndex = defaultTierIndex >= 0 ? defaultTierIndex : (cycle?.currentIndex ?? 0);
 		let selectedTierIndex = startTierIndex;
 		let selectedAgentCount = 0;
-		let selectedAgentType: "swift" | "persistent" = "swift";
+		let selectedAgentType: "swift" | "main" = "swift";
 		let slider: HookSelectorSlider | undefined =
 			cycle && cycle.models.length > 1
 				? {
@@ -3685,7 +3821,7 @@ export class InteractiveMode implements InteractiveModeContext {
 							labels: ["Sub-agent tooling: task", "Sub-agent tooling: agent_invoke"],
 							selectedIndex: 0,
 							onChange: index => {
-								selectedAgentType = index === 0 ? "swift" : "persistent";
+								selectedAgentType = index === 0 ? "swift" : "main";
 							},
 						}
 					: undefined,
@@ -3877,6 +4013,16 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#btwController.dispose();
 		this.#omfgController.dispose();
 		this.#focusController.dispose();
+		await this.swarmModeController?.dispose();
+
+		// Persist agent profiles to disk before session teardown.
+		// Use the cwd captured at init time; getProjectDir() may have
+		// changed during the session via /move or session resume.
+		if (this.#profileCwd) {
+			await ProfileRegistry.global()
+				.save(this.#profileCwd)
+				.catch(() => {});
+		}
 
 		// Surface an explicit "Closing session…" line so the user sees a reason
 		// for the pause while `session.dispose()` flushes memory consolidate and
@@ -4526,7 +4672,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		const overlay = new SwarmDashboardOverlay(
 			bridge
 				? {
-						fsm: bridge.fsm,
 						stateTracker: { state: bridge.swarmState },
 						graphDefinition: bridge instanceof GraphRunner ? bridge.graph : undefined,
 						modelCost,
@@ -4545,8 +4690,164 @@ export class InteractiveMode implements InteractiveModeContext {
 			margin: 0,
 			fullscreen: true,
 		});
-		this.ui.setFocus(overlay);
+	}
+	showSwarmSidebar(): void {
+		if (this.#swarmSidebarHandle) {
+			this.#swarmSidebarHandle.hide();
+			this.#swarmSidebarHandle = undefined;
+			this.#swarmSidebarUnsubscribe?.();
+			this.#swarmSidebarUnsubscribe = undefined;
+			this.ui.requestRender();
+			return;
+		}
+		const sidebar = new SwarmSidebar(
+			{
+				onSelectAgent: (agentId: string) => {
+					// Entering a member's own session: hide the crew overlay so the
+					// focused session's transcript is actually visible (the overlay
+					// would otherwise keep covering the base screen, making the
+					// page look frozen). Input routing already switches to the
+					// focused session via #submitToFocusedSession.
+					if (this.#crewStartOverlayHandle) {
+						this.#crewStartOverlayHandle.hide();
+						this.#crewStartOverlayHandle = undefined;
+					}
+					void this.focusAgentSession(agentId).catch(() => {});
+				},
+				onClose: () => this.showSwarmSidebar(),
+				onRequestRender: () => this.ui.requestRender(),
+				onFocusTranscript: () => {
+					this.ui.setFocus(this.editor);
+				},
+				sessionName: this.sessionName,
+				onAddMember: () => {
+					if (!this.swarmModeController) return;
+					// Close the sidebar first
+					this.showSwarmSidebar();
+					const input = new Input();
+					input.prompt = "Agent ID: ";
+					const { promise, resolve } = Promise.withResolvers<string | undefined>();
+					input.onSubmit = (value: string) => resolve(value);
+					input.onEscape = () => resolve(undefined);
+					const handle = this.ui.showOverlay(input, {
+						anchor: "bottom-center",
+						width: "60%",
+						margin: 1,
+					});
+					this.ui.setFocus(input);
+					this.ui.requestRender();
+					void promise.then(async value => {
+						handle.hide();
+						if (value?.trim()) {
+							await this.swarmModeController?.addMember(value.trim());
+							this.ui.requestRender();
+						}
+						// Re-show the sidebar
+						this.showSwarmSidebar();
+					});
+				},
+				onRemoveMember: async (agentId: string) => {
+					await this.swarmModeController?.removeMember(agentId);
+					this.ui.requestRender();
+				},
+			},
+			theme,
+		);
+		const widthPct = sidebar.sidebarWidthPct;
+		this.#swarmSidebarHandle = this.ui.showOverlay(sidebar, {
+			width: `${widthPct}%`,
+			anchor: "left-center",
+			margin: 1,
+		});
+		this.ui.setFocus(sidebar);
 		this.ui.requestRender();
+		// Subscribe to agent status changes to show unread dots
+		// when a non-focused agent produces output.
+		this.#swarmSidebarUnsubscribe = AgentRegistry.global().onChange(event => {
+			const focusedId = this.focusedAgentId;
+			const agentId: string | undefined =
+				event.type === "status_changed" || event.type === "registered" ? event.ref.id : undefined;
+			if (agentId && agentId !== focusedId) {
+				sidebar.markUnread(agentId);
+			}
+		});
+	}
+	/** Show the profile selection dialog for creating a new crew. */
+	async showSwarmCrewStart(name?: string): Promise<void> {
+		if (!this.swarmModeController) {
+			this.showError("Swarm mode controller is not initialized");
+			return;
+		}
+
+		const crewName = name?.trim() || `Crew ${new Date().toLocaleTimeString()}`;
+
+		try {
+			const dialogPromise = this.swarmModeController.createCrewWithDialog(crewName);
+			const dialog = this.swarmModeController.pendingDialog;
+			if (!dialog) return;
+
+			// Render the profile selection overlay — the dialog itself handles input
+			const handle = this.ui.showOverlay(dialog, {
+				anchor: "center",
+				width: "60%",
+				margin: 2,
+			});
+
+			try {
+				const crewId = await dialogPromise;
+				handle.hide();
+				this.showStatus(`Crew "${crewName}" created`);
+				this.#mountCrewView(crewId);
+			} catch (err) {
+				handle.hide();
+				const msg = (err as Error).message;
+				if (msg !== "Cancelled") {
+					this.showError(`Failed to create crew: ${msg}`);
+				}
+			}
+		} catch (err) {
+			const msg = (err as Error).message;
+			if (msg !== "Cancelled") {
+				this.showError(`Failed to create crew: ${msg}`);
+			}
+		}
+	}
+
+	/** Mount the crew view as an overlay after crew creation. */
+	#mountCrewView(crewId: string): void {
+		if (!this.swarmModeController) return;
+
+		const view = this.swarmModeController.getCrewView(crewId);
+		if (!view) return;
+
+		// Hide existing crew overlay if any
+		this.#crewStartOverlayHandle?.hide();
+
+		// Mount as a normal (non-fullscreen) overlay anchored top-left so the
+		// status line and editor stay visible below it.
+		//
+		// Height budget: the overlay must never cover the editor. The editor
+		// sits at the END of the content frame — which is NOT always the bottom
+		// of the viewport. With a short frame (fresh session, welcome screen),
+		// the frame is shorter than the terminal and the editor renders at the
+		// content bottom (mid-screen), while rows below the frame stay blank.
+		// Budgeting maxHeight from terminal rows alone let the overlay extend
+		// past the editor's real position and hide the input box. Derive the
+		// ceiling from the last frame's length minus the editor's own rows, so
+		// the overlay ends one row above the editor wherever it sits; the frame
+		// only grows from here (chat history, notices), which moves the editor
+		// DOWN — never back under the overlay.
+		const frameLength = this.ui.lastFrameLength;
+		const editorLines = Math.max(1, this.editor.getLines().length);
+		const editorTop = Math.max(0, frameLength - editorLines);
+		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: Math.max(10, editorTop - 1),
+			margin: 0,
+		});
+		this.ui.setFocus(this.editor);
+		this.#updateSwarmModeStatus();
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {

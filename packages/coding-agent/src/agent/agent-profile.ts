@@ -15,6 +15,7 @@
 
 import * as fs from "node:fs/promises";
 import { getProfilesDir } from "../offload/paths";
+import { SWARM_ROLE_PROFILES } from "./role-profiles";
 
 // ============================================================================
 // Validation
@@ -180,6 +181,30 @@ export class ProfileRegistry {
 			ProfileRegistry.#global = new ProfileRegistry();
 		}
 		return ProfileRegistry.#global;
+	}
+
+	static async initGlobal(workspaceDir: string): Promise<ProfileRegistry> {
+		const loadedRegistry = await ProfileRegistry.load(workspaceDir);
+		let seeded = false;
+		if (loadedRegistry.list().length < 2) {
+			for (const roleDef of Object.values(SWARM_ROLE_PROFILES)) {
+				loadedRegistry.getOrCreate({
+					profileId: roleDef.profileId,
+					name: roleDef.identity.name,
+					archetype: roleDef.identity.archetype,
+					domains: roleDef.expertise.domains,
+					specialties: roleDef.expertise.specialties,
+				});
+			}
+			seeded = true;
+		}
+		ProfileRegistry.global().deserialize(loadedRegistry.serialize());
+		if (seeded) {
+			await ProfileRegistry.global()
+				.save(workspaceDir)
+				.catch(() => {});
+		}
+		return ProfileRegistry.global();
 	}
 
 	static resetGlobalForTests(): void {

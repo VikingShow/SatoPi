@@ -90,8 +90,8 @@ describe("agent_invoke E2E", () => {
 			// Verify createAgentSession was called with the correct options
 			expect(mockCreateAgentSession).toHaveBeenCalledTimes(1);
 			expect(mockCreateAgentSession).toHaveBeenCalledWith({
-				agentKind: "persistent",
-				persistentProfileId: "testProfile",
+				agentKind: "main",
+				profileId: "testProfile",
 				agentId: "persist-testProfile",
 				agentDisplayName: "persist-testProfile",
 				autoApprove: true,
@@ -207,7 +207,7 @@ describe("agent_invoke E2E", () => {
 			AgentRegistry.global().register({
 				id: "persist-existingProfile",
 				displayName: "persist-existingProfile",
-				kind: "persistent",
+				kind: "main",
 				profileId: "existingProfile",
 				session: mockSession as unknown as AgentSession,
 				status: "idle",
@@ -245,7 +245,7 @@ describe("agent_invoke E2E", () => {
 			AgentRegistry.global().register({
 				id: "persist-busyProfile",
 				displayName: "persist-busyProfile",
-				kind: "persistent",
+				kind: "main",
 				profileId: "busyProfile",
 				session: null,
 				status: "running",

@@ -31,7 +31,7 @@ describe("renderWelcomeTip", () => {
 		expect(plain).toContain("Try the shiny advisor");
 		expect(plain).not.toContain("[NEW]"); // literal marker stripped
 		expect(plain).toContain("NEW!"); // replaced by the visible tag
-		expect(styled).toContain("\x1b[1m"); // tag is bold
+		expect(styled).toContain("\x1b[38;"); // tag is rainbow-colored (per-char HSL)
 		expect(styled).not.toBe(plain); // tag carries SGR color escapes
 	});
 

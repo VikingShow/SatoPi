@@ -87,7 +87,7 @@ function deriveAgentContext(
 
 	const refs = AgentRegistry.global().list();
 	return refs
-		.filter(ref => ref.kind === "persistent" || ref.kind === "sub")
+		.filter(ref => ref.kind === "main" || ref.kind === "sub")
 		.map(ref => ({
 			agentId: ref.displayName,
 			tokensUsed: 0,

@@ -202,7 +202,38 @@ bun run build:native   # 修改 Rust crate 后重新编译 N-API 插件
 
 ## Swarm 配置
 
+<<<<<<< HEAD
 编辑 `.swarm-workspace/loop.yaml`：
+=======
+The name captures the moment of **Satori**（悟り）— the Zen sudden awakening — emerging from a **team of Pi** agents converging on truth through structured roundtable debate. Like swarm intelligence crystallizing into insight.
+
+The logo embodies three layers:
+- **Circle** — the roundtable（圆桌会议）and the mathematical **π**, the agent runtime at the core
+- **Golden ring** — the light of emergent wisdom breaking through
+- **Bodhi leaf**（菩提葉）— enlightenment growing from collective deliberation
+
+### The Opera Metaphor
+
+SatoPi models the entire swarm workflow as a **three-act opera**:
+
+```
+Script → Stage → Curtain
+```
+
+| Act | Phase | What happens |
+|-----|-------|--------------|
+| **Script** | `script` → `script-debate` → `script-confirm` | Socratic dialogue clarifies the task, then a multi-agent roundtable debate refines the plan into `.stp/plan.md` |
+| **Stage** | `stage` ⇄ `paused` / `blocked` | Agents claim tasks from a DAG queue and execute in parallel, coordinated via stigmergy (environment marks) and IRC (direct messaging) |
+| **Curtain** | `curtain` → `idle` | Experience extraction, root-cause analysis, and reflection — lessons persist for future runs |
+
+**GraphRunner** (`src/graph/`) is the sole orchestration engine powering the entire lifecycle — DAG scheduling, agent behavior lifecycle, plan validation, and FSM transitions — replacing the earlier fragmented implementation.
+
+## SatoPi Swarm — Development Guide
+
+### Configuration
+
+Edit `.stp/loop.yaml` to configure the swarm:
+>>>>>>> dev
 
 ```yaml
 swarm:
@@ -316,6 +347,7 @@ packages/swarm-gui/src/
 
 ---
 
+<<<<<<< HEAD
 ## 安装 stp
 
 **macOS · Linux**
@@ -350,3 +382,36 @@ MIT. See [LICENSE](LICENSE).
 
 © 2025 Mario Zechner
 © 2025-2026 Can Bölük
+=======
+| File | Purpose |
+|------|---------|
+| `src/graph/` | GraphRunner orchestration engine + DAG scheduling |
+| `src/crew/` | CrewManager + RoundtableSession (agent group chat) |
+| `src/context/` | ContextPipeline + offload sources |
+| `src/swarm/` | Session management, state machine, prompts |
+| `.stp/loop.yaml` | Swarm configuration |
+| `.stp/plan.md` | Generated plan from the script phase |
+| `.stp/roles/` | Agent role definitions (YAML) |
+| `profiles.json` | Persistent agent credit profiles |
+
+## Architecture
+
+```
+packages/coding-agent/src/
+├── graph/          GraphRunner + DAG orchestration
+├── crew/           CrewManager + RoundtableSession
+├── context/        ContextPipeline + offload sources
+├── swarm/          Session management + state machine + prompts
+├── agent/          Agent profiles + role definitions + selection
+├── tools/          All 32 built-in tools
+├── modes/          TUI + interactive mode
+├── task/           Subprocess task executor
+├── session/        Agent session management
+├── offload/        Context offloading pipeline (L1→L3)
+├── coordination/   Stigmergy mark environment
+├── experience/     Curtain phase: experience extraction + root-cause analysis
+├── comm/           Agent-to-agent communication channels
+├── hooks/          Lifecycle hooks + ActivityLogger
+└── infra/          Infrastructure: activity logger, MnemoPi, hindsight
+```
+>>>>>>> dev

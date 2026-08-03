@@ -16,9 +16,9 @@ import type { AgentTool, AgentToolContext, AgentToolResult } from "@satopi/pi-ag
 import type { ToolExample } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
 import { type } from "arktype";
+import type { CommChannel } from "../comm/comm-channel";
+import type { ActivityLogger } from "../infra/activity-logger";
 import { IrcBus } from "../irc/bus";
-import { CommChannel } from "../swarm/comm-bus/comm-channel";
-import type { ActivityLogger } from "../swarm/infra/activity-logger";
 
 // ============================================================================
 // Types
@@ -57,12 +57,8 @@ declare module "@satopi/pi-agent-core" {
 function resolveChannel(context?: AgentToolContext): CommChannel | undefined {
 	if (context?.commChannel) return context.commChannel;
 
-	// Fallback: create a minimal channel from global IrcBus
-	const bus = IrcBus.global();
-	if (!bus) return undefined;
-
-	// Use an empty channel — the tool will populate as needed
-	return new CommChannel(bus, [], []);
+	// Fallback: use the default channel from the global IrcBus
+	return IrcBus.global()?.getDefaultChannel();
 }
 
 // ============================================================================
@@ -191,11 +187,15 @@ export class AgentQueryAllTool implements AgentTool<typeof queryAllSchema, Recor
 		try {
 			// Use IrcBus.collectResponses — broadcast the question then collect answers
 			const agentList = [...channel.members];
+			if (agentList.length === 0) {
+				return { content: [{ type: "text", text: "No agents available." }], isError: true };
+			}
+			const facilitatorId = agentList[0];
 			const responses = await bus.collectResponses(
-				"agent", // callerId
-				agentList, // all peer agents
-				{ from: "agent", body: params.question },
-				{}, // accept from anyone
+				facilitatorId,
+				agentList,
+				{ from: facilitatorId, body: params.question },
+				{},
 				timeout,
 			);
 
@@ -281,10 +281,14 @@ export class AgentQueryMajorityTool implements AgentTool<typeof queryMajoritySch
 
 		try {
 			const agentList = [...channel.members];
+			if (agentList.length === 0) {
+				return { content: [{ type: "text", text: "No agents available." }], isError: true };
+			}
+			const facilitatorId = agentList[0];
 			const responses = await bus.collectResponses(
-				"agent",
+				facilitatorId,
 				agentList,
-				{ from: "agent", body: params.question },
+				{ from: facilitatorId, body: params.question },
 				{},
 				timeout,
 			);
@@ -381,6 +385,12 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 		const bus = IrcBus.global();
 		const agentList = [...channel.members];
 
+		if (agentList.length === 0) {
+			return { content: [{ type: "text", text: "No agents available." }], isError: true };
+		}
+
+		const facilitatorId = agentList[0];
+
 		try {
 			const positions: string[] = [];
 
@@ -391,15 +401,12 @@ export class AgentRoundtableTool implements AgentTool<typeof roundtableSchema, s
 						? `[ROUNDTABLE R1/${rounds}] Topic: ${params.topic}\nState your position.`
 						: `[ROUNDTABLE R${r + 1}/${rounds}] Respond to the previous round's discussion. Topic: ${params.topic}`;
 
-				await channel.send("agent", prompt);
+				await channel.send(facilitatorId, prompt);
 
-				const responses = await bus.collectResponses(
-					"agent",
-					agentList,
-					{ from: "agent", body: prompt },
-					{},
-					30_000,
-				);
+				const responses = await bus.collectResponses(facilitatorId, agentList, {
+					from: facilitatorId,
+					body: prompt,
+				});
 
 				for (const [, msg] of responses) {
 					positions.push(msg.body);

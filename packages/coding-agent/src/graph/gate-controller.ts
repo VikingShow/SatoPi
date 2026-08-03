@@ -174,6 +174,7 @@ export class GateController extends EventEmitter {
 			case "compile-check":
 			case "test":
 			case "script":
+			case "debate":
 				return this.#runBashGate(gate, node.label);
 
 			case "lsp":

@@ -3,6 +3,8 @@
  *
  * Handles `stp swarm run|plan|resume` subcommands for managing swarm runs.
  */
+
+import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as readline from "node:readline";
@@ -12,28 +14,23 @@ import { RoleAssetManager } from "../agent/role-asset";
 import { ModelRegistry } from "../config/model-registry";
 import { Settings } from "../config/settings";
 import { MarkEnvironment } from "../coordination/mark-environment";
-import { IrcBus } from "../irc/bus";
-import { NoopOffloadManager } from "../offload/manager";
+import { ExperienceStore } from "../experience/experience";
+import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../graph/graph-runner";
+import { getSessionPlanPath } from "../graph/plan-paths";
+import { registerBuiltinHooks } from "../hooks/register-builtins";
 import { discoverAuthStorage } from "../sdk";
 import type { SwarmDefinition } from "../swarm/core";
-import { assembleAgentRuntime } from "../swarm/core/assembler";
-import { EmbeddedSwarmBridge } from "../swarm/core/embedded-swarm-bridge";
 import { GraphRunnerAsRunManager } from "../swarm/core/graph-runner-as-run-manager";
-import type { RunManager, SteeringSink } from "../swarm/core/services";
-import { StateTracker } from "../swarm/core/state";
-import { SwarmRunner } from "../swarm/core/swarm-runner";
-import { ExperienceStore } from "../swarm/curtain/experience";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import { HookPipeline } from "../swarm/hook-system/hook-pipeline";
-import { registerBuiltinHooks } from "../swarm/hook-system/register-builtins";
-import { ActivityLogger } from "../swarm/infra/activity-logger";
+import type { SteeringSink } from "../swarm/core/services";
+import { setCurrentSwarmPhase } from "../swarm/core/state";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
 import { createSwarmMnemopiClient } from "../swarm/infra/create-mnemopi-client";
 import { createSwarmHindsightClient } from "../swarm/infra/hindsight-adapter";
 import { SwarmMnemopiAdapter } from "../swarm/infra/mnemopi-adapter";
-import { DebateRoundtable } from "../swarm/script/debate-roundtable";
-import { getSessionPlanPath } from "../swarm/script/plan-paths";
 import { SessionRegistry } from "../swarm/session";
 import type { SessionFactory, SharedServices } from "../swarm/session/session-registry";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 
 export type SwarmAction = "run" | "plan" | "resume";
 
@@ -42,7 +39,6 @@ export interface SwarmCommandArgs {
 	/** YAML path for run/plan, session name for resume. */
 	target: string;
 	flags: Record<string, unknown>;
-	engine?: "graph" | "legacy";
 }
 
 // ============================================================================
@@ -67,12 +63,16 @@ export async function runSwarmCommand(cmd: SwarmCommandArgs): Promise<void> {
 /**
  * Create the SharedServices bag and SessionFactory for a swarm run.
  * Returns both so callers can customize the session before starting.
+ *
+ * With `{ resume: true }` the session's entry reader spans every session
+ * file in the swarm dir (oldest first) instead of just the newest — see
+ * readAllSessionEntries for why resume needs that.
  */
 async function createSwarmServices(
 	cwd: string,
 	yamlPath: string,
 	_def: SwarmDefinition,
-	engine: "graph" | "legacy" = "graph",
+	opts?: { resume?: boolean },
 ): Promise<{ shared: SharedServices; factory: SessionFactory }> {
 	const authStorage = await discoverAuthStorage();
 	const settings = await Settings.init({ cwd });
@@ -90,7 +90,7 @@ async function createSwarmServices(
 	// for the swarm session. Null when Mnemopi is unavailable or unconfigured.
 	const mnemopiClient = await createSwarmMnemopiClient(settings, cwd);
 
-	const profileRegistry = await ProfileRegistry.load(cwd);
+	const profileRegistry = await ProfileRegistry.initGlobal(cwd);
 	const markEnvironment = new MarkEnvironment();
 	const roleAssetManager = new RoleAssetManager(cwd);
 	await roleAssetManager.init();
@@ -109,16 +109,23 @@ async function createSwarmServices(
 	};
 
 	const factory: SessionFactory = async (s, name, swarmDir) => {
-		const stateTracker = new StateTracker(cwd, name);
-		const activityLogger = new ActivityLogger(swarmDir, name);
-
-		// HookPipeline with NoopOffloadManager — SessionRegistry upgrades
-		// to a real OffloadManager once SessionStorage is available.
-		const hookPipeline = new HookPipeline();
-		registerBuiltinHooks(hookPipeline, {
-			offloadManager: new NoopOffloadManager(),
+		// Create shared swarm infrastructure (StateTracker, SwarmSessionManager,
+		// ActivityLogger, ExperienceStore, RoleAssetManager, HookPipeline, runtime).
+		const infra = await createSwarmInfra({
+			workspace: s.workspace,
+			swarmDir,
+			swarmName: name,
+			modelRegistry: s.modelRegistry,
+			settings: s.settings,
 			profileRegistry: s.profileRegistry,
-			experienceStore: s.experienceStore,
+			startPhase: "script",
+		});
+
+		// Register custom hooks (MnemopiAdapter)
+		registerBuiltinHooks(infra.hookPipeline, {
+			offloadManager: infra.offloadManager,
+			profileRegistry: s.profileRegistry,
+			experienceStore: infra.experienceStore,
 			mnemopiAdapter: s.mnemopiClient
 				? new SwarmMnemopiAdapter(s.mnemopiClient, {
 						enabled: true,
@@ -129,66 +136,79 @@ async function createSwarmServices(
 				: undefined,
 		});
 
-		// Assemble AgentRuntime with full DI (no global singletons).
-		// IrcBus.global() is the one exception — SatoPi owns it.
-		const ircBus = IrcBus.global();
-		const runtime = assembleAgentRuntime({
+		// GraphRunner with injected infra
+		const graphRunner = new GraphRunner({
+			workspace: s.workspace,
+			graphPath: s.yamlPath,
 			modelRegistry: s.modelRegistry,
 			settings: s.settings,
-			activityLogger,
-			roleAssetManager: s.roleAssetManager,
-			hookPipeline,
-			ircBus,
-			experienceStore: s.experienceStore,
-			hindsightClient: s.hindsightClient,
-			mnemopiClient: s.mnemopiClient,
-			markEnvironment: s.markEnvironment,
+			profileRegistry: s.profileRegistry,
+			infra,
+			onPhaseChange: phase => setCurrentSwarmPhase(phase),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
+			readSessionEntries: opts?.resume
+				? () => readAllSessionEntries(swarmDir)
+				: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
-		let runManager: RunManager;
-		if (engine === "graph") {
-			// GraphRunner implements ISwarmOrchestrator; wrap in adapter for RunManager.
-			const graphRunner = new GraphRunner({
-				workspace: s.workspace,
-				graphPath: s.yamlPath,
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				profileRegistry: s.profileRegistry,
-			});
-			await graphRunner.init();
-			runManager = new GraphRunnerAsRunManager(graphRunner);
-		} else {
-			// Legacy SwarmRunner with AgentRuntime — StageController uses
-			// runtime.spawn() instead of the legacy streamAgentOutput path.
-			process.stderr.write("WARNING: SwarmRunner is deprecated; prefer --engine graph (GraphRunner).\n");
-			runManager = new SwarmRunner({
-				modelRegistry: s.modelRegistry,
-				settings: s.settings,
-				workspace: s.workspace,
-				yamlPath: s.yamlPath,
-				stateTracker,
-				activityLogger,
-				experienceStore: s.experienceStore,
-				sessionManager: undefined,
-				profileRegistry: s.profileRegistry,
-				markEnvironment,
-				roleAssetManager: s.roleAssetManager,
-				hookPipeline,
-				runtime,
-				hindsightClient: s.hindsightClient,
-			});
-		}
+		await graphRunner.init();
+		const runManager = new GraphRunnerAsRunManager(graphRunner);
 
-		// Real SteeringSink — routes human steering via IrcBus → AgentRuntime.
+		// Real SteeringSink — routes human steering via IrcBus.
 		const steeringSink: SteeringSink = {
 			steer(text: string): void {
-				void runtime.sendHumanMessage("planner", text);
+				void infra.runtime.sendHumanMessage("planner", text);
 			},
 		};
 
-		return { name, swarmDir, stateTracker, activityLogger, runManager, steeringSink, hookPipeline };
+		return {
+			name,
+			swarmDir,
+			stateTracker: infra.stateTracker,
+			activityLogger: infra.activityLogger,
+			runManager,
+			steeringSink,
+			hookPipeline: infra.hookPipeline,
+		};
 	};
 
 	return { shared, factory };
+}
+
+/**
+ * Read every session file in a swarm's `.session` dir, oldest file first.
+ *
+ * Each run rotates to a fresh session file (createSwarmInfra forces a new
+ * one), and SwarmSessionManager.readRawEntries only reads the newest file.
+ * Checkpoint recovery scans entries newest→oldest, so a resume against only
+ * the newest (empty) file would miss the previous run's graph_checkpoint.
+ * Merging all files oldest-first restores the global newest→oldest view.
+ */
+async function readAllSessionEntries(swarmDir: string): Promise<Array<Record<string, unknown>>> {
+	const sessionDir = path.join(swarmDir, ".session");
+	let files: string[];
+	try {
+		files = (await fs.readdir(sessionDir)).filter(f => f.endsWith(".jsonl")).map(f => path.join(sessionDir, f));
+	} catch {
+		return [];
+	}
+
+	const withMtime = await Promise.all(files.map(async f => ({ f, mtimeMs: (await fs.stat(f)).mtimeMs })));
+	withMtime.sort((a, b) => a.mtimeMs - b.mtimeMs);
+
+	const entries: Array<Record<string, unknown>> = [];
+	for (const { f } of withMtime) {
+		const text = await Bun.file(f).text();
+		for (const line of text.split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			try {
+				entries.push(JSON.parse(trimmed) as Record<string, unknown>);
+			} catch {
+				/* skip malformed line */
+			}
+		}
+	}
+	return entries;
 }
 
 // ============================================================================
@@ -211,34 +231,20 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 	const yamlPath = path.resolve(cmd.target);
 	const cwd = getProjectDir();
 
-	// Determine engine before parsing — graph engine skips swarm YAML parsing
-	const engine = (cmd.engine ?? "graph") as "graph" | "legacy";
-
-	let def: SwarmDefinition;
-	if (engine === "graph") {
-		// GraphRunner handles its own YAML parsing (graph.yaml format)
-		def = {
-			name: path.basename(yamlPath, path.extname(yamlPath)),
-			workspace: cwd,
-			mode: "loop",
-			targetCount: 0,
-			agents: new Map(),
-			agentOrder: [],
-			loopConfig: undefined,
-		};
-	} else {
-		try {
-			def = await parseSwarmYamlFile(yamlPath);
-		} catch (err) {
-			process.stderr.write(`Failed to parse ${yamlPath}: ${String(err)}\n`);
-			process.exitCode = 1;
-			return;
-		}
-	}
+	// GraphRunner handles its own YAML parsing (graph.yaml format)
+	const def: SwarmDefinition = {
+		name: path.basename(yamlPath, path.extname(yamlPath)),
+		workspace: cwd,
+		mode: "loop",
+		targetCount: 0,
+		agents: new Map(),
+		agentOrder: [],
+		loopConfig: undefined,
+	};
 
 	const swarmName = def.name;
 
-	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, engine);
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def);
 
 	try {
 		const registry = new SessionRegistry(shared, factory, 1);
@@ -253,20 +259,8 @@ async function runSwarmRun(cmd: SwarmCommandArgs): Promise<void> {
 			return;
 		}
 
-		if (engine === "graph") {
-			// GraphRunnerAsRunManager handles completion internally.
-			process.stderr.write(`Graph "${swarmName}" started.\n`);
-		} else {
-			process.stderr.write(`Swarm "${swarmName}" started, waiting for completion…\n`);
-			process.stderr.write("WARNING: SwarmRunner waitForCompletion is deprecated; prefer GraphRunner.\n");
-			await (session.runManager as SwarmRunner).waitForCompletion();
-			const curtainResult = (session.runManager as SwarmRunner).getLastCurtainResult();
-			if (curtainResult) {
-				process.stderr.write(`Swarm "${swarmName}" completed: ${curtainResult.status}\n`);
-			} else {
-				process.stderr.write(`Swarm "${swarmName}" finished.\n`);
-			}
-		}
+		// GraphRunnerAsRunManager handles completion internally.
+		process.stderr.write(`Graph "${swarmName}" started.\n`);
 	} finally {
 		await shared.profileRegistry.save(cwd);
 	}
@@ -301,27 +295,31 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 	try {
 		// Create shared services (reuse createSwarmServices for consistency).
 		// We only need `shared`; the factory and session are unused in plan mode.
-		const { shared } = await createSwarmServices(cwd, yamlPath, def, "graph");
+		const { shared } = await createSwarmServices(cwd, yamlPath, def);
 		const swarmDir = path.join(shared.workspace, ".stp", "sessions", `swarm-${swarmName}`);
 		await fs.mkdir(swarmDir, { recursive: true });
 
-		const bridge = new EmbeddedSwarmBridge(
-			{
-				workspace: shared.workspace,
-				swarmDir,
-				modelRegistry: shared.modelRegistry,
-				settings: shared.settings,
-				roleAssetManager: shared.roleAssetManager,
-				profileRegistry: shared.profileRegistry,
-				autoApplaud: true,
-			},
-			event => {
-				if (event.phase) phase = event.phase;
-				if (event.subStatus) {
-					process.stderr.write(`[${event.phase}] ${event.subStatus}\n`);
-				}
-			},
-		);
+		const infra = await createSwarmInfra({
+			workspace: shared.workspace,
+			swarmDir,
+			swarmName,
+			modelRegistry: shared.modelRegistry,
+			settings: shared.settings,
+			profileRegistry: shared.profileRegistry,
+			startPhase: "script",
+		});
+		const bridge = new GraphRunner({
+			workspace: shared.workspace,
+			swarmDir,
+			modelRegistry: shared.modelRegistry,
+			settings: shared.settings,
+			profileRegistry: shared.profileRegistry,
+			autoApplaud: true,
+			infra,
+			onPhaseChange: p => setCurrentSwarmPhase(p),
+			debateRoundtableFactory: config => new DebateRoundtable(config),
+			readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+		});
 		await bridge.init();
 		phase = "script";
 
@@ -491,7 +489,7 @@ async function runSwarmPlan(cmd: SwarmCommandArgs): Promise<void> {
 }
 
 /** Spawn planner agent and wait for response. */
-async function sendToPlanner(bridge: EmbeddedSwarmBridge, text: string): Promise<void> {
+async function sendToPlanner(bridge: GraphRunner, text: string): Promise<void> {
 	const runtime = bridge.runtime;
 	await runtime.ircBus.receiveFromHuman(text, "planner");
 	const [planner] = await runtime.spawn([
@@ -510,10 +508,103 @@ async function sendToPlanner(bridge: EmbeddedSwarmBridge, text: string): Promise
 }
 
 // ============================================================================
-// resume (placeholder)
+// resume — continue a graph run from its last checkpoint
 // ============================================================================
 
-async function runSwarmResume(_cmd: SwarmCommandArgs): Promise<void> {
-	process.stderr.write("resume not yet implemented\n");
-	process.exitCode = 1;
+async function runSwarmResume(cmd: SwarmCommandArgs): Promise<void> {
+	const sessionName = cmd.target;
+	const cwd = getProjectDir();
+
+	// Graph-mode sessions live in .stp/sessions/swarm-<name>; the original
+	// yaml must still exist in the workspace to rebuild the execution waves.
+	const swarmDir = path.join(cwd, ".stp", "sessions", `swarm-${sessionName}`);
+	try {
+		if (!(await fs.stat(swarmDir)).isDirectory()) throw new Error("not a directory");
+	} catch {
+		process.stderr.write(`No swarm session "${sessionName}" found (expected ${swarmDir}).\n`);
+		process.exitCode = 1;
+		return;
+	}
+
+	const yamlPath = await resolveGraphYamlForSession(cwd, sessionName);
+	if (!yamlPath) {
+		process.stderr.write(`Cannot resume "${sessionName}": no ${sessionName}.graph.yaml found in the workspace.\n`);
+		process.exitCode = 1;
+		return;
+	}
+
+	const def: SwarmDefinition = {
+		name: sessionName,
+		workspace: cwd,
+		mode: "loop",
+		targetCount: 0,
+		agents: new Map(),
+		agentOrder: [],
+		loopConfig: undefined,
+	};
+
+	// Resume reads across all session files so checkpoint recovery sees the
+	// previous run's graph_checkpoint (each run rotates to a fresh file).
+	const { shared, factory } = await createSwarmServices(cwd, yamlPath, def, { resume: true });
+
+	try {
+		const registry = new SessionRegistry(shared, factory, 1);
+		const session = await registry.createSession(sessionName);
+
+		process.stderr.write(`Resuming swarm "${sessionName}"…\n`);
+
+		const result = await session.runManager.resume();
+		if (!result.success) {
+			process.stderr.write(`Resume failed: ${result.error ?? "unknown error"}\n`);
+			process.exitCode = 1;
+			return;
+		}
+
+		// GraphRunnerAsRunManager resumes the graph from its checkpoint.
+		process.stderr.write(`Graph "${sessionName}" resumed.\n`);
+	} finally {
+		await shared.profileRegistry.save(cwd);
+	}
+}
+
+/**
+ * Locate the `<name>.graph.yaml` backing a graph-mode swarm session.
+ * Sessions are keyed by yaml basename (`.stp/sessions/swarm-<name>`), so
+ * resume must re-find the original yaml to rebuild execution waves. Prefers
+ * the shallowest match; skips vendor/build directories.
+ */
+async function resolveGraphYamlForSession(cwd: string, sessionName: string): Promise<string | null> {
+	const wanted = `${sessionName}.graph.yaml`;
+	const matches: string[] = [];
+	const skipped: Record<string, true> = {
+		".git": true,
+		".stp": true,
+		node_modules: true,
+		dist: true,
+		build: true,
+		".bun": true,
+	};
+
+	async function walk(dir: string, depth: number): Promise<void> {
+		if (depth > 8) return;
+		let entries: Dirent[];
+		try {
+			entries = await fs.readdir(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				if (skipped[entry.name]) continue;
+				await walk(path.join(dir, entry.name), depth + 1);
+			} else if (entry.name === wanted) {
+				matches.push(path.join(dir, entry.name));
+			}
+		}
+	}
+
+	await walk(cwd, 0);
+	if (matches.length === 0) return null;
+	matches.sort((a, b) => a.split("/").length - b.split("/").length);
+	return matches[0];
 }

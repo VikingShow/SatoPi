@@ -2,14 +2,39 @@
 
 ## [Unreleased]
 
+### Added
+
+- `/graph theatre` now attaches a real `GraphRunner` (builtin theatre graph) to the active crew: phase transitions broadcast to the crew channel, crew-member `plan.md` writes feed the bridge via a per-session capture hook, and human messages forward to the active phase behavior. New `/graph launch` verb starts Stage execution, gated on plan readiness.
+- `stp swarm resume <name>` is implemented — restores a graph run from its persisted checkpoint (`GraphRunner.resumeGraphRun`), scanning all session files so prior-run checkpoints are found.
+- New `crew.memberModel` setting (default `smartest`) selects crew member models; falls back to the session model, then the first available.
+- Graph engine hardening: full state persistence & recovery — `NodeRunState` carries a serializable result snapshot and checkpoints rebuild upstream outputs, so conditional-routing gates make consistent decisions after an interrupted run resumes.
+- Loop bodies support subgraphs (`LoopBodySpec.subgraph_path`, `custom|subgraph`), with each iteration item injected into the subgraph run; condition DSL adds array indices (`${node}.field[n]`) and `and`/`or` keywords equivalent to `&&`/`||`.
+- End-to-end graph composition test covering loop + conditional routing + checkpoint recovery.
 ### Changed
 
+- Crew members now spawn with a working tool set (`read/grep/glob/edit/write/bash/todo`), richer persistent-main-agent prompts, and per-profile model selection instead of the first available model for everyone.
+- The `swarm` magic keyword uses a single session-level plan.md capture hook with a pending-write buffer (no more dropped plan writes during bridge init), per-run swarm session directories, and idle bridges are disposed before a new run starts.
 
+
+- Crew mode (`/swarm start`) TUI rework: the crew transcript now fills the available terminal height with scrollback (j/k) instead of a small top-aligned panel, the main input editor is reused directly for crew chat (Enter routes to the crew via the existing dispatch, with view-owned keys — scroll/filter/tools/close — only while the editor is empty), and the round counter is now dynamic (`Rounds: N · X/Y replying` derived from live agent status instead of a write-once `DEBATING` badge). Esc closes the crew view via key matching that works on Kitty-style CSI-u terminals.
+- Status bar no longer lists individual swarm agents (`[main:running] - … - +N more`); it keeps the one-line swarm digest (`crew: name [N agents]` / phase + counts) while agent detail lives in the Ctrl+B swarm sidebar and the Agent Hub.
+- Ctrl+B swarm sidebar now spans the full terminal height (viewport-derived tree budget) with a wider 40% default (still resizable with Ctrl+←/→).
 - Added inline TUI renderer for `agent_invoke` persistent agent calls — transcripts now show a "Invoke Agent" framed block (matching the `task` tool's visual style exactly) with live progress streaming, output preview, yield tree, and auto-dismiss after 5s.
 - Status bar now shows `🤖 2p·3a` (or `🤖 N pgent` / `🤖 N agents`) to distinguish persistent agents from task subagents at a glance.
 - Agent HUD above the editor now dispatches by agent kind instead of count: subagent-only shows gold "Subagents" panel, persistent-only shows green "Persistent Agents" panel, and both together show a silver-blue "Agents" panel with per-kind item colours. Replaced the old framed-block `renderAgentPanel` in this path with the simpler tree-list HUD style for visual consistency.
 ### Fixed
+- Fixed crew transcript scroll hint advertising `j/k:scroll` while the keys were never handled — j/k scrolling is now wired through the empty-editor arbitration.
+- Fixed the `swarm` magic keyword plan-capture race: plan.md writes between prompt dispatch and bridge initialization were silently dropped (double `beforeToolCall` registration); a single session hook with a buffer now flushes them after init.
+- Fixed `stp swarm resume` being a placeholder ("resume not yet implemented") — now performs checkpoint-based recovery.
+- Fixed crew mode input editor being hidden: the crew overlay's height budget now derives from the real content frame (`TUI.lastFrameLength`) instead of terminal rows, so it never covers the editor even when the frame is shorter than the viewport.
+- Fixed crew members silently not replying: `createAgentSession` already pre-registers the agent ref, and the duplicate `AgentRegistry.register` in crew spawning disposed the member's own session (whose teardown unregistered the ref) — spawning now reuses the pre-registered ref.
+- Fixed Ctrl+B sidebar appearing frozen: key dispatch matched literal strings (`"Enter"`, `"ArrowDown"`) while the TUI delivers raw sequences — Enter on an agent node now works via `matchesKey`; selecting an agent also hides the crew overlay so the member's session page is visible.
+- Fixed binary bundle failing to resolve `@satopi/pi-coding-agent/swarm/task-analyzer` — the exports map pointed at the pre-migration `src/swarm/script/` path; repointed to `src/graph/task-analyzer.ts`.
+### Removed
 
+- Removed dead swarm modules: `stage-controller.ts`, `role-roundtable.ts`, `swarm-hooks.ts`, `verification-hook.ts` (interface moved to `hooks/builtins/`), `session-types.ts` (merged into `session-registry.ts`), and the orphaned `agent-conversation-view.ts` / `crew-entry-block.ts` TUI components.
+- Removed the unused `swarm.engine` setting and the accepted-but-ignored `--engine legacy` CLI flag.
+- Removed the dead `StateTracker` loop-mode API (praise/criticism counters, `init`, `logTransition`, `getWorstAgent`, `unregisterAgent`, `resetAgentStatuses`) and the unused `renderAgentPanelFromGlobalRegistry`.
 - Fixed a bug where swarm `agent-launcher.ts` did not pass `agentDisplayName` to `createAgentSession`, causing all swarm-spawned persistent agents to appear as "main" in the agent registry instead of their `spec.id`.
 - Fixed a bug where `OffloadSource` was never registered on the `ContextPipeline`, causing offloaded context (L1 summaries, MMD context) collected by `OffloadManager` to never be injected back into agent prompts — the summarize→store→inject pipeline is now closed via late binding in `createSwarmSession`.
 - Fixed status bar subagent badge double-counting persistent agents — `countRunningSubagentBadgeAgents` now correctly counts only `kind: "sub"` agents, so the badge shows distinct `N pgent` / `N agents` / `Np·Ma` formats instead of always falling into the combined format.

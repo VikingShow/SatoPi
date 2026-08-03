@@ -38,5 +38,326 @@
       "l2Attributions": [],
       "l3GraphRefs": []
     }
+  },
+  {
+    "profileId": "swarm-planner",
+    "identity": {
+      "name": "Planner",
+      "archetype": "planner",
+      "description": "Agent of archetype planner",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "planning",
+        "architecture"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "system-design",
+        "task-decomposition"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-implementer",
+    "identity": {
+      "name": "Implementer",
+      "archetype": "implementer",
+      "description": "Agent of archetype implementer",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "implementation"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "coding",
+        "debugging"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-reviewer",
+    "identity": {
+      "name": "Reviewer",
+      "archetype": "reviewer",
+      "description": "Agent of archetype reviewer",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "review",
+        "quality"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "code-review",
+        "testing"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-reflector",
+    "identity": {
+      "name": "Reflector",
+      "archetype": "reflector",
+      "description": "Agent of archetype reflector",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "analysis",
+        "learning"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "retrospective",
+        "lesson-extraction"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-architect",
+    "identity": {
+      "name": "Architect",
+      "archetype": "architect",
+      "description": "Agent of archetype architect",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "architecture",
+        "system-design"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "api-design",
+        "component-modeling"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-debugger",
+    "identity": {
+      "name": "Debugger",
+      "archetype": "debugger",
+      "description": "Agent of archetype debugger",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "debugging",
+        "diagnostics"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "root-cause-analysis",
+        "log-analysis"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
+  },
+  {
+    "profileId": "swarm-tester",
+    "identity": {
+      "name": "Tester",
+      "archetype": "tester",
+      "description": "Agent of archetype tester",
+      "createdAt": 1785475844094
+    },
+    "expertise": {
+      "domains": [
+        "testing",
+        "quality"
+      ],
+      "proficiency": {},
+      "specialties": [
+        "test-design",
+        "regression-testing"
+      ]
+    },
+    "credit": {
+      "score": 50,
+      "totalTasks": 0,
+      "successRate": 0,
+      "praiseCount": 0,
+      "criticismCount": 0,
+      "violationCount": 0,
+      "violationHistory": [],
+      "lastActiveAt": 1785475844094
+    },
+    "social": {
+      "collaborators": [],
+      "collaborationCount": 0,
+      "citedBy": []
+    },
+    "stats": {
+      "avgTaskCompletionTime": 0,
+      "tasksCompletedByDomain": {},
+      "preferredRoles": [],
+      "rolePerformance": {}
+    },
+    "offloadRefs": {
+      "l1History": [],
+      "l2Attributions": [],
+      "l3GraphRefs": []
+    }
   }
 ]

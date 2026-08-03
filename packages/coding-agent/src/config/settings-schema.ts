@@ -172,6 +172,7 @@ export type StatusLineSegmentId =
 	| "cache_write"
 	| "cache_hit"
 	| "session_name"
+	| "swarm"
 	| "usage"
 	| "collab";
 
@@ -1771,17 +1772,25 @@ export const SETTINGS_SCHEMA = {
 			description: "Run a multi-agent debate to refine the plan before confirming",
 		},
 	},
-
-	"swarm.engine": {
-		type: "enum",
-		values: ["graph", "legacy"],
-		default: "legacy",
+	"magicKeywords.swarm.maxForkDepth": {
+		type: "number",
+		default: 1,
 		ui: {
 			tab: "magic",
 			group: "Swarm",
-			label: "Swarm Engine",
-			description:
-				"Swarm execution engine (legacy = EmbeddedSwarmBridge for interactive, graph = Theatre Graph for CLI). Defaults to legacy.",
+			label: "Max Fork Depth",
+			description: "Maximum agent_fork nesting depth. 1 = children cannot fork further (default).",
+		},
+	},
+
+	"crew.memberModel": {
+		type: "string",
+		default: "smartest",
+		ui: {
+			tab: "magic",
+			group: "Crew",
+			label: "Crew Member Model",
+			description: "Model selector used to spawn crew members (e.g. smartest, or provider/model-id).",
 		},
 	},
 

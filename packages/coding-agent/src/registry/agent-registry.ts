@@ -34,9 +34,8 @@ export type AgentStatus = "running" | "idle" | "parked" | "aborted";
 /**
  * - `main`/`sub`: the user-facing agent tree (driving agent + task subagents).
  * - `advisor`: a passive review transcript — hidden from rosters.
- * - `persistent`: cross-session agent with AgentProfile + role identity.
  */
-export type AgentKind = "main" | "sub" | "advisor" | "persistent";
+export type AgentKind = "main" | "sub" | "advisor";
 
 export interface AgentRef {
 	id: string;
@@ -51,9 +50,9 @@ export interface AgentRef {
 	lastActivity: number;
 	/** Short gist of what the agent is currently doing (latest intent or tool), for the work-aware roster. Display-only. */
 	activity?: string;
-	/** Associated AgentProfile (only for persistent agents). */
+	/** Associated AgentProfile (for agents with a persistent identity). */
 	profileId?: string;
-	/** Current role name (only for persistent agents). */
+	/** Current role name (for agents participating in a swarm/crew). */
 	role?: string;
 }
 

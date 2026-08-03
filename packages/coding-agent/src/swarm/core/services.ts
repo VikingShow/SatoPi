@@ -6,7 +6,6 @@
  * and phase orchestration (RunManager, SteeringSink).
  */
 
-import type { CurtainResult } from "../curtain/types";
 import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
@@ -15,7 +14,7 @@ import type { SwarmSessionManager } from "../session/swarm-session-manager";
 
 // ============================================================================
 
-/** Controls the swarm loop lifecycle. Implemented by SwarmRunManager. */
+/** Controls the swarm loop lifecycle. Implemented by GraphRunnerAsRunManager. */
 export interface RunManager {
 	setSessionManager?(sm: SwarmSessionManager): void;
 	start(agentCount?: number): Promise<{ success: boolean; error?: string }>;
@@ -24,8 +23,7 @@ export interface RunManager {
 	resume(): Promise<{ success: boolean; error?: string }>;
 	updatePlanAndContinue(content: string): Promise<{ success: boolean; error?: string }>;
 	readonly isRunning: boolean;
-	getLastCurtainResult?: () => CurtainResult | null;
-	resolveBlocker?: (decision: "continue" | "skip" | "abort") => boolean;
+	getLastCurtainResult?: () => Record<string, unknown> | null;
 }
 
 /** Accepts steering messages from the human during a running loop. */

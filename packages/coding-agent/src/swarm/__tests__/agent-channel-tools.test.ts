@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AgentToolContext } from "@satopi/pi-agent-core";
 import type { TextContent } from "@satopi/pi-ai";
+import { CommChannel } from "../../comm/comm-channel";
 import { IrcBus } from "../../irc/bus";
 import {
 	AgentBroadcastTool,
@@ -21,7 +22,6 @@ import {
 	AgentQueryMajorityTool,
 	AgentRoundtableTool,
 } from "../../tools/agent-channel-tools";
-import { CommChannel } from "../comm-bus/comm-channel";
 
 function makeChannel(bus: IrcBus, agentIds: string[]): CommChannel {
 	return new CommChannel(bus, agentIds, []);

@@ -7,9 +7,9 @@
  */
 
 import type { Component } from "@satopi/pi-tui";
+import { matchesKey } from "@satopi/pi-tui/keys";
 import { type AgentRef, AgentRegistry } from "../../../registry/agent-registry";
 import type { SwarmState } from "../../../swarm/core/state";
-import type { WorkflowFsm } from "../../../swarm/core/workflow-fsm";
 import { theme as appTheme, type Theme } from "../../theme/theme";
 import type { CommMessage } from "./comm-panel";
 import type { ContextPanelState } from "./context-panel";
@@ -34,7 +34,6 @@ export class SwarmDashboardOverlay implements Component {
 	readonly #modelCost: ModelCostInfo | undefined;
 	readonly #roundtableState: RoundtableViewState | undefined;
 	readonly #planContent: string | undefined;
-	#unsubscribe?: () => void;
 
 	constructor(deps: SwarmDashboardOverlayDeps) {
 		this.#stateTracker = deps.stateTracker ?? null;
@@ -43,10 +42,6 @@ export class SwarmDashboardOverlay implements Component {
 		this.#roundtableState = deps.roundtableState;
 		this.#planContent = deps.planContent;
 		this.#modelCost = deps.modelCost;
-		// Subscribe to FSM phase transitions for live updates
-		this.#unsubscribe = deps.fsm?.onChange(() => {
-			this.onRequestRender?.();
-		});
 
 		// Start pulse animation for the current-phase highlight.
 		startPhasePulse(() => this.onRequestRender?.());
@@ -57,9 +52,8 @@ export class SwarmDashboardOverlay implements Component {
 		const dashboard = renderDashboard(input);
 		return dashboard.render(width);
 	}
-
 	handleInput(data: string): void {
-		if (data === "escape" || data === "q" || data === "\x1b") {
+		if (matchesKey(data, "escape") || data === "q") {
 			this.onClose?.();
 		}
 	}
@@ -67,8 +61,6 @@ export class SwarmDashboardOverlay implements Component {
 	invalidate(): void {}
 	dispose(): void {
 		stopPhasePulse();
-		this.#unsubscribe?.();
-		this.#unsubscribe = undefined;
 	}
 
 	// ── Snapshot builder ──────────────────────────────────────────────────
@@ -187,7 +179,6 @@ interface GraphDefinitionLike {
 }
 
 export interface SwarmDashboardOverlayDeps {
-	fsm?: WorkflowFsm;
 	stateTracker?: StateTrackerLike;
 	graphDefinition?: GraphDefinitionLike;
 	theme?: Theme;

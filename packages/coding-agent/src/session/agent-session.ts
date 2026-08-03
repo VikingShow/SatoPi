@@ -244,6 +244,9 @@ import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { GoalRuntime } from "../goals/runtime";
 import type { Goal, GoalModeState } from "../goals/state";
+import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../graph/graph-runner";
+import type { ISwarmOrchestrator } from "../graph/orchestrator-interface";
 import type { HindsightSessionState } from "../hindsight/state";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import { IrcBus, type IrcMessage } from "../irc/bus";
@@ -300,9 +303,10 @@ import {
 	type SecretObfuscator,
 } from "../secrets/obfuscator";
 import { invalidateHostMetadata } from "../ssh/connection-manager";
-import { EmbeddedSwarmBridge, type ISwarmOrchestrator } from "../swarm/core/embedded-swarm-bridge";
-import { GraphRunner } from "../swarm/graph/graph-runner";
-import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-types";
+import { setCurrentSwarmPhase } from "../swarm/core/state";
+import { createSwarmInfra } from "../swarm/core/swarm-infra";
+import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-registry";
+import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
 import { usesCodexTaskPrompt } from "../task/prompt-policy";
 import type { SingleResult } from "../task/types";
 import {
@@ -889,8 +893,8 @@ export interface AgentSessionConfig {
 	 *  prelude gating so a top-level session created with a custom `agentId` still
 	 *  receives the always-mode reminder. Defaults to "main". */
 	agentKind?: AgentKind;
-	/** Profile ID for persistent agents that survive across sessions. */
-	persistentProfileId?: string;
+	/** Profile ID for agents that survive across sessions. */
+	profileId?: string;
 	/** Mark environment tracking region locks and ownership. */
 	markEnvironment?: MarkEnvironment;
 	/**
@@ -1678,10 +1682,10 @@ export class AgentSession {
 	readonly sessionManager: SessionManager;
 	readonly settings: Settings;
 	readonly yieldQueue: YieldQueue;
-	/** Agent kind: "main" | "sub" | "advisor" | "persistent" */
+	/** Agent kind: "main" | "sub" | "advisor" */
 	readonly kind: AgentKind;
-	/** Profile ID for persistent agents that survive across sessions. */
-	readonly persistentProfileId?: string;
+	/** Profile ID for agents that survive across sessions. */
+	readonly profileId?: string;
 	/** Mark environment tracking region locks and ownership. */
 	readonly markEnvironment: MarkEnvironment;
 	/** Agent role assigned at spawn (swarm tracking). */
@@ -1758,6 +1762,12 @@ export class AgentSession {
 	#advisorRecorderClosed: Promise<void> = Promise.resolve();
 	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
 	#embeddedSwarm: ISwarmOrchestrator | null = null;
+	/** In-flight #initializeEmbeddedSwarm promise — guards against double init on overlapping swarm prompts. */
+	#swarmInitPromise: Promise<void> | null = null;
+	/** plan.md writes captured while the swarm bridge is not yet ready (last write wins). */
+	#pendingPlanCaptures: string[] = [];
+	/** True once the plan.md capture hook is installed on this session's agent (exactly once). */
+	#swarmPlanCaptureHookInstalled = false;
 	#swarmServices = new Map<string, SessionServices>();
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
@@ -2627,7 +2637,7 @@ export class AgentSession {
 		this.#obfuscator = config.obfuscator;
 		this.#agentId = config.agentId;
 		this.kind = config.agentKind ?? "main";
-		this.persistentProfileId = config.persistentProfileId;
+		this.profileId = config.profileId;
 		this.markEnvironment = config.markEnvironment ?? new MarkEnvironment();
 		this.#providerSessionId = config.providerSessionId;
 		this.#inheritedProviderPromptCacheKey =
@@ -4956,9 +4966,11 @@ export class AgentSession {
 		// or TUI routing missed the swarm path), call confirmScript() here.
 		const bridge = this.#embeddedSwarm;
 		if (bridge && !bridge.stageStarted) {
-			bridge.confirmScript().catch(err =>
-				logger.error("Swarm confirmScript failed from afterToolCall fallback", { error: String(err) }),
-			);
+			bridge
+				.confirmScript()
+				.catch(err =>
+					logger.error("Swarm confirmScript failed from afterToolCall fallback", { error: String(err) }),
+				);
 		}
 	}
 
@@ -6182,7 +6194,7 @@ export class AgentSession {
 
 	/** Profile for persistent agents that survive across sessions. */
 	get profile(): AgentProfile | undefined {
-		return this.persistentProfileId ? ProfileRegistry.global().get(this.persistentProfileId) : undefined;
+		return this.profileId ? ProfileRegistry.global().get(this.profileId) : undefined;
 	}
 
 	/**
@@ -6248,6 +6260,14 @@ export class AgentSession {
 		this.#embeddedSwarm
 			?.dispose()
 			.catch(err => logger.error("Failed to dispose swarm bridge", { error: String(err) }));
+		// NOTE: `process.cwd()` may differ from the TUI's `#profileCwd` when
+		// called from a swarm session whose embedded process has its own
+		// working directory. This is acceptable — the embedded swarm path
+		// carries its own cwd context, and `applyCwdChange` already saves the
+		// prior workspace's profiles before switching (P1-5).
+		ProfileRegistry.global()
+			.save(process.cwd())
+			.catch(err => logger.error("Failed to save ProfileRegistry on dispose", { error: String(err) }));
 	}
 
 	/**
@@ -8197,31 +8217,31 @@ export class AgentSession {
 				attribution: "user",
 				timestamp,
 			});
-
-			// Register plan.md capture hook SYNCHRONOUSLY — BEFORE the
-			// fire-and-forget init. The model starts processing immediately
-			// and may write plan.md before the bridge is ready.
-			const planCapture = this.#embeddedSwarm;
-			if (!planCapture) {
-				this.agent.beforeToolCall = ctx => {
-					const bridge = this.#embeddedSwarm;
-					if (!bridge) return undefined;
-					if (ctx.toolCall.name === "write") {
-						const args = ctx.args as { path?: string; content?: string };
-						if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-							this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-							bridge.onPlanUpdated(args.content);
-						}
-					}
-					return undefined;
-				};
+			// The plan.md capture hook lives on the session (installed exactly once
+			// in #initializeEmbeddedSwarm) and reads the CURRENT #embeddedSwarm on
+			// every call — plan.md writes are forwarded to the live bridge, or
+			// buffered while no bridge is ready yet. If a previous swarm run left
+			// an idle bridge behind, recycle it so this run gets a fresh
+			// GraphRunner + swarmDir instead of reusing the old run's state.
+			const existingBridge = this.#embeddedSwarm;
+			if (existingBridge && !existingBridge.isRunning) {
+				this.#embeddedSwarm = null;
+				existingBridge
+					.dispose()
+					.catch(err => logger.error("Failed to dispose stale swarm bridge", { error: String(err) }));
 			}
 
-			// Initialize embedded swarm bridge (fire-and-forget — must not block the prompt)
-			if (!this.#embeddedSwarm) {
-				this.#initializeEmbeddedSwarm().catch(err => {
-					logger.error("Failed to init embedded swarm bridge", { error: String(err) });
-				});
+			// Initialize embedded swarm bridge (fire-and-forget — must not block
+			// the prompt). While it initializes, plan.md writes are buffered by
+			// the capture hook and flushed once the bridge is ready.
+			if (!this.#embeddedSwarm && !this.#swarmInitPromise) {
+				this.#swarmInitPromise = this.#initializeEmbeddedSwarm()
+					.catch(err => {
+						logger.error("Failed to init embedded swarm bridge", { error: String(err) });
+					})
+					.finally(() => {
+						this.#swarmInitPromise = null;
+					});
 			}
 		}
 		if (
@@ -8241,47 +8261,62 @@ export class AgentSession {
 		return keywordNotices;
 	}
 
-	async #initializeEmbeddedSwarm(): Promise<void> {
-		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
-		const engine = (this.settings.get("swarm.engine") as string) ?? "legacy";
+	/**
+	 * Install the plan.md capture hook — exactly once per session. Called from
+	 * #initializeEmbeddedSwarm (the only place that owns the bridge) before its
+	 * first await, so plan.md writes during the init window are captured, not
+	 * dropped. The hook reads the CURRENT #embeddedSwarm on every call: writes
+	 * are forwarded to the live bridge, or buffered in #pendingPlanCaptures
+	 * while no bridge is ready (init window / between runs). The buffer is
+	 * flushed by #initializeEmbeddedSwarm once the new bridge is installed.
+	 */
+	#installSwarmPlanCaptureHook(): void {
+		if (this.#swarmPlanCaptureHookInstalled) return;
+		this.#swarmPlanCaptureHookInstalled = true;
+		this.agent.beforeToolCall = ctx => {
+			if (ctx.toolCall.name !== "write") return undefined;
+			const args = ctx.args as { path?: string; content?: string };
+			if (typeof args.path !== "string" || !args.path.includes("plan.md") || typeof args.content !== "string") {
+				return undefined;
+			}
+			this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
+			const bridge = this.#embeddedSwarm;
+			if (bridge) {
+				bridge.onPlanUpdated(args.content);
+			} else {
+				// Bridge not ready yet — keep only the latest write (last write wins).
+				this.#pendingPlanCaptures = [args.content];
+			}
+			return undefined;
+		};
+	}
 
-		if (engine === "graph") {
-			const graphPath = path.join(import.meta.dir, "..", "swarm", "graph", "builtin", "theatre.graph.yaml");
-			const bridge = new GraphRunner({
+	async #initializeEmbeddedSwarm(): Promise<void> {
+		// Install the single plan.md capture hook before the first await — the
+		// model may write plan.md while createSwarmInfra/bridge.init() run.
+		this.#installSwarmPlanCaptureHook();
+
+		const sessionId = this.sessionId ?? crypto.randomUUID().slice(0, 8);
+		const runSuffix = Date.now().toString(36);
+		const swarmName = `${sessionId}-run${runSuffix}`;
+		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${swarmName}`;
+
+		try {
+			const profileRegistry = ProfileRegistry.global();
+			const infra = await createSwarmInfra({
 				workspace: process.cwd(),
-				graphPath,
+				swarmDir,
+				swarmName,
 				modelRegistry: this.#modelRegistry,
 				settings: this.settings,
+				profileRegistry,
+				startPhase: "script",
 			});
-			await bridge.init();
-			this.emitNotice(
-				"info",
-				"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
-				"swarm",
-			);
-			this.setToolContextAgentRuntime(bridge.runtime);
-			this.#embeddedSwarm = bridge;
-			logger.info("[AgentSession] GraphRunner initialized", { sessionId, graphPath });
-			// Register beforeToolCall hook to capture plan.md writes → bridge.onPlanUpdated
-			this.agent.beforeToolCall = ctx => {
-				if (ctx.toolCall.name === "write" && this.#embeddedSwarm) {
-					const args = ctx.args as { path?: string; content?: string };
-					if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-						this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-						this.#embeddedSwarm.onPlanUpdated(args.content);
-					}
-				}
-				return undefined;
-			};
-			return;
-		}
 
-		const swarmDir = `${process.cwd()}/.stp/sessions/swarm-${sessionId}`;
-
-		const profileRegistry = await ProfileRegistry.load(process.cwd());
-		const bridge = new EmbeddedSwarmBridge(
-			{
+			const builtinGraphPath = path.resolve(import.meta.dir, "..", "graph", "builtin", "theatre.graph.yaml");
+			const bridge = new GraphRunner({
 				workspace: process.cwd(),
+				graphPath: builtinGraphPath,
 				swarmDir,
 				modelRegistry: this.#modelRegistry,
 				settings: this.settings,
@@ -8289,41 +8324,31 @@ export class AgentSession {
 				maxWorkers: (this.settings.get("magicKeywords.swarm.maxWorkers") as number) ?? 4,
 				maxRounds: (this.settings.get("magicKeywords.swarm.maxRounds") as number) ?? 3,
 				autoApplaud: (this.settings.get("magicKeywords.swarm.autoApplaud") as boolean) ?? false,
-			},
-			event => {
-				if (event.phase === "script") {
-					const taskInfo = event.progress?.totalTasks
-						? ` (${event.progress.totalTasks} task${event.progress.totalTasks === 1 ? "" : "s"} outlined)`
-						: "";
-					this.emitNotice("info", `Script phase: ${event.subStatus}${taskInfo}`, "swarm");
-				}
-			},
-		);
+				infra,
+				onPhaseChange: phase => setCurrentSwarmPhase(phase),
+				debateRoundtableFactory: config => new DebateRoundtable(config),
+				readSessionEntries: () => SwarmSessionManager.readRawEntries(swarmDir),
+			});
 
-		// Register beforeToolCall BEFORE bridge.init() — the MAIN model may
-		// start writing plan.md while init is still in-flight (it's fire-and-forget
-		// upstream). Catch plan writes early so getPlanContent() is never empty.
-		const planCapture = bridge;
-		this.agent.beforeToolCall = ctx => {
-			if (ctx.toolCall.name === "write") {
-				const args = ctx.args as { path?: string; content?: string };
-				if (typeof args.path === "string" && args.path.includes("plan.md") && typeof args.content === "string") {
-					this.emitNotice("info", "Script phase: writing plan.md...", "swarm");
-					planCapture.onPlanUpdated(args.content);
-				}
+			await bridge.init();
+			this.emitNotice("info", "Swarm orchestration mode active.", "swarm");
+			this.setToolContextAgentRuntime(bridge.runtime);
+			this.#embeddedSwarm = bridge;
+
+			// Flush plan.md writes captured while the bridge was initializing.
+			const pending = this.#pendingPlanCaptures;
+			this.#pendingPlanCaptures = [];
+			for (const content of pending) {
+				bridge.onPlanUpdated(content);
 			}
-			return undefined;
-		};
 
-		await bridge.init();
-		this.emitNotice(
-			"info",
-			"Swarm orchestration mode active. The agent will research, plan, then ask for your approval.",
-			"swarm",
-		);
-		this.setToolContextAgentRuntime(bridge.runtime);
-		this.#embeddedSwarm = bridge;
-		logger.info("[AgentSession] EmbeddedSwarmBridge initialized", { sessionId, swarmDir });
+			logger.info("[AgentSession] GraphRunner initialized (swarm keyword)", { sessionId, swarmDir });
+		} catch (err) {
+			// A failed init can never flush its captures — drop them so a later
+			// run doesn't receive stale plan content from this one.
+			this.#pendingPlanCaptures = [];
+			throw err;
+		}
 	}
 
 	/**

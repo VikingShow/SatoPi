@@ -867,6 +867,12 @@ export function findCommittedPrefixResync(
 export class TUI extends Container {
 	terminal: Terminal;
 	#previousFrameLength = 0;
+	/** Length (rows) of the most recently emitted frame. Lets host code position
+	 *  overlays relative to real content (e.g. keeping an overlay above the
+	 *  editor when the content frame is shorter than the viewport). */
+	get lastFrameLength(): number {
+		return this.#previousFrameLength;
+	}
 	#previousWidth = 0;
 	#previousHeight = 0;
 	#focusedComponent: Component | null = null;

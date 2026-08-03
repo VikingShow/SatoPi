@@ -34,6 +34,15 @@ import type { DiscoverableTool, DiscoverableToolSearchIndex } from "../tool-disc
 import type { EventBus } from "../utils/event-bus";
 import { WebSearchTool } from "../web/search";
 import type { WorkspaceTree } from "../workspace-tree";
+import {
+	AgentBroadcastTool,
+	AgentPeersTool,
+	AgentQueryAllTool,
+	AgentQueryMajorityTool,
+	AgentRoundtableTool,
+} from "./agent-channel-tools";
+import { AgentCreateCrewTool } from "./agent-create-crew";
+import { AgentForkTool } from "./agent-fork-tool";
 import { agentInvokeTool } from "./agent-invoke";
 import { AskTool } from "./ask";
 import { AstEditTool } from "./ast-edit";
@@ -484,6 +493,13 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	learn: LearnTool.createIf,
 	manage_skill: ManageSkillTool.createIf,
 	agent_invoke: () => agentInvokeTool,
+	agent_fork: () => new AgentForkTool(),
+	agent_broadcast: _s => new AgentBroadcastTool(),
+	agent_query_all: _s => new AgentQueryAllTool(),
+	agent_query_majority: _s => new AgentQueryMajorityTool(),
+	agent_roundtable: _s => new AgentRoundtableTool(),
+	agent_peers: _s => new AgentPeersTool(),
+	agent_create_crew: () => new AgentCreateCrewTool(),
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
@@ -639,6 +655,7 @@ export async function createTools(
 			return ["hindsight", "mnemopi"].includes(session.settings.get("memory.backend") ?? "");
 		}
 		if (name === "manage_skill") return session.settings.get("autolearn.enabled") && (session.taskDepth ?? 0) === 0;
+		if (name === "agent_fork") return true;
 		if (name === "learn") {
 			return (
 				session.settings.get("autolearn.enabled") &&
@@ -648,6 +665,17 @@ export async function createTools(
 		}
 		if (name === "task") {
 			return canSpawnAtDepth(session.settings.get("task.maxRecursionDepth") ?? 2, session.taskDepth ?? 0);
+		}
+		// Swarm agent channel tools: always allowed (graceful degradation when no swarm)
+		if (
+			name === "agent_broadcast" ||
+			name === "agent_query_all" ||
+			name === "agent_query_majority" ||
+			name === "agent_roundtable" ||
+			name === "agent_peers" ||
+			name === "agent_create_crew"
+		) {
+			return true;
 		}
 		return true;
 	};

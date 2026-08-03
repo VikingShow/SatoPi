@@ -24,6 +24,8 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../extensibility/plugins/marketplace";
+import { compileMermaidToGraph } from "../graph/mermaid-compiler";
+import type { GraphDefinition } from "../graph/schema";
 import { resolveMemoryBackend } from "../memory-backend";
 import { runPauseScreen } from "../modes/components/pause-screen";
 import { describeLoopLimitRuntime } from "../modes/loop-limit";
@@ -34,9 +36,7 @@ import type { AgentSession, FreshSessionResult } from "../session/agent-session"
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
-import { convertLoopFileToGraph } from "../swarm/graph/loop-converter";
-import { compileMermaidToGraph } from "../swarm/graph/mermaid-compiler";
-import type { GraphDefinition } from "../swarm/graph/schema";
+import { convertLoopFileToGraph } from "../swarm/loop-converter";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
 import {
@@ -1224,10 +1224,31 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 	},
 	{
 		name: "swarm",
-		description: "Open Swarm dashboard",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.showSwarmDashboard();
-			runtime.ctx.editor.setText("");
+		description: "Swarm operations",
+		subcommands: [
+			{ name: "start", description: "Start a new agent crew" },
+			{ name: "off", description: "Leave the current crew" },
+		],
+		allowArgs: true,
+		handleTui: async (command, runtime) => {
+			const { verb, rest } = parseSubcommand(command.args);
+			if (!verb || verb === "dashboard") {
+				runtime.ctx.showSwarmDashboard();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "start") {
+				const name = rest || `Crew ${new Date().toLocaleTimeString()}`;
+				await runtime.ctx.showSwarmCrewStart(name);
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "off") {
+				runtime.ctx.swarmModeController?.leaveCrew();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showError("Usage: /swarm [start [name] | off | dashboard]");
 		},
 	},
 	{
@@ -1237,6 +1258,9 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 			{ name: "run", description: "Open Swarm dashboard for the graph engine" },
 			{ name: "list", description: "List available graph definition files" },
 			{ name: "compile", description: "Compile Mermaid or loop YAML to a graph definition", usage: "<path>" },
+			{ name: "theatre", description: "Attach the builtin theatre graph to the active crew" },
+			{ name: "launch", description: "Launch Stage on the attached graph (crew plan.md must exist)" },
+			{ name: "off", description: "Detach the active graph from the current crew" },
 		],
 		allowArgs: true,
 		handle: async (command, runtime) => {
@@ -1293,7 +1317,19 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				await runtime.output("Use /swarm to open the Swarm dashboard.");
 				return commandConsumed();
 			}
-			return usage("Usage: /graph [run|list|compile <path>]", runtime);
+			if (verb === "theatre") {
+				await runtime.output("Use /graph theatre from the TUI to attach the builtin theatre graph.");
+				return commandConsumed();
+			}
+			if (verb === "launch") {
+				await runtime.output("Use /graph launch from the TUI to launch Stage on the attached graph.");
+				return commandConsumed();
+			}
+			if (verb === "off") {
+				await runtime.output("Use /graph off from the TUI to detach the active graph.");
+				return commandConsumed();
+			}
+			return usage("Usage: /graph [run|list|compile <path>|theatre|launch|off]", runtime);
 		},
 		handleTui: async (command, runtime) => {
 			const { verb, rest } = parseSubcommand(command.args);
@@ -1354,9 +1390,23 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 					runtime.ctx.showStatus(`Compile failed: ${errorMessage(err)}`);
 				}
 				runtime.ctx.editor.setText("");
+			}
+			if (verb === "theatre") {
+				await runtime.ctx.swarmModeController?.attachGraph("builtin/theatre.graph.yaml");
+				runtime.ctx.editor.setText("");
 				return;
 			}
-			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>]");
+			if (verb === "launch") {
+				await runtime.ctx.swarmModeController?.launchGraph();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			if (verb === "off") {
+				await runtime.ctx.swarmModeController?.detachGraph();
+				runtime.ctx.editor.setText("");
+				return;
+			}
+			runtime.ctx.showStatus("Usage: /graph [run|list|compile <path>|theatre|launch|off]");
 			runtime.ctx.editor.setText("");
 		},
 	},

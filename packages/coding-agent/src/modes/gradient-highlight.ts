@@ -39,6 +39,9 @@ export interface GradientHighlightSpec {
 export function createGradientHighlighter(spec: GradientHighlightSpec): KeywordHighlighter {
 	const { probe, highlight, stops, hue, saturation = 90, lightness = 62 } = spec;
 
+	// Ensure highlight is global — matchAll throws on non-global regexes.
+	const safeHighlight: RegExp = highlight.global ? highlight : new RegExp(highlight.source, `${highlight.flags}g`);
+
 	let cachedMode: string | undefined;
 	let cachedPalette: readonly string[] | undefined;
 
@@ -88,7 +91,7 @@ export function createGradientHighlighter(spec: GradientHighlightSpec): KeywordH
 		const masked = maskNonProse(text);
 		let out = "";
 		let last = 0;
-		for (const m of masked.matchAll(highlight)) {
+		for (const m of masked.matchAll(safeHighlight)) {
 			const start = m.index ?? 0;
 			const end = start + m[0].length;
 			out += text.slice(last, start) + paint(text.slice(start, end), resetTo, wrappedPhase);

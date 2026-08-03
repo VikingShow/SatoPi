@@ -2022,7 +2022,9 @@ export class Editor implements Component, Focusable {
 		if (this.onChange) this.onChange("");
 		const maybePromise = this.onSubmit?.(result);
 		if (maybePromise instanceof Promise) {
-			maybePromise.finally(() => { this.#submitting = false; });
+			maybePromise.finally(() => {
+				this.#submitting = false;
+			});
 		} else {
 			this.#submitting = false;
 		}

@@ -24,6 +24,7 @@ import type {
 	StatusLineSegmentId,
 	StatusLineSegmentOptions,
 	StatusLineSettings,
+	SwarmModeStatus,
 } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -277,6 +278,7 @@ export class StatusLineComponent implements Component {
 	#loopModeStatus: { enabled: boolean } | null = null;
 	#goalModeStatus: { enabled: boolean; paused: boolean } | null = null;
 	#vibeModeStatus: { enabled: boolean } | null = null;
+	#swarmModeStatus: SwarmModeStatus = null;
 	#collabStatus: CollabStatus | null = null;
 	#focusedAgentId: string | undefined;
 	#activeRepoCache: ActiveRepoCache | undefined;
@@ -515,6 +517,10 @@ export class StatusLineComponent implements Component {
 
 	setVibeModeStatus(status: { enabled: boolean } | undefined): void {
 		this.#vibeModeStatus = status ?? null;
+	}
+
+	setSwarmModeStatus(status: SwarmModeStatus): void {
+		this.#swarmModeStatus = status;
 	}
 
 	setCollabStatus(status: CollabStatus | null): void {
@@ -1066,6 +1072,7 @@ export class StatusLineComponent implements Component {
 					: null,
 			goalMode: this.#goalModeStatus,
 			vibeMode: this.#vibeModeStatus,
+			swarmMode: this.#swarmModeStatus,
 			collab: this.#collabStatus,
 			usageStats,
 			contextPercent,

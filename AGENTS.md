@@ -50,39 +50,45 @@ Unless user tells you exactly what to write:
   History: `with { type: "file" }` only copied the entry as a raw asset (workers crashed silently in compiled binaries — issues #1011, #1027), and the later literal-path + extra-entrypoint pattern required keeping spawn literals and two build scripts in sync (issue #1150). The smoke probe below is the live validation of this contract.
   Validate any new worker with the dedicated smoke probe: `stp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.
 
-## Swarm Architecture (v3 — `refactor/swarm-v3-unified-architecture`)
+## Swarm Architecture
 
-The SatoPi swarm multi-agent orchestration follows a 6-layer unified architecture. See `docs/swarm-architecture-v3.md` for the full design.
+The swarm multi-agent orchestration runs on a graph engine: `GraphRunner` (the sole
+`ISwarmOrchestrator`) drives a DAG of phase nodes (`theatre.graph.yaml`:
+Script → Stage → Curtain) through `GraphEngine`/`WaveScheduler`. See
+`docs/swarm/refactoring-plan-2026-07-30.md` (execution blueprint) and
+`docs/swarm/tui-crew-optimization-plan.md` (crew TUI design).
 
-### Layer Overview
+### Module Map (actual layout)
 
-| Layer | Directory | Purpose |
-|-------|-----------|---------|
-| WorkflowFSM | `swarm/core/workflow-fsm.ts` | Declarative PhaseDefinition (idle→script→stage→curtain), guarded transitions |
-| AgentRuntime | `swarm/agent-runtime/` | Declarative AgentSpec → AgentHandle spawning. Uses `Agent` + `AgentSession` directly (NOT `runSubprocess()`) for full `AgentLoopConfig` access |
-| CommBus | `swarm/comm-bus/` | Human=Agent peer endpoints, `CommChannel` (send/roundtable/vote) wraps `IrcBus` |
-| ContextManager | `swarm/context-manager/` | `ContextPipeline` (8 priority-ordered `ContextSource`), `OffloadManager` (L1→L3), `ContextCompactor` (3 strategies) |
-| HookPipeline | `swarm/hook-system/` | Priority-ordered lifecycle hooks (Profile→Stigmergy→Offload→Mnemopi→Experience→Verification). 23 `HookEvent` types |
-| PhaseBehavior | `swarm/behaviors/` | `ScriptBehavior` / `StageBehavior` / `CurtainBehavior` implement unified `PhaseBehavior` interface |
+| Concern | Home |
+|---|---|
+| Orchestrator / graph engine | `src/graph/` — `graph-runner.ts`, `graph-engine.ts`, `graph-executor.ts`, `dag.ts`, `gate-controller.ts`, `checkpoint.ts`, `node-behavior.ts`, `phase-behavior-adapter.ts`, `builtin/theatre.graph.yaml` |
+| Phase behaviors | `src/graph/behaviors/` — `script-behavior.ts`, `stage-behavior.ts`, `curtain-behavior.ts`, `debate-roundtable.ts` |
+| Agent spawning | `src/graph/agent-helpers.ts` `spawnAgent()` (hooks → RoleProvider → ContextPipeline → `createAgentSession`); `AgentSpec` in `agent-spec.ts`. The former `AgentRuntime` class is **deleted** — never resurrect it |
+| State | `src/swarm/core/state.ts` `StateTracker` + global `currentSwarmPhase`; persistence via `SwarmSessionManager` (JSONL) |
+| Services | `src/swarm/core/swarm-infra.ts` (`createSwarmInfra`), `services.ts` (RunManager — sole impl `GraphRunnerAsRunManager`), `schema.ts` (loop-YAML → graph via `loop-converter.ts`) |
+| Session | `src/swarm/session/` — `swarm-session-manager.ts`, `session-registry.ts`, `create-swarm-session.ts` |
+| Crew (group chat) | `src/crew/crew-manager.ts`, `src/modes/controllers/swarm-mode-controller.ts` — `/swarm start` enters a human-participating crew chat with NO graph by default |
+| Communication | `src/comm/comm-channel.ts` (send/roundtable/vote over `IrcBus`), `src/comm/roundtable.ts` (Jaccard convergence), `src/comm/vote.ts` |
+| Context pipeline | `src/context/context-pipeline.ts` + `src/context/sources/*` (11 sources; registered: experience, mmd, stigmergy, offload, mnemopi, hindsight; role/profile folded into `RoleProvider`) |
+| Hooks | `src/hooks/hook-pipeline.ts`, `register-builtins.ts` (Profile/Stigmergy/Offload/Mnemopi/Experience; Verification builtin is not registered) |
+| Legacy loop engine | **Deleted** (`SwarmRunner`/`SwarmRunManager`/`AgentRuntime`/`WorkflowFSM` do not exist). `LoopSwarmConfig` survives only as config/type for `TaskComplexityAnalyzer` and graph-engine tuning |
 
 ### Key Design Rules
 
-- **Do NOT import from `runSubprocess()`** for new agent spawning — use `AgentRuntime.spawn()` which leverages `AgentLoopConfig` hooks
-- **Do NOT create `AgentChannel` directly** — use `CommBus.groupChannel()` / `CommChannel.roundtable()` / `CommChannel.vote()`
-- **Do NOT track phase manually** (`#phase`, `#busy`) — use `WorkflowFsm.transition()`
+- **Do NOT import from `runSubprocess()`** for swarm agent spawning — use `GraphRunner`'s `spawnAgent()` path (`graph/agent-helpers.ts`), which goes through hooks, role resolution, and the context pipeline
+- **Do NOT create `AgentChannel`** — use `CommChannel` (`comm/comm-channel.ts`) / `IrcBus` for crew and phase communication
+- **Do NOT track phase manually** — phase is `GraphRunner.#phase` + `StateTracker.state.phase` + `setCurrentSwarmPhase()`; node transitions are DAG order (the `PhaseBehavior` adapter ignores `completion.nextPhase`)
 - **Do NOT inline context assembly** — register a `ContextSource` on the `ContextPipeline`
 - **Do NOT create ad-hoc hook systems** — register on `HookPipeline` with proper priority
-- **All existing public APIs remain unchanged** — new layers are additive; old code delegates internally
-- **Zero oh-my-pi modifications** — all new code is in `swarm/` subdirectories
+- **Crew and Graph are orthogonal**: `/swarm start` = crew chat (human participates directly, default no graph); the `swarm` magic keyword = embedded `GraphRunner` workflow (Script→Stage→Curtain); `stp swarm run` = CLI graph run
 
-### Deprecated (migrated internally)
+### Deprecated (do not revive)
 
-| Old | New |
-|-----|-----|
-| `SwarmStateMachine` | `WorkflowFsm` |
-| `AgentChannel` | `CommChannel` |
-| `RoleRoundtable` | `CommChannel.roundtable()` |
-| `ReporterElection` | `CommChannel.vote()` |
+`SwarmStateMachine`, `AgentChannel`, `RoleRoundtable`, `ReporterElection`,
+`StageController`, `role-roundtable.ts`, `verification-hook.ts`, and the
+`swarm.engine` setting are dead — the live surfaces are `WorkflowFsm`-less
+graph waves, `CommChannel`, and `CommChannel.roundtable()/vote()`.
 
 ## Bun Over Node
 
