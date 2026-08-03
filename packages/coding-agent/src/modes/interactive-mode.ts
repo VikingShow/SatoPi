@@ -150,6 +150,7 @@ import { type DebateAnnotations, PlanReviewOverlay } from "./components/plan-rev
 import { StatusLineComponent } from "./components/status-line";
 import { SwarmDashboardOverlay } from "./components/swarm/swarm-dashboard-overlay";
 import { SwarmSidebar } from "./components/swarm/swarm-sidebar";
+import { CrewTranscriptView } from "./components/swarm/crew-transcript-view";
 import { SwarmStatusBar } from "./components/swarm/swarm-status-bar";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { TranscriptContainer } from "./components/transcript-container";
@@ -565,6 +566,10 @@ export class InteractiveMode implements InteractiveModeContext {
 	#swarmSidebarUnsubscribe?: () => void;
 	#swarmDashboardHandle: OverlayHandle | undefined;
 	#crewStartOverlayHandle: OverlayHandle | undefined;
+	/** Fill spacer pushed into the chat container while the crew view is
+	 *  mounted, so the editor sits at the viewport bottom instead of right
+	 *  after the (short) welcome content. */
+	#crewViewFillSpacer: Spacer | undefined;
 	#swarmStatusBar: SwarmStatusBar | undefined;
 	/** Multi-agent Crew chat controller. Created in init(), available when swarm mode is active. */
 	swarmModeController?: SwarmModeController;
@@ -861,12 +866,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			workspace: getProjectDir(),
 			theme,
 			onRequestRender: () => this.ui.requestRender(),
-			onNotice: (level, message) => {
-				if (level === "error") this.showError(message);
-				else this.showWarning(message);
-			},
 			onLeaveCrew: () => {
 				this.#crewStartOverlayHandle?.hide();
+				if (this.#crewViewFillSpacer) {
+					this.ui.removeChild(this.#crewViewFillSpacer);
+					this.#crewViewFillSpacer = undefined;
+				}
 				this.#updateSwarmModeStatus();
 			},
 		});
@@ -4697,6 +4702,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#swarmSidebarHandle = undefined;
 			this.#swarmSidebarUnsubscribe?.();
 			this.#swarmSidebarUnsubscribe = undefined;
+			// Restore focus to the editor explicitly: hide() restores focus to
+			// the topmost visible overlay (the crew view), but Ctrl+B is bound
+			// on the editor's custom key handlers — with focus parked on the
+			// crew view the next Ctrl+B is swallowed and the sidebar can never
+			// reopen until the user manually refocuses the editor.
+			this.ui.setFocus(this.editor);
 			this.ui.requestRender();
 			return;
 		}
@@ -4822,28 +4833,39 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Hide existing crew overlay if any
 		this.#crewStartOverlayHandle?.hide();
-
-		// Mount as a normal (non-fullscreen) overlay anchored top-left so the
-		// status line and editor stay visible below it.
-		//
-		// Height budget: the overlay must never cover the editor. The editor
-		// sits at the END of the content frame — which is NOT always the bottom
-		// of the viewport. With a short frame (fresh session, welcome screen),
-		// the frame is shorter than the terminal and the editor renders at the
-		// content bottom (mid-screen), while rows below the frame stay blank.
-		// Budgeting maxHeight from terminal rows alone let the overlay extend
-		// past the editor's real position and hide the input box. Derive the
-		// ceiling from the last frame's length minus the editor's own rows, so
-		// the overlay ends one row above the editor wherever it sits; the frame
-		// only grows from here (chat history, notices), which moves the editor
-		// DOWN — never back under the overlay.
-		const frameLength = this.ui.lastFrameLength;
+		// The content frame of a fresh session is shorter than the viewport, so
+		// the editor renders mid-screen (right after the welcome content) and a
+		// frame-based overlay budget would leave the crew panel almost no room.
+		// Push the editor to the viewport bottom with a fill spacer (removed on
+		// leave), then budget the overlay from the viewport: it ends
+		// `editorLines + 2` rows above the bottom and can never cover the
+		// editor.
+		const rows = this.ui.terminal.rows;
 		const editorLines = Math.max(1, this.editor.getLines().length);
-		const editorTop = Math.max(0, frameLength - editorLines);
+		const maxHeight = Math.max(10, rows - editorLines - 3);
+		if (!this.#crewViewFillSpacer) {
+			this.#crewViewFillSpacer = new Spacer(0);
+			// Move the status line + editor container to the end of the layout
+			// and put the spacer before them, so the status line and editor sit
+			// at the viewport bottom regardless of how short the content frame
+			// is (a fresh session's frame ends right after the welcome content,
+			// leaving the editor mid-screen otherwise).
+			this.ui.removeChild(this.statusLine);
+			this.ui.removeChild(this.editorContainer);
+			this.ui.addChild(this.#crewViewFillSpacer);
+			this.ui.addChild(this.statusLine);
+			this.ui.addChild(this.editorContainer);
+		}
+		this.#crewViewFillSpacer.setLines(Math.max(0, rows - this.ui.lastFrameLength - 1));
+		// Give the view the same height budget so its fill padding matches the
+		// engine's maxHeight clamp (otherwise the bottom border gets clipped).
+		if (view instanceof CrewTranscriptView) {
+			view.setTargetHeight(maxHeight);
+		}
 		this.#crewStartOverlayHandle = this.ui.showOverlay(view, {
 			anchor: "top-left",
 			width: "100%",
-			maxHeight: Math.max(10, editorTop - 1),
+			maxHeight,
 			margin: 0,
 		});
 		this.ui.setFocus(this.editor);

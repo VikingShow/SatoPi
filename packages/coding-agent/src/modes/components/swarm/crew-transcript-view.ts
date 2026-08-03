@@ -99,6 +99,9 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	/** Largest valid scroll offset, refreshed on each render from the current filters. */
 	#maxScrollOffset = 0;
 
+	/** Overlay height the host mounted this view with; padding targets it so
+	 *  the bottom border is never clipped by the engine's maxHeight clamp. */
+	#targetHeight: number | undefined;
 	constructor(state: CrewTranscriptState, theme: Theme, onClose?: () => void) {
 		this.#state = state;
 		this.#theme = theme;
@@ -113,6 +116,11 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	/** Update mutable transcript state fields. */
 	updateState(state: Partial<CrewTranscriptState>): void {
 		Object.assign(this.#state, state);
+	}
+
+	/** Set the overlay height budget (from the host's mount options). */
+	setTargetHeight(height: number): void {
+		this.#targetHeight = height;
 	}
 
 	render(width: number): readonly string[] {
@@ -169,32 +177,41 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 				if (filtered.length === 0) {
 					lines.push(t.fg("dim", "  No transcript entries match filter"));
 				} else {
-					// Window the transcript to the rows left after chrome; the scroll
-					// hint shares the message area (one row) when content overflows.
+					// Pre-render every entry to wrapped display rows (multi-line
+					// bodies), then window by ROWS so long agent replies are fully
+					// readable instead of being truncated to one line.
+					const rendered: string[] = [];
+					for (const entry of filtered) {
+						rendered.push(...this.#entryLines(entry, innerWidth, t));
+					}
 					const budget = this.#contentBudget(lines.length);
-					const overflow = filtered.length > budget;
+					const overflow = rendered.length > budget;
 					const windowRows = overflow ? Math.max(1, budget - 1) : budget;
-					this.#maxScrollOffset = Math.max(0, filtered.length - windowRows);
+					this.#maxScrollOffset = Math.max(0, rendered.length - windowRows);
 					this.#scrollOffset = Math.min(Math.max(0, this.#scrollOffset), this.#maxScrollOffset);
-					const start = Math.max(0, filtered.length - windowRows - this.#scrollOffset);
-					for (const entry of filtered.slice(start, start + windowRows)) {
-						lines.push(this.#entryLine(entry, innerWidth, t));
+					const start = Math.max(0, rendered.length - windowRows - this.#scrollOffset);
+					for (const line of rendered.slice(start, start + windowRows)) {
+						lines.push(line);
 					}
 					if (overflow) {
 						lines.push(t.fg("dim", `  \u2191\u2193 ${this.#maxScrollOffset} more`));
 					}
 				}
 
+				// Fill the content area to the panel's target height so the
+				// bottom border sits at the content edge instead of floating
+				// right after the last message row. Prefer the host-provided
+				// overlay budget (maxHeight) so the engine never clips the
+				// border; fall back to the terminal-derived estimate.
+				const available = Math.max(MIN_VIEW_ROWS, getTerminalRows() - RESERVED_BOTTOM_ROWS);
+				const target = this.#targetHeight ?? available;
+				const contentTarget = Math.max(lines.length, target - PANEL_CHROME_ROWS);
+				for (let i = lines.length; i < contentTarget; i++) lines.push("");
 				return lines;
 			},
 			this.#theme,
 		);
-		const lines = [...panel.render(width)];
-		// Fill-height: pad to the available screen height (reserving the status
-		// line + editor at the bottom) so the panel spans the terminal above it.
-		const target = Math.max(MIN_VIEW_ROWS, getTerminalRows() - RESERVED_BOTTOM_ROWS);
-		for (let i = lines.length; i < target; i++) lines.push("");
-		return lines;
+		return panel.render(width);
 	}
 
 	/** Scroll the transcript window by `delta` entries (negative scrolls up). */
@@ -311,28 +328,53 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 		return Math.max(1, available - PANEL_CHROME_ROWS - chromeRows);
 	}
 
-	/** Render a single transcript entry (tool vs message). */
-	#entryLine(entry: CrewTranscriptEntry, innerWidth: number, t: Theme): string {
+	/** Render a transcript entry as wrapped display rows (multi-line bodies). */
+	#entryLines(entry: CrewTranscriptEntry, innerWidth: number, t: Theme): string[] {
 		const entryKind = entry.kind ?? "message";
 		const color = agentColor(entry.agentId, t);
 		const time = formatTime(entry.timestamp, t);
 		const tag = color(`[${entry.agentId}]`);
 		const roundLabel = t.fg("dim", `R${entry.round}`);
+		const isTool = entryKind === "tool";
 
-		if (entryKind === "tool") {
-			const toolTag = t.fg("accent", `\u2699 ${entry.toolName ?? "tool"}`);
-			const prefix = `  ${time} ${roundLabel} ${tag} ${toolTag} `;
-			const prefixLen = visibleLen(prefix);
-			const bodyBudget = Math.max(5, innerWidth - prefixLen - 1);
-			const body = entry.body.length > bodyBudget ? `${entry.body.slice(0, bodyBudget - 1)}\u2026` : entry.body;
-			return `${prefix}${t.fg("dim", body)}`;
-		}
-		const prefix = `  ${time} ${roundLabel} ${tag} `;
+		const prefix = isTool
+			? `  ${time} ${roundLabel} ${tag} ${t.fg("accent", `\u2699 ${entry.toolName ?? "tool"}`)} `
+			: `  ${time} ${roundLabel} ${tag} `;
 		const prefixLen = visibleLen(prefix);
-		const bodyBudget = Math.max(5, innerWidth - prefixLen - 1);
-		const body = entry.body.length > bodyBudget ? `${entry.body.slice(0, bodyBudget - 1)}\u2026` : entry.body;
-		return `${prefix}${body}`;
+		const bodyWidth = Math.max(10, innerWidth - prefixLen - 1);
+		const bodyLines = wrapBody(entry.body, bodyWidth);
+		const renderBody = (line: string): string => (isTool ? t.fg("dim", line) : line);
+
+		const out: string[] = [];
+		bodyLines.forEach((body, index) => {
+			if (index === 0) {
+				out.push(`${prefix}${renderBody(body)}`);
+			} else {
+				// Continuation rows align under the body column (prefix width).
+				out.push(`  ${" ".repeat(Math.max(0, prefixLen - 2))}${renderBody(body)}`);
+			}
+		});
+		return out.length > 0 ? out : [prefix];
 	}
+}
+
+/**
+ * Wrap a message body to `width` display columns, honoring embedded newlines.
+ * Hard-wraps long tokens at the column bound so rows can never overflow the
+ * panel (word-wrap would still need a fallback for unbreakable tokens).
+ */
+function wrapBody(text: string, width: number): string[] {
+	const out: string[] = [];
+	for (const paragraph of text.split("\n")) {
+		if (paragraph === "") {
+			out.push("");
+			continue;
+		}
+		for (let i = 0; i < paragraph.length; i += width) {
+			out.push(paragraph.slice(i, i + width));
+		}
+	}
+	return out;
 }
 
 // ============================================================================
