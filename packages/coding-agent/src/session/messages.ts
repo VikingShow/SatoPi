@@ -30,8 +30,8 @@ export {
 	createCustomMessage,
 } from "@satopi/pi-agent-core/compaction/messages";
 
-import type { OutputMeta } from "../tools/output-meta";
-import { formatOutputNotice } from "../tools/output-meta";
+import type { OutputMeta } from "../utils/output-meta";
+import { formatOutputNotice } from "../utils/output-meta";
 
 export const SKILL_PROMPT_MESSAGE_TYPE = "skill-prompt";
 export const LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE = "lsp-late-diagnostic";
