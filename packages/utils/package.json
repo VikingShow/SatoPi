@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@satopi/pi-utils",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Shared utilities for pi packages",
   "homepage": "https://omp.sh",
   "author": "Can Boluk",
