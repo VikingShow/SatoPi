@@ -610,6 +610,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		// no-op that unfocuses, and must not re-hide a just-restored overlay.
 		if (this.#focusController.focusedAgentId) {
 			this.#crewStartOverlayHandle?.setHidden(true);
+			// The crew fill spacer exists to pin the editor below the crew overlay;
+			// with the overlay hidden it only pads a gap between the focused
+			// transcript and the status bar — drop it, restore on unfocus.
+			this.#setCrewFillSpacer(false);
 		}
 	}
 	focusParentSession(): Promise<void> {
@@ -801,6 +805,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			// No-op outside crew mode (no overlay mounted).
 			if (!this.#crewStartOverlayHandle) return;
 			this.#crewStartOverlayHandle.setHidden(false);
+			// Restore the crew fill spacer (removed while viewing an agent session).
+			this.#setCrewFillSpacer(true);
 			// setHidden re-focuses the overlay component; the editor must keep input.
 			this.ui.setFocus(this.editor);
 			this.#updateSwarmModeStatus();
@@ -885,10 +891,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			onLeaveCrew: () => {
 				this.#crewStartOverlayHandle?.hide();
 				this.#crewStartOverlayHandle = undefined;
-				if (this.#crewViewFillSpacer) {
-					this.ui.removeChild(this.#crewViewFillSpacer);
-					this.#crewViewFillSpacer = undefined;
-				}
+				this.#setCrewFillSpacer(false);
 				this.#updateSwarmModeStatus();
 			},
 		});
@@ -4869,20 +4872,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const rows = this.ui.terminal.rows;
 		const editorLines = Math.max(1, this.editor.getLines().length);
 		const maxHeight = Math.max(10, rows - editorLines - 3);
-		if (!this.#crewViewFillSpacer) {
-			this.#crewViewFillSpacer = new Spacer(0);
-			// Move the status line + editor container to the end of the layout
-			// and put the spacer before them, so the status line and editor sit
-			// at the viewport bottom regardless of how short the content frame
-			// is (a fresh session's frame ends right after the welcome content,
-			// leaving the editor mid-screen otherwise).
-			this.ui.removeChild(this.statusLine);
-			this.ui.removeChild(this.editorContainer);
-			this.ui.addChild(this.#crewViewFillSpacer);
-			this.ui.addChild(this.statusLine);
-			this.ui.addChild(this.editorContainer);
-		}
-		this.#crewViewFillSpacer.setLines(Math.max(0, rows - this.ui.lastFrameLength - 1));
+		this.#setCrewFillSpacer(true);
 		// Give the view the same height budget so its fill padding matches the
 		// engine's maxHeight clamp (otherwise the bottom border gets clipped).
 		if (view instanceof CrewTranscriptView) {
@@ -4896,6 +4886,36 @@ export class InteractiveMode implements InteractiveModeContext {
 		});
 		this.ui.setFocus(this.editor);
 		this.#updateSwarmModeStatus();
+	}
+
+	/**
+	 * Toggle the crew fill spacer that pins the status line + editor to the
+	 * viewport bottom while the crew overlay is mounted. When an agent session
+	 * is focused the overlay is hidden and the spacer is removed, so the
+	 * focused transcript sits flush above the status bar instead of leaving a
+	 * large empty gap.
+	 */
+	#setCrewFillSpacer(active: boolean): void {
+		if (active) {
+			if (!this.#crewViewFillSpacer) {
+				this.#crewViewFillSpacer = new Spacer(0);
+				// Move the status line + editor container to the end of the layout
+				// and put the spacer before them, so the status line and editor sit
+				// at the viewport bottom regardless of how short the content frame
+				// is (a fresh session's frame ends right after the welcome content,
+				// leaving the editor mid-screen otherwise).
+				this.ui.removeChild(this.statusLine);
+				this.ui.removeChild(this.editorContainer);
+				this.ui.addChild(this.#crewViewFillSpacer);
+				this.ui.addChild(this.statusLine);
+				this.ui.addChild(this.editorContainer);
+			}
+			const rows = this.ui.terminal.rows;
+			this.#crewViewFillSpacer.setLines(Math.max(0, rows - this.ui.lastFrameLength - 1));
+		} else if (this.#crewViewFillSpacer) {
+			this.ui.removeChild(this.#crewViewFillSpacer);
+			this.#crewViewFillSpacer = undefined;
+		}
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {
