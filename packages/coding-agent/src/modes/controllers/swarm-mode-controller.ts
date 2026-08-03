@@ -481,7 +481,13 @@ export class SwarmModeController {
 				const ref = agentRefs.get(mention.agentId);
 				if (ref?.session) {
 					prompts.push(
-						ref.session.prompt(mention.text).catch(err =>
+						// Crew-routed messages must not trigger the magic-keyword
+						// notices (a broadcast containing the standalone word
+						// "swarm" would otherwise steer every member into the
+						// Script phase — each initializing its own embedded
+						// GraphRunner and blocking the UI loop). The keyword
+						// affordances are a main-session, user-typed feature.
+						ref.session.prompt(mention.text, { synthetic: true }).catch(err =>
 							logger.error("[SwarmModeController] Agent prompt failed", {
 								agentId: mention.agentId,
 								error: String(err),
@@ -497,7 +503,9 @@ export class SwarmModeController {
 			for (const [memberId, ref] of agentRefs) {
 				if (ref.session) {
 					prompts.push(
-						ref.session.prompt(parsed.broadcast).catch(err =>
+						// Synthetic: crew-routed text must not trigger the
+						// magic-keyword notices (see the directed-message path).
+						ref.session.prompt(parsed.broadcast, { synthetic: true }).catch(err =>
 							logger.error("[SwarmModeController] Broadcast prompt failed", {
 								agentId: memberId,
 								error: String(err),
