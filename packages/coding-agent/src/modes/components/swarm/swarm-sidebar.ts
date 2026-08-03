@@ -3,7 +3,7 @@ import type { Component } from "@satopi/pi-tui";
 import { matchesKey } from "@satopi/pi-tui/keys";
 import { formatAge } from "@satopi/pi-utils";
 import type { CrewManager } from "../../../crew/crew-manager";
-import { AgentRegistry } from "../../../registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "../../../registry/agent-registry";
 import type { SessionInfo } from "../../../session/session-listing";
 import { formatStatusIcon } from "../../../tools/render-utils";
 import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
@@ -88,6 +88,7 @@ export class SwarmSidebar implements Component {
 	#expandedCrews = new Set<string>();
 	#expandedSwarms = new Set<string>();
 	#expandedHistory = new Set<string>();
+	#expandedHistoryAgents = new Set<string>();
 	#otherSessions: SessionInfo[] = [];
 	#sessionSummaries = new Map<string, { count: number; latestMtime: number }>();
 	#historyAgents = new Map<string, PersistedAgentInfo[]>();
@@ -267,17 +268,51 @@ export class SwarmSidebar implements Component {
 					if (sessionExpanded) {
 						const agents = this.#historyAgents.get(session.path);
 						if (agents) {
-							for (const agent of agents) {
-								sessionNode.children!.push({
-									type: "agent",
-									id: `history:agent:${session.path}:${agent.id}`,
-									label: agent.displayName,
-									status: "parked",
-									agentId: agent.id,
-									sessionFile: agent.sessionFile,
-									depth: 2,
-								});
+							// Persisted agents form a nested tree keyed by
+							// parentId (a sub-session's own sub-sessions). Roots
+							// are agents whose parent is the main agent or has no
+							// transcript in this session (orphans). Advisors are
+							// observability-only and never join the tree.
+							const subs = agents.filter(a => a.kind === "sub");
+							const agentIds = new Set(subs.map(a => a.id));
+							const childrenByParent = new Map<string, PersistedAgentInfo[]>();
+							for (const agent of subs) {
+								const parent = agent.parentId ?? MAIN_AGENT_ID;
+								// Orphans (parent has no transcript in this session)
+								// group under MAIN so the walk below reaches them.
+								const effectiveParent =
+									parent === MAIN_AGENT_ID || agentIds.has(parent) ? parent : MAIN_AGENT_ID;
+								const list = childrenByParent.get(effectiveParent);
+								if (list) list.push(agent);
+								else childrenByParent.set(effectiveParent, [agent]);
 							}
+							const buildAgentTree = (parentId: string, depth: number): TreeNode[] => {
+								const kids = childrenByParent.get(parentId) ?? [];
+								return kids.map(agent => {
+									const hasChildren = childrenByParent.has(agent.id);
+									const expanded = hasChildren
+										? this.#expandedHistoryAgents.has(`${session.path}:${agent.id}`)
+										: undefined;
+									const node: TreeNode = {
+										type: "agent",
+										id: `history:agent:${session.path}:${agent.id}`,
+										label: agent.displayName,
+										status: "parked",
+										agentId: agent.id,
+										// The session path (the #historyAgents map key)
+										// so Enter can look the agent up and toggle
+										// container expansion per session.
+										sessionFile: session.path,
+										depth,
+										expanded,
+									};
+									if (hasChildren && expanded) {
+										node.children = buildAgentTree(agent.id, depth + 1);
+									}
+									return node;
+								});
+							};
+							sessionNode.children = buildAgentTree(MAIN_AGENT_ID, 2);
 						} else {
 							// Lazy load in flight — show a dim placeholder row.
 							sessionNode.children!.push({
@@ -376,11 +411,12 @@ export class SwarmSidebar implements Component {
 
 				const flat = this.#flattenTree(tree);
 				// Tree rows are budgeted from the terminal height: the framed
-				// panel takes 2 rows for its top/bottom bars and 2 for the
-				// trailing spacer + keybinding hint, with one row reserved for
-				// the "+N more" overflow marker. No fixed cap — the tree grows
-				// to fill the viewport.
-				const treeBudget = Math.max(1, termRows - 5);
+				// panel takes 2 rows for its top/bottom bars, the overlay
+				// reserves 2 more for its top/bottom margins, and one row each
+				// goes to the "+N more" overflow marker, the trailing spacer
+				// and the keybinding hint. No fixed cap — the tree grows to
+				// fill the viewport.
+				const treeBudget = Math.max(1, termRows - 7);
 				const maxVisible = Math.min(flat.length, treeBudget);
 
 				if (tree.length === 0) {
@@ -400,16 +436,21 @@ export class SwarmSidebar implements Component {
 
 					const multiMark = this.#multiSelected.has(node.id) ? t.fg("accent", "\u2713 ") : "";
 					const cursor = isSelected ? t.fg("accent", "\u25b6 ") : "  ";
-
 					if (node.type === "agent" || node.type === "crew-member") {
-						const iconStatus = AGENT_STATUS_ICON[node.status ?? "idle"] ?? "done";
-						const glyph = formatStatusIcon(iconStatus, t);
-						const color = iconStatus === "running" ? "accent" : iconStatus === "error" ? "error" : "dim";
-						const icon = t.fg(color as "accent" | "error" | "dim", glyph);
+						let glyph: string;
+						if (node.type === "agent" && node.expanded !== undefined) {
+							// History container agent (has persisted
+							// sub-sessions): expand/collapse marker.
+							glyph = t.fg("dim", node.expanded ? "\u25bc" : "\u25b6");
+						} else {
+							const iconStatus = AGENT_STATUS_ICON[node.status ?? "idle"] ?? "done";
+							const color = iconStatus === "running" ? "accent" : iconStatus === "error" ? "error" : "dim";
+							glyph = t.fg(color as "accent" | "error" | "dim", formatStatusIcon(iconStatus, t));
+						}
 						const maxName = Math.max(4, innerWidth - 20);
 						const name = node.label.length > maxName ? `${node.label.slice(0, maxName - 1)}\u2026` : node.label;
 						const unreadDot = this.#unreadAgents.has(node.agentId ?? "") ? t.fg("accent", "\u25cf ") : "";
-						lines.push(`${prefix}${cursor}${multiMark}${icon} ${unreadDot}${name}`);
+						lines.push(`${prefix}${cursor}${multiMark}${glyph} ${unreadDot}${name}`);
 					} else if (node.type === "crew" || node.type === "swarm") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
@@ -442,11 +483,12 @@ export class SwarmSidebar implements Component {
 				}
 
 				lines.push("");
-				lines.push(t.fg("dim", ` j/k nav  Enter open/resume  Space select  Ctrl+B close  \u2190\u2192 resize`));
+				lines.push(t.fg("dim", ` j/k nav  Enter open  r resume  Space select  Ctrl+B close  \u2190\u2192 resize`));
 
-				// Fill the remaining content rows so the bordered panel spans the
-				// whole terminal height (2 rows are the frame's top/bottom bars).
-				for (let i = lines.length; i < termRows - 2; i++) {
+				// Fill the remaining content rows so the bordered panel spans
+				// the overlay budget: termRows minus the frame's 2 top/bottom
+				// bars and the overlay's 2 vertical margins.
+				for (let i = lines.length; i < termRows - 4; i++) {
 					lines.push("");
 				}
 				return lines;
@@ -543,6 +585,16 @@ export class SwarmSidebar implements Component {
 			}
 			return;
 		}
+		if (data === "r") {
+			if (currentIdx >= 0) {
+				const node = flat[currentIdx].node;
+				// r = resume (mirrors the Agent Hub's r=revive mnemonic).
+				if (node.type === "history-session" && node.sessionFile) {
+					this.#config.onResumeSession?.(node.sessionFile);
+				}
+			}
+			return;
+		}
 		if (matchesKey(data, "enter") || matchesKey(data, "return")) {
 			if (currentIdx >= 0) {
 				const node = flat[currentIdx].node;
@@ -550,16 +602,27 @@ export class SwarmSidebar implements Component {
 					// Toggle History expand/collapse
 					this.#toggleHistoryExpansion(node);
 				} else if (node.type === "history-session") {
-					// Resume the selected historical session
-					if (node.sessionFile) {
-						this.#config.onResumeSession?.(node.sessionFile);
-					}
+					// Tree convention: Enter toggles the session's agent tree
+					// (r resumes).
+					this.#toggleHistoryExpansion(node);
 				} else if (node.type === "agent" && node.sessionFile) {
-					// Open a persisted agent from the History section: look up the
-					// cached info so the caller can register + focus it.
-					const info = this.#historyAgents.get(node.sessionFile)?.find(a => a.id === node.agentId);
-					if (info) {
-						this.#config.onOpenHistoryAgent?.(info);
+					if (node.expanded !== undefined) {
+						// Container agent (has persisted sub-sessions): toggle
+						// its subtree, matching the crew/swarm convention.
+						const key = `${node.sessionFile}:${node.agentId}`;
+						if (this.#expandedHistoryAgents.has(key)) {
+							this.#expandedHistoryAgents.delete(key);
+						} else {
+							this.#expandedHistoryAgents.add(key);
+						}
+						this.#config.onRequestRender?.();
+					} else {
+						// Leaf persisted agent: look up the cached info so the
+						// caller can register + focus it.
+						const info = this.#historyAgents.get(node.sessionFile)?.find(a => a.id === node.agentId);
+						if (info) {
+							this.#config.onOpenHistoryAgent?.(info);
+						}
 					}
 				} else if (node.type === "crew") {
 					// Toggle crew expand/collapse
