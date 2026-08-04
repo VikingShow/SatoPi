@@ -150,7 +150,7 @@ describe("global --profile flag", () => {
 			}),
 		);
 		const output = outSpy.mock.calls.map(call => String(call[0] ?? "")).join("\n");
-		expect(output).toContain("Created omp-work");
+		expect(output).toContain("Created stp-work");
 		expect(output).not.toContain(`${APP_NAME}/${VERSION}`);
 	});
 
@@ -175,7 +175,7 @@ describe("global --profile flag", () => {
 			}),
 		);
 		const output = outSpy.mock.calls.map(call => String(call[0] ?? "")).join("\n");
-		expect(output).toContain("Created omp-work");
+		expect(output).toContain("Created stp-work");
 		expect(output).not.toContain(`${APP_NAME}/${VERSION}`);
 	});
 
@@ -201,7 +201,7 @@ describe("global --profile flag", () => {
 		);
 		expect(getActiveProfile()).toBe("work");
 		const output = outSpy.mock.calls.map(call => String(call[0] ?? "")).join("\n");
-		expect(output).toContain("Created omp-work");
+		expect(output).toContain("Created stp-work");
 		expect(output).not.toContain(`${APP_NAME}/${VERSION}`);
 	});
 
@@ -314,7 +314,7 @@ describe("global --profile flag", () => {
 			]);
 
 			expect(stdout, stderr).toContain("HANDLED");
-			expect(stderr).toContain("Invalid OMP profile");
+			expect(stderr).toContain("Invalid STP profile");
 			expect(exitCode).toBe(1);
 		} finally {
 			await removeWithRetries(root);

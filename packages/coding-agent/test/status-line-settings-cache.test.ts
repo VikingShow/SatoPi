@@ -157,7 +157,9 @@ describe("StatusLineComponent effective settings cache", () => {
 		const customComponent = makeComponent({ preset: "custom", leftSegments: [], rightSegments: [] });
 		expect(customComponent.getEffectiveSettingsForTest().leftSegments).toEqual([]);
 		expect(customComponent.getEffectiveSettingsForTest().rightSegments).toEqual([]);
-		expect(customComponent.getTopBorder(120)).toEqual({ content: "", width: 0 });
+		const topBorder = customComponent.getTopBorder(120);
+		expect(stripVTControlCharacters(topBorder.content)).toBe("○  ○");
+		expect(topBorder.width).toBe(4);
 	});
 
 	it("surfaces active subagents even when custom segments omit subagents", () => {
@@ -173,7 +175,9 @@ describe("StatusLineComponent effective settings cache", () => {
 	it("keeps plan and hook state dynamic without settings invalidation", () => {
 		const component = makeComponent({ preset: "custom", leftSegments: ["mode"], rightSegments: [] });
 		const effective = component.getEffectiveSettingsForTest();
-		expect(component.getTopBorder(80).content).toBe("");
+		const topBorder = component.getTopBorder(80);
+		expect(stripVTControlCharacters(topBorder.content)).toBe("○  ○");
+		expect(topBorder.width).toBe(4);
 
 		component.setPlanModeStatus({ enabled: true, paused: false });
 		expect(stripVTControlCharacters(component.getTopBorder(80).content)).toContain("Plan");
