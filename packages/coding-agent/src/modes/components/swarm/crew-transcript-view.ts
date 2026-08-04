@@ -14,12 +14,18 @@
  * Keyboard:
  *   j/k — scroll the transcript window
  *   f — toggle agent filter popup (show/hide specific agents)
- *   t — toggle between messages-only and messages+tools display
  *   r — cycle through round filters (all → round 1 → round 2 → … → all)
  *   Esc — close the view (leave the crew)
  */
 
-import { type Component, matchesKey, type OverlayFocusOwner } from "@satopi/pi-tui";
+import {
+	type Component,
+	matchesKey,
+	type OverlayFocusOwner,
+	truncateToWidth,
+	visibleWidth,
+	wrapTextWithAnsi,
+} from "@satopi/pi-tui";
 import type { CrewState, CrewSummary } from "../../../crew/crew-manager";
 import { AgentRegistry } from "../../../registry/agent-registry";
 import type { Theme, ThemeColor } from "../../theme/theme";
@@ -37,6 +43,8 @@ const PANEL_CHROME_ROWS = 2;
 const MIN_VIEW_ROWS = 10;
 /** Terminal height fallback when process.stdout.rows is unavailable. */
 const FALLBACK_TERMINAL_ROWS = 24;
+/** Below this inner width the per-entry round label is omitted to save prefix space. */
+const MIN_ROUND_LABEL_INNER_WIDTH = 60;
 
 /**
  * Terminal height in rows. Mirrors ProcessTerminal's own resolution
@@ -90,11 +98,10 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	readonly #theme: Theme;
 	readonly #onClose?: () => void;
 	#showFilterPopup = false;
-	#showTools = true;
 	#filteredAgentIds = new Set<string>();
 	/** Current round filter: 0 = all, N = round N only. */
 	#roundFilter = 0;
-	/** Scroll offset in entries from the newest transcript position (0 = follow newest). */
+	/** Scroll offset in rows from the newest transcript position (0 = follow newest). */
 	#scrollOffset = 0;
 	/** Largest valid scroll offset, refreshed on each render from the current filters. */
 	#maxScrollOffset = 0;
@@ -130,17 +137,17 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 				const lines: string[] = [];
 
 				// 1. Topic
-				lines.push(t.fg("accent", `  Topic: ${this.#state.topic}`));
+				lines.push(t.fg("accent", truncateToWidth(`  Topic: ${this.#state.topic}`, innerWidth)));
 
 				// 2. Rounds + crew activity badge (derived from entries + AgentRegistry)
-				lines.push(this.#badgeLine(t));
+				lines.push(this.#badgeLine(innerWidth, t));
 
 				// 3. Crew member roster (only for full CrewState)
 				if ("members" in this.#state.crew && this.#state.crew.members.length > 0) {
 					const members = this.#state.crew.members
 						.map(m => `${m.agentId}${m.role === "observer" ? "*" : ""}`)
 						.join(", ");
-					lines.push(t.fg("dim", `  Crew: ${members}`));
+					lines.push(t.fg("dim", truncateToWidth(`  Crew: ${members}`, innerWidth)));
 				}
 
 				lines.push("");
@@ -152,14 +159,14 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 					for (const agentId of uniqueAgents) {
 						const hidden = this.#filteredAgentIds.has(agentId);
 						const mark = hidden ? t.fg("error", "\u2717") : t.fg("success", "\u2713");
-						lines.push(`  \u2502 ${mark} ${agentId}`);
+						lines.push(truncateToWidth(`  \u2502 ${mark} ${agentId}`, innerWidth));
 					}
 					lines.push(t.fg("dim", "  \u2514\u2500 a-z toggle  f close"));
 					lines.push("");
 				}
 
 				// 5. Shortcuts hint
-				lines.push(t.fg("dim", "  f:filter  t:tools  r:round  j/k:scroll"));
+				lines.push(t.fg("dim", truncateToWidth("  f:filter  r:round  j/k:scroll", innerWidth)));
 				lines.push("");
 
 				// 6. Scrollable message transcript window
@@ -170,12 +177,9 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 				if (this.#filteredAgentIds.size > 0) {
 					filtered = filtered.filter(e => !this.#filteredAgentIds.has(e.agentId));
 				}
-				if (!this.#showTools) {
-					filtered = filtered.filter(e => (e.kind ?? "message") !== "tool");
-				}
 
 				if (filtered.length === 0) {
-					lines.push(t.fg("dim", "  No transcript entries match filter"));
+					lines.push(t.fg("dim", truncateToWidth("  No transcript entries match filter", innerWidth)));
 				} else {
 					// Pre-render every entry to wrapped display rows (multi-line
 					// bodies), then window by ROWS so long agent replies are fully
@@ -214,7 +218,7 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 		return panel.render(width);
 	}
 
-	/** Scroll the transcript window by `delta` entries (negative scrolls up). */
+	/** Scroll the transcript window by `delta` rows (negative scrolls up). */
 	scrollBy(delta: number): void {
 		this.#scrollOffset = Math.max(0, Math.min(this.#scrollOffset + delta, this.#maxScrollOffset));
 	}
@@ -222,11 +226,6 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	/** Open/close the agent filter popup. */
 	toggleFilter(): void {
 		this.#showFilterPopup = !this.#showFilterPopup;
-	}
-
-	/** Toggle between messages-only and messages+tools display. */
-	toggleTools(): void {
-		this.#showTools = !this.#showTools;
 	}
 
 	/** Cycle through round filters: 0 (all) → 1 → 2 → … → max → 0. */
@@ -242,7 +241,7 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	/**
 	 * The crew overlay delegates keyboard focus to the main editor: the host
 	 * focuses the editor while this overlay is up so its key chain can arbitrate
-	 * crew navigation (j/k/f/t/r/Esc) without typing being swallowed.
+	 * crew navigation (j/k/f/r/Esc) without typing being swallowed.
 	 */
 	ownsOverlayFocusTarget(_component: Component): boolean {
 		return true;
@@ -257,10 +256,6 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 			case "f":
 			case "F":
 				this.toggleFilter();
-				break;
-			case "t":
-			case "T":
-				this.toggleTools();
 				break;
 			case "r":
 			case "R":
@@ -294,7 +289,7 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 	}
 
 	/** Badge line: round count derived from entries + live crew member activity. */
-	#badgeLine(t: Theme): string {
+	#badgeLine(innerWidth: number, t: Theme): string {
 		const rounds = Math.max(1, this.#maxRound());
 		const roundInfo =
 			this.#roundFilter > 0
@@ -307,9 +302,9 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 			const replying = memberIds.filter(id => registry.get(id)?.status === "running").length;
 			line += t.fg("dim", ` \u00b7 ${replying}/${memberIds.length} replying`);
 		}
-		const toolMode = this.#showTools ? "tools" : "msg-only";
-		line += `  ${t.fg("dim", `[${toolMode}]`)}`;
-		return line;
+		// Truncated so the line can never re-wrap inside the frame and inflate
+		// the panel past the overlay height budget.
+		return truncateToWidth(line, innerWidth);
 	}
 
 	/** Highest round number seen in the transcript (0 when empty). */
@@ -321,60 +316,54 @@ export class CrewTranscriptView implements Component, OverlayFocusOwner {
 		return max;
 	}
 
-	/** Rows available for the message window after chrome, capped to the screen. */
+	/** Rows available for the message window after chrome. When the host has
+	 *  mounted the view with an overlay height budget (setTargetHeight), that
+	 *  budget is authoritative — the panel must never exceed it or the engine's
+	 *  maxHeight clamp clips the bottom border. Falls back to a terminal-derived
+	 *  estimate when the host never set one. */
 	#contentBudget(chromeRows: number): number {
+		if (this.#targetHeight !== undefined) {
+			// Panel chrome: header bar + bottom border.
+			return Math.max(1, this.#targetHeight - PANEL_CHROME_ROWS - chromeRows);
+		}
 		const available = Math.max(MIN_VIEW_ROWS, getTerminalRows() - RESERVED_BOTTOM_ROWS);
-		// Panel chrome: header bar + bottom border.
 		return Math.max(1, available - PANEL_CHROME_ROWS - chromeRows);
 	}
 
-	/** Render a transcript entry as wrapped display rows (multi-line bodies). */
+	/** Render a transcript entry as a header row + wrapped body block, followed
+	 *  by exactly one blank separator row (mirrors the main-session transcript's
+	 *  block rhythm). Continuation rows align under the body column. */
 	#entryLines(entry: CrewTranscriptEntry, innerWidth: number, t: Theme): string[] {
-		const entryKind = entry.kind ?? "message";
 		const color = agentColor(entry.agentId, t);
 		const time = formatTime(entry.timestamp, t);
 		const tag = color(`[${entry.agentId}]`);
-		const roundLabel = t.fg("dim", `R${entry.round}`);
-		const isTool = entryKind === "tool";
-
-		const prefix = isTool
-			? `  ${time} ${roundLabel} ${tag} ${t.fg("accent", `\u2699 ${entry.toolName ?? "tool"}`)} `
-			: `  ${time} ${roundLabel} ${tag} `;
-		const prefixLen = visibleLen(prefix);
+		// Tool entries are not produced at this baseline (Phase B4 wires them in
+		// later); kind/toolName stay on the type for that path, but every entry
+		// renders through the message layout.
+		const roundLabel = innerWidth < MIN_ROUND_LABEL_INNER_WIDTH ? "" : `${t.fg("dim", `R${entry.round}`)} `;
+		const prefix = `  ${time} ${roundLabel}${tag} `;
+		const prefixLen = visibleWidth(prefix);
 		const bodyWidth = Math.max(10, innerWidth - prefixLen - 1);
-		const bodyLines = wrapBody(entry.body, bodyWidth);
-		const renderBody = (line: string): string => (isTool ? t.fg("dim", line) : line);
+		const bodyLines = wrapTextWithAnsi(entry.body, bodyWidth);
+		// A body ending in "\n" wraps to a trailing empty paragraph that would
+		// double the block separator — drop trailing empties so the boundary
+		// between adjacent entries stays exactly one blank row.
+		let bodyEnd = bodyLines.length;
+		while (bodyEnd > 0 && bodyLines[bodyEnd - 1] === "") bodyEnd--;
 
 		const out: string[] = [];
-		bodyLines.forEach((body, index) => {
+		bodyLines.slice(0, bodyEnd).forEach((body, index) => {
 			if (index === 0) {
-				out.push(`${prefix}${renderBody(body)}`);
+				out.push(`${prefix}${body}`);
 			} else {
 				// Continuation rows align under the body column (prefix width).
-				out.push(`  ${" ".repeat(Math.max(0, prefixLen - 2))}${renderBody(body)}`);
+				out.push(`${" ".repeat(Math.max(0, prefixLen))}${body}`);
 			}
 		});
-		return out.length > 0 ? out : [prefix];
+		if (out.length === 0) out.push(prefix);
+		out.push("");
+		return out;
 	}
-}
-
-/**
- * Wrap a message body to `width` display columns, honoring embedded newlines.
- * Hard-wraps long tokens at the column bound so rows can never overflow the
- * panel (word-wrap would still need a fallback for unbreakable tokens).
- */
-function wrapBody(text: string, width: number): string[] {
-	const out: string[] = [];
-	for (const paragraph of text.split("\n")) {
-		if (paragraph === "") {
-			out.push("");
-			continue;
-		}
-		for (let i = 0; i < paragraph.length; i += width) {
-			out.push(paragraph.slice(i, i + width));
-		}
-	}
-	return out;
 }
 
 // ============================================================================
@@ -412,25 +401,6 @@ export function formatTime(ts: number, t: Theme): string {
 	const d = new Date(ts);
 	const hh = String(d.getHours()).padStart(2, "0");
 	const mm = String(d.getMinutes()).padStart(2, "0");
-	const ss = String(d.getSeconds()).padStart(2, "0");
-	return t.fg("dim", `${hh}:${mm}:${ss}`);
+	return t.fg("dim", `${hh}:${mm}`);
 }
 
-/** Visible length of a string, stripping ANSI escape sequences. */
-function visibleLen(s: string): number {
-	let len = 0;
-	let inEscape = false;
-	for (let i = 0; i < s.length; i++) {
-		const ch = s[i];
-		if (ch === "\x1b") {
-			inEscape = true;
-			continue;
-		}
-		if (inEscape) {
-			if (ch >= "@" && ch <= "~") inEscape = false;
-			continue;
-		}
-		len++;
-	}
-	return len;
-}

@@ -275,13 +275,13 @@ export class InputController {
 			// these keys are arbitrated here — empty-editor only, typing always
 			// wins (matching the AgentTranscriptViewer convention). The editor's
 			// custom key-handler slot is unusable for plain letters: it swallows
-			// keys unconditionally and would break typing j/k/f/t/r mid-message.
+			// keys unconditionally and would break typing j/k/f/r mid-message.
 			this.ctx.ui.addInputListener(data => {
 				const controller = this.ctx.swarmModeController;
 				if (!controller?.isCrewActive()) return undefined;
 				// While an agent session is focused the crew keys must not hijack
 				// input: Esc on an agent page returns to the crew (unfocus) instead
-				// of leaving the crew, and j/k/f/t/r stay out of the focused
+				// of leaving the crew, and j/k/f/r stay out of the focused
 				// session's own arbitration.
 				if (this.ctx.focusedAgentId) return undefined;
 				const view = controller.activeCrewView;
@@ -294,8 +294,6 @@ export class InputController {
 					view.scrollBy(-1);
 				} else if (matchesKey(data, "f")) {
 					view.toggleFilter();
-				} else if (matchesKey(data, "t")) {
-					view.toggleTools();
 				} else if (matchesKey(data, "r")) {
 					view.cycleRound();
 				} else if (matchesKey(data, "escape")) {
