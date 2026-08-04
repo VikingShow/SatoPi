@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@satopi/pi-mnemopi",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Local SQLite memory engine for SatoPi agents",
   "homepage": "https://omp.sh",
   "author": "Can Boluk",
