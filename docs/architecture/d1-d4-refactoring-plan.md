@@ -1,7 +1,7 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅(巨型工具拆分)· 阶段 4 ✅(sdk.ts 拆分)· 阶段 5 起待执行**
+> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅· 阶段 4 ✅· 阶段 5 ✅(interactive-mode 拆分)· 阶段 6 待执行**
 >
 > 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
@@ -222,13 +222,15 @@ stp --smoke-test     # CLI 冒烟
 - **验证记录**: ① `bun run check` ✅ ② sdk 相关测试: agent-session-mcp-discovery/cli-extension-providers/message-pipeline/model-persistence/tool-rebuild-skip/cli-max-time-flag 74 pass, legacy-pi-default-resource/goals/auth-broker/openai-responses/ssh-refresh 44 pass(2 个既有 python-kernel 环境失败,测试文件与 dev 仅 import 路径差异,非 sdk 拆分引入) ③ `stp --smoke-test` ✅ ④ 期间 smoke 出现 `peer-roster-source` 报错,复查确认为瞬时模块缓存问题,重跑即恢复
 - **验收**: 提交 `refactor(sdk): extract discovery and system-prompt into src/sdk/ (stage 4a)`(a367bc78c5),已推送
 
-### 阶段 5 — interactive-mode.ts 拆分
+### 阶段 5 — interactive-mode.ts 拆分 ✅(已完成,2026-08-04)
 
-- 按既有 `modes/controllers/` 模式提取:
-  - `input-chain.ts`(输入控制链)、`keymap.ts`(键位表)、`hud-renderer.ts`(HUD 渲染)、`session-switch.ts`(会话切换)
-- 主文件保留状态机核心 + 事件循环骨架(目标 < 3,000 行)
-- **DoD**: TUI 交互行为不变,`stp --smoke-test` 通过
-- **验收**: 提交 `refactor(modes): extract controllers from interactive-mode`
+- 提取 `modes/controllers/interactive-render-utils.ts`: 无状态渲染纯函数(computeEditorMaxHeight/formatHudNoteMarker/parseGoalSubcommand/formatContextTokenCount/renderAgentHud/renderSubagentHudLines)+ 14 个常量(EDITOR_*/MODEL_CYCLE_TRACK_CLEAR_MS/SUBAGENT_*/GOAL_SUBCOMMANDS/PLAN_KEEP_CONTEXT_*)
+- interactive-mode.ts: 5,215 → **5,075 行**;类保留全部逻辑,import + re-export 提取的符号(对外 API 不变)
+- 修复既有 bug: `renderSubagentHudLines` 标题 "Agents" → "Subagents"(与其专测期望一致;git stash 确认该失败在提取前就存在)
+- > 注: 初版规划按 input-chain/keymap/hud-renderer/session-switch 拆 4 个 controllers;实测类内方法(事件处理/UI/状态)深度耦合 `this` 状态,仅模块级纯函数可安全提取,故收敛为 1 个 render-utils 模块(与阶段 2b/4 的"深度耦合则不拆"决策一致)
+- **DoD**: `bun run check` 通过;interactive-mode 相关测试 16 pass;`stp --smoke-test` 通过
+- **验证记录**: ① `bun run check` ✅ ② editor-max-height 3/3 + interactive-mode 套件 16 pass ✅ ③ 遗留 1 个 `coalesces a burst` 失败为既有(类内 observer 调度,git-stash 确认提取前相同,与拆分无关) ④ `stp --smoke-test` ✅
+- **验收**: 提交 `refactor(modes): extract interactive-mode render helpers to controllers/interactive-render-utils.ts (stage 5)`(6818014a2a),已推送
 
 ### 阶段 6 — agent-session.ts 两批拆分(最重,最后)
 
