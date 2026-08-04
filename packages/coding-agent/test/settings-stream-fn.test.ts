@@ -12,7 +12,7 @@ import type { StreamFn } from "@satopi/pi-agent-core";
 import type { Context, Model, SimpleStreamOptions } from "@satopi/pi-ai";
 import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { createSettingsAwareStreamFn } from "@satopi/pi-coding-agent/session/settings-stream-fn";
+import { createSettingsAwareStreamFn } from "@satopi/pi-coding-agent/session/agent/settings-stream-fn";
 
 function captureBase(): { fn: StreamFn; calls: Array<{ options?: SimpleStreamOptions }> } {
 	const calls: Array<{ options?: SimpleStreamOptions }> = [];

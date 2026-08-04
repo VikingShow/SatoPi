@@ -11,7 +11,8 @@
  */
 
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import { estimateTokens } from "@satopi/pi-agent-core/compaction";
+import type { CompactionSettings } from "@satopi/pi-agent-core/compaction";
+import { estimateTokens, resolveThresholdTokens } from "@satopi/pi-agent-core/compaction";
 
 // ============================================================================
 // Types
@@ -401,4 +402,79 @@ export function compactContext(
 		tokensBefore,
 		tokensAfter: estimateTotalTokens(result.messages),
 	};
+}
+
+// ============================================================================
+// Session-compaction coordination (P3 #3)
+// ============================================================================
+
+export type OffloadCompactTier = "none" | "mild" | "aggressive" | "emergency";
+
+/**
+ * Outcome of the most recent offload L3 compaction run — the explicit shared
+ * signal between the two compaction pipelines.
+ *
+ * The offload side writes it after every `compactContext` run (per provider
+ * request); the session-side threshold compaction reads it before paying for
+ * a full history rewrite. The two pipelines previously shared zero state and
+ * fought over the same conversation: the session rewrite would coarsen (via an
+ * LLM summary call) history that the per-turn L3 tier was already keeping
+ * within budget. The signal lets the session defer to L3 when it is sufficient.
+ */
+export interface OffloadCompactStatus {
+	/** The L3 tier that applied; "none" when the request was already under the mild ratio. */
+	tier: OffloadCompactTier;
+	tokensBefore: number;
+	tokensAfter: number;
+	/** The context window the L3 compaction was configured with. */
+	contextWindow: number;
+	/** Epoch ms of the run (used to reject stale signals). */
+	at: number;
+}
+
+/** Derive the tier + sizes for `result` as an {@link OffloadCompactStatus}. */
+export function toOffloadCompactStatus(result: CompactContextResult, contextWindow: number): OffloadCompactStatus {
+	const tier: OffloadCompactTier = result.emergencyApplied
+		? "emergency"
+		: result.aggressiveApplied
+			? "aggressive"
+			: result.mildApplied
+				? "mild"
+				: "none";
+	return {
+		tier,
+		tokensBefore: result.tokensBefore,
+		tokensAfter: result.tokensAfter,
+		contextWindow,
+		at: Date.now(),
+	};
+}
+
+/** How long an offload compaction signal stays fresh (ms). */
+export const OFFLOAD_COMPACT_FRESH_MS = 10 * 60_000;
+
+/**
+ * Session-side threshold decision: should the session's own (expensive,
+ * history-rewriting) compaction defer to the offload L3 tier?
+ *
+ * Returns true only when the offload L3 compaction already ran on the most
+ * recent provider request, applied a tier, and brought the effective request
+ * under the same compaction threshold the session is about to trip on. In that
+ * state the session rewrite would be redundant work that replaces the
+ * per-tool-call detail L3 preserves with a single coarse summary. The status is
+ * overwritten on every provider request (L3 runs per turn), so a present status
+ * is inherently the just-sent request's outcome; the freshness window only
+ * guards against a manager that stopped receiving L3 runs.
+ */
+export function shouldDeferSessionCompaction(
+	contextWindow: number,
+	settings: CompactionSettings,
+	status: OffloadCompactStatus | undefined,
+): boolean {
+	if (!status) return false;
+	if (status.tier === "none") return false;
+	if (status.contextWindow !== contextWindow) return false;
+	if (Date.now() - status.at > OFFLOAD_COMPACT_FRESH_MS) return false;
+	const threshold = resolveThresholdTokens(contextWindow, settings);
+	return status.tokensAfter <= threshold;
 }

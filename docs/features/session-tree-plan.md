@@ -15,14 +15,14 @@ The session is stored as an append-only entry log, but runtime behavior is tree-
 
 Key files:
 
-- `src/session/session-manager.ts` — tree data model, traversal, leaf movement, branch/session extraction
-- `src/session/session-context.ts` — `buildSessionContext` context reconstruction (resolved root→leaf LLM context, compaction/branch-summary replay)
-- `src/session/agent-session.ts` — `/tree` navigation flow, summarization, hook/event emission
+- `src/session/store/session-manager.ts` — tree data model, traversal, leaf movement, branch/session extraction
+- `src/session/message/session-context.ts` — `buildSessionContext` context reconstruction (resolved root→leaf LLM context, compaction/branch-summary replay)
+- `src/session/agent/agent-session.ts` — `/tree` navigation flow, summarization, hook/event emission
 - `src/modes/components/tree-selector.ts` — interactive tree UI behavior and filtering
 - `src/modes/controllers/selector-controller.ts` — selector orchestration for `/tree` and `/branch`
 - `src/slash-commands/builtin-registry.ts` — command routing (`/tree`, `/branch`)
 - `src/modes/controllers/input-controller.ts` — double-escape behavior and `app.session.tree`/`app.session.fork` keybinding wiring
-- `src/session/messages.ts` — conversion of `branch_summary`, `compaction`, and `custom_message` entries into LLM context messages
+- `src/session/message/messages.ts` — conversion of `branch_summary`, `compaction`, and `custom_message` entries into LLM context messages
 
 ## Tree data model in `SessionManager`
 
@@ -119,7 +119,7 @@ User-facing `/branch` flow (`SelectorController.showUserMessageSelector` → `Ag
   - then replays post-compaction messages
 - Includes `branch_summary` and `custom_message` entries as `AgentMessage` objects.
 
-`session/messages.ts` then maps these message types for model input:
+`session/message/messages.ts` then maps these message types for model input:
 
 - `branchSummary` and `compactionSummary` become user-role templated context messages
 - `custom`/`hookMessage` become developer-role content messages (via agent-core's `convertMessageToLlm`)

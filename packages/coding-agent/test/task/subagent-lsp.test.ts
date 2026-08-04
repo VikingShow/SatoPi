@@ -9,7 +9,11 @@ import type { LoadExtensionsResult } from "@satopi/pi-coding-agent/extensibility
 import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	PromptOptions,
+} from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { TaskTool } from "@satopi/pi-coding-agent/task";
 import * as discoveryModule from "@satopi/pi-coding-agent/task/discovery";
 import type { AgentDefinition, TaskParams } from "@satopi/pi-coding-agent/task/types";

@@ -7,7 +7,7 @@ import { buildModel } from "@satopi/pi-catalog/build";
 import {
 	createSnapcompactSavingsRecorder,
 	readSnapcompactSavingsJournal,
-} from "@satopi/pi-coding-agent/session/snapcompact-savings-journal";
+} from "@satopi/pi-coding-agent/session/store/snapcompact-savings-journal";
 
 function model(provider = "anthropic", id = "claude-test"): Model {
 	return buildModel({

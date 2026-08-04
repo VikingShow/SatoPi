@@ -45,13 +45,13 @@
 |---|---|---|---|
 | 150 | `retainContext: settings.get("hindsight.retainContext") ?? "omp"` | Config defaults | hindsight 上下文保留配置的默认回退值 |
 
-### 6. `packages/coding-agent/src/session/redis-session-storage.ts`
+### 6. `packages/coding-agent/src/session/store/redis-session-storage.ts`
 
 | 行号 | 内容 | 分类 | 说明 |
 |---|---|---|---|
 | 45 | `const DEFAULT_PREFIX = "omp:sessions:"` | Database/storage | Redis key 前缀，已有部署使用此前缀存储 session 数据 |
 
-### 7. `packages/coding-agent/src/session/sql-session-storage.ts`
+### 7. `packages/coding-agent/src/session/store/sql-session-storage.ts`
 
 | 行号 | 内容 | 分类 | 说明 |
 |---|---|---|---|

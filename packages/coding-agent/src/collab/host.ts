@@ -24,9 +24,9 @@ import type {
 import type { InteractiveModeContext } from "../modes/types";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry } from "../registry/agent-registry";
-import type { AgentSessionEvent } from "../session/agent-session";
-import { stripImagesFromMessage, USER_INTERRUPT_LABEL } from "../session/messages";
-import type { SessionEntry as StoredSessionEntry } from "../session/session-entries";
+import type { AgentSessionEvent } from "../session/agent/agent-session";
+import { stripImagesFromMessage, USER_INTERRUPT_LABEL } from "../session/message/messages";
+import type { SessionEntry as StoredSessionEntry } from "../session/store/session-entries";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
 import { generateRoomKey, generateWriteToken, importRoomKey } from "./crypto";
 import { collabDisplayName } from "./display-name";

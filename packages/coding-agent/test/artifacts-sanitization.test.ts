@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ArtifactManager } from "@satopi/pi-coding-agent/session/artifacts";
+import { ArtifactManager } from "@satopi/pi-coding-agent/session/shared/artifacts";
 import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 describe("ArtifactManager tool-type sanitization", () => {

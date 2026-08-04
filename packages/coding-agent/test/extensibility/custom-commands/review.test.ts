@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { ReviewCommand } from "@satopi/pi-coding-agent/extensibility/custom-commands/bundled/review";
 import type { CustomCommandAPI } from "@satopi/pi-coding-agent/extensibility/custom-commands/types";
 import type { HookCommandContext } from "@satopi/pi-coding-agent/extensibility/hooks/types";
-import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
 import type { PrDiffPayload, ViewLookupResult } from "@satopi/pi-coding-agent/tools/gh";
 import * as gh from "@satopi/pi-coding-agent/tools/gh";
 import * as git from "@satopi/pi-coding-agent/utils/git";

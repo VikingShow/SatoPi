@@ -125,6 +125,8 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Speech",
 		"Collab",
 		"Magic Keywords",
+		"Swarm",
+		"Crew",
 		"Startup & Updates",
 		"Power (macOS)",
 		"Agent",
@@ -1736,7 +1738,7 @@ export const SETTINGS_SCHEMA = {
 		type: "number",
 		default: 4,
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Swarm",
 			label: "Max Workers",
 			description: "Maximum parallel workers during Stage phase (1-12)",
@@ -1746,7 +1748,7 @@ export const SETTINGS_SCHEMA = {
 		type: "number",
 		default: 3,
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Swarm",
 			label: "Max Rounds",
 			description: "Maximum retry rounds during Stage phase",
@@ -1756,7 +1758,7 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Swarm",
 			label: "Auto Applaud",
 			description: "Automatically complete Curtain without waiting for human applaud",
@@ -1766,7 +1768,7 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: false,
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Swarm",
 			label: "Enable Plan Debate",
 			description: "Run a multi-agent debate to refine the plan before confirming",
@@ -1776,7 +1778,7 @@ export const SETTINGS_SCHEMA = {
 		type: "number",
 		default: 1,
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Swarm",
 			label: "Max Fork Depth",
 			description: "Maximum agent_fork nesting depth. 1 = children cannot fork further (default).",
@@ -1787,7 +1789,7 @@ export const SETTINGS_SCHEMA = {
 		type: "string",
 		default: "smartest",
 		ui: {
-			tab: "magic",
+			tab: "interaction",
 			group: "Crew",
 			label: "Crew Member Model",
 			description: "Model selector used to spawn crew members (e.g. smartest, or provider/model-id).",

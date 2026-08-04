@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import * as snapcompact from "@satopi/snapcompact";
-import type { CompactionSummaryMessage } from "./messages";
-import { buildSessionContext, type StrippedToolCallsMarker } from "./session-context";
-import type { SessionEntry } from "./session-entries";
+import type { CompactionSummaryMessage } from "./message/messages";
+import { buildSessionContext, type StrippedToolCallsMarker } from "./message/session-context";
+import type { SessionEntry } from "./store/session-entries";
 
 const timestamp = "2026-07-09T00:00:00.000Z";
 

@@ -320,31 +320,31 @@ describe("GrepTool internal URL resolution", () => {
 		);
 	});
 
-	it("expands omp:// root to grep embedded documentation files", async () => {
+	it("expands stp:// root to grep embedded documentation files", async () => {
 		const session = createSession();
 		const tool = new GrepTool(session);
 
 		const result = await tool.execute("test-call", {
 			pattern: "Grep file contents with a regex across files",
-			path: "omp://",
+			path: "stp://",
 		});
 
 		const text = getResultText(result);
-		expect(text).toContain("# omp://tools/grep.md");
+		expect(text).toContain("# stp://tools/grep.md");
 		expect(text).toContain("Grep file contents with a regex across files");
 	});
 
-	it("expands omp://docs to grep embedded documentation files", async () => {
+	it("expands stp://docs to grep embedded documentation files", async () => {
 		const session = createSession();
 		const tool = new GrepTool(session);
 
 		const result = await tool.execute("test-call", {
 			pattern: "Read files, directories, archives",
-			path: "omp://docs",
+			path: "stp://docs",
 		});
 
 		const text = getResultText(result);
-		expect(text).toContain("# omp://tools/read.md");
+		expect(text).toContain("# stp://tools/read.md");
 		expect(text).toContain("Read files, directories, archives");
 	});
 

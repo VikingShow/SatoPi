@@ -3,7 +3,7 @@ import type { ImageContent } from "@satopi/pi-ai";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { InputController } from "@satopi/pi-coding-agent/modes/controllers/input-controller";
 import type { InteractiveModeContext, SubmittedUserInput } from "@satopi/pi-coding-agent/modes/types";
-import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
+import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
 import { vocalizer } from "@satopi/pi-coding-agent/tts/vocalizer";
 import * as logger from "@satopi/pi-utils/logger";
 

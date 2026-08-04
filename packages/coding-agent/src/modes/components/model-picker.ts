@@ -8,7 +8,7 @@ import type { Model } from "@satopi/pi-ai";
 import type { Component, TUI } from "@satopi/pi-tui";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import type { ResolvedRoleModel } from "../../session/agent-session";
+import type { ResolvedRoleModel } from "../../session/agent/agent-session";
 import { theme } from "../theme/theme";
 import {
 	buildBrowserItems,

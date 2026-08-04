@@ -12,7 +12,7 @@ The critical distinction: **notebook support is file conversion/editing, not not
 - [`src/tools/eval.ts`](../packages/coding-agent/src/tools/eval.ts)
 - [`src/eval/py/executor.ts`](../packages/coding-agent/src/eval/py/executor.ts)
 - [`src/eval/py/kernel.ts`](../packages/coding-agent/src/eval/py/kernel.ts)
-- [`src/session/streaming-output.ts`](../packages/coding-agent/src/session/streaming-output.ts)
+- [`src/session/message/streaming-output.ts`](../packages/coding-agent/src/session/message/streaming-output.ts)
 
 ## 1) Runtime boundary: editing vs executing
 
@@ -147,7 +147,7 @@ Cancellation/timeout:
 
 ## 6) Truncation and artifact behavior
 
-`OutputSink` in `src/session/streaming-output.ts` is used by kernel execution paths:
+`OutputSink` in `src/session/message/streaming-output.ts` is used by kernel execution paths:
 
 - sanitizes every chunk
 - tracks total/output lines and bytes

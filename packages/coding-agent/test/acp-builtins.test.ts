@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome, ResetCreditTarget, UsageReport } from "@satopi/pi-ai";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import type { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import type { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { executeAcpBuiltinSlashCommand } from "@satopi/pi-coding-agent/slash-commands/acp-builtins";
 import { removeWithRetries, setProjectDir } from "@satopi/pi-utils";
 

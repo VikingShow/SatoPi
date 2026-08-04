@@ -6,7 +6,7 @@ import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { ModelHubComponent } from "@satopi/pi-coding-agent/modes/components/model-hub";
 import { SessionSelectorComponent } from "@satopi/pi-coding-agent/modes/components/session-selector";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
 import { setKeybindings, type TUI } from "@satopi/pi-tui";
 
 beforeAll(() => {

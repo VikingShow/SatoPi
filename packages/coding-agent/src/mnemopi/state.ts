@@ -15,7 +15,7 @@ import {
 	truncateRecallQuery,
 } from "../hindsight/content";
 import { extractMessages } from "../hindsight/transcript";
-import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
+import type { AgentSession, AgentSessionEvent } from "../session/agent/agent-session";
 import type { MnemopiBackendConfig, MnemopiScoping } from "./config";
 import { mnemopiEmbedClient } from "./embed-client";
 

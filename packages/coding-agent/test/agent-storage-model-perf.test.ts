@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("AgentStorage model perf aggregates", () => {

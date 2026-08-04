@@ -18,10 +18,10 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { type SettingPath, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { TtsrManager } from "@satopi/pi-coding-agent/export/ttsr";
 import type { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { convertToLlm } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
@@ -1442,7 +1442,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const cwd = sessionManager.getCwd();
-		const ruleAbsPath = path.join(cwd, ".omp", "rules", "no-unwrap.md");
+		const ruleAbsPath = path.join(cwd, ".stp", "rules", "no-unwrap.md");
 		const expectedRel = path.relative(cwd, ruleAbsPath);
 		const rule: Rule = {
 			name: "no-unwrap",

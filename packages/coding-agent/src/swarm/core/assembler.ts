@@ -22,10 +22,14 @@ import { HindsightSource } from "../../context/sources/hindsight-source";
 import { MmdSource } from "../../context/sources/mmd-source";
 import { MnemopiSource } from "../../context/sources/mnemopi-source";
 import { OffloadSource } from "../../context/sources/offload-source";
+import { PeerRosterSource } from "../../context/sources/peer-roster-source";
+import { ProfileSource } from "../../context/sources/profile-source";
 import { StigmergySource } from "../../context/sources/stigmergy-source";
+import { TaskQueueSource } from "../../context/sources/task-queue-source";
 import { MarkEnvironment } from "../../coordination";
 import type { ExperienceStore } from "../../experience/experience";
 import { spawnAgent } from "../../graph/agent-helpers";
+import { TaskQueue } from "../../graph/task-queue";
 import { HookPipeline } from "../../hooks/hook-pipeline";
 import { type BuiltinHookDeps, registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityLogger } from "../../infra/activity-logger";
@@ -34,6 +38,7 @@ import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
+import { SwarmMnemopiAdapter } from "../infra/mnemopi-adapter";
 import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
@@ -55,6 +60,8 @@ export interface AssemblerOptions {
 	markEnvironment?: MarkEnvironment;
 	offloadManager?: IOffloadManager;
 	activeMmd?: string;
+	/** Runtime-owned TaskQueue shared with StageBehavior — enables TaskQueueSource. */
+	taskQueue?: TaskQueue;
 }
 
 // ============================================================================
@@ -72,6 +79,10 @@ export interface CreateOrchestratorRuntimeOptions {
 	ircBus?: IrcBus;
 	toolRegistry?: Map<string, Tool>;
 	activeMmd?: string;
+	/** Semantic memory handle — forwarded to assembleAgentRuntime → MnemopiSource. */
+	mnemopiClient?: MnemopiClient | null;
+	/** Cross-session recall handle — forwarded to assembleAgentRuntime → HindsightSource. */
+	hindsightClient?: SwarmHindsightClient | null;
 }
 
 export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
@@ -79,6 +90,9 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 	hookPipeline: HookPipeline;
 	markEnvironment: MarkEnvironment;
 } {
+	// Runtime-owned TaskQueue — StageBehavior adopts it during Stage so workers
+	// (and TaskQueueSource context) see the live shared queue state.
+	const taskQueue = new TaskQueue([]);
 	const markEnvironment = new MarkEnvironment();
 	const hookPipeline = new HookPipeline();
 
@@ -87,6 +101,14 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		markEnvironment,
 		offloadManager: opts.offloadManager,
 		experienceStore: opts.experienceStore,
+		mnemopiAdapter: opts.mnemopiClient
+			? new SwarmMnemopiAdapter(opts.mnemopiClient, {
+					enabled: true,
+					topK: 5,
+					deduplicate: true,
+					autoStoreThreshold: 5,
+				})
+			: undefined,
 	};
 	registerBuiltinHooks(hookPipeline, hookDeps);
 
@@ -99,9 +121,12 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		ircBus: opts.ircBus,
 		toolRegistry: opts.toolRegistry,
 		experienceStore: opts.experienceStore,
+		mnemopiClient: opts.mnemopiClient,
+		hindsightClient: opts.hindsightClient,
 		activeMmd: opts.activeMmd,
 		markEnvironment,
 		offloadManager: opts.offloadManager,
+		taskQueue,
 	});
 
 	return { runtime, hookPipeline, markEnvironment };
@@ -114,6 +139,26 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
 	const contextPipeline = new ContextPipeline();
+
+	// ProfileSource is deliberately registered in addition to RoleProvider:
+	// RoleProvider only folds profile identity/credit/expertise into the role
+	// system prompt when spec.roleSource === "profile", while ProfileSource
+	// injects the <agent_profile> block (credit score, praise/criticism counts,
+	// recent violations, low-credit warnings) for ANY agent whose id matches a
+	// registered profile — complementary behavioral context, not a duplicate.
+	// Lookup is by spec.id, which equals the profileId for stage-behavior
+	// workers; graph-node agents miss (getPromptContext → null → {}) and the
+	// source degrades to a harmless no-op.
+	if (opts.profileRegistry) {
+		contextPipeline.register(new ProfileSource(opts.profileRegistry));
+	}
+
+	// MnemopiSource/HindsightSource register only when their clients are
+	// provided. assembleAgentRuntime supports them fully (see opts), but the
+	// CLI chain (createSwarmInfra → createOrchestratorRuntime) does not forward
+	// SharedServices.mnemopiClient/hindsightClient yet — that forwarding is a
+	// mechanical change in src/swarm/core/swarm-infra.ts (outside slice H) and
+	// is the only missing link; MmdSource is already wired via opts.activeMmd.
 	if (opts.experienceStore) {
 		contextPipeline.register(new ExperienceSource(opts.experienceStore));
 	}
@@ -133,6 +178,16 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 		contextPipeline.register(new OffloadSource(opts.offloadManager));
 	}
 
+	// PeerRosterSource needs no dependencies — always inject so every spawned
+	// agent sees who it is collaborating with.
+	contextPipeline.register(new PeerRosterSource());
+
+	// TaskQueueSource shows the shared stage task queue (in-progress, ready,
+	// blocked) to Stage workers. Only registered when a runtime queue exists.
+	if (opts.taskQueue) {
+		contextPipeline.register(new TaskQueueSource(opts.taskQueue));
+	}
+
 	if (opts.ircBus) {
 		opts.ircBus.setActivityLogger(opts.activityLogger);
 		opts.ircBus.setHookPipeline(opts.hookPipeline);
@@ -140,7 +195,7 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 
 	const ircBus = opts.ircBus!;
 
-	// Runtime-level CommChannel (same role as AgentRuntime.#commChannel)
+	// Runtime-level CommChannel (the runtime's inter-agent communication bus)
 	const commChannel = new CommChannel(
 		ircBus,
 		[], // members added as agents spawn
@@ -158,6 +213,7 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const runtime: SwarmRuntime = {
 		contextPipeline,
 		ircBus,
+		taskQueue: opts.taskQueue,
 
 		async spawn(specs) {
 			const sessions = await Promise.all(

@@ -11,7 +11,7 @@
  */
 
 import { logger } from "@satopi/pi-utils";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID, type RegistryEvent } from "./agent-registry";
 
 export type AgentReviver = () => Promise<AgentSession>;

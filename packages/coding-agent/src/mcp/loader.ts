@@ -5,8 +5,8 @@
  */
 import { logger } from "@satopi/pi-utils";
 import type { LoadedCustomTool } from "../extensibility/custom-tools/types";
-import { AgentStorage } from "../session/agent-storage";
-import type { AuthStorage } from "../session/auth-storage";
+import type { AuthStorage } from "../session/auth/auth-storage";
+import { AgentStorage } from "../session/store/agent-storage";
 import { type MCPLoadResult, MCPManager } from "./manager";
 import type { McpConnectionStatusEvent } from "./startup-events";
 import { MCPToolCache } from "./tool-cache";

@@ -21,7 +21,7 @@ import type { RoleAsset, RoleAssetManager } from "./role-asset";
 
 /**
  * The resolved role — concrete prompt, tools, and guidelines
- * ready to feed into the AgentLauncher.
+ * ready to feed into the agent spawner.
  */
 export interface ResolvedRole {
 	/** System prompt injected into the agent's initial context. */

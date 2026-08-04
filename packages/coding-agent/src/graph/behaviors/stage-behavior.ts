@@ -9,7 +9,7 @@
  *   - Creates one agent per unique task role (no profile selection)
  *   - Parses the plan via {@link TaskQueue.parseFromPlan} and drives the
  *     resulting TaskQueue directly
- *   - Uses AgentRuntime + IrcBus + TaskQueue directly for the
+ *   - Uses the runtime + IrcBus + TaskQueue directly for the
  *     event-driven lifecycle that the graph engine requires
  *
  * Data flow:
@@ -22,7 +22,7 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { CommChannel } from "../../comm/comm-channel";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { Chapter } from "../../swarm/core/state";
 import { TaskQueue } from "../task-queue";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
@@ -38,6 +38,90 @@ interface AgentTracking {
 	currentTask?: string;
 	/** Whether this agent has been flagged with an error. */
 	hasError: boolean;
+}
+
+// ============================================================================
+// Summary extraction helpers
+// ============================================================================
+
+/** Maximum length for the `agent:afterComplete` summary payload. */
+const MAX_SUMMARY_LENGTH = 200;
+
+/** Truncate text to at most {@link MAX_SUMMARY_LENGTH} characters. */
+function truncateSummary(text: string): string {
+	return text.length > MAX_SUMMARY_LENGTH ? text.slice(0, MAX_SUMMARY_LENGTH) : text;
+}
+
+/** Join the text content of a message payload (string or text content blocks). */
+function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	const parts: string[] = [];
+	for (const block of content) {
+		if (
+			typeof block === "object" &&
+			block !== null &&
+			"type" in block &&
+			block.type === "text" &&
+			"text" in block &&
+			typeof block.text === "string"
+		) {
+			parts.push(block.text);
+		}
+	}
+	return parts.join("\n");
+}
+
+/**
+ * Extract the last assistant message's text from an agent_end event result.
+ *
+ * graph-runner passes the full AgentEndEvent (`{ type: "agent_end", messages }`)
+ * as `result`; when the last assistant message carries no text (e.g. a
+ * tool-call-only turn), earlier assistant messages are scanned.
+ */
+function extractAssistantSummary(result: unknown): string {
+	if (typeof result === "string") return truncateSummary(result);
+	if (typeof result !== "object" || result === null) return "";
+	if (!("type" in result) || !("messages" in result)) return "";
+	if (result.type !== "agent_end") return "";
+	const messages = result.messages;
+	if (!Array.isArray(messages)) return "";
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (typeof message !== "object" || message === null) continue;
+		if (!("role" in message) || !("content" in message)) continue;
+		if (message.role !== "assistant") continue;
+		const text = messageText(message.content);
+		if (text.length > 0) return truncateSummary(text);
+	}
+	return "";
+}
+
+/**
+ * Extract error text from a failed agent event result: explicit `error` field,
+ * then the last assistant message's `errorMessage`, then its text content
+ * (e.g. max_turns), falling back to "unknown error".
+ */
+function extractErrorSummary(result: unknown): string {
+	if (typeof result === "string") return truncateSummary(result);
+	if (typeof result !== "object" || result === null) return "unknown error";
+	if ("error" in result && typeof result.error === "string" && result.error.length > 0) {
+		return truncateSummary(result.error);
+	}
+	if ("messages" in result && Array.isArray(result.messages)) {
+		for (let i = result.messages.length - 1; i >= 0; i--) {
+			const message = result.messages[i];
+			if (typeof message !== "object" || message === null) continue;
+			if (!("role" in message) || !("errorMessage" in message)) continue;
+			if (message.role !== "assistant") continue;
+			if (typeof message.errorMessage === "string" && message.errorMessage.length > 0) {
+				return truncateSummary(message.errorMessage);
+			}
+		}
+		const assistantText = extractAssistantSummary(result);
+		if (assistantText.length > 0) return assistantText;
+	}
+	return "unknown error";
 }
 // ============================================================================
 // Stable profile ID mappings — ensures agent identities survive across swarm runs
@@ -92,7 +176,13 @@ export class StageBehavior implements PhaseBehavior {
 		const tasks =
 			execTasks.length > 0 ? execTasks : allTasks.map(t => ({ ...t, assignedRole: "implementer" as const }));
 
-		this.#taskQueue = new TaskQueue(tasks);
+		// Adopt the runtime-owned shared queue when present (assembler wiring)
+		// so TaskQueueSource context and CrossCheckBehavior observe the live
+		// queue state; otherwise build a private queue as before.
+		this.#taskQueue = ctx.runtime.taskQueue ?? new TaskQueue(tasks);
+		if (ctx.runtime.taskQueue) {
+			ctx.runtime.taskQueue.load(tasks);
+		}
 
 		logger.info("[StageBehavior] Parsed tasks from plan", {
 			taskCount: allTasks.length,
@@ -102,14 +192,17 @@ export class StageBehavior implements PhaseBehavior {
 		});
 
 		// 2. Determine agent IDs and roles from tasks
-		//    Each unique assignedRole gets one agent (with role defaulting to "worker").
-		//    Planner tasks have already been filtered out above.
+		//    Each unique non-empty assignedRole gets one agent (with role defaulting
+		//    to "worker"). Planner tasks have already been filtered out above.
 		const roleSet = new Set<string>();
 		for (const task of tasks) {
-			roleSet.add(task.assignedRole);
+			if (task.assignedRole.trim().length > 0) {
+				roleSet.add(task.assignedRole);
+			}
 		}
 
-		// If no tasks were parsed, create a single default worker
+		// If no tasks were parsed (or every role was empty), create a single
+		// default worker instead of spawning a degenerate empty-role agent.
 		const roles = roleSet.size > 0 ? [...roleSet] : ["worker"];
 
 		// Generate stable profile-based agent IDs instead of temporary agent-N IDs
@@ -125,6 +218,7 @@ export class StageBehavior implements PhaseBehavior {
 				await channel.roundtable("assign roles for this project", {
 					rounds: ctx.loopConfig.debate.maxRounds ?? 2,
 					agentIds,
+					phase: this.phase,
 				});
 				logger.info("[StageBehavior] Role roundtable complete");
 			} catch (err) {
@@ -207,7 +301,7 @@ export class StageBehavior implements PhaseBehavior {
 			});
 		}
 
-		// Also deliver via AgentRuntime for agent-level steering queue
+		// Also deliver via the runtime for agent-level steering queue
 		for (const [agentId, tracking] of this.#agents) {
 			if (tracking.handle.status === "running") {
 				await ctx.runtime
@@ -256,6 +350,7 @@ export class StageBehavior implements PhaseBehavior {
 					{
 						agentId: event.agentId,
 						success: true,
+						summary: extractAssistantSummary(event.result),
 					},
 					{ phase: "stage", agentId: event.agentId },
 				);
@@ -268,10 +363,7 @@ export class StageBehavior implements PhaseBehavior {
 				await ctx.stateTracker
 					.updateAgent(event.agentId, {
 						status: "failed",
-						error:
-							typeof event.result === "string"
-								? event.result
-								: ((event.result as { error?: string })?.error ?? "unknown error"),
+						error: extractErrorSummary(event.result),
 					})
 					.catch(err => logger.error("StateTracker updateAgent failed (failed)", { error: String(err) }));
 
@@ -296,6 +388,7 @@ export class StageBehavior implements PhaseBehavior {
 					{
 						agentId: event.agentId,
 						success: false,
+						summary: extractErrorSummary(event.result),
 					},
 					{ phase: "stage", agentId: event.agentId },
 				);

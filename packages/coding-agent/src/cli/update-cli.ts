@@ -293,9 +293,13 @@ async function getLatestRelease(): Promise<ReleaseInfo> {
 	if (!response.ok) {
 		throw new Error(`Failed to fetch release info: ${response.statusText}`);
 	}
-
-	const data = (await response.json()) as { tag_name: string };
-	const tag = data.tag_name;
+	const data = (await response.json()) as { tag_name?: unknown };
+	const tag = typeof data.tag_name === "string" ? data.tag_name : undefined;
+	if (!tag) {
+		// Proxies and offline mirrors can return 200 with a non-release body;
+		// fail cleanly instead of crashing on undefined.tag_name.
+		throw new Error("Release metadata response did not include a tag_name");
+	}
 	const version = tag.startsWith("v") ? tag.slice(1) : tag;
 
 	return { tag, version };

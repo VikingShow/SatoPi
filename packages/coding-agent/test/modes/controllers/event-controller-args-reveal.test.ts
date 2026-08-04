@@ -14,7 +14,7 @@ import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event
 import { STREAMING_REVEAL_FRAME_MS } from "@satopi/pi-coding-agent/modes/controllers/streaming-reveal";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 beforeAll(async () => {
 	await initTheme();

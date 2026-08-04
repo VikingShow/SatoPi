@@ -3,12 +3,12 @@ graph:
   #
   # This is the built-in graph that runs when the user types "swarm" magic keyword
   # or invokes `stp swarm run`.  It mirrors the existing SwarmRunner lifecycle:
-  #   Script → Stage → Curtain
+  #   Script → Debate → Stage → Cross-Check → Curtain
   #
   # Users can extend this graph by copying it to .stp/graphs/ and adding nodes.
 
   name: theatre
-  description: "SatoPi built-in three-phase workflow: Script → Stage → Curtain"
+  description: "SatoPi built-in five-phase workflow: Script → Debate → Stage → Cross-Check → Curtain"
   version: 1
   revision: 1
   strategy: waves
@@ -46,6 +46,24 @@ graph:
           - "Cancel"
       timeout: "0"
 
+    debate:
+      label: "Debate · Plan Refinement"
+      description: |
+        Multi-agent roundtable debate. Reviewer-style agents critique the
+        draft plan produced by Script and converge on a refined version
+        (Jaccard-similarity convergence with early exit) before execution.
+        Disabled when magicKeywords.swarm.enableDebate is false — the plan
+        then passes through unchanged.
+      type: debate
+      role: debater
+      depends_on:
+        - script
+      tools:
+        - read
+        - grep
+        - irc
+      timeout: "15m"
+
     stage:
       label: "Stage · Execution"
       description: |
@@ -55,7 +73,7 @@ graph:
       type: stage
       role: stage-controller
       depends_on:
-        - script
+        - debate
       tools:
         - read
         - write
@@ -71,12 +89,35 @@ graph:
         type: compile-check
         command: "bun check && bun test"
         mode: on-failure
+      retry:
+        max_attempts: 3
+        strategy: exponential
+        base_delay_ms: 5000
+        on_failure: block
       timeout: "30m"
       max_context_tokens: 8000
-
       # Auto agent count: the loop runtime determines the optimal
       # number of worker agents from task complexity and plan size.
       # Equivalent to loopConfig.agents.auto = true
+
+    cross_check:
+      label: "Cross-Check · Review"
+      description: |
+        Post-Stage verification. Reviewer agents (swarm-reviewer profile)
+        inspect every deliverable the Stage produced; deliverables that fail
+        get a REWORK verdict, their task is blocked in the shared task queue,
+        and the verdicts are recorded in the run state (reviewVerdict summary
+        + activity log) so the next run retries them via the existing
+        retry/backoff machinery.
+      type: cross-check
+      role: reviewer
+      depends_on:
+        - stage
+      tools:
+        - read
+        - grep
+        - bash
+      timeout: "10m"
 
     curtain:
       label: "Curtain · Reflection"
@@ -87,7 +128,7 @@ graph:
       type: curtain
       role: reflector
       depends_on:
-        - stage
+        - cross_check
       tools:
         - read
         - write

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import { YieldQueue } from "@satopi/pi-coding-agent/session/yield-queue";
+import { YieldQueue } from "@satopi/pi-coding-agent/session/agent/yield-queue";
 
 type Entry = {
 	id: string;

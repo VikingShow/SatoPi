@@ -11,17 +11,27 @@ describe("Theatre Graph", () => {
 			expect(def.name).toBe("theatre");
 		});
 
-		it("has three nodes: script, stage, curtain", async () => {
+		it("has five nodes: script, debate, stage, cross_check, curtain", async () => {
 			const def = await loadGraphDefinition(BUILTIN_THEATRE);
 			expect(Object.keys(def.nodes)).toContain("script");
+			expect(Object.keys(def.nodes)).toContain("debate");
 			expect(Object.keys(def.nodes)).toContain("stage");
+			expect(Object.keys(def.nodes)).toContain("cross_check");
 			expect(Object.keys(def.nodes)).toContain("curtain");
 		});
 
-		it("has correct dependency chain", async () => {
+		it("has correct dependency chain (Script → Debate → Stage → Cross-Check → Curtain)", async () => {
 			const def = await loadGraphDefinition(BUILTIN_THEATRE);
-			expect(def.nodes.stage?.depends_on).toContain("script");
-			expect(def.nodes.curtain?.depends_on).toContain("stage");
+			expect(def.nodes.debate?.depends_on).toContain("script");
+			expect(def.nodes.stage?.depends_on).toContain("debate");
+			expect(def.nodes.cross_check?.depends_on).toContain("stage");
+			expect(def.nodes.curtain?.depends_on).toContain("cross_check");
+		});
+
+		it("debate and cross_check nodes use the registered node kinds", async () => {
+			const def = await loadGraphDefinition(BUILTIN_THEATRE);
+			expect(def.nodes.debate?.type).toBe("debate");
+			expect(def.nodes.cross_check?.type).toBe("cross-check");
 		});
 
 		it("script node has human-review gate", async () => {
@@ -29,9 +39,11 @@ describe("Theatre Graph", () => {
 			expect(def.nodes.script?.gate?.type).toBe("human-review");
 		});
 
-		it("stage node has heavy: true for fork support", async () => {
+		it("stage node has heavy: true and a compile-check gate with retry policy", async () => {
 			const def = await loadGraphDefinition(BUILTIN_THEATRE);
 			expect(def.nodes.stage?.heavy).toBe(true);
+			expect(def.nodes.stage?.gate?.type).toBe("compile-check");
+			expect(def.nodes.stage?.retry?.maxAttempts).toBeGreaterThanOrEqual(1);
 		});
 
 		it("validation returns results (may include warnings)", async () => {

@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import { readTerminalBreadcrumbEntry } from "@satopi/pi-coding-agent/session/session-paths";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
+import { readTerminalBreadcrumbEntry } from "@satopi/pi-coding-agent/session/store/session-paths";
 import { getTerminalId } from "@satopi/pi-tui";
 import { getConfigRootDir, getTerminalSessionsDir, setAgentDir } from "@satopi/pi-utils";
 

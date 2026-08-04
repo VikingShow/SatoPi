@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { findCompactMode, parseCompactArgs } from "@satopi/pi-coding-agent/session/compact-modes";
+import { findCompactMode, parseCompactArgs } from "@satopi/pi-coding-agent/session/shared/compact-modes";
 
 describe("compact mode registry", () => {
 	it("maps each mode to the settings overrides the engine relies on", () => {

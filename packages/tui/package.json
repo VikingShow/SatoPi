@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@satopi/pi-tui",
-  "version": "16.5.0",
+  "version": "0.0.5",
   "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
   "homepage": "https://omp.sh",
   "author": "Can Boluk",

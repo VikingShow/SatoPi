@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import type { AuthStorage, FetchImpl } from "@satopi/pi-ai";
-import { AuthStorage as CodingAuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage as CodingAuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { searchAnthropic } from "@satopi/pi-coding-agent/web/search/providers/anthropic";
 import { TempDir } from "@satopi/pi-utils";
 

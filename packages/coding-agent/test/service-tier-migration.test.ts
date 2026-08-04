@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import { getProjectAgentDir, TempDir } from "@satopi/pi-utils";
 import { YAML } from "bun";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";

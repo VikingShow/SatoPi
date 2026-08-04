@@ -11,7 +11,7 @@ import { logger } from "@satopi/pi-utils";
 import type { SourceMeta } from "../capability/types";
 import { resolveConfigValue } from "../config/resolve-config-value";
 import type { CustomTool } from "../extensibility/custom-tools/types";
-import { type AuthStorage, REMOTE_REFRESH_SENTINEL } from "../session/auth-storage";
+import { type AuthStorage, REMOTE_REFRESH_SENTINEL } from "../session/auth/auth-storage";
 import {
 	connectToServer,
 	disconnectServer,

@@ -21,9 +21,9 @@ Does not cover:
 
 - [`../src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
 - [`../src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts)
-- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`../src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts)
 - [`packages/agent/src/compaction/compaction.ts`](../packages/agent/src/compaction/compaction.ts)
-- [`../src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`../src/session/store/session-manager.ts`](../packages/coding-agent/src/session/store/session-manager.ts)
 - [`../src/slash-commands/builtin-registry.ts`](../packages/coding-agent/src/slash-commands/builtin-registry.ts)
 
 ## Trigger path

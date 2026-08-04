@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AssistantMessage } from "@satopi/pi-ai";
-import { isEmptyErrorTurn } from "@satopi/pi-coding-agent/session/messages";
+import { isEmptyErrorTurn } from "@satopi/pi-coding-agent/session/message/messages";
 
 type Turn = Pick<AssistantMessage, "stopReason" | "content">;
 

@@ -21,7 +21,7 @@ export default class Read extends Command {
 		"stp read src/foo.ts:50-100",
 		"stp read src/foo.ts:raw",
 		"stp read https://example.com",
-		"stp read omp://",
+		"stp read stp://",
 		"stp read issue://123",
 		"stp read path/to/archive.zip:dir/file.ts",
 		"stp read path/to/db.sqlite:users:42",

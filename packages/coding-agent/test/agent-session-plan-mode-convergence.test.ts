@@ -18,9 +18,9 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { IrcBus, type IrcMessage } from "@satopi/pi-coding-agent/irc/bus";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { Snowflake, TempDir } from "@satopi/pi-utils";
 import { type } from "arktype";
 import planModeReminderPrompt from "../src/prompts/system/plan-mode-tool-decision-reminder.md" with { type: "text" };
@@ -203,6 +203,12 @@ describe("AgentSession plan-mode convergence", () => {
 		const registry = AgentRegistry.global();
 		registry.register({ id: "peer", displayName: "peer", kind: "sub", session: null, status: "running" });
 		try {
+			// Rebind the global bus to the CURRENT global registry. The bus caches
+			// the registry it was constructed with, and another test file sharing
+			// this process may have called AgentRegistry.resetGlobalForTests() —
+			// the stale bus then cannot resolve the "peer" ref above, `send` fails
+			// silently, and the parked reply waiter never resolves (test timeout).
+			IrcBus.resetGlobalForTests();
 			const bus = IrcBus.global();
 			// Park the sender's reply waiter first (timeout 0 = no wall-clock timer;
 			// a broken auto-reply path fails via the test runner's own timeout).

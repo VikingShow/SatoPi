@@ -1,7 +1,7 @@
 import type { AgentToolResult } from "@satopi/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "../extensibility/extensions";
-import type { SessionEntry } from "../session/session-entries";
-import type { TruncationResult } from "../session/streaming-output";
+import type { TruncationResult } from "../session/message/streaming-output";
+import type { SessionEntry } from "../session/store/session-entries";
 
 export type MetricDirection = "lower" | "higher";
 export type ExperimentStatus = "keep" | "discard" | "crash" | "checks_failed";

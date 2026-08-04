@@ -29,7 +29,7 @@ import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@satopi/pi-ai/auth-
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@satopi/pi-catalog/models";
 import { getConfigRootDir, isEnoent, VERSION } from "@satopi/pi-utils";
 import chalk from "chalk";
-import { type AuthBrokerClientConfig, resolveAuthBrokerConfig } from "../session/auth-broker-config";
+import { type AuthBrokerClientConfig, resolveAuthBrokerConfig } from "../session/auth/auth-broker-config";
 
 export type AuthGatewayAction = "serve" | "token" | "status" | "check";
 

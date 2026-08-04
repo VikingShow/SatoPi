@@ -5,9 +5,9 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("advisor watchdog prompt discovery", () => {
@@ -238,10 +238,10 @@ describe("advisor watchdog prompt discovery", () => {
 		const tempDir = TempDir.createSync("@pi-advisor-watchdog-");
 		tempDirs.push(tempDir);
 		const cwd = tempDir.join("project-root");
-		const ompDir = path.join(cwd, ".omp");
+		const stpDir = path.join(cwd, ".stp");
 		const userAgentDir = tempDir.join("user-agent");
 		fs.mkdirSync(cwd, { recursive: true });
-		fs.mkdirSync(ompDir, { recursive: true });
+		fs.mkdirSync(stpDir, { recursive: true });
 		fs.mkdirSync(userAgentDir, { recursive: true });
 
 		const userWatchdogContent = "User-level watchdog rule.";
@@ -249,7 +249,7 @@ describe("advisor watchdog prompt discovery", () => {
 		const standaloneWatchdogContent = "Standalone project watchdog rule.";
 
 		fs.writeFileSync(path.join(userAgentDir, "WATCHDOG.md"), userWatchdogContent, "utf8");
-		fs.writeFileSync(path.join(ompDir, "WATCHDOG.md"), nativeWatchdogContent, "utf8");
+		fs.writeFileSync(path.join(stpDir, "WATCHDOG.md"), nativeWatchdogContent, "utf8");
 		fs.writeFileSync(path.join(cwd, "WATCHDOG.md"), standaloneWatchdogContent, "utf8");
 
 		const authStorage = await AuthStorage.create(tempDir.join("testauth.db"));

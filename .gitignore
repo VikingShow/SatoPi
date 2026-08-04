@@ -87,3 +87,6 @@ plan.md
 
 # test-generated agent profile dump
 packages/coding-agent/profiles.json
+
+# test-generated agent smoke dirs
+packages/coding-agent/stp-smoke-agent-uri-*/

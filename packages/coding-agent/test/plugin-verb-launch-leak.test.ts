@@ -26,7 +26,7 @@ describe("documented-but-unregistered plugin verbs do not leak to launch (#2935)
 		expect(result).not.toHaveProperty("argv");
 		// Must point at the real command.
 		expect(result).toHaveProperty("error");
-		expect("error" in result && result.error).toContain("omp plugin list");
+		expect("error" in result && result.error).toContain("stp plugin list");
 	});
 
 	test("bare `omp remove` hints at `omp plugin uninstall` instead of launching with 'remove' as the prompt", () => {
@@ -34,7 +34,7 @@ describe("documented-but-unregistered plugin verbs do not leak to launch (#2935)
 		expect(result).not.toEqual({ argv: ["launch", "remove"] });
 		expect(result).not.toHaveProperty("argv");
 		expect(result).toHaveProperty("error");
-		expect("error" in result && result.error).toContain("omp plugin uninstall");
+		expect("error" in result && result.error).toContain("stp plugin uninstall");
 	});
 
 	test("genuine multi-word prompts beginning with these verbs still route to launch", () => {

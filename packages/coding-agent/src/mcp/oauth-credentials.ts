@@ -1,6 +1,6 @@
 import { getActiveProfile } from "@satopi/pi-utils/dirs";
 import { expandEnvVarsDeep } from "../discovery/helpers";
-import type { AuthStorage } from "../session/auth-storage";
+import type { AuthStorage } from "../session/auth/auth-storage";
 import {
 	isManagedMCPOAuthCredentialId,
 	type MCPStoredOAuthCredential,

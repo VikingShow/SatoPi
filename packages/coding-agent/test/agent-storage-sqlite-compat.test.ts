@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { AgentStorage, SCHEMA_VERSION } from "@satopi/pi-coding-agent/session/agent-storage";
+import { AgentStorage, SCHEMA_VERSION } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import { TempDir } from "@satopi/pi-utils";
 import { readTableSql } from "./helpers/sqlite-inspect";
 

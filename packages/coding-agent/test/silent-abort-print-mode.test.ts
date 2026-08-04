@@ -9,8 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:
 import type { AssistantMessage } from "@satopi/pi-ai";
 import * as AIError from "@satopi/pi-ai/error";
 import { runPrintMode } from "@satopi/pi-coding-agent/modes/print-mode";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/messages";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/message/messages";
 
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
 	return {

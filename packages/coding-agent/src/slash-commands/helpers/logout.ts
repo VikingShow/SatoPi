@@ -1,4 +1,4 @@
-import type { OAuthAccountIdentity, StoredAuthCredential } from "../../session/auth-storage";
+import type { OAuthAccountIdentity, StoredAuthCredential } from "../../session/auth/auth-storage";
 
 export interface LogoutAccount {
 	credentialId: number;

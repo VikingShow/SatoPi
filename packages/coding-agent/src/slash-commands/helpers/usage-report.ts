@@ -1,6 +1,6 @@
 import type { UsageLimit, UsageReport } from "@satopi/pi-ai";
 import { sanitizeText } from "@satopi/pi-utils";
-import type { OAuthAccountIdentity } from "../../session/auth-storage";
+import type { OAuthAccountIdentity } from "../../session/auth/auth-storage";
 import type { SlashCommandRuntime } from "../types";
 import { reportMatchesActiveAccount } from "./active-oauth-account";
 import { formatDuration, renderAsciiBar } from "./format";

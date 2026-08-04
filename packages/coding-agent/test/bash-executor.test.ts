@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resetSettingsForTest, Settings, type ShellMinimizerSettings } from "@satopi/pi-coding-agent/config/settings";
 import { buildMinimizerOptions, executeBash } from "@satopi/pi-coding-agent/exec/bash-executor";
-import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/streaming-output";
+import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/message/streaming-output";
 import * as shellSnapshot from "@satopi/pi-coding-agent/utils/shell-snapshot";
 import type { Shell } from "@satopi/pi-natives";
 import * as piNatives from "@satopi/pi-natives";

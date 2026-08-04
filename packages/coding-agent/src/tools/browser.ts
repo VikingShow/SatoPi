@@ -4,7 +4,7 @@ import { prompt, untilAborted } from "@satopi/pi-utils";
 import { type } from "arktype";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
-import { enforceInlineByteCap } from "../session/streaming-output";
+import { enforceInlineByteCap } from "../session/message/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
 import { acquireBrowser, type BrowserHandle, type BrowserKind, type BrowserKindTag } from "./browser/registry";

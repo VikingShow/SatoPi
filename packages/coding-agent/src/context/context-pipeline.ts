@@ -19,7 +19,12 @@ import type { AgentLoopConfig, AgentMessage } from "@satopi/pi-agent-core";
 import { logger } from "@satopi/pi-utils";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
-import { compactContext, DEFAULT_COMPACT_CONFIG } from "../offload/compact";
+import {
+	compactContext,
+	DEFAULT_COMPACT_CONFIG,
+	type OffloadCompactStatus,
+	toOffloadCompactStatus,
+} from "../offload/compact";
 import type { Chapter } from "../swarm/core/state";
 
 // ============================================================================
@@ -228,7 +233,10 @@ export class ContextPipeline {
 		opts?: {
 			compactWindow?: number;
 			agentId?: string;
-			offloadManager?: { getOffloadSummaries(): Promise<Map<string, string>> };
+			offloadManager?: {
+				getOffloadSummaries(): Promise<Map<string, string>>;
+				recordCompactResult?(status: OffloadCompactStatus): void;
+			};
 		},
 	): Exclude<AgentLoopConfig["transformContext"], undefined> {
 		const injected = assembled.injectedMessages;
@@ -264,6 +272,9 @@ export class ContextPipeline {
 					contextWindow: opts.compactWindow,
 				});
 				result = compacted.messages;
+				// Publish the L3 outcome as the offload → session coordination
+				// signal (session compaction defers to it when L3 is sufficient).
+				offloadManager?.recordCompactResult?.(toOffloadCompactStatus(compacted, opts.compactWindow));
 
 				// Hook: context:afterCompaction
 				if (hookPipeline) {

@@ -25,8 +25,8 @@ import { $which, logger } from "@satopi/pi-utils";
 import { DEFAULT_SHARE_URL } from "@satopi/pi-wire";
 import { $ } from "bun";
 import { obfuscateToolArguments, type SecretObfuscator } from "../secrets/obfuscator";
-import type { SessionEntry, SessionHeader } from "../session/session-entries";
-import type { SessionManager } from "../session/session-manager";
+import type { SessionEntry, SessionHeader } from "../session/store/session-entries";
+import type { SessionManager } from "../session/store/session-manager";
 import type { OutputMeta } from "../tools/output-meta";
 import { buildSessionData, type SessionData, type SubSession } from "./html";
 

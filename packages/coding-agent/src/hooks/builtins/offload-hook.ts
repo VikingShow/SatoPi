@@ -61,7 +61,7 @@ export function createOffloadHook(offloadManager: IOffloadManager): HookRegistra
 				// workflow:beforePhase — flush pending data
 				// -----------------------------------------------------------------
 				case "workflow:beforePhase": {
-					await offloadManager.forceFlush();
+					await offloadManager.forceFlush(ctx.phase);
 					logger.debug("[OffloadHook] Force-flush completed", {
 						phase: ctx.phase,
 					});

@@ -28,7 +28,7 @@ import { HookInputComponent } from "../../modes/components/hook-input";
 import { HookSelectorComponent, type HookSelectorSlider } from "../../modes/components/hook-selector";
 import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext, InteractiveSelectorDialogOptions } from "../../modes/types";
-import { normalizeCustomMessagePayload, USER_INTERRUPT_LABEL } from "../../session/messages";
+import { normalizeCustomMessagePayload, USER_INTERRUPT_LABEL } from "../../session/message/messages";
 import { setSessionTerminalTitle, setTerminalTitle } from "../../utils/title-generator";
 
 const MAX_WIDGET_LINES = 10;

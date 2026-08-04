@@ -5,8 +5,8 @@ This document describes operator-visible behavior for session export/share/fork/
 ## Implementation files
 
 - [`../src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts)
-- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
-- [`../src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`../src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts)
+- [`../src/session/store/session-manager.ts`](../packages/coding-agent/src/session/store/session-manager.ts)
 - [`../src/export/html/index.ts`](../packages/coding-agent/src/export/html/index.ts)
 - [`../src/export/custom-share.ts`](../packages/coding-agent/src/export/custom-share.ts)
 - [`../src/main.ts`](../packages/coding-agent/src/main.ts)

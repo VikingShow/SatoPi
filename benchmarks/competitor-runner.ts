@@ -70,7 +70,10 @@ async function runAiderOnTask(task: EditTask, config: CompetitorConfig): Promise
 		};
 		await copyDir(task.inputDir, workspace);
 
-		// Git init (aider requires a git repo)
+		// Git init — aider requires a git repo, so this is scoped to the aider
+		// arm ONLY. The shared in-loop runner must NEVER git-init its workspace:
+		// a stray .git/ is flagged as an unexpected file by the verifier and
+		// fakes passRate=0 failures. Keep this block inside runAiderOnTask.
 		try {
 			execSync("git init", { cwd: workspace, stdio: "ignore" });
 			execSync("git config user.email 'aider@bench.local'", { cwd: workspace, stdio: "ignore" });

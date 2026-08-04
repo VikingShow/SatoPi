@@ -5,9 +5,9 @@ import {
 	CURRENT_SESSION_VERSION,
 	type SessionHeader,
 	type SessionMessageEntry,
-} from "@satopi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getTerminalId } from "@satopi/pi-tui";
 import { getAgentDir, getTerminalSessionsDir, removeWithRetries, setAgentDir, TempDir } from "@satopi/pi-utils";
 

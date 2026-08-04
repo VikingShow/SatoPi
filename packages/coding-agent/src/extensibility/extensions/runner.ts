@@ -9,7 +9,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import { type Theme, theme } from "../../modes/theme/theme";
-import type { SessionManager } from "../../session/session-manager";
+import type { SessionManager } from "../../session/store/session-manager";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { createExtensionModelQuery } from "./model-api";
 import type {

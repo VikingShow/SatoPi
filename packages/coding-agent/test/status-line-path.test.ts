@@ -3,7 +3,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SegmentContext } from "@satopi/pi-coding-agent/modes/components/status-line/segments";
-import { renderSegment } from "@satopi/pi-coding-agent/modes/components/status-line/segments";
+import {
+	renderSegment,
+	setScratchRootExclusionsForTest,
+} from "@satopi/pi-coding-agent/modes/components/status-line/segments";
 import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { getProjectDir, removeSyncWithRetries, setProjectDir } from "@satopi/pi-utils";
 
@@ -69,6 +72,7 @@ function createPathContext(): SegmentContext {
 afterEach(() => {
 	vi.restoreAllMocks();
 	setProjectDir(originalProjectDir);
+	setScratchRootExclusionsForTest(undefined);
 });
 
 function expectContentToContainPath(content: string, expected: string): void {
@@ -93,6 +97,10 @@ describe("status line path segment", () => {
 	it("strips the Projects root for symlink-equivalent aliases", () => {
 		if (process.platform === "win32") return;
 
+		// The fake home lives under the repo (`.wt`). When the suite itself runs
+		// from a temp worktree under `os.tmpdir()`, the home would be classified
+		// as scratch — exclude the OS temp root so this stays location-independent.
+		setScratchRootExclusionsForTest([os.tmpdir()]);
 		const { home, projectsRoot } = createFakeHome();
 
 		const realProjectDir = fs.mkdtempSync(path.join(projectsRoot, "stp-status-line-"));
@@ -177,6 +185,9 @@ describe("status line path segment", () => {
 
 	it("keeps the folder icon for paths outside any scratch root", () => {
 		const { home, projectsRoot } = createFakeHome();
+		// Same as above: keep the fake-home project outside scratch classification
+		// even when the repo (and thus the fake home) sits under os.tmpdir().
+		setScratchRootExclusionsForTest([os.tmpdir()]);
 		const realProjectDir = fs.mkdtempSync(path.join(projectsRoot, "stp-status-line-real-"));
 		try {
 			setProjectDir(realProjectDir);

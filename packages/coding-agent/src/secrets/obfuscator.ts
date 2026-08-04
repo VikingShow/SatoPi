@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { AssistantMessage, Context, ImageContent, Message, TextContent } from "@satopi/pi-ai";
-import type { SessionContext } from "../session/session-context";
+import type { SessionContext } from "../session/message/session-context";
 import { compileSecretRegex } from "./regex";
 
 // ═══════════════════════════════════════════════════════════════════════════

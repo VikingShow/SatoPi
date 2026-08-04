@@ -23,9 +23,9 @@ describe("profile alias installer", () => {
 		});
 
 		expect(result.configPath).toBe("/home/me/.bashrc");
-		expect(result.command).toBe("omp --profile=work");
+		expect(result.command).toBe("stp --profile=work");
 		expect(files.get("/home/me/.bashrc")).toContain("stp-work() {");
-		expect(files.get("/home/me/.bashrc")).toContain('command omp --profile=work "$@"');
+		expect(files.get("/home/me/.bashrc")).toContain('command stp --profile=work "$@"');
 	});
 
 	it("resolves source invocations without forcing the source checkout as cwd", () => {
@@ -122,9 +122,9 @@ describe("profile alias installer", () => {
 			},
 		});
 
-		const content = files.get("/Users/me/.config/fish/conf.d/omp-profiles.fish") ?? "";
-		expect(content).toContain("function omp-work --wraps omp");
-		expect(content).toContain("command omp --profile=work $argv");
+		const content = files.get("/Users/me/.config/fish/conf.d/stp-profiles.fish") ?? "";
+		expect(content).toContain("function stp-work --wraps stp");
+		expect(content).toContain("command stp --profile=work $argv");
 	});
 
 	it("installs the fish alias under XDG_CONFIG_HOME when set", async () => {
@@ -143,8 +143,8 @@ describe("profile alias installer", () => {
 			},
 		});
 
-		expect(result.configPath).toBe("/home/me/.dotfiles/config/fish/conf.d/omp-profiles.fish");
-		expect(files.get(result.configPath)).toContain("function omp-work --wraps omp");
+		expect(result.configPath).toBe("/home/me/.dotfiles/config/fish/conf.d/stp-profiles.fish");
+		expect(files.get(result.configPath)).toContain("function stp-work --wraps stp");
 	});
 
 	it("writes a PowerShell function because aliases cannot carry arguments", async () => {
@@ -164,8 +164,8 @@ describe("profile alias installer", () => {
 
 		const psConfigPath = path.join("C:\\Users\\me", "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
 		const content = files.get(psConfigPath) ?? "";
-		expect(content).toContain("function omp-work");
-		expect(content).toContain("& omp --profile=work @args");
+		expect(content).toContain("function stp-work");
+		expect(content).toContain("& stp --profile=work @args");
 	});
 
 	it("detects pwsh from PSModulePath when SHELL is unset on Windows", async () => {
@@ -189,7 +189,7 @@ describe("profile alias installer", () => {
 		expect(result.shell).toBe("pwsh");
 		const psConfigPath = path.join("C:\\Users\\me", "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
 		expect(result.configPath).toBe(psConfigPath);
-		expect(files.get(result.configPath)).toContain("& omp --profile=work @args");
+		expect(files.get(result.configPath)).toContain("& stp --profile=work @args");
 	});
 
 	it("selects Windows PowerShell when only WindowsPowerShell modules are present", async () => {
@@ -246,9 +246,9 @@ describe("profile alias installer", () => {
 				"/home/me/.zshrc",
 				[
 					"before",
-					"# >>> omp profile alias: omp-work >>>",
-					"alias omp-work='command omp --profile=old'",
-					"# <<< omp profile alias: omp-work <<<",
+					"# >>> stp profile alias: stp-work >>>",
+					"alias stp-work='command stp --profile=old'",
+					"# <<< stp profile alias: stp-work <<<",
 					"after",
 				].join("\n"),
 			],
@@ -269,7 +269,7 @@ describe("profile alias installer", () => {
 		const content = files.get("/home/me/.zshrc") ?? "";
 		expect(content).toContain("before");
 		expect(content).toContain("after");
-		expect(content).toContain('command omp --profile=work "$@"');
+		expect(content).toContain('command stp --profile=work "$@"');
 		expect(content).not.toContain("--profile=old");
 	});
 
@@ -278,7 +278,7 @@ describe("profile alias installer", () => {
 		// was interrupted or hand-edited. Appending a fresh block would let the
 		// *next* install splice from the stale start through the new end, deleting
 		// the user config in between. Refuse and preserve the file untouched.
-		const original = ["# >>> omp profile alias: omp-work >>>", "stp-work() {", "export SECRET=keepme"].join("\n");
+		const original = ["# >>> stp profile alias: stp-work >>>", "stp-work() {", "export SECRET=keepme"].join("\n");
 		const files = new Map<string, string>([["/home/me/.zshrc", original]]);
 		let wrote = false;
 
@@ -301,8 +301,8 @@ describe("profile alias installer", () => {
 		expect(files.get("/home/me/.zshrc")).toBe(original);
 	});
 
-	it("refuses to shadow the base omp command case-insensitively", async () => {
-		for (const aliasName of ["omp", "OMP"]) {
+	it("refuses to shadow the base stp command case-insensitively", async () => {
+		for (const aliasName of ["stp", "STP"]) {
 			await expect(
 				installProfileAlias({
 					profile: "work",
@@ -373,7 +373,7 @@ describe("profile alias installer", () => {
 					files.set(filePath, content);
 				},
 			}),
-		).rejects.toThrow("Invalid OMP profile");
+		).rejects.toThrow("Invalid STP profile");
 		expect(files.size).toBe(0);
 	});
 
@@ -434,8 +434,8 @@ describe("profile alias installer", () => {
 			},
 		});
 
-		expect(result.configPath).toBe("D:/xdg/fish/conf.d/omp-profiles.fish");
-		expect(result.reloadedWith).toBe("source 'D:/xdg/fish/conf.d/omp-profiles.fish'");
+		expect(result.configPath).toBe("D:/xdg/fish/conf.d/stp-profiles.fish");
+		expect(result.reloadedWith).toBe("source 'D:/xdg/fish/conf.d/stp-profiles.fish'");
 	});
 
 	it("preserves UNC path roots when normalizing POSIX shell config paths", async () => {

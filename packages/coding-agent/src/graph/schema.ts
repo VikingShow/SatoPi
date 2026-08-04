@@ -61,8 +61,13 @@ export interface NodeBehavior {
 	/**
 	 * Validate: run gate checks against the execution result.
 	 * Called after execute() regardless of success/failure.
+	 *
+	 * Optional — only completion-driven behaviors (e.g.
+	 * PhaseBehaviorNodeAdapter, LoopNodeBehavior) implement it. Custom-node
+	 * gates are run by GraphRunner via GateController instead, so
+	 * CustomNodeBehavior intentionally has no validate().
 	 */
-	validate(result: NodeResult, gate?: GateSpec): Promise<GateResult>;
+	validate?(result: NodeResult, gate?: GateSpec): Promise<GateResult>;
 
 	/**
 	 * Cleanup: abort any still-running agents and release resources.
@@ -173,6 +178,8 @@ const VALID_NODE_TYPES: Record<string, true> = {
 	custom: true,
 	subgraph: true,
 	loop: true,
+	debate: true,
+	"cross-check": true,
 };
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;

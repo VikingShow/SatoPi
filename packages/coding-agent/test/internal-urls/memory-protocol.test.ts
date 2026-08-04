@@ -11,7 +11,7 @@ import {
 	setMnemopiSessionState,
 } from "@satopi/pi-coding-agent/mnemopi/state";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { getAgentDir, removeWithRetries, setAgentDir, TempDir } from "@satopi/pi-utils";
 
 // Mnemopi state is loaded lazily; preload so `new MnemopiSessionState(...)` can

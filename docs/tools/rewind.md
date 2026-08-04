@@ -6,9 +6,9 @@
 - Entry: `packages/coding-agent/src/tools/checkpoint.ts`
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/rewind.md`
 - Key collaborators:
-  - `packages/coding-agent/src/session/agent-session.ts` — validates pending rewind state, applies the actual rewind, and injects the retained report.
-  - `packages/coding-agent/src/session/session-manager.ts` — branches the persisted session tree and appends persisted summary/report entries.
-  - `packages/coding-agent/src/session/session-context.ts` — `buildSessionContext()` converts persisted `branch_summary` entries into LLM-visible `branchSummary` messages on rebuilt context.
+  - `packages/coding-agent/src/session/agent/agent-session.ts` — validates pending rewind state, applies the actual rewind, and injects the retained report.
+  - `packages/coding-agent/src/session/store/session-manager.ts` — branches the persisted session tree and appends persisted summary/report entries.
+  - `packages/coding-agent/src/session/message/session-context.ts` — `buildSessionContext()` converts persisted `branch_summary` entries into LLM-visible `branchSummary` messages on rebuilt context.
   - `packages/coding-agent/src/tools/index.ts` — registers the tool and shares the `checkpoint.enabled` gate.
 
 ## Inputs
@@ -70,7 +70,7 @@ The returned tool result is not the final rewind. `AgentSession` waits until `tu
 - Requires exactly one active checkpoint; there is no path to name or choose among multiple checkpoints.
 - Report text must be non-empty after `trim()`.
 - Rewind restores only the message prefix recorded by `checkpointMessageCount`; there is no file restore, artifact restore, blob restore, or process restore path.
-- Persisted report/summary content is still subject to the global session persistence cap `MAX_PERSIST_CHARS = 500_000` in `packages/coding-agent/src/session/session-persistence.ts`.
+- Persisted report/summary content is still subject to the global session persistence cap `MAX_PERSIST_CHARS = 500_000` in `packages/coding-agent/src/session/store/session-persistence.ts`.
 
 ## Errors
 - `ToolError("Checkpoint not available in subagents.")` — thrown for subagent sessions.
@@ -87,9 +87,9 @@ The returned tool result is not the final rewind. `AgentSession` waits until `tu
 - Not restored:
   - filesystem contents
   - git state
-  - artifacts under `packages/coding-agent/src/session/artifacts.ts`
-  - blob-store payloads under `packages/coding-agent/src/session/blob-store.ts`
-  - prompt history rows in `packages/coding-agent/src/session/history-storage.ts`
-  - auth or other agent storage in `packages/coding-agent/src/session/agent-storage.ts`
+  - artifacts under `packages/coding-agent/src/session/shared/artifacts.ts`
+  - blob-store payloads under `packages/coding-agent/src/session/store/blob-store.ts`
+  - prompt history rows in `packages/coding-agent/src/session/store/history-storage.ts`
+  - auth or other agent storage in `packages/coding-agent/src/session/store/agent-storage.ts`
 - There is no concurrent-edit reconciliation. If code or session-adjacent state changes during the checkpoint window, rewind does not merge or revert them; it only drops conversation context and rewires the session branch.
 - Rewind is not destructive to persisted session history. `branchWithSummary()` appends a new `branch_summary` entry and moves the leaf; it does not delete the abandoned path from the `.jsonl` session log. The active context is cut over to the new branch, but the old entries remain in session storage.

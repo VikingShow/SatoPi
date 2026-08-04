@@ -17,8 +17,8 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAcpSessionFactory } from "@satopi/pi-coding-agent/main";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {

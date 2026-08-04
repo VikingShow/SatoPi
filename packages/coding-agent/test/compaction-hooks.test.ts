@@ -18,9 +18,9 @@ import {
 	type SessionEvent,
 } from "@satopi/pi-coding-agent/extensibility/hooks";
 import { theme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { createTools, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { e2eApiKey } from "./utilities";

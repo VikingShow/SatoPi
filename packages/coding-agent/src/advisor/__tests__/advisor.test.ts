@@ -9,8 +9,8 @@ import { createAdvisorMessageCard } from "../../modes/components/advisor-message
 import { getThemeByName, setThemeInstance } from "../../modes/theme/theme";
 import advisorSystemPrompt from "../../prompts/advisor/system.md" with { type: "text" };
 import { SecretObfuscator } from "../../secrets/obfuscator";
-import { formatSessionHistoryMarkdown } from "../../session/session-history-format";
-import { YieldQueue } from "../../session/yield-queue";
+import { YieldQueue } from "../../session/agent/yield-queue";
+import { formatSessionHistoryMarkdown } from "../../session/store/session-history-format";
 import { BUILTIN_TOOL_NAMES } from "../../tools/builtin-names";
 import {
 	ADVISOR_DEFAULT_TOOL_NAMES,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { parseTurnBudget } from "@satopi/pi-coding-agent/modes/turn-budget";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 
 describe("parseTurnBudget", () => {
 	it("parses k/m multipliers, plain counts, and decimals", () => {

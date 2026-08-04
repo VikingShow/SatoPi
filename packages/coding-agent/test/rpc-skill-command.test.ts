@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { tryRunRpcSkillCommand } from "@satopi/pi-coding-agent/modes/rpc/rpc-mode";
-import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE } from "@satopi/pi-coding-agent/session/messages";
+import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE } from "@satopi/pi-coding-agent/session/message/messages";
 import { removeWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("tryRunRpcSkillCommand", () => {

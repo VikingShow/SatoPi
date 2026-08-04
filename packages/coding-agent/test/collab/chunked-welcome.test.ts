@@ -17,7 +17,7 @@ import { CollabHost } from "@satopi/pi-coding-agent/collab/host";
 import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@satopi/pi-coding-agent/collab/protocol";
 import { CollabSocket } from "@satopi/pi-coding-agent/collab/relay-client";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
 import { installInMemoryRelay, uninstallInMemoryRelay } from "./helpers/in-memory-relay";
 
 // In-memory transport: shared FakeWebSocket + InMemoryRelay harness (see

@@ -3,7 +3,7 @@ import { SessionFocusController } from "@satopi/pi-coding-agent/modes/controller
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 interface SessionStub {
 	session: AgentSession;

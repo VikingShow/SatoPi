@@ -10,7 +10,7 @@ import type { Extension, ExtensionError, ExtensionFactory } from "@satopi/pi-cod
 import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions";
 import { ExtensionRuntime } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 interface SessionDirs {
@@ -89,9 +89,19 @@ describe("createAgentSession credential_disabled subscription", () => {
 		return { cwd, agentDir };
 	};
 
-	const baseOptions = (dirs: SessionDirs, authStorage: AuthStorage, extensions: ExtensionFactory[] = []) => ({
+	const baseOptions = (
+		dirs: SessionDirs,
+		authStorage: AuthStorage,
+		extensions: ExtensionFactory[] = [],
+		agentId?: string,
+	) => ({
 		cwd: dirs.cwd,
 		agentDir: dirs.agentDir,
+		// Concurrent sessions must not collide on the default MAIN_AGENT_ID —
+		// the AgentRegistry singleton replaces (and disposes) a session that
+		// re-registers the same id, which would silently unsubscribe the first
+		// session's credential_disabled listener.
+		...(agentId ? { agentId } : {}),
 		authStorage,
 		// Pin the model registry at a temp models.json. Without an explicit path, ModelRegistry
 		// loads the developer's real ~/.omp models config on every construction (~100ms each,
@@ -235,9 +245,16 @@ describe("createAgentSession credential_disabled subscription", () => {
 		const dirs1 = makeDirs("concurrent-1");
 		const dirs2 = makeDirs("concurrent-2");
 		const dirs3 = makeDirs("concurrent-3");
-		const session1 = await createAgentSession(baseOptions(dirs1, authStorage, [ext1.factory]));
-		const session2 = await createAgentSession(baseOptions(dirs2, authStorage, [ext2.factory]));
-		const session3 = await createAgentSession(baseOptions(dirs3, authStorage, [ext3.factory]));
+		const suffix = Snowflake.next();
+		const session1 = await createAgentSession(
+			baseOptions(dirs1, authStorage, [ext1.factory], `credential-bridge-1-${suffix}`),
+		);
+		const session2 = await createAgentSession(
+			baseOptions(dirs2, authStorage, [ext2.factory], `credential-bridge-2-${suffix}`),
+		);
+		const session3 = await createAgentSession(
+			baseOptions(dirs3, authStorage, [ext3.factory], `credential-bridge-3-${suffix}`),
+		);
 		initializeRunnerForTest(session1.session.extensionRunner);
 		initializeRunnerForTest(session2.session.extensionRunner);
 		initializeRunnerForTest(session3.session.extensionRunner);

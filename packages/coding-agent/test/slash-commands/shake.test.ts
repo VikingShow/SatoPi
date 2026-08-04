@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { ShakeMode } from "@satopi/pi-coding-agent/session/shake-types";
+import type { ShakeMode } from "@satopi/pi-coding-agent/session/shared/shake-types";
 import {
 	ACP_BUILTIN_SLASH_COMMANDS,
 	executeAcpBuiltinSlashCommand,

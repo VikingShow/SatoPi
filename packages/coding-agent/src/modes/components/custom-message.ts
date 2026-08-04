@@ -2,7 +2,7 @@ import type { Component } from "@satopi/pi-tui";
 import { Box, Container } from "@satopi/pi-tui";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
 import { theme } from "../../modes/theme/theme";
-import type { CustomMessage } from "../../session/messages";
+import type { CustomMessage } from "../../session/message/messages";
 import { renderFramedMessage } from "./message-frame";
 
 /**

@@ -9,37 +9,34 @@
  * - Profile credit tracking via ProfileRegistry
  */
 
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, type Mock, mock, vi } from "bun:test";
 import type { AgentToolContext } from "@satopi/pi-agent-core";
-import type { AgentSession } from "../../session/agent-session";
-
-// ============================================================================
-// Mock createAgentSession at module level before anything imports it
-// ============================================================================
-
-const mockCreateAgentSession = mock();
-
-mock.module("../../sdk", () => ({
-	createAgentSession: mockCreateAgentSession,
-}));
-
 import { ProfileRegistry } from "../../agent/agent-profile";
-// Now these imports will resolve with the mocked sdk
 import { AgentRegistry } from "../../registry/agent-registry";
+import type { CreateAgentSessionResult } from "../../sdk";
+import * as sdkModule from "../../sdk";
+import type { AgentSession } from "../../session/agent/agent-session";
 import { agentInvokeTool } from "../../tools/agent-invoke";
+
+let mockCreateAgentSession: Mock<typeof sdkModule.createAgentSession>;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 /** Create a minimal mock AgentSession for testing. */
-function makeMockSession(overrides?: Record<string, unknown>) {
+function makeMockSession(overrides?: Record<string, unknown>): AgentSession {
 	return {
 		prompt: mock().mockResolvedValue(true),
 		wait: mock().mockResolvedValue({ output: "Task completed", exitCode: 0 }),
 		subscribe: mock().mockReturnValue(() => {}),
 		...overrides,
-	};
+	} as unknown as AgentSession;
+}
+
+/** Minimal createAgentSession result carrying the session under test. */
+function makeSessionResult(session: AgentSession): CreateAgentSessionResult {
+	return { session } as unknown as CreateAgentSessionResult;
 }
 
 // ============================================================================
@@ -54,13 +51,12 @@ beforeEach(() => {
 	}
 	// Reset ProfileRegistry for clean slate
 	ProfileRegistry.resetGlobalForTests();
-	mockCreateAgentSession.mockClear();
+	mockCreateAgentSession = vi.spyOn(sdkModule, "createAgentSession");
 });
 
 afterEach(() => {
-	mock.restore();
+	vi.restoreAllMocks();
 });
-
 // ============================================================================
 // Tests
 // ============================================================================
@@ -75,9 +71,7 @@ describe("agent_invoke E2E", () => {
 			});
 
 			const mockSession = makeMockSession();
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
@@ -147,9 +141,7 @@ describe("agent_invoke E2E", () => {
 			const mockSession = makeMockSession({
 				prompt: mock().mockRejectedValue(new Error("Task rejected")),
 			});
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
@@ -176,9 +168,7 @@ describe("agent_invoke E2E", () => {
 			const mockSession = makeMockSession({
 				prompt: mock().mockRejectedValue(new Error("Boom")),
 			});
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			await agentInvokeTool.execute(
 				"toolCall-1",
@@ -252,9 +242,7 @@ describe("agent_invoke E2E", () => {
 			});
 
 			const mockSession = makeMockSession();
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			const result = await agentInvokeTool.execute(
 				"toolCall-1",
@@ -281,9 +269,7 @@ describe("agent_invoke E2E", () => {
 			const mockSession = makeMockSession({
 				wait: mock().mockResolvedValue({ output: "Done", exitCode: 0 }),
 			});
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			await agentInvokeTool.execute(
 				"toolCall-1",
@@ -308,9 +294,7 @@ describe("agent_invoke E2E", () => {
 			const mockSession = makeMockSession({
 				wait: mock().mockResolvedValue({ output: "Error occurred", exitCode: 1 }),
 			});
-			mockCreateAgentSession.mockResolvedValue({
-				session: mockSession,
-			});
+			mockCreateAgentSession.mockResolvedValue(makeSessionResult(mockSession));
 
 			await agentInvokeTool.execute(
 				"toolCall-1",

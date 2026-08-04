@@ -7,7 +7,7 @@ import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { ModelPickerComponent, type ModelPickerOptions } from "@satopi/pi-coding-agent/modes/components/model-picker";
 import { resolveSegmentPalette } from "@satopi/pi-coding-agent/modes/components/segment-track";
 import { getThemeByName, setThemeInstance, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { ResolvedRoleModel } from "@satopi/pi-coding-agent/session/agent-session";
+import type { ResolvedRoleModel } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import type { TUI } from "@satopi/pi-tui";
 
 function normalize(lines: readonly string[]): string {

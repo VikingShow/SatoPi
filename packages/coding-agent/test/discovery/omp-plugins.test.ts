@@ -116,7 +116,7 @@ function ctx(): LoadContext {
 }
 
 test("project settings.json#extensions surfaces every sub-directory", async () => {
-	writeFile(path.join(project, ".omp", "settings.json"), JSON.stringify({ extensions: [ext] }));
+	writeFile(path.join(project, ".stp", "settings.json"), JSON.stringify({ extensions: [ext] }));
 
 	const [skills, commands, rules, prompts, hooks, tools, mcps] = await Promise.all([
 		loadFromPlugin<{ name: string }>(skillCapability.id, ctx()),
@@ -170,7 +170,7 @@ test("relative paths in settings resolve against the project cwd", async () => {
 	const target = path.join(project, relative);
 	fs.mkdirSync(path.dirname(target), { recursive: true });
 	fs.cpSync(ext, target, { recursive: true });
-	writeFile(path.join(project, ".omp", "settings.json"), JSON.stringify({ extensions: [`./${relative}`] }));
+	writeFile(path.join(project, ".stp", "settings.json"), JSON.stringify({ extensions: [`./${relative}`] }));
 
 	const skills = await loadFromPlugin<{ name: string }>(skillCapability.id, ctx());
 	expect(skills.map(s => s.name)).toContain("my-skill");
@@ -181,7 +181,7 @@ test(".mcp.json with bare entries (no command/url) records a warning and is skip
 		path.join(ext, ".mcp.json"),
 		JSON.stringify({ mcpServers: { broken: {}, ok: { command: "x", args: [] } } }),
 	);
-	writeFile(path.join(project, ".omp", "settings.json"), JSON.stringify({ extensions: [ext] }));
+	writeFile(path.join(project, ".stp", "settings.json"), JSON.stringify({ extensions: [ext] }));
 
 	const result = await pluginProvider(mcpCapability.id).load(ctx());
 	expect(result.items.map(s => (s as { name: string }).name)).toEqual(["ok"]);
@@ -191,7 +191,7 @@ test(".mcp.json with bare entries (no command/url) records a warning and is skip
 test("installed plugins under `<plugins>/node_modules/` are surfaced (e.g. via `omp plugin link`/`install`)", async () => {
 	// Simulate what `plugin install` / `plugin link` produces: a plugins root
 	// with `package.json#dependencies` and a populated `node_modules/<pkg>/`.
-	const pluginsDir = path.join(home, ".omp", "plugins");
+	const pluginsDir = path.join(home, ".stp", "plugins");
 	const nodeModules = path.join(pluginsDir, "node_modules");
 	const installed = path.join(nodeModules, "my-installed-ext");
 	fs.mkdirSync(installed, { recursive: true });
@@ -210,7 +210,7 @@ test("installed plugins under `<plugins>/node_modules/` are surfaced (e.g. via `
 });
 
 test("project-scoped installed plugins surface project-level sub-discovery", async () => {
-	const pluginsDir = path.join(project, ".omp", "plugins");
+	const pluginsDir = path.join(project, ".stp", "plugins");
 	const installed = path.join(pluginsDir, "node_modules", "my-project-ext");
 	fs.mkdirSync(installed, { recursive: true });
 	fs.cpSync(ext, installed, { recursive: true });
@@ -231,7 +231,7 @@ test("project-scoped installed plugins surface project-level sub-discovery", asy
 });
 
 test("disabled installed plugins do not contribute sub-discovery", async () => {
-	const pluginsDir = path.join(home, ".omp", "plugins");
+	const pluginsDir = path.join(home, ".stp", "plugins");
 	const installed = path.join(pluginsDir, "node_modules", "my-disabled-ext");
 	fs.mkdirSync(installed, { recursive: true });
 	fs.cpSync(ext, installed, { recursive: true });
@@ -255,7 +255,7 @@ test("linked plugins (only in lockfile, not in package.json#dependencies) are su
 	// still find the package — otherwise the documented `omp install
 	// ./local-extension` workflow leaves the sibling skills/hooks/tools
 	// invisible (see PR #1498 review).
-	const pluginsDir = path.join(home, ".omp", "plugins");
+	const pluginsDir = path.join(home, ".stp", "plugins");
 	const nodeModules = path.join(pluginsDir, "node_modules");
 	fs.mkdirSync(nodeModules, { recursive: true });
 	const linkTarget = path.join(nodeModules, "my-linked-ext");

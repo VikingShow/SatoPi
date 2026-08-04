@@ -85,7 +85,7 @@ export interface AgentBeforeSpawnPayload {
 export interface AgentAfterSpawnPayload {
 	agentId: string;
 	role: string;
-	/** The AgentSession returned by AgentLauncher. */
+	/** The AgentSession returned by spawnAgent(). */
 	session: unknown;
 }
 
@@ -125,6 +125,8 @@ export interface WorkflowBeforePhasePayload {
 
 /** Payload for workflow:afterPhase — emitted after a phase completes. */
 export interface WorkflowAfterPhasePayload {
+	/** The phase that completed. */
+	phase?: string;
 	/** Optional list of agent IDs that participated in the phase. */
 	agentIds?: string[];
 	/** Optional session summary for experience persistence. */

@@ -13,7 +13,7 @@ import { SessionObserverRegistry } from "@satopi/pi-coding-agent/modes/session-o
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { TempDir } from "@satopi/pi-utils";
 
 const AGENT_ID = "Worker";

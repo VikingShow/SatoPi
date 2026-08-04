@@ -11,9 +11,12 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { ExperienceEntry } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
-import type { SessionStorage } from "../session/session-storage";
+import type { SessionStorage } from "../session/store/session-storage";
+import type { Chapter } from "../types/chapter";
+import type { OffloadCompactStatus } from "./compact";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------
@@ -24,17 +27,21 @@ export interface IOffloadManager {
 	/** L1 summarization of an agent's output (hook direction). */
 	summarizeL1(agentId: string, content: unknown): Promise<void>;
 	/** Force-flush pending offload data to persistent storage (hook direction). */
-	forceFlush(): Promise<void>;
+	forceFlush(phase?: Chapter): Promise<void>;
 	/** Get MMD context for agent spawn injection (context direction). */
 	getMmdContext(agentId: string, taskDescription: string): Promise<string | null>;
 	/** Get experience context for agent spawn injection (context direction). */
 	getExperienceContext(agentId: string, taskDescription: string): Promise<string | null>;
 	/** Get a map of agent_id → latest summary for all offloaded agents. */
 	getOffloadSummaries(): Promise<Map<string, string>>;
+	/**
+	 * Record the outcome of an L3 `compactContext` run (offload → session
+	 * coordination signal). Called by the per-request L3 transform callers.
+	 */
+	recordCompactResult(status: OffloadCompactStatus): void;
+	/** Last recorded L3 compaction outcome, or undefined when L3 never ran. */
+	getLastCompactStatus(): OffloadCompactStatus | undefined;
 }
-
-// ---------------------------------------------------------------------------
-// OffloadManager — real implementation backed by OffloadStore
 // ---------------------------------------------------------------------------
 
 export class OffloadManager implements IOffloadManager {
@@ -42,6 +49,8 @@ export class OffloadManager implements IOffloadManager {
 	readonly #sessionId: string;
 	readonly #hookPipeline: HookPipeline | undefined;
 	#iteration = 0;
+	/** Outcome of the most recent L3 compactContext run (session-coordination signal). */
+	#lastCompactStatus: OffloadCompactStatus | undefined;
 
 	constructor(
 		workspace: string,
@@ -86,10 +95,10 @@ export class OffloadManager implements IOffloadManager {
 		}
 	}
 
-	async forceFlush(): Promise<void> {
+	async forceFlush(phase?: Chapter): Promise<void> {
 		// Hook: offload:beforeFlush
 		if (this.#hookPipeline) {
-			const ctx: HookContext = { phase: undefined };
+			const ctx: HookContext = { phase };
 			await this.#hookPipeline.trigger("offload:beforeFlush", {}, ctx);
 		}
 
@@ -99,10 +108,37 @@ export class OffloadManager implements IOffloadManager {
 		// writes are visible.
 		logger.debug("[OffloadManager] forceFlush (write-through, no buffered data)");
 
+		// Bridge this session's offload data to the experience store so the
+		// experience-hook can persist a lesson for cross-run learning. The runId
+		// is unique per flush: lessons.run_id is the PRIMARY KEY, and a fixed
+		// sessionId would collide across stage/curtain flushes — the later flush
+		// (carrying the real L1 summary) would be silently dropped.
+		const sessionEntries = await this.#store.readAllFileEntries(this.#sessionId);
+		const latest = sessionEntries[sessionEntries.length - 1];
+		const runId = `${this.#sessionId}-${Date.now()}`;
+		const entry: ExperienceEntry = {
+			runId,
+			timestamp: new Date().toISOString(),
+			lesson: {
+				type: "reflection",
+				summary: latest?.summary ?? "swarm run flush",
+				detail: "",
+				tags: [],
+				confidence: 0.5,
+				source: "offload-flush",
+			},
+			stats: {
+				totalIterations: sessionEntries.length,
+				finalStatus: "completed",
+				reviewApprovalRatio: 0,
+				agentCount: 0,
+			},
+		};
+
 		// Hook: offload:afterFlush
 		if (this.#hookPipeline) {
-			const ctx: HookContext = { phase: undefined };
-			await this.#hookPipeline.trigger("offload:afterFlush", {}, ctx);
+			const ctx: HookContext = { phase };
+			await this.#hookPipeline.trigger("offload:afterFlush", { entry, runId }, ctx);
 		}
 	}
 
@@ -114,6 +150,16 @@ export class OffloadManager implements IOffloadManager {
 			map.set(e.agent_id, e.summary);
 		}
 		return map;
+	}
+
+	// -- Session-compaction coordination --------------------------------------
+
+	recordCompactResult(status: OffloadCompactStatus): void {
+		this.#lastCompactStatus = status;
+	}
+
+	getLastCompactStatus(): OffloadCompactStatus | undefined {
+		return this.#lastCompactStatus;
 	}
 
 	// -- Context direction -----------------------------------------------------

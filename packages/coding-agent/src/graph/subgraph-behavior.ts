@@ -7,7 +7,7 @@
  * into the parent node's {@link NodeResult}.
  *
  * The nested engine's per-node executor is implemented here: each subgraph
- * `custom` node spawns one agent via `ctx.runtime` (the shared AgentSpawner),
+ * `custom` node spawns one agent via `ctx.runtime` (the shared SwarmRuntime),
  * mirroring {@link CustomNodeBehavior}. The nested engine reuses the full
  * scheduling lifecycle (waves / dynamic + conditional routing) so subgraph
  * internals behave exactly like a top-level graph.
@@ -122,7 +122,7 @@ export class SubgraphNodeBehavior implements NodeBehavior {
 }
 
 // ============================================================================
-// SubgraphNodeExecutor — executes subgraph nodes via the parent's AgentSpawner
+// SubgraphNodeExecutor — executes subgraph nodes via the parent's SwarmRuntime
 // ============================================================================
 
 /**

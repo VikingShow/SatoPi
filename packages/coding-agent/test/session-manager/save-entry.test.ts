@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { CustomEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { CustomEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 
 describe("SessionManager.saveCustomEntry", () => {
 	it("saves custom entries and includes them in tree traversal", () => {

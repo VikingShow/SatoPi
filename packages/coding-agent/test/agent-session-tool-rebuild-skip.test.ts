@@ -4,8 +4,8 @@ import type { Model } from "@satopi/pi-ai";
 import { buildModel } from "@satopi/pi-catalog/build";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import type { CustomTool } from "@satopi/pi-coding-agent/extensibility/custom-tools/types";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { type } from "arktype";
 
 // Cache-stability invariant: when MCP servers reconnect with byte-identical tool

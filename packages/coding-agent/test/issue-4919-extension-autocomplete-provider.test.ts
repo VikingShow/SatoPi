@@ -28,9 +28,9 @@ import { loadExtensions } from "../src/extensibility/extensions/loader";
 import { ExtensionRunner } from "../src/extensibility/extensions/runner";
 import { InteractiveMode } from "../src/modes/interactive-mode";
 import { initTheme } from "../src/modes/theme/theme";
-import { AgentSession } from "../src/session/agent-session";
-import { AuthStorage } from "../src/session/auth-storage";
-import { SessionManager } from "../src/session/session-manager";
+import { AgentSession } from "../src/session/agent/agent-session";
+import { AuthStorage } from "../src/session/auth/auth-storage";
+import { SessionManager } from "../src/session/store/session-manager";
 
 function makeTool(name: string): AgentTool {
 	return {

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { Settings } from "../../../config/settings";
-import type { AgentSession } from "../../../session/agent-session";
+import type { AgentSession } from "../../../session/agent/agent-session";
 import { getThemeByName, setThemeInstance } from "../../theme/theme";
 import { StatusLineComponent } from "./component";
 

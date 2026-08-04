@@ -7,10 +7,10 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import { GoalTool } from "@satopi/pi-coding-agent/goals/tools/goal-tool";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { normalizeCustomMessagePayload } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { normalizeCustomMessagePayload } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { DiscoverableTool } from "@satopi/pi-coding-agent/tool-discovery/tool-index";
 import { createTools, type Tool, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import type { TodoPhase } from "@satopi/pi-coding-agent/tools/todo";

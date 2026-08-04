@@ -5,7 +5,7 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import { AssistantMessageComponent } from "@satopi/pi-coding-agent/modes/components/assistant-message";
 import { TranscriptContainer } from "@satopi/pi-coding-agent/modes/components/transcript-container";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
+import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
 import { type Component, Text } from "@satopi/pi-tui";
 
 // Models a transcript block that re-lays-out (tool preview collapsing, assistant

@@ -6,7 +6,7 @@ import type { AgentToolResult } from "@satopi/pi-agent-core";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { resolveLocalUrlToPath } from "@satopi/pi-coding-agent/internal-urls";
 import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
-import type { ClientBridge } from "@satopi/pi-coding-agent/session/client-bridge";
+import type { ClientBridge } from "@satopi/pi-coding-agent/session/agent/client-bridge";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { WriteTool } from "@satopi/pi-coding-agent/tools/write";
 import { removeWithRetries } from "@satopi/pi-utils";

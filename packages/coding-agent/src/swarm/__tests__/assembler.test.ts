@@ -16,12 +16,13 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { ExperienceStore } from "../../experience/experience";
+import { TaskQueue } from "../../graph/task-queue";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
 import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
-import { assembleAgentRuntime } from "../core/assembler";
+import { assembleAgentRuntime, createOrchestratorRuntime } from "../core/assembler";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
 
@@ -126,5 +127,84 @@ describe("assembleAgentRuntime", () => {
 
 		expect(runtime).toBeTruthy();
 		expect(typeof runtime.spawn).toBe("function");
+	});
+
+	// ── E1a: TaskQueueSource registration ─────────────────────────────────
+
+	test("registers TaskQueueSource and exposes the runtime task queue when one is provided", () => {
+		const queue = new TaskQueue([]);
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+			taskQueue: queue,
+		});
+
+		// The same queue instance flows through to the runtime so StageBehavior
+		// and CrossCheckBehavior observe the identical queue the source reads.
+		expect(runtime.taskQueue).toBe(queue);
+		const sources = runtime.contextPipeline.listSources();
+		expect(sources.some(s => s.name === "task-queue" && s.priority === 7)).toBe(true);
+	});
+
+	test("does not register TaskQueueSource without a runtime task queue", () => {
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+		});
+
+		expect(runtime.taskQueue).toBeUndefined();
+		expect(runtime.contextPipeline.listSources().some(s => s.name === "task-queue")).toBe(false);
+	});
+
+	// ── E2: ProfileSource registration (slice H) ─────────────────────────
+
+	test("registers ProfileSource when a profileRegistry is provided", () => {
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+			profileRegistry: mockProfileRegistry,
+		});
+
+		const sources = runtime.contextPipeline.listSources();
+		expect(sources.some(s => s.name === "profile" && s.priority === 1)).toBe(true);
+	});
+
+	test("does not register ProfileSource without a profileRegistry", () => {
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+		});
+
+		expect(runtime.contextPipeline.listSources().some(s => s.name === "profile")).toBe(false);
+	});
+
+	// ── E3: mnemopi/hindsight clients forwarded by the orchestrator (slice H) ──
+
+	test("createOrchestratorRuntime forwards mnemopi/hindsight clients to the runtime", () => {
+		const { runtime } = createOrchestratorRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			experienceStore: mockExperienceStore,
+			mnemopiClient: mockMnemopiClient,
+			hindsightClient: mockHindsightClient,
+		});
+
+		const sources = runtime.contextPipeline.listSources();
+		expect(sources.some(s => s.name === "mnemopi")).toBe(true);
+		expect(sources.some(s => s.name === "hindsight")).toBe(true);
 	});
 });

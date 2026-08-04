@@ -37,7 +37,7 @@ import { $which, APP_NAME, getAgentDbPath, getConfigRootDir, isEnoent, logger, V
 import { setTransports as setLoggerTransports } from "@satopi/pi-utils/logger";
 import { $ } from "bun";
 import chalk from "chalk";
-import { resolveAuthBrokerConfig } from "../session/auth-broker-config";
+import { resolveAuthBrokerConfig } from "../session/auth/auth-broker-config";
 
 export type AuthBrokerAction = "serve" | "token" | "login" | "logout" | "status" | "import" | "migrate" | "list";
 

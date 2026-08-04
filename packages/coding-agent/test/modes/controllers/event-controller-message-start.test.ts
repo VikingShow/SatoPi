@@ -5,7 +5,7 @@ import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@satopi/pi-coding-agent/modes/utils/ui-helpers";
-import type { CustomMessage } from "@satopi/pi-coding-agent/session/messages";
+import type { CustomMessage } from "@satopi/pi-coding-agent/session/message/messages";
 import type { Component } from "@satopi/pi-tui";
 
 beforeAll(() => {
@@ -267,7 +267,7 @@ describe("EventController IRC expiry", () => {
 		}
 		// live block + MAX_LIVE_IRC_CARDS (4): the 5th card evicted the 1st.
 		expect(chatContainer.children).toHaveLength(5);
-		const rendered = chatContainer.children.map(child => child.render(80).join("\n"));
+		const rendered = chatContainer.children.map(child => Bun.stripANSI(child.render(80).join("\n")));
 		expect(rendered.some(text => text.includes("100"))).toBe(false);
 		expect(rendered.some(text => text.includes("104"))).toBe(true);
 	});

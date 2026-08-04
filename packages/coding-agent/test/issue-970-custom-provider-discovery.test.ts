@@ -10,7 +10,7 @@ import { ModelRegistry as ModelRegistryImpl } from "@satopi/pi-coding-agent/conf
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { ModelHubComponent } from "@satopi/pi-coding-agent/modes/components/model-hub";
 import { getThemeByName, setThemeInstance } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import type { TUI } from "@satopi/pi-tui";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 

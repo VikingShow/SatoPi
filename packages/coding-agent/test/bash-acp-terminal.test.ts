@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { ClientBridge, ClientBridgeTerminalHandle } from "@satopi/pi-coding-agent/session/client-bridge";
+import type { ClientBridge, ClientBridgeTerminalHandle } from "@satopi/pi-coding-agent/session/agent/client-bridge";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { BashTool } from "@satopi/pi-coding-agent/tools/bash";
 

@@ -12,7 +12,6 @@ import {
 import type { EditorTheme, MarkdownTheme, SelectListTheme, SettingsListTheme, SymbolTheme } from "@satopi/pi-tui";
 import { adjustHsv, colorLuma, getCustomThemesDir, isEnoent, logger, relativeLuminance } from "@satopi/pi-utils";
 import { type } from "arktype";
-import chalk from "chalk";
 import { LRUCache } from "lru-cache/raw";
 // Embed theme JSON files at build time
 import darkThemeJson from "./dark.json" with { type: "json" };
@@ -1618,27 +1617,27 @@ export class Theme {
 	}
 
 	bold(text: string): string {
-		return chalk.bold(text);
+		return `\x1b[1m${text}\x1b[22m`;
 	}
 
 	dim(text: string): string {
-		return chalk.dim(text);
+		return `\x1b[2m${text}\x1b[22m`;
 	}
 
 	italic(text: string): string {
-		return chalk.italic(text);
+		return `\x1b[3m${text}\x1b[23m`;
 	}
 
 	underline(text: string): string {
-		return chalk.underline(text);
+		return `\x1b[4m${text}\x1b[24m`;
 	}
 
 	strikethrough(text: string): string {
-		return chalk.strikethrough(text);
+		return `\x1b[9m${text}\x1b[29m`;
 	}
 
 	inverse(text: string): string {
-		return chalk.inverse(text);
+		return `\x1b[7m${text}\x1b[27m`;
 	}
 
 	getFgAnsi(color: ThemeColor): string {
@@ -2924,7 +2923,7 @@ export function getMarkdownTheme(): MarkdownTheme {
 		bold: (text: string) => theme.bold(text),
 		italic: (text: string) => theme.italic(text),
 		underline: (text: string) => theme.underline(text),
-		strikethrough: (text: string) => chalk.strikethrough(text),
+		strikethrough: (text: string) => theme.strikethrough(text),
 		symbols: getSymbolTheme(),
 		resolveMermaidAscii: mermaid
 			? (source, maxWidth) =>

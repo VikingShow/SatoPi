@@ -22,8 +22,8 @@ import * as AIError from "@satopi/pi-ai/error";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event-controller";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
 
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
 	return {

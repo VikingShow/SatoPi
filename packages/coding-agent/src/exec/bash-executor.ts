@@ -7,7 +7,7 @@ import { ExponentialYield } from "@satopi/pi-agent-core/utils/yield";
 import { executeShell, type MinimizerOptions, Shell, type ShellRunResult } from "@satopi/pi-natives";
 import { isExecutable, type ShellConfig } from "@satopi/pi-utils/procmgr";
 import { Settings, type ShellMinimizerSettings } from "../config/settings";
-import { OutputSink } from "../session/streaming-output";
+import { OutputSink } from "../session/message/streaming-output";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../tools/output-meta";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { buildNonInteractiveEnv } from "./non-interactive-env";

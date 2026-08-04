@@ -6,7 +6,7 @@ It explicitly excludes context-overflow recovery via auto-compaction. Overflow i
 
 ## Implementation files
 
-- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`../src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts)
 - [`../src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
 - [`../src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
 - [`../src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)

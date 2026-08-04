@@ -14,9 +14,9 @@ import type { Model } from "@satopi/pi-ai";
 import { buildModel } from "@satopi/pi-catalog/build";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAcpConnection } from "@satopi/pi-coding-agent/modes/acp/acp-mode";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 const TEST_MODEL: Model = buildModel({

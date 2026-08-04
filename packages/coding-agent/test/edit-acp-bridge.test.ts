@@ -8,7 +8,7 @@ import { HashlineFilesystem } from "@satopi/pi-coding-agent/edit/hashline/filesy
 import { resolveLocalUrlToPath } from "@satopi/pi-coding-agent/internal-urls";
 import type { WritethroughCallback } from "@satopi/pi-coding-agent/lsp";
 import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
-import type { ClientBridge } from "@satopi/pi-coding-agent/session/client-bridge";
+import type { ClientBridge } from "@satopi/pi-coding-agent/session/agent/client-bridge";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { removeWithRetries } from "@satopi/pi-utils";
 

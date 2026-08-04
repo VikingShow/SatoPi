@@ -10,7 +10,7 @@ import type { Hook } from "../../discovery";
 import { loadCapability } from "../../discovery";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
-import type { CustomMessagePayload } from "../../session/messages";
+import type { CustomMessagePayload } from "../../session/message/messages";
 import * as typebox from "../typebox";
 import { resolvePath, withExitGuard } from "../utils";
 import { execCommand } from "./runner";

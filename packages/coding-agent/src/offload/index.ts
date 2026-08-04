@@ -20,6 +20,11 @@ export {
 	type CompactContextResult,
 	compactContext,
 	DEFAULT_COMPACT_CONFIG,
+	OFFLOAD_COMPACT_FRESH_MS,
+	type OffloadCompactStatus,
+	type OffloadCompactTier,
+	shouldDeferSessionCompaction,
+	toOffloadCompactStatus,
 } from "./compact";
 export {
 	createOffloadHooks,

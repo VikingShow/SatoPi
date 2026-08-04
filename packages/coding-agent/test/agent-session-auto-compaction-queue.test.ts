@@ -8,10 +8,10 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { loadExtensions } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import * as unexpectedStopClassifier from "@satopi/pi-coding-agent/session/unexpected-stop-classifier";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import * as unexpectedStopClassifier from "@satopi/pi-coding-agent/session/agent/unexpected-stop-classifier";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getProjectAgentDir, TempDir, withTimeout } from "@satopi/pi-utils";
 import * as logger from "@satopi/pi-utils/logger";
 

@@ -8,7 +8,7 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as readline from "node:readline";
-import { getProjectDir } from "@satopi/pi-utils";
+import { getProjectDir, logger } from "@satopi/pi-utils";
 import { ProfileRegistry } from "../agent/agent-profile";
 import { RoleAssetManager } from "../agent/role-asset";
 import { ModelRegistry } from "../config/model-registry";
@@ -151,6 +151,21 @@ async function createSwarmServices(
 				: () => SwarmSessionManager.readRawEntries(swarmDir),
 		});
 		await graphRunner.init();
+
+		// #8 headless hang: `stp swarm run` has no human to confirm a plan.
+		// If a plan.md already exists in this session dir (e.g. produced by
+		// `stp swarm plan` or a prior run), inject it now so ScriptBehavior
+		// auto-confirms instead of the script node polling forever.
+		try {
+			const planContent = await fs.readFile(getSessionPlanPath(swarmDir), "utf-8");
+			if (planContent.trim().length > 0) {
+				graphRunner.onPlanUpdated(planContent);
+				logger.info("[SwarmCLI] Injected existing plan.md into graph runner", { swarmDir });
+			}
+		} catch {
+			// No plan.md yet — the script node waits for the planner/human
+			// (or the phase-completion timeout fails the run).
+		}
 		const runManager = new GraphRunnerAsRunManager(graphRunner);
 
 		// Real SteeringSink — routes human steering via IrcBus.

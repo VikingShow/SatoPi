@@ -6,11 +6,11 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { type CreateAgentSessionResult, createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { getRestorableSessionModels } from "@satopi/pi-coding-agent/session/session-context";
-import { EPHEMERAL_MODEL_CHANGE_ROLE } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { getRestorableSessionModels } from "@satopi/pi-coding-agent/session/message/session-context";
+import { EPHEMERAL_MODEL_CHANGE_ROLE } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { AUTO_THINKING } from "@satopi/pi-coding-agent/thinking";
 import { TempDir } from "@satopi/pi-utils";
 

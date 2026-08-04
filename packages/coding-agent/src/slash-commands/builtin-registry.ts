@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { getOAuthProviders } from "@satopi/pi-ai/oauth";
 import { type AutocompleteItem, Spacer } from "@satopi/pi-tui";
 import { APP_NAME, getProjectDir, setProjectDir } from "@satopi/pi-utils";
+import { deriveProfileId, ensureProfileRegistry, ProfileRegistry, validateProfileId } from "../agent/agent-profile";
 import { COLLAB_GUEST_ALLOWED_COMMANDS, CollabGuestLink } from "../collab/guest";
 import { CollabHost } from "../collab/host";
 import { expandRoleAlias, getModelMatchPreferences, resolveCliModel } from "../config/model-resolver";
@@ -32,10 +33,10 @@ import { describeLoopLimitRuntime } from "../modes/loop-limit";
 import { theme } from "../modes/theme/theme";
 import type { InteractiveModeContext } from "../modes/types";
 import { extractLastCodeBlock, extractLastCommand } from "../modes/utils/copy-targets";
-import type { AgentSession, FreshSessionResult } from "../session/agent-session";
-import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
-import { resolveResumableSession } from "../session/session-listing";
-import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
+import type { AgentSession, FreshSessionResult } from "../session/agent/agent-session";
+import { COMPACT_MODES, parseCompactArgs } from "../session/shared/compact-modes";
+import { formatShakeSummary, type ShakeMode } from "../session/shared/shake-types";
+import { resolveResumableSession } from "../session/store/session-listing";
 import { convertLoopFileToGraph } from "../swarm/loop-converter";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
@@ -52,6 +53,7 @@ import { formatDuration } from "./helpers/format";
 import { createMarketplaceManager } from "./helpers/marketplace-manager";
 import { handleMcpAcp } from "./helpers/mcp";
 import { commandConsumed, errorMessage, parseSlashCommand, parseSubcommand, usage } from "./helpers/parse";
+import { PROFILE_USAGE, parseProfileCreateArgs, renderProfileTable } from "./helpers/profile";
 import { describeRedeemOutcome, type ResetUsageAccount, toResetUsageAccounts } from "./helpers/reset-usage";
 import { handleSshAcp } from "./helpers/ssh";
 import { launchStatsDashboard, parseStatsDashboardArgs } from "./helpers/stats-dashboard";
@@ -1258,6 +1260,84 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 		},
 	},
 	{
+		name: "profile",
+		description: "Manage agent profiles selectable via /swarm start",
+		subcommands: [
+			{ name: "list", description: "List all agent profiles (id, name, archetype, credit)" },
+			{
+				name: "create",
+				description: "Create a new agent profile",
+				usage: "<name> [--archetype <type>] [--domains a,b]",
+			},
+			{ name: "delete", description: "Delete an agent profile", usage: "<profileId>" },
+		],
+		allowArgs: true,
+		handle: async (command, runtime) => {
+			const { verb, rest } = parseSubcommand(command.args);
+			if (!verb) return usage(PROFILE_USAGE, runtime);
+
+			// The TUI initializes the global registry at startup; ACP/RPC do not,
+			// so ensure it is loaded (and seeded) for the canonical project dir
+			// before reading/writing profiles.
+			const workspaceDir = getProjectDir();
+			try {
+				await ensureProfileRegistry(workspaceDir);
+			} catch (err) {
+				return usage(`Failed to load profiles: ${errorMessage(err)}`, runtime);
+			}
+			const registry = ProfileRegistry.global();
+
+			if (verb === "list") {
+				await runtime.output(renderProfileTable(registry.list()));
+				return commandConsumed();
+			}
+
+			if (verb === "create") {
+				const args = parseProfileCreateArgs(rest);
+				if (!args.name) return usage(PROFILE_USAGE, runtime);
+				const profileId = deriveProfileId(args.name);
+				if (!validateProfileId(profileId)) {
+					return usage(
+						`Invalid name "${args.name}": could not derive a safe profileId (letters, digits, hyphens, underscores only)`,
+						runtime,
+					);
+				}
+				try {
+					const profile = registry.createProfile({
+						profileId,
+						name: args.name,
+						archetype: args.archetype ?? "worker",
+						domains: args.domains,
+					});
+					await registry.save(workspaceDir);
+					await runtime.output(
+						`Created profile "${profile.profileId}" (${profile.identity.name}, ${profile.identity.archetype}, credit ${profile.credit.score}).`,
+					);
+				} catch (err) {
+					return usage(`Failed to create profile: ${errorMessage(err)}`, runtime);
+				}
+				return commandConsumed();
+			}
+
+			if (verb === "delete") {
+				const profileId = rest.trim();
+				if (!validateProfileId(profileId)) {
+					return usage(`Invalid profile id "${profileId}".`, runtime);
+				}
+				if (!registry.has(profileId)) {
+					await runtime.output(`No profile "${profileId}".`);
+					return commandConsumed();
+				}
+				registry.deleteProfile(profileId, workspaceDir);
+				await registry.save(workspaceDir);
+				await runtime.output(`Deleted profile "${profileId}".`);
+				return commandConsumed();
+			}
+
+			return usage(PROFILE_USAGE, runtime);
+		},
+	},
+	{
 		name: "graph",
 		description: "Theatre Graph commands",
 		subcommands: [
@@ -1320,7 +1400,14 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				}
 			}
 			if (verb === "run") {
-				await runtime.output("Use /swarm to open the Swarm dashboard.");
+				// Text/ACP mode has no dashboard, so a non-interactive run cannot
+				// be launched from here. Point at the scriptable headless CLI
+				// (`stp swarm run <swarm.yaml>`); the TUI handler opens the
+				// dashboard instead. Full in-session headless runs would need a
+				// headless runner hook on SlashCommandRuntime (see batch report).
+				await runtime.output(
+					"Headless graph runs: `stp swarm run <swarm.yaml>`. In the TUI, /graph run opens the dashboard.",
+				);
 				return commandConsumed();
 			}
 			if (verb === "theatre") {

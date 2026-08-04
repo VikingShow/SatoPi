@@ -27,9 +27,9 @@ import {
 	createAcpExtensionUiContext,
 } from "@satopi/pi-coding-agent/modes/acp/acp-agent";
 import type { PlanModeState } from "@satopi/pi-coding-agent/plan-mode/state";
-import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS } from "@satopi/pi-coding-agent/stt/models";
 import {
 	DEFAULT_TTS_LOCAL_MODEL_KEY,

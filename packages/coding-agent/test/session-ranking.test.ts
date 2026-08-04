@@ -7,8 +7,8 @@ import {
 	mergeSessionRanking,
 	rankSessionSearchMatches,
 } from "@satopi/pi-coding-agent/modes/components/session-selector";
-import { listSessions, type SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
-import { MemorySessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
+import { listSessions, type SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
+import { MemorySessionStorage } from "@satopi/pi-coding-agent/session/store/session-storage";
 import { getHistoryDbPath, getSessionsDir, TempDir } from "@satopi/pi-utils";
 
 function makeSession(id: string, overrides: Partial<SessionInfo> = {}): SessionInfo {

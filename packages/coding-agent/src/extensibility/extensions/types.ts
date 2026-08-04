@@ -44,9 +44,9 @@ import type * as PiCodingAgent from "../../index";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import type { CustomEditor } from "../../modes/components/custom-editor";
 import type { Theme } from "../../modes/theme/theme";
-import type { CompactMode } from "../../session/compact-modes";
-import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
-import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
+import type { CustomMessage, CustomMessagePayload } from "../../session/message/messages";
+import type { CompactMode } from "../../session/shared/compact-modes";
+import type { ReadonlySessionManager, SessionManager } from "../../session/store/session-manager";
 import type {
 	BashToolDetails,
 	BashToolInput,

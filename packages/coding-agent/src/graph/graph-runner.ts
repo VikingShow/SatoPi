@@ -21,11 +21,12 @@ import type { CommChannel } from "../comm/comm-channel";
 import { MarkEnvironment } from "../coordination/mark-environment";
 import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { IrcBus } from "../irc/bus";
 import type { IOffloadManager } from "../offload/manager";
 import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
 import type { SwarmInfra } from "../swarm/core/swarm-infra";
@@ -48,6 +49,14 @@ import type { GraphRunState } from "./types";
 
 /** Phases where the workflow is considered actively running. */
 const ACTIVE_PHASES: Set<Chapter> = new Set(["script", "script-debate", "stage", "curtain"]);
+
+/**
+ * How long a PhaseBehavior-backed node (script/stage/curtain) may wait for
+ * completion (e.g. script plan confirmation) before the run fails. Guards
+ * against headless runs polling forever when no human/plan will ever arrive.
+ */
+const PHASE_COMPLETION_TIMEOUT_MS = 600_000; // 10 minutes
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -56,6 +65,11 @@ export interface GraphRunnerConfig {
 	workspace: string;
 	/** Path to .graph.yaml file. Omit for swarm keyword (plan.md) mode. */
 	graphPath?: string;
+	/**
+	 * Max ms a PhaseBehavior-backed node (script/stage/curtain) may wait for
+	 * completion before the run fails. Defaults to {@link PHASE_COMPLETION_TIMEOUT_MS}.
+	 */
+	phaseCompletionTimeoutMs?: number;
 	modelRegistry: ModelRegistry;
 	settings: Settings;
 	profileRegistry?: ProfileRegistry;
@@ -204,7 +218,10 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 		this.#gateController = new GateController({ workspace });
 
 		if (hasGraph) {
-			// Mark mode as graph for TUI dashboard rendering
+			// Placeholder dashboard label until nodes actually run. This is NOT
+			// the phase the workflow is waiting on — execute() flips the phase
+			// to the waiting node's chapter (e.g. "script" while a script node
+			// polls for plan confirmation) before the completion poll begins.
 			await this.#stateTracker
 				.updatePipeline({ phase: "stage" })
 				.catch(err => logger.error("StateTracker updatePipeline failed", { error: String(err) }));
@@ -276,6 +293,12 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 							: stopReason === "error" || stopReason === "max_turns"
 								? "failed"
 								: "completed";
+					if (status === "failed" || status === "aborted") {
+						const error = (lastAssistant?.errorMessage ?? stopReason ?? "unknown agent error").slice(0, 200);
+						this.#hookPipeline
+							?.trigger("agent:onError", { agentId: agent.id, error }, { phase: this.#phase, agentId: agent.id })
+							.catch(err => logger.error("agent:onError trigger failed", { error: String(err) }));
+					}
 					const ctx = this.#buildPhaseContext();
 					this.#currentBehavior
 						?.handleAgentEvent({ agentId: agent.id, status, result: event }, ctx)
@@ -289,6 +312,37 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#unwireAgentEvents(): void {
 		for (const unsub of this.#agentUnsubscribes) unsub();
 		this.#agentUnsubscribes = [];
+	}
+
+	// ── Phase transition hook emission ─────────────────────────────────────
+
+	/**
+	 * Transition the workflow to `next`: emit workflow:beforePhase, assign the
+	 * phase, run `onPhaseChange`, then emit workflow:afterPhase. Hook failures
+	 * are logged and never interrupt the transition.
+	 */
+	async #transitionPhase(next: Chapter): Promise<void> {
+		await this.#emitPhaseHook("workflow:beforePhase", next);
+		this.#phase = next;
+		this.#config.onPhaseChange?.(next);
+		await this.#emitPhaseHook("workflow:afterPhase", next);
+	}
+
+	/**
+	 * Fire a workflow phase hook event through the pipeline (no-op when no
+	 * pipeline is wired). Errors are caught and logged — hook isolation.
+	 */
+	async #emitPhaseHook(event: "workflow:beforePhase" | "workflow:afterPhase", phase: Chapter): Promise<void> {
+		const ctx: HookContext = { phase };
+		try {
+			if (event === "workflow:beforePhase") {
+				await this.#hookPipeline?.trigger("workflow:beforePhase", { phase }, ctx);
+			} else {
+				await this.#hookPipeline?.trigger("workflow:afterPhase", { phase }, ctx);
+			}
+		} catch (err) {
+			logger.error(`[GraphRunner] ${event} trigger failed`, { error: String(err) });
+		}
 	}
 
 	// ── Curtain lifecycle (synchronous — called within confirmScript) ──────
@@ -335,8 +389,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 					this.#applaudResolve = null;
 				}
 
-				this.#phase = "idle";
-				this.#config.onPhaseChange?.("idle");
+				await this.#transitionPhase("idle");
 				await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
 				if (this.#crewChannel) {
 					this.#crewChannel.send("system", "Phase: idle — Workflow complete");
@@ -351,8 +404,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				return;
 			}
 			// Re-plan or unknown — go idle
-			this.#phase = "idle";
-			this.#config.onPhaseChange?.("idle");
+			await this.#transitionPhase("idle");
 			await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
 			if (this.#crewChannel) {
 				this.#crewChannel.send("system", "Phase: idle — Workflow complete");
@@ -398,6 +450,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			swarmDir: this.#swarmDir,
 			loopConfig: this.#loopConfig,
 			planContent: this.#planContent,
+			debateRoundtableFactory: this.#config.debateRoundtableFactory,
 		};
 		const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
 		const ctx: NodeContext = {
@@ -428,6 +481,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			profileRegistry: this.#config.profileRegistry,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
+			planContent: this.#planContent,
+			taskQueue: this.#runtime.taskQueue,
+			onPlanUpdated: content => this.onPlanUpdated(content),
 			executeNode: this,
 			graphDir: this.#config.graphPath ? path.dirname(this.#config.graphPath) : this.#config.workspace,
 		};
@@ -447,12 +503,42 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			}
 
 			if (behavior instanceof PhaseBehaviorNodeAdapter) {
-				while (!this.#abortController?.signal.aborted) {
-					const gateResult = await behavior.validate(behaviorResult);
-					if (gateResult.passed) break;
-					await Bun.sleep(750);
+				// The phase label should reflect what this node is actually
+				// waiting on — e.g. a script node must show "script" (not the
+				// "stage" pinned at init/confirmScript) while it polls for
+				// plan confirmation.
+				const phase = behavior.name as Chapter;
+				if (phase !== this.#phase) {
+					await this.#transitionPhase(phase);
+					await this.#stateTracker.updatePipeline({ phase }).catch(() => {});
 				}
-				this.#unwireAgentEvents();
+
+				// #8 headless hang: without a plan (or a human to confirm) a
+				// script node would poll forever. Bound the wait and fail the
+				// run with a clear error when no confirmation arrives.
+				const timeoutMs = this.#config.phaseCompletionTimeoutMs ?? PHASE_COMPLETION_TIMEOUT_MS;
+				const deadline = Date.now() + timeoutMs;
+				try {
+					while (!this.#abortController?.signal.aborted) {
+						const gateResult = await behavior.validate(behaviorResult);
+						if (gateResult.passed) break;
+						if (Date.now() >= deadline) {
+							const label = timeoutMs >= 60_000 ? `${Math.round(timeoutMs / 60_000)} minutes` : `${timeoutMs}ms`;
+							const message =
+								`Node "${nodeId}" did not complete within ${label} — no confirmation received. ` +
+								"Failing the run instead of waiting indefinitely.";
+							logger.error("[GraphRunner] Phase node timed out waiting for completion", {
+								nodeId,
+								phase: this.#phase,
+								timeoutMs,
+							});
+							throw new Error(message);
+						}
+						await Bun.sleep(750);
+					}
+				} finally {
+					this.#unwireAgentEvents();
+				}
 			}
 
 			if (!node.gate) {
@@ -462,6 +548,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 					success: behaviorResult.success,
 					output: behaviorResult.output,
 					artifacts: behaviorResult.artifacts,
+					exitCode: behaviorResult.exitCode,
 					error: behaviorResult.error,
 				};
 			}
@@ -476,7 +563,16 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				const action = await this.#gateController.handleGateFailure(node, lastGateResult, attempt);
 				if (action.type === "continue") {
 					await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-					return { nodeId, success: true, output: behaviorResult.output, artifacts: behaviorResult.artifacts };
+					return {
+						nodeId,
+						success: true,
+						output: behaviorResult.output,
+						artifacts: behaviorResult.artifacts,
+						// The gate verdict (its exit code) is the node's exit code
+						// for conditional routing; fall back to the agent's code
+						// when the gate produced none (e.g. skipped on-failure).
+						exitCode: lastGateResult.exitCode ?? behaviorResult.exitCode,
+					};
 				}
 				if (action.type === "block") {
 					await this.#stateTracker.updateAgent(nodeId, { status: "failed", error: action.reason });
@@ -494,7 +590,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			}
 			if (lastGateResult.passed) {
 				await this.#stateTracker.updateAgent(nodeId, { status: "completed" });
-				return { nodeId, success: true, output: behaviorResult.output, artifacts: behaviorResult.artifacts };
+				return {
+					nodeId,
+					success: true,
+					output: behaviorResult.output,
+					artifacts: behaviorResult.artifacts,
+					exitCode: lastGateResult.exitCode ?? behaviorResult.exitCode,
+				};
 			}
 			return { nodeId, success: false, error: lastGateResult.errors.join("; ") };
 		} catch (err) {
@@ -569,8 +671,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	}
 
 	async confirmScript(_opts?: { agentType?: "swift" | "main"; agentCount?: number }): Promise<string[]> {
-		this.#phase = "stage";
-		this.#config.onPhaseChange?.("stage");
+		await this.#transitionPhase("stage");
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		if (this.#crewChannel) {
 			this.#crewChannel.send("system", "Phase: stage — Execution phase started — dispatching tasks");
@@ -622,15 +723,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine execution failed", { error: String(err) });
-			this.#phase = "blocked";
-			this.#config.onPhaseChange?.("blocked");
+			await this.#transitionPhase("blocked");
 			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return [];
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		this.#phase = "curtain";
-		this.#config.onPhaseChange?.("curtain");
+		await this.#transitionPhase("curtain");
 		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 		if (this.#crewChannel) {
 			this.#crewChannel.send("system", "Phase: curtain — Reflection phase started — summarizing delivery");
@@ -676,8 +775,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	async pauseStage(): Promise<void> {
 		this.#abortController?.abort();
-		this.#phase = "paused";
-		this.#config.onPhaseChange?.("paused");
+		await this.#transitionPhase("paused");
 		await this.#stateTracker.updatePipeline({ phase: "paused" }).catch(() => {});
 	}
 
@@ -697,8 +795,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			currentWave: checkpointState.currentWave,
 		});
 
-		this.#phase = "stage";
-		this.#config.onPhaseChange?.("stage");
+		await this.#transitionPhase("stage");
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		this.#abortController = new AbortController();
 
@@ -746,15 +843,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine resume execution failed", { error: String(err) });
-			this.#phase = "blocked";
-			this.#config.onPhaseChange?.("blocked");
+			await this.#transitionPhase("blocked");
 			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return { success: false, error: String(err) };
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		this.#phase = "curtain";
-		this.#config.onPhaseChange?.("curtain");
+		await this.#transitionPhase("curtain");
 		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 
 		const curtainCtx = this.#buildPhaseContext();

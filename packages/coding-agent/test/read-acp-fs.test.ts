@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult } from "@satopi/pi-agent-core";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import type { ClientBridge } from "@satopi/pi-coding-agent/session/client-bridge";
+import type { ClientBridge } from "@satopi/pi-coding-agent/session/agent/client-bridge";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import type { ReadToolDetails } from "@satopi/pi-coding-agent/tools/read";
 import { ReadTool } from "@satopi/pi-coding-agent/tools/read";

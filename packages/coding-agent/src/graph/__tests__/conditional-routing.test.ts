@@ -1,8 +1,15 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: condition DSL literals in YAML
 // biome-ignore-all lint/suspicious/noUselessEscapeInString: `\$` escapes `${` in YAML
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
+import type { AgentSession } from "../../session/agent/agent-session";
+import type { StateTracker } from "../../swarm/core/state";
+import type { SwarmInfra } from "../../swarm/core/swarm-infra";
 import type { NodeExecutionContext, NodeExecutor } from "../graph-engine";
 import { GraphEngine } from "../graph-engine";
+import { GraphRunner } from "../graph-runner";
 import { parseGraphYaml, validateGraphDefinition } from "../schema";
 import type { GraphDefinition, NodeResult } from "../types";
 
@@ -157,19 +164,23 @@ graph:
 // Conditional routing — dynamic scheduler execution
 // ============================================================================
 
-describe("conditional routing execution", () => {
-	it("routes to the success target when exitCode is 0", async () => {
-		const def = parseGraphYaml(`
+// Real-chain harness: drives GraphRunner.execute (engine → runner →
+// CustomNodeBehavior → runtime.spawn → session.wait()) so exitCode must
+// actually flow through the production path for `${node}.exitCode == 0`
+// routing to hit its branch. A dropped exitCode (undefined) evaluates
+// `undefined == 0` as false and would route to the default target instead.
+
+const CONDITIONAL_GRAPH_YAML = `
 graph:
-  name: cond
-  description: conditional graph
+  name: cond-exit
+  description: conditional routing on real exit code
   version: 1
   revision: 0
   strategy: dynamic
   nodes:
     build:
       label: Build
-      description: build
+      description: build task
       role: builder
       tools: []
       depends_on: []
@@ -180,96 +191,213 @@ graph:
         default: rollback
     deploy:
       label: Deploy
-      description: deploy
+      description: deploy task
       role: deployer
       tools: []
       depends_on: [build]
     rollback:
       label: Rollback
-      description: rollback
+      description: rollback task
       role: ops
       tools: []
       depends_on: [build]
-`);
+`;
 
-		const run = new Set<string>();
-		const executor: NodeExecutor = {
-			async execute(nodeId: string, _ctx: NodeExecutionContext): Promise<NodeResult> {
-				run.add(nodeId);
-				if (nodeId === "build") return { nodeId, success: true, output: "ok", exitCode: 0 };
-				return { nodeId, success: true, output: "ran" };
-			},
-		};
+interface ExitCodeHarness {
+	runner: GraphRunner;
+	agentUpdates: Array<{ id: string; update: { status?: string; error?: string } }>;
+	phases: string[];
+	runDir: string;
+	reporter: EventSession;
+	reflector: EventSession;
+}
 
-		const engine = new GraphEngine({
-			graph: def,
-			waves: buildWaves(def),
-			checkpointStore: makeCheckpoint() as never,
-			graphName: "cond",
-		});
+interface EventSession {
+	session: AgentSession;
+	emit: (event: unknown) => void;
+	listenerCount: () => number;
+}
 
-		const result = await engine.run(executor);
-		expect(run.has("build")).toBe(true);
-		expect(run.has("deploy")).toBe(true);
-		expect(run.has("rollback")).toBe(false);
-		expect(result.executionErrors).toHaveLength(0);
+/** Agent session whose wait() resolves with a fixed exit code. */
+function makeWorkSession(id: string, role: string, exitCode: number): AgentSession {
+	return {
+		id,
+		role,
+		status: "completed",
+		wait: mock(async () => ({
+			index: 0,
+			id,
+			agent: id,
+			agentSource: "bundled",
+			task: "",
+			exitCode,
+			output: exitCode === 0 ? "ok" : "failed",
+			stderr: "",
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+		})),
+		abort: mock(),
+	} as unknown as AgentSession;
+}
+
+/** Agent session whose subscribe callback the test drives manually (curtain). */
+function makeEventSession(id: string, role: string): EventSession {
+	const listeners: Array<(event: unknown) => void> = [];
+	const session = {
+		id,
+		role,
+		status: "idle",
+		subscribe: (cb: (event: unknown) => void): (() => void) => {
+			listeners.push(cb);
+			return () => {
+				const index = listeners.indexOf(cb);
+				if (index >= 0) listeners.splice(index, 1);
+			};
+		},
+		abort: mock(),
+	} as unknown as AgentSession;
+	return {
+		session,
+		emit: event => {
+			for (const cb of [...listeners]) cb(event);
+		},
+		listenerCount: () => listeners.length,
+	};
+}
+
+function assistantMessage(stopReason: string): Record<string, unknown> {
+	return {
+		role: "assistant",
+		content: [],
+		api: "mock",
+		provider: "mock",
+		model: "mock",
+		usage: {},
+		stopReason,
+		timestamp: 0,
+	};
+}
+
+function agentEndEvent(messages: unknown[]): Record<string, unknown> {
+	return { type: "agent_end", messages };
+}
+
+/**
+ * Build a GraphRunner over a real graph YAML with a mocked runtime whose
+ * sessions return a fixed exit code from wait(). Custom nodes (build/deploy/
+ * rollback) get work sessions; the curtain spawn gets the two event sessions.
+ */
+async function createExitCodeHarness(buildExitCode: number): Promise<ExitCodeHarness> {
+	const runDir = await mkdtemp(path.join(tmpdir(), "cond-exit-"));
+	const yamlPath = path.join(runDir, "cond.graph.yaml");
+	await writeFile(yamlPath, CONDITIONAL_GRAPH_YAML);
+
+	const agentUpdates: ExitCodeHarness["agentUpdates"] = [];
+	const phases: string[] = [];
+	const reporter = makeEventSession("reporter", "reporter");
+	const reflector = makeEventSession("reflector", "reflector");
+
+	const stateTracker = {
+		state: { phase: "idle", agents: {} },
+		updatePipeline: mock().mockResolvedValue(undefined),
+		updateAgent: mock((id: string, update: { status?: string; error?: string }) => {
+			agentUpdates.push({ id, update });
+		}),
+		registerAgent: mock(),
+		getBestAgent: mock(),
+	} as unknown as StateTracker;
+
+	const infra = {
+		sessionManager: { appendCustomEntry: mock(), storage: {} },
+		stateTracker,
+		activityLogger: { logPhase: mock(), logCrash: mock(), logNomination: mock() },
+		experienceStore: { close: mock() },
+		hookPipeline: { trigger: mock() },
+		runtime: {
+			spawn: mock(async (specs: Array<{ id: string; role: string }>) => {
+				// CurtainBehavior spawns exactly two (reporter + reflector).
+				if (specs.length >= 2) return [reporter.session, reflector.session];
+				const spec = specs[0]!;
+				const exitCode = spec.id === "node-build" ? buildExitCode : 0;
+				return [makeWorkSession(spec.id, spec.role, exitCode)];
+			}),
+			contextPipeline: {},
+			ircBus: { receiveFromHuman: mock() },
+		},
+		roleAssetManager: {},
+		markEnvironment: {},
+		offloadManager: {},
+		ircBus: {},
+	} as unknown as SwarmInfra;
+
+	const runner = new GraphRunner({
+		workspace: runDir,
+		graphPath: yamlPath,
+		modelRegistry: {} as never,
+		settings: {} as never,
+		infra,
+		autoApplaud: true,
+		onPhaseChange: phase => phases.push(phase),
+		readSessionEntries: mock().mockResolvedValue([]),
+	});
+	await runner.init();
+
+	return { runner, agentUpdates, phases, runDir, reporter, reflector };
+}
+
+// These tests drive the REAL GraphRunner lifecycle (production code polls its
+// phase-completion loop with Bun.sleep(750) and the curtain lifecycle with
+// Bun.sleep(750)), so fake timers cannot control the code under test; we poll
+// on state predicates instead of fixed sleeps.
+async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error(`waitFor timed out after ${timeoutMs}ms`);
+		await Bun.sleep(50);
+	}
+}
+
+/** Drive confirmScript() to completion: run the graph, then finish the curtain
+ * phase by completing its reporter/reflector agents. */
+async function runGraphToCompletion(h: ExitCodeHarness): Promise<void> {
+	const runPromise = h.runner.confirmScript();
+	await waitFor(
+		() => h.phases.includes("curtain") && h.reporter.listenerCount() >= 1 && h.reflector.listenerCount() >= 1,
+	);
+	h.reporter.emit(agentEndEvent([assistantMessage("stop")]));
+	h.reflector.emit(agentEndEvent([assistantMessage("stop")]));
+	await waitFor(() => h.phases.includes("idle"));
+	await runPromise;
+	await h.runner.dispose();
+	await rm(h.runDir, { recursive: true, force: true });
+}
+
+describe("conditional routing execution", () => {
+	it("routes to the success target when exitCode is 0 through the real execution chain", async () => {
+		const h = await createExitCodeHarness(0);
+		await runGraphToCompletion(h);
+
+		// build's session.wait() returned exitCode 0 → CustomNodeBehavior put it
+		// on the NodeResult → GraphRunner propagated it → the condition
+		// "${build}.exitCode == 0" matched → deploy ran, rollback didn't. A
+		// dropped exitCode would evaluate `undefined == 0` as false and route to
+		// rollback, failing this assertion.
+		const updates = h.agentUpdates;
+		expect(updates.filter(u => u.id === "build").some(u => u.update.status === "completed")).toBe(true);
+		expect(updates.filter(u => u.id === "deploy").some(u => u.update.status === "completed")).toBe(true);
+		expect(updates.filter(u => u.id === "rollback").some(u => u.update.status === "completed")).toBe(false);
 	});
 
-	it("routes to the default target when no condition matches", async () => {
-		const def = parseGraphYaml(`
-graph:
-  name: cond
-  description: conditional graph
-  version: 1
-  revision: 0
-  strategy: dynamic
-  nodes:
-    build:
-      label: Build
-      description: build
-      role: builder
-      tools: []
-      depends_on: []
-      routes:
-        conditions:
-          - when: "\${build}.exitCode == 0"
-            to: deploy
-        default: rollback
-    deploy:
-      label: Deploy
-      description: deploy
-      role: deployer
-      tools: []
-      depends_on: [build]
-    rollback:
-      label: Rollback
-      description: rollback
-      role: ops
-      tools: []
-      depends_on: [build]
-`);
+	it("routes to the default target when exitCode is 1 through the real execution chain", async () => {
+		const h = await createExitCodeHarness(1);
+		await runGraphToCompletion(h);
 
-		const run = new Set<string>();
-		const executor: NodeExecutor = {
-			async execute(nodeId: string, _ctx: NodeExecutionContext): Promise<NodeResult> {
-				run.add(nodeId);
-				if (nodeId === "build") return { nodeId, success: false, output: "failed", exitCode: 1 };
-				return { nodeId, success: true, output: "ran" };
-			},
-		};
-
-		const engine = new GraphEngine({
-			graph: def,
-			waves: buildWaves(def),
-			checkpointStore: makeCheckpoint() as never,
-			graphName: "cond2",
-		});
-
-		const result = await engine.run(executor);
-		expect(run.has("build")).toBe(true);
-		expect(run.has("deploy")).toBe(false);
-		expect(run.has("rollback")).toBe(true);
-		expect(result.executionErrors).toHaveLength(0);
+		const updates = h.agentUpdates;
+		expect(updates.filter(u => u.id === "build").some(u => u.update.status === "completed")).toBe(true);
+		expect(updates.filter(u => u.id === "deploy").some(u => u.update.status === "completed")).toBe(false);
+		expect(updates.filter(u => u.id === "rollback").some(u => u.update.status === "completed")).toBe(true);
 	});
 
 	it("keeps waves mode working for graphs without routing", async () => {

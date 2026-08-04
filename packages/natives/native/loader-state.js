@@ -685,14 +685,15 @@ function initLoaderContext() {
 		userDataDir,
 	});
 
-	// Version sentinel emitted by the Rust addon under a `js_name` that encodes
-	// the package version (`__piNativesV{major}_{minor}_{patch}`).
-	// `scripts/release.ts` bumps the name in `crates/pi-natives/src/lib.rs` in
-	// lock-step with the version, so a `.node` from a different release
-	// physically cannot expose the symbol this loader is looking for. That
-	// turns the silent `<sym> is not a function` crash from a Windows
-	// locked-file update into an actionable load-time error.
-	const versionSentinelExport = `__piNativesV${packageVersion.replace(/[^A-Za-z0-9]/g, "_")}`;
+	// Version sentinel emitted by the Rust addon under a FIXED `js_name`
+	// (`__piNativesSatoPi`, defined in `crates/pi-natives/src/lib.rs`). The
+	// name is deliberately decoupled from the package version so a release
+	// bump never has to rename the symbol in lock-step across the crate and
+	// the loader. A `.node` from a different release still cannot expose this
+	// symbol unless it was built from the same source tree, which turns the
+	// silent `<sym> is not a function` crash from a Windows locked-file
+	// update into an actionable load-time error.
+	const versionSentinelExport = "__piNativesSatoPi";
 	const isWorkspaceLoad =
 		!isCompiledBinary && !nativeDir.includes("\\node_modules\\") && !nativeDir.includes("/node_modules/");
 

@@ -24,6 +24,7 @@ import { createStigmergyHook } from "./builtins/stigmergy-hook";
 import type { VerificationHook } from "./builtins/verification-hook";
 import { createVerificationHook } from "./builtins/verification-hook";
 import type { HookPipeline } from "./hook-pipeline";
+import type { HookRegistration } from "./types";
 
 /** Dependencies for the built-in hook set. All fields are optional. */
 export interface BuiltinHookDeps {
@@ -42,7 +43,31 @@ export interface BuiltinHookDeps {
 }
 
 /**
+ * Register a hook only when no hook with the same name AND priority already
+ * exists on the pipeline.
+ *
+ * registerBuiltinHooks is invoked from several bootstrap layers that share one
+ * HookPipeline (createOrchestratorRuntime in assembler.ts, the swarm-cli
+ * session factory, createSwarmSession, and SessionRegistry.createSession).
+ * Without this guard each redundant call re-registers the same builtins and
+ * trips the pipeline's "Overwriting existing hook" warning on every startup.
+ * First-wins is safe here: the duplicate calls pass the same dependency
+ * instances (profileRegistry, experienceStore) or storage-equivalent offload
+ * managers bound to the same session directory.
+ */
+function registerIfAbsent(pipeline: HookPipeline, hook: HookRegistration): boolean {
+	const existing = pipeline.list().some(h => h.name === hook.name && h.priority === hook.priority);
+	if (existing) return false;
+	pipeline.register(hook);
+	return true;
+}
+
+/**
  * Register all available built-in hooks onto the given pipeline.
+ *
+ * Idempotent: a hook already registered on the pipeline with the same name and
+ * priority is left untouched (see registerIfAbsent), so the multiple bootstrap
+ * callsites that share one HookPipeline do not trip the overwrite warning.
  *
  * @param pipeline  The HookPipeline instance to register onto.
  * @param deps      Dependencies for the hooks; omit any you don't have.
@@ -52,33 +77,44 @@ export function registerBuiltinHooks(pipeline: HookPipeline, deps: BuiltinHookDe
 	const registered: string[] = [];
 
 	if (deps.profileRegistry) {
-		pipeline.register(createProfileHook(deps.profileRegistry));
-		registered.push("profile-hook");
+		if (registerIfAbsent(pipeline, createProfileHook(deps.profileRegistry))) {
+			registered.push("profile-hook");
+		}
 	}
 
 	if (deps.markEnvironment) {
-		pipeline.register(createStigmergyHook(deps.markEnvironment));
-		registered.push("stigmergy-hook");
+		if (registerIfAbsent(pipeline, createStigmergyHook(deps.markEnvironment))) {
+			registered.push("stigmergy-hook");
+		}
 	}
 
 	if (deps.offloadManager) {
-		pipeline.register(createOffloadHook(deps.offloadManager));
-		registered.push("offload-hook");
+		if (registerIfAbsent(pipeline, createOffloadHook(deps.offloadManager))) {
+			registered.push("offload-hook");
+		}
 	}
 
 	if (deps.mnemopiAdapter) {
-		pipeline.register(createMnemopiHook(deps.mnemopiAdapter));
-		registered.push("mnemopi-hook");
+		// Coordination: fan the agent:afterComplete summary into mnemopi,
+		// the ExperienceStore and the memories backend from one hook (see
+		// createMnemopiHook's coordination deps).
+		if (
+			registerIfAbsent(pipeline, createMnemopiHook(deps.mnemopiAdapter, { experienceStore: deps.experienceStore }))
+		) {
+			registered.push("mnemopi-hook");
+		}
 	}
 
 	if (deps.experienceStore) {
-		pipeline.register(createExperienceHook(deps.experienceStore));
-		registered.push("experience-hook");
+		if (registerIfAbsent(pipeline, createExperienceHook(deps.experienceStore))) {
+			registered.push("experience-hook");
+		}
 	}
 
 	if (deps.verificationHook) {
-		pipeline.register(createVerificationHook(deps.verificationHook));
-		registered.push("verification-hook");
+		if (registerIfAbsent(pipeline, createVerificationHook(deps.verificationHook))) {
+			registered.push("verification-hook");
+		}
 	}
 
 	return registered;

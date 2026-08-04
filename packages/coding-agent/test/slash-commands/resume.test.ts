@@ -3,9 +3,9 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import { resolveResumableSession } from "@satopi/pi-coding-agent/session/session-listing";
-import { computeDefaultSessionDir } from "@satopi/pi-coding-agent/session/session-paths";
-import { FileSessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
+import { resolveResumableSession } from "@satopi/pi-coding-agent/session/store/session-listing";
+import { computeDefaultSessionDir } from "@satopi/pi-coding-agent/session/store/session-paths";
+import { FileSessionStorage } from "@satopi/pi-coding-agent/session/store/session-storage";
 import { executeBuiltinSlashCommand } from "@satopi/pi-coding-agent/slash-commands/builtin-registry";
 import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 

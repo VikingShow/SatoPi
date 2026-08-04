@@ -69,6 +69,11 @@ for (const dir in packages) {
 	if (pkg.data.dependencies) {
 		for (const [depName, currentVersion] of Object.entries(pkg.data.dependencies)) {
 			if (versionMap[depName]) {
+				// Monorepo packages resolve each other through the workspace
+				// protocol (`workspace:*`); rewriting those to a plain semver
+				// range would sever the local workspace linking. Treat
+				// `workspace:` specs as already in sync.
+				if (currentVersion.startsWith("workspace:")) continue;
 				const newVersion = `^${versionMap[depName]}`;
 				if (currentVersion !== newVersion) {
 					console.log(`\n${pkg.data.name}:`);
@@ -85,6 +90,7 @@ for (const dir in packages) {
 	if (pkg.data.devDependencies) {
 		for (const [depName, currentVersion] of Object.entries(pkg.data.devDependencies)) {
 			if (versionMap[depName]) {
+				if (currentVersion.startsWith("workspace:")) continue;
 				const newVersion = `^${versionMap[depName]}`;
 				if (currentVersion !== newVersion) {
 					console.log(`\n${pkg.data.name}:`);

@@ -8,7 +8,7 @@
  */
 
 import type { AssistantMessage } from "@satopi/pi-ai";
-import type { SessionEntry } from "../session/session-entries";
+import type { SessionEntry } from "../session/store/session-entries";
 import { type HindsightMessage, hasSubstantiveContent } from "./content";
 
 export interface ReadonlySessionManagerLike {

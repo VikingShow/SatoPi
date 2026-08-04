@@ -14,7 +14,7 @@
 import * as path from "node:path";
 import type { Model } from "@satopi/pi-ai";
 import type { Component } from "@satopi/pi-tui";
-import { logger } from "@satopi/pi-utils";
+import { logger, prompt } from "@satopi/pi-utils";
 import type { AgentProfile, ProfileRegistry } from "../../agent/agent-profile";
 import type { ModelRegistry } from "../../config/model-registry";
 import { resolveModelOverride } from "../../config/model-resolver";
@@ -29,6 +29,7 @@ import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
 import { createAgentSession } from "../../sdk";
 import { setCurrentSwarmPhase } from "../../swarm/core/state";
 import { createSwarmInfra } from "../../swarm/core/swarm-infra";
+import crewMemberPrompt from "../../swarm/prompts/crew-member.md" with { type: "text" };
 import { SwarmSessionManager } from "../../swarm/session/swarm-session-manager";
 import type { CrewTranscriptState } from "../components/swarm/crew-transcript-view";
 import { CrewTranscriptView } from "../components/swarm/crew-transcript-view";
@@ -422,7 +423,6 @@ export class SwarmModeController {
 			const state: CrewTranscriptState = {
 				crew: crew.state,
 				topic: crew.state.name,
-				converged: false,
 				totalRounds: 1,
 				entries: [],
 			};
@@ -562,6 +562,12 @@ export class SwarmModeController {
 			logger.warn("[SwarmModeController] Cannot spawn crew members: missing modelRegistry or settings");
 			return;
 		}
+		// The active crew's CommChannel: crew-member agent-channel tools
+		// (agent_peers, irc, ...) resolve this channel from context.commChannel,
+		// so they operate on the real crew membership instead of falling back to
+		// the global default channel.
+		const crew = this.#activeCrewId ? this.#crewManager.getCrew(this.#activeCrewId) : undefined;
+		const commChannel = crew?.channel;
 
 		const availableModels = modelRegistry.getAvailable();
 		if (availableModels.length === 0) {
@@ -596,23 +602,15 @@ export class SwarmModeController {
 					agentId: profileId,
 					agentDisplayName: name,
 					model,
-					systemPrompt:
-						// Crew-member contract. Future work: move to a prompts/*.md file once
-						// prompt-file management lands for crew members (repo rule: prompts live
-						// in .md); a plain inline template is intentional for now.
-						`You are ${name}, a ${archetype} agent.
-
-Your expertise domains: ${domains || "general"}.
-
-You are a persistent crew member (agent kind "main") of a multi-agent crew — not a one-shot subagent. You stay in the crew across turns, and your replies are recorded in the shared crew transcript. Your agent id is ${profileId}; crewmates and the human may address you with @${profileId}.
-
-Your role in this crew: ${profile.identity.description}.
-
-Rules:
-- Reply concisely; no preamble or filler.
-- Use your tools (read, grep, glob, edit, write, bash, todo) whenever the task requires inspecting or changing files.
-- Watch for @mentions of your agent id; when replying to a specific crewmate, address them by @mention.`,
-					toolNames: ["read", "grep", "glob", "edit", "write", "bash", "todo"],
+					systemPrompt: prompt.render(crewMemberPrompt, {
+						name,
+						archetype,
+						domains: domains || "general",
+						profileId,
+						description: profile.identity.description,
+					}),
+					toolNames: ["read", "grep", "glob", "edit", "write", "bash", "todo", "irc", "agent_peers"],
+					commChannel,
 					modelRegistry,
 					settings,
 					hasIrcInterrupts: true,

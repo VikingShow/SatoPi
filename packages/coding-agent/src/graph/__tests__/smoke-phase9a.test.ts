@@ -7,7 +7,8 @@
  *  3. GraphEngine — standalone 2-node DAG execution with a mock NodeExecutor
  */
 
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import type { Mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { TextContent } from "@satopi/pi-ai";
@@ -17,34 +18,27 @@ import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
 import { parseInternalUrl } from "../../internal-urls/parse";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
+// ============================================================================
+// 1. agent_invoke smoke test — mock pattern mirrors existing E2E tests
+import * as sdkModule from "../../sdk";
+import type { AgentSession } from "../../session/agent/agent-session";
+import { agentInvokeTool } from "../../tools/agent-invoke";
 import type { CheckpointStore } from "../checkpoint";
 import { buildExecutionWaves } from "../dag";
 import type { NodeExecutionContext } from "../graph-engine";
 import { GraphEngine } from "../graph-engine";
 import type { GraphDefinition, GraphRunState, NodeExecutionOutput, NodeResult } from "../types";
 
-// ============================================================================
-// 1. agent_invoke smoke test — mock pattern mirrors existing E2E tests
-// ============================================================================
-
-const mockCreateAgentSession = mock();
-
-mock.module("../../sdk", () => ({
-	createAgentSession: mockCreateAgentSession,
-}));
-
-import { agentInvokeTool } from "../../tools/agent-invoke";
+let mockCreateAgentSession: Mock<typeof sdkModule.createAgentSession>;
 
 // Helper: make a session-shaped mock
-function makeSession(output: string, exitCode = 0) {
+function makeSession(output: string, exitCode = 0): AgentSession {
 	return {
 		prompt: mock().mockResolvedValue(true),
 		wait: mock().mockResolvedValue({ output, exitCode }),
 		subscribe: mock().mockReturnValue(() => {}),
-	};
+	} as unknown as AgentSession;
 }
-
 // Helper: create a profile
 function createProfile(id: string) {
 	ProfileRegistry.global().createProfile({
@@ -59,19 +53,24 @@ describe("Phase 9A: Smoke Tests", () => {
 	// 1. agent_invoke
 	// ==================================================================
 	describe("1. agent_invoke", () => {
+		beforeEach(() => {
+			mockCreateAgentSession = vi.spyOn(sdkModule, "createAgentSession");
+		});
+
 		afterEach(() => {
-			mock.restore();
+			vi.restoreAllMocks();
 			for (const ref of AgentRegistry.global().list()) {
 				AgentRegistry.global().unregister(ref.id);
 			}
 			ProfileRegistry.resetGlobalForTests();
-			mockCreateAgentSession.mockClear();
 		});
 
 		it("smoke: spawns a new persistent agent session and returns output", async () => {
 			createProfile("smoke-worker");
 			const session = makeSession("Smoke test task completed successfully");
-			mockCreateAgentSession.mockResolvedValue({ session });
+			mockCreateAgentSession.mockResolvedValue({ session } as unknown as Awaited<
+				ReturnType<typeof sdkModule.createAgentSession>
+			>);
 
 			const result = await agentInvokeTool.execute("call-1", { profileId: "smoke-worker", task: "Run smoke test" });
 

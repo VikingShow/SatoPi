@@ -18,7 +18,7 @@ import {
 	evaluateCodexAutoRedeem,
 	shouldEvaluateCodexAutoRedeem,
 	shouldPromptCodexAutoRedeem,
-} from "@satopi/pi-coding-agent/session/codex-auto-reset";
+} from "@satopi/pi-coding-agent/session/agent/codex-auto-reset";
 
 // Epoch ms divisible by 60_000 so a minute-boundary `resetsAt` lets the
 // debounce-jitter cases reason about bucket crossings precisely.

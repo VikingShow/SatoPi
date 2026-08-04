@@ -22,7 +22,7 @@ import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
-import type { CustomMessage } from "../session/messages";
+import type { CustomMessage } from "../session/message/messages";
 
 export interface IrcMessage {
 	id: string;

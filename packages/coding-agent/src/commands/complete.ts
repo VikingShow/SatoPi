@@ -10,7 +10,7 @@
  */
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@satopi/pi-catalog/models";
 import { Command } from "@satopi/pi-utils/cli";
-import { SessionManager } from "../session/session-manager";
+import { SessionManager } from "../session/store/session-manager";
 
 export default class Complete extends Command {
 	static hidden = true;

@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_BYTES, OutputSink } from "../../session/streaming-output";
+import { DEFAULT_MAX_BYTES, OutputSink } from "../../session/message/streaming-output";
 import type { ToolSession } from "../../tools";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../../tools/output-meta";
 import { isEvalTimeoutControlEvent } from "../bridge-timeout";

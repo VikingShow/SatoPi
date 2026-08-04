@@ -386,7 +386,7 @@ MIT. See [LICENSE](LICENSE).
 | File | Purpose |
 |------|---------|
 | `src/graph/` | GraphRunner orchestration engine + DAG scheduling |
-| `src/crew/` | CrewManager + RoundtableSession (agent group chat) |
+| `src/crew/` | CrewManager (agent group chat; roundtables via `graph/behaviors/debate-roundtable.ts`) |
 | `src/context/` | ContextPipeline + offload sources |
 | `src/swarm/` | Session management, state machine, prompts |
 | `.stp/loop.yaml` | Swarm configuration |
@@ -399,7 +399,7 @@ MIT. See [LICENSE](LICENSE).
 ```
 packages/coding-agent/src/
 ├── graph/          GraphRunner + DAG orchestration
-├── crew/           CrewManager + RoundtableSession
+├── crew/           CrewManager (roundtables: graph/behaviors/debate-roundtable)
 ├── context/        ContextPipeline + offload sources
 ├── swarm/          Session management + state machine + prompts
 ├── agent/          Agent profiles + role definitions + selection

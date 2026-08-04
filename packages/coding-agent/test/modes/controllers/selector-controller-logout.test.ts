@@ -3,7 +3,7 @@ import { LogoutAccountSelectorComponent } from "@satopi/pi-coding-agent/modes/co
 import { SelectorController } from "@satopi/pi-coding-agent/modes/controllers/selector-controller";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { AuthStorage, StoredAuthCredential } from "@satopi/pi-coding-agent/session/auth-storage";
+import type { AuthStorage, StoredAuthCredential } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 
 interface TestEditorContainer {
 	children: unknown[];

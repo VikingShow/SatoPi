@@ -8,7 +8,7 @@ import type { AgentToolContext } from "@satopi/pi-agent-core";
 import { AsyncJobManager } from "@satopi/pi-coding-agent/async";
 import { DEFAULT_BASH_INTERCEPTOR_RULES, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { EditTool } from "@satopi/pi-coding-agent/edit";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { BashTool } from "@satopi/pi-coding-agent/tools/bash";
 import { JobTool } from "@satopi/pi-coding-agent/tools/job";
@@ -1450,7 +1450,6 @@ function b() {
 			expect(result.details?.async?.state).toBe("running");
 			expect(result.details?.async?.type).toBe("bash");
 			expect(getTextOutput(result)).toContain("Backgrounded as job");
-			expect(getTextOutput(result)).toContain("start");
 
 			const jobId = result.details?.async?.jobId;
 			if (!jobId) {
@@ -1464,6 +1463,7 @@ function b() {
 			expect(deliveries).toHaveLength(1);
 			expect(deliveries[0]?.jobId).toBe(jobId);
 			expect(deliveries[0]?.text).toContain("done");
+			expect(deliveries[0]?.text).toContain("start");
 			expect(updates).toEqual(updatesAtBackground);
 			await asyncJobManager.dispose();
 		});

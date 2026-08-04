@@ -6,7 +6,7 @@ import { type AssistantMessageEventStream, clearCustomApis, Effort, type FetchIm
 import { getOAuthProviders, unregisterOAuthProviders } from "@satopi/pi-ai/oauth";
 import type { OAuthCredentials } from "@satopi/pi-ai/oauth/types";
 import { ModelRegistry, type ProviderConfigInput } from "@satopi/pi-coding-agent/config/model-registry";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("ModelRegistry runtime provider registration", () => {

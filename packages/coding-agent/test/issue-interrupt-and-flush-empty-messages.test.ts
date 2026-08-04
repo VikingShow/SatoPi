@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "bun:test";
 import type { ImageContent } from "@satopi/pi-ai";
 import { InputController } from "@satopi/pi-coding-agent/modes/controllers/input-controller";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
+import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
 
 function createContext(options?: {
 	queuedMessageCount?: number;

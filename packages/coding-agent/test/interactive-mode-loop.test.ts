@@ -6,9 +6,9 @@ import { resetSettingsForTest, Settings, settings } from "@satopi/pi-coding-agen
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { SubmittedUserInput } from "@satopi/pi-coding-agent/modes/types";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 async function flushMicrotasks(): Promise<void> {

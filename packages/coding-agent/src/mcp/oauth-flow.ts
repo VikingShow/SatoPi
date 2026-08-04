@@ -10,7 +10,7 @@ import { OAuthCallbackFlow } from "@satopi/pi-ai/oauth/callback-server";
 import type { OAuthController, OAuthCredentials } from "@satopi/pi-ai/oauth/types";
 import type { FetchImpl } from "@satopi/pi-ai/types";
 import { getActiveProfile } from "@satopi/pi-utils/dirs";
-import type { OAuthCredential } from "../session/auth-storage";
+import type { OAuthCredential } from "../session/auth/auth-storage";
 
 /** Credential-id prefix for OMP-managed MCP OAuth credentials keyed by profile and server URL. */
 const MCP_OAUTH_URL_CREDENTIAL_PREFIX = "mcp_oauth:";

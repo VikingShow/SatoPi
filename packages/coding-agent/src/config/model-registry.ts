@@ -67,7 +67,7 @@ import type { OAuthCredentials, OAuthLoginCallbacks } from "@satopi/pi-ai/oauth/
 import { getBundledModelReferenceIndex, resolveModelReference } from "@satopi/pi-catalog/identity";
 import { isBunTestRuntime, isRecord, logger, wrapFetchForExtraCa } from "@satopi/pi-utils";
 import { parseModelString, resolveProviderModelReference } from "../config/model-resolver";
-import type { AuthStorage, OAuthCredential } from "../session/auth-storage";
+import type { AuthStorage, OAuthCredential } from "../session/auth/auth-storage";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
 import type { ConfigError, ConfigFile } from "./config-file";
 import {

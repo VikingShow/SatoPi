@@ -3,8 +3,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { TempDir } from "@satopi/pi-utils";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
-import { ArtifactManager } from "../../session/artifacts";
+import type { AgentSession } from "../../session/agent/agent-session";
+import { ArtifactManager } from "../../session/shared/artifacts";
 import { AgentProtocolHandler } from "../agent-protocol";
 import { resetRegisteredArtifactDirsForTests } from "../registry-helpers";
 
