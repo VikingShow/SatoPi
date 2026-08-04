@@ -368,6 +368,8 @@ describe("CommChannel", () => {
 			getMmdContext: mock(async () => null),
 			getExperienceContext: mock(async () => null),
 			getOffloadSummaries: mock(async () => new Map<string, string>()),
+			recordCompactResult: mock(() => {}),
+			getLastCompactStatus: mock(() => undefined),
 		};
 		pipeline.register(createOffloadHook(offloadManager));
 

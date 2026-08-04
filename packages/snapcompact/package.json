@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@satopi/snapcompact",
-  "version": "16.5.0",
+  "version": "0.0.4",
   "description": "Bitmap-frame context compression for vision-capable LLMs",
   "homepage": "https://omp.sh",
   "author": "Can Boluk",

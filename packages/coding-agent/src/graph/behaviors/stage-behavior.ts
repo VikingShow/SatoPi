@@ -192,14 +192,17 @@ export class StageBehavior implements PhaseBehavior {
 		});
 
 		// 2. Determine agent IDs and roles from tasks
-		//    Each unique assignedRole gets one agent (with role defaulting to "worker").
-		//    Planner tasks have already been filtered out above.
+		//    Each unique non-empty assignedRole gets one agent (with role defaulting
+		//    to "worker"). Planner tasks have already been filtered out above.
 		const roleSet = new Set<string>();
 		for (const task of tasks) {
-			roleSet.add(task.assignedRole);
+			if (task.assignedRole.trim().length > 0) {
+				roleSet.add(task.assignedRole);
+			}
 		}
 
-		// If no tasks were parsed, create a single default worker
+		// If no tasks were parsed (or every role was empty), create a single
+		// default worker instead of spawning a degenerate empty-role agent.
 		const roles = roleSet.size > 0 ? [...roleSet] : ["worker"];
 
 		// Generate stable profile-based agent IDs instead of temporary agent-N IDs

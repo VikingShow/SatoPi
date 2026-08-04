@@ -521,6 +521,55 @@ describe("StageBehavior", () => {
 			expect(result.agents.length).toBe(1);
 		});
 
+		it("spawns one agent per distinct role from a swarm-format plan", async () => {
+			// Swarm plan.md format: checkboxes with indented plain-text bullets
+			// (Files:/Change:/Acceptance:/Depends:) — roles come from Role: bullets.
+			ctx.planContent = [
+				"## Phase 1: Core",
+				"**Contract:** shared interface",
+				"",
+				"- [ ] **Task: Build api**",
+				"  - Files: `src/api.ts`",
+				"  - Role: implementer",
+				"  - Change: add the endpoint",
+				"  - Acceptance: returns 200",
+				"",
+				"- [ ] **Task: Test api**",
+				"  - Files: `tests/api.test.ts`",
+				"  - Role: tester",
+				"  - Change: cover the endpoint",
+				"  - Acceptance: tests pass",
+				"  - Depends: Build api",
+			].join("\n");
+
+			const result = await behavior.enter(ctx);
+
+			// Distinct roles → distinct agents, never a single collapsed worker.
+			expect(result.agents).toBeArray();
+			expect(result.agents.length).toBe(2);
+			expect(result.agents.map(a => a.role)).toEqual(["implementer", "tester"]);
+
+			// Stable swarm profile ids flow through the spawn seam.
+			const spawnMock = ctx.runtime.spawn as unknown as { mock: { calls: unknown[][] } };
+			const specs = spawnMock.mock.calls[0]![0] as Array<Record<string, unknown>>;
+			expect(specs.map(s => s.profileId)).toEqual(["swarm-implementer", "swarm-tester"]);
+
+			// Dependencies parsed from Depends: bullets reach the agent specs.
+			const testerSpec = specs.find(s => s.role === "tester")!;
+			expect(testerSpec.todoPhases).toMatchObject([{ title: "Test api", dependsOn: ["build-api"] }]);
+		});
+
+		it("does not spawn a degenerate empty-role agent for plans without role metadata", async () => {
+			// Legacy checkbox tasks without any role metadata default to a
+			// single implementer agent — never a "worker-" agent with an empty role.
+			ctx.planContent = "## Tasks\n- [ ] build-api\n- [ ] test-api";
+
+			const result = await behavior.enter(ctx);
+
+			expect(result.agents.length).toBe(1);
+			expect(result.agents[0]!.role).toBe("implementer");
+		});
+
 		it("returns initialUIMessage with agent count", async () => {
 			const result = await behavior.enter(ctx);
 

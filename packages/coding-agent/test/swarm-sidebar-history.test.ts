@@ -16,6 +16,8 @@
 import { afterEach, beforeAll, describe, expect, it, type Mock, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { CrewManager } from "@satopi/pi-coding-agent/crew/crew-manager";
+import type { IrcBus } from "@satopi/pi-coding-agent/irc/bus";
 import { collectPersistedAgents, type PersistedAgentInfo } from "@satopi/pi-coding-agent/modes/components/agent-hub";
 import { SwarmSidebar } from "@satopi/pi-coding-agent/modes/components/swarm/swarm-sidebar";
 import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
@@ -77,7 +79,7 @@ interface Harness {
 	onRequestRender: Mock<() => void>;
 }
 
-function makeHarness(fx: Fixture): Harness {
+function makeHarness(fx: Fixture, crewManager?: CrewManager): Harness {
 	const onResumeSession = vi.fn<(sessionFile: string) => void>();
 	const onOpenHistoryAgent = vi.fn<(agent: PersistedAgentInfo) => void>();
 	const onRequestRender = vi.fn<() => void>();
@@ -89,7 +91,7 @@ function makeHarness(fx: Fixture): Harness {
 			onResumeSession,
 			onOpenHistoryAgent,
 			onRequestRender,
-			crewManager: undefined,
+			crewManager,
 		},
 		theme,
 	);
@@ -162,14 +164,14 @@ describe("SwarmSidebar history", () => {
 
 	/**
 	 * Register enough root-level (kind "main") agents that the flat tree
-	 * overflows the treeBudget (termRows - 7) at any terminal height. Returns
+	 * overflows the treeBudget (termRows - 8) at any terminal height. Returns
 	 * the registered ids so the caller can unregister them afterwards — the
 	 * global registry is shared across tests in this file.
 	 */
 	function registerOverflowAgents(prefix: string): string[] {
 		const termRows = process.stdout.rows || 24;
 		const fakes: string[] = [];
-		const count = termRows + 8; // flat tree = count + 1 > treeBudget = termRows - 7
+		const count = termRows + 8; // flat tree = count + 1 > treeBudget = termRows - 8
 		for (let i = 0; i < count; i++) {
 			const id = `${prefix}-${i}`;
 			fakes.push(id);
@@ -283,6 +285,138 @@ describe("SwarmSidebar history", () => {
 			expect(clamped.length).toBeLessThanOrEqual(maxHeight);
 			const lastNonEmpty = [...clamped].reverse().find(l => strip(l).trim() !== "");
 			expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+		} finally {
+			for (const id of fakes) AgentRegistry.global().unregister(id);
+		}
+	});
+
+	it("shows the sub-agent count on a collapsed Swarms node, stable across expand/collapse", async () => {
+		const h = await newHarness();
+		const subIds: string[] = [];
+		try {
+			for (let i = 0; i < 3; i++) {
+				const id = `swarm-count-${i}`;
+				subIds.push(id);
+				AgentRegistry.global().register({
+					id,
+					displayName: `Sub Agent ${i}`,
+					kind: "sub",
+					session: null,
+					status: "idle",
+				});
+			}
+			// Collapsed: the count must come from the registry, not the (empty
+			// until expanded) children array.
+			const collapsed = rendered(h.sidebar);
+			const swarmsLine = collapsed.find(l => l.includes("Swarms"));
+			expect(swarmsLine).toBeDefined();
+			expect(swarmsLine).toContain("(3)");
+			// Expanding materializes the children; the count must not change.
+			selectRow(h.sidebar, flatIndexOf(collapsed, "Swarms"));
+			h.sidebar.handleInput("\n");
+			const expanded = rendered(h.sidebar);
+			expect(expanded.find(l => l.includes("Swarms"))).toContain("(3)");
+			expect(expanded.some(l => l.includes("Sub Agent 0"))).toBe(true);
+		} finally {
+			for (const id of subIds) AgentRegistry.global().unregister(id);
+		}
+	});
+
+	it("shows the session count on a collapsed History node", async () => {
+		const h = await newHarness();
+		await waitFor(() => rendered(h.sidebar).some(l => l.includes("History")), "History root row");
+		const historyLine = rendered(h.sidebar).find(l => l.includes("History"));
+		expect(historyLine).toBeDefined();
+		// Two other sessions in the fixture; the row is collapsed so children
+		// are empty — the count must not read as 0.
+		expect(historyLine).toContain("(2)");
+	});
+
+	it("shows the member count on a collapsed crew node, stable across expand/collapse", async () => {
+		fx = await makeFixture();
+		const crewManager = new CrewManager(path.join(fx.dir.path(), "crews"), {} as unknown as IrcBus);
+		await crewManager.createCrew("Design Crew", ["agent-a", "agent-b"]);
+		const h = makeHarness(fx, crewManager);
+		sidebars.push(h.sidebar);
+
+		// 2 named members + the auto-added human observer.
+		const collapsed = rendered(h.sidebar);
+		const crewLine = collapsed.find(l => l.includes("Design Crew"));
+		expect(crewLine).toBeDefined();
+		expect(crewLine).toContain("(3)");
+		// Expanding adds the two action rows; the count stays the member count.
+		selectRow(h.sidebar, flatIndexOf(collapsed, "Design Crew"));
+		h.sidebar.handleInput("\n");
+		const expanded = rendered(h.sidebar);
+		expect(expanded.find(l => l.includes("Design Crew"))).toContain("(3)");
+		expect(expanded.some(l => l.includes("+ Add Member"))).toBe(true);
+	});
+
+	it("keeps the bottom border when the engine's maxHeight is one row short of stdout's rows", async () => {
+		const h = await newHarness();
+		const termRows = process.stdout.rows || 24;
+		const fakes = registerOverflowAgents("sidebar-short");
+		try {
+			const overlayLines = h.sidebar.render(120);
+			// The overlay engine derives maxHeight from terminal.rows, which
+			// prefers DEC 2048 in-band resize reports over process.stdout.rows
+			// (packages/tui/src/terminal.ts) — the two can disagree by a row.
+			// Non-bottom anchors keep the TOP of an over-tall overlay
+			// (slice(0, maxHeight)), amputating the bottom border. Simulate
+			// the compositor with a one-row-smaller height.
+			const maxHeight = termRows - 3;
+			const clamped = overlayLines.length > maxHeight ? overlayLines.slice(0, maxHeight) : overlayLines;
+			const lastNonEmpty = [...clamped].reverse().find(l => strip(l).trim() !== "");
+			expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+		} finally {
+			for (const id of fakes) AgentRegistry.global().unregister(id);
+		}
+	});
+
+	it("fits the overlay budget when stdout reports no rows but $LINES is set", async () => {
+		const h = await newHarness();
+		const fakes = registerOverflowAgents("sidebar-lines");
+		const stdoutRowsDesc = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+		const prevLines = Bun.env.LINES;
+		try {
+			// Engine height resolution: in-band reports → stdout.rows →
+			// $LINES → 24 (packages/tui/src/terminal.ts). With stdout reporting
+			// no rows the sidebar must use the same $LINES fallback, or it
+			// over-fills against the engine's smaller maxHeight.
+			Object.defineProperty(process.stdout, "rows", { configurable: true, value: 0 });
+			Bun.env.LINES = "20";
+			const overlayLines = h.sidebar.render(120);
+			// Engine maxHeight for the same resolution: 20 - 2 (margin 1).
+			const maxHeight = 20 - 2;
+			const clamped = overlayLines.length > maxHeight ? overlayLines.slice(0, maxHeight) : overlayLines;
+			const lastNonEmpty = [...clamped].reverse().find(l => strip(l).trim() !== "");
+			expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+		} finally {
+			if (stdoutRowsDesc) Object.defineProperty(process.stdout, "rows", stdoutRowsDesc);
+			Object.defineProperty(process.stdout, "rows", { value: undefined, configurable: true });
+			if (prevLines === undefined) delete Bun.env.LINES;
+			else Bun.env.LINES = prevLines;
+			for (const id of fakes) AgentRegistry.global().unregister(id);
+		}
+	});
+
+	it("keeps the selection visible by scrolling the viewport", async () => {
+		const h = await newHarness();
+		const termRows = process.stdout.rows || 24;
+		const fakes = registerOverflowAgents("sidebar-scroll");
+		try {
+			// Flat order: session (0), then one row per fake agent (1..count,
+			// count = termRows + 8). The last agent's flat index is termRows + 8.
+			const lastAgentFlatIndex = termRows + 8;
+			selectRow(h.sidebar, lastAgentFlatIndex);
+			const lines = rendered(h.sidebar);
+			const lastAgent = `Fake Agent ${termRows + 7}`;
+			const row = lines.findIndex(l => l.includes(lastAgent));
+			expect(row).toBeGreaterThan(0);
+			expect(strip(lines[row] ?? "")).toContain("\u25b6");
+			// The viewport shifted down with the selection: the first rows
+			// scrolled off.
+			expect(lines.some(l => l.includes("Fake Agent 0"))).toBe(false);
 		} finally {
 			for (const id of fakes) AgentRegistry.global().unregister(id);
 		}

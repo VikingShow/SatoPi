@@ -271,6 +271,8 @@ import { parseTurnBudget } from "../../modes/turn-budget";
 import { containsUltrathink, ULTRATHINK_NOTICE } from "../../modes/ultrathink";
 import { computeNonMessageBreakdown, computeNonMessageTokens } from "../../modes/utils/context-usage";
 import { containsWorkflow, renderWorkflowNotice } from "../../modes/workflow";
+import { shouldDeferSessionCompaction } from "../../offload/compact";
+import type { IOffloadManager } from "../../offload/manager";
 import { resolveApprovedPlan } from "../../plan-mode/approved-plan";
 import { createPlanReadMatcher } from "../../plan-mode/plan-protection";
 import type { PlanModeState } from "../../plan-mode/state";
@@ -806,6 +808,13 @@ export interface AgentSessionConfig {
 	skills?: Skill[];
 	/** Skill loading warnings (already captured by SDK) */
 	skillWarnings?: SkillWarning[];
+	/**
+	 * Optional offload manager. When present (and the per-request L3
+	 * compaction is wired through it), the session's threshold compaction
+	 * consults its last L3 outcome and defers the expensive history rewrite
+	 * while the offload tier already keeps the request within budget.
+	 */
+	offloadManager?: IOffloadManager;
 	/** Custom commands (TypeScript slash commands) */
 	customCommands?: LoadedCustomCommand[];
 	skillsSettings?: SkillsSettings;
@@ -1747,6 +1756,8 @@ export class AgentSession {
 	#swarmServices = new Map<string, SessionServices>();
 	#goalTurnCounter = 0;
 	#clientBridge: ClientBridge | undefined;
+	/** Offload manager (shared L3 compaction signal); undefined when offload is not wired. */
+	readonly #offloadManager: IOffloadManager | undefined;
 	#allowAcpAgentInitiatedTurns = false;
 	/** Per-session memory of allow_always / reject_always decisions for gated tools. */
 	#acpPermissionDecisions: Map<string, "allow_always" | "reject_always"> = new Map();
@@ -2428,6 +2439,7 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
 		this.#autoApprove = config.autoApprove === true;
+		this.#offloadManager = config.offloadManager;
 		// Power assertions are taken per turn (see #beginInFlight); nothing acquired here.
 		this.#evalKernelOwnerId = config.evalKernelOwnerId ?? `agent-session:${Snowflake.next()}`;
 		this.#parentEvalSessionId = config.parentEvalSessionId;
@@ -13313,6 +13325,22 @@ export class AgentSession {
 	}
 
 	/**
+	 * Offload coordination: returns true when the offload L3 compaction that
+	 * ran on the most recent provider request already keeps the effective
+	 * context under the session's compaction threshold, so the session's own
+	 * threshold rewrite can be skipped. Falls back to false (rewrite) when no
+	 * offload manager is wired or no fresh L3 signal is present.
+	 */
+	async #shouldDeferThresholdCompactionToOffload(): Promise<boolean> {
+		const offloadManager = this.#offloadManager;
+		if (!offloadManager) return false;
+		const contextWindow = this.model?.contextWindow ?? 0;
+		if (contextWindow <= 0) return false;
+		const status = await offloadManager.getLastCompactStatus();
+		return shouldDeferSessionCompaction(contextWindow, this.settings.getGroup("compaction"), status);
+	}
+
+	/**
 	 * Internal: Run auto-compaction with events.
 	 *
 	 * @param allowDefer If true (default), threshold-driven handoff strategy is allowed to
@@ -13341,6 +13369,18 @@ export class AgentSession {
 		const compactionSettings = this.settings.getGroup("compaction");
 		if (compactionSettings.strategy === "off") return COMPACTION_CHECK_NONE;
 		if (reason !== "idle" && !compactionSettings.enabled) return COMPACTION_CHECK_NONE;
+
+		// ── Offload coordination (P3 #3) ─────────────────────────────────────
+		// The offload L3 compaction (compactContext) runs per provider request
+		// and is transient — it never touches persisted history. When it has
+		// JUST applied a tier and already brought the effective request under
+		// the compaction threshold, this threshold rewrite would be redundant
+		// (an LLM summary call that coarsens history the per-turn L3 tier is
+		// already keeping within budget). Defer to it; rewrite only when L3
+		// cannot keep up (status absent, no tier applied, or still over budget).
+		if (reason === "threshold" && (await this.#shouldDeferThresholdCompactionToOffload())) {
+			return COMPACTION_CHECK_NONE;
+		}
 		const generation = this.#promptGeneration;
 		const suppressContinuation = options.suppressContinuation === true;
 		const shouldAutoContinue =

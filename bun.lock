@@ -24,7 +24,7 @@
     },
     "packages/agent": {
       "name": "@satopi/pi-agent-core",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "@opentelemetry/api": "catalog:",
         "@satopi/pi-ai": "workspace:*",
@@ -42,7 +42,7 @@
     },
     "packages/ai": {
       "name": "@satopi/pi-ai",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@satopi/pi-catalog": "workspace:*",
@@ -58,7 +58,7 @@
     },
     "packages/catalog": {
       "name": "@satopi/pi-catalog",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@satopi/pi-utils": "workspace:*",
@@ -72,7 +72,7 @@
     },
     "packages/coding-agent": {
       "name": "@satopi/pi-coding-agent",
-      "version": "0.0.1",
+      "version": "0.0.4",
       "bin": {
         "stp": "src/cli.ts",
       },
@@ -127,7 +127,7 @@
     },
     "packages/collab-web": {
       "name": "@satopi/collab-web",
-      "version": "16.3.6",
+      "version": "0.0.4",
       "dependencies": {
         "@satopi/pi-wire": "workspace:*",
         "lucide-react": "catalog:",
@@ -143,7 +143,7 @@
     },
     "packages/hashline": {
       "name": "@satopi/hashline",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "diff": "catalog:",
         "lru-cache": "catalog:",
@@ -154,7 +154,7 @@
     },
     "packages/metaharness": {
       "name": "@satopi/pi-metaharness",
-      "version": "0.0.1",
+      "version": "0.0.4",
       "bin": {
         "metaharness": "src/server.ts",
       },
@@ -186,7 +186,7 @@
     },
     "packages/mnemopi": {
       "name": "@satopi/pi-mnemopi",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "bin": {
         "mnemopi": "src/cli.ts",
       },
@@ -212,7 +212,7 @@
     },
     "packages/natives": {
       "name": "@satopi/pi-natives",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "devDependencies": {
         "@napi-rs/cli": "catalog:",
         "@types/bun": "catalog:",
@@ -220,7 +220,7 @@
     },
     "packages/snapcompact": {
       "name": "@satopi/snapcompact",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "@satopi/pi-ai": "workspace:*",
         "@satopi/pi-natives": "workspace:*",
@@ -233,7 +233,7 @@
     },
     "packages/stats": {
       "name": "@satopi/omp-stats",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "bin": {
         "stp-stats": "./src/index.ts",
       },
@@ -259,7 +259,7 @@
     },
     "packages/tui": {
       "name": "@satopi/pi-tui",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "dependencies": {
         "@satopi/pi-natives": "workspace:*",
         "@satopi/pi-utils": "workspace:*",
@@ -273,7 +273,7 @@
     },
     "packages/typescript-edit-benchmark": {
       "name": "@satopi/typescript-edit-benchmark",
-      "version": "0.0.1",
+      "version": "0.0.4",
       "dependencies": {
         "@babel/generator": "catalog:",
         "@babel/parser": "catalog:",
@@ -297,7 +297,7 @@
     },
     "packages/utils": {
       "name": "@satopi/pi-utils",
-      "version": "0.0.1",
+      "version": "0.0.4",
       "dependencies": {
         "@satopi/pi-natives": "workspace:*",
         "handlebars": "catalog:",
@@ -310,7 +310,7 @@
     },
     "packages/web": {
       "name": "@satopi/pi-web",
-      "version": "0.1.0",
+      "version": "0.0.4",
       "dependencies": {
         "lucide-react": "catalog:",
         "react": "catalog:",
@@ -325,7 +325,7 @@
     },
     "packages/wire": {
       "name": "@satopi/pi-wire",
-      "version": "16.5.0",
+      "version": "0.0.4",
       "devDependencies": {
         "@types/bun": "catalog:",
       },
@@ -366,18 +366,18 @@
     "@huggingface/transformers": "^4.2.0",
     "@mozilla/readability": "^0.6.0",
     "@napi-rs/cli": "3.7.2",
-    "@oh-my-pi/hashline": "16.5.0",
-    "@oh-my-pi/omp-stats": "16.5.0",
-    "@oh-my-pi/pi-agent-core": "16.5.0",
-    "@oh-my-pi/pi-ai": "16.5.0",
-    "@oh-my-pi/pi-catalog": "16.5.0",
-    "@oh-my-pi/pi-coding-agent": "16.5.0",
-    "@oh-my-pi/pi-mnemopi": "16.5.0",
-    "@oh-my-pi/pi-natives": "16.5.0",
-    "@oh-my-pi/pi-tui": "16.5.0",
-    "@oh-my-pi/pi-utils": "16.5.0",
-    "@oh-my-pi/pi-wire": "16.5.0",
-    "@oh-my-pi/snapcompact": "16.5.0",
+    "@oh-my-pi/hashline": "0.0.4",
+    "@oh-my-pi/omp-stats": "0.0.4",
+    "@oh-my-pi/pi-agent-core": "0.0.4",
+    "@oh-my-pi/pi-ai": "0.0.4",
+    "@oh-my-pi/pi-catalog": "0.0.4",
+    "@oh-my-pi/pi-coding-agent": "0.0.4",
+    "@oh-my-pi/pi-mnemopi": "0.0.4",
+    "@oh-my-pi/pi-natives": "0.0.4",
+    "@oh-my-pi/pi-tui": "0.0.4",
+    "@oh-my-pi/pi-utils": "0.0.4",
+    "@oh-my-pi/pi-wire": "0.0.4",
+    "@oh-my-pi/snapcompact": "0.0.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/context-async-hooks": "^2.7.1",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",

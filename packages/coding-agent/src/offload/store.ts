@@ -171,15 +171,21 @@ export class OffloadStore {
 	 */
 	async listAgentIds(): Promise<string[]> {
 		const dir = getAgentDataDir(this.#workspace, this.#agentName);
+		// The listing itself is the source of truth: listFilesSync already
+		// returns [] for a missing dir. A separate exists(dir) gate would break
+		// storage backends that only track files (MemorySessionStorage has no
+		// directory entries, so exists(dir) is always false there).
+		let files: string[];
 		try {
-			const exists = await this.#storage.exists(dir);
-			if (!exists) return [];
+			files = this.#storage.listFilesSync(dir, "*.jsonl");
 		} catch {
 			return [];
 		}
-
-		const files = this.#storage.listFilesSync(dir, "*.jsonl");
-		return files.map(f => path.basename(f, ".jsonl"));
+		// Files are named `offload-{sessionId}.jsonl`; strip the prefix so the
+		// returned ids round-trip through getOffloadPath (which re-adds it).
+		return files
+			.map(f => path.basename(f, ".jsonl"))
+			.map(id => (id.startsWith("offload-") ? id.slice("offload-".length) : id));
 	}
 
 	// -- Clear ----------------------------------------------------------------

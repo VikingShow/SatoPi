@@ -1400,7 +1400,14 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<SlashCommandSpec> = [
 				}
 			}
 			if (verb === "run") {
-				await runtime.output("Use /swarm to open the Swarm dashboard.");
+				// Text/ACP mode has no dashboard, so a non-interactive run cannot
+				// be launched from here. Point at the scriptable headless CLI
+				// (`stp swarm run <swarm.yaml>`); the TUI handler opens the
+				// dashboard instead. Full in-session headless runs would need a
+				// headless runner hook on SlashCommandRuntime (see batch report).
+				await runtime.output(
+					"Headless graph runs: `stp swarm run <swarm.yaml>`. In the TUI, /graph run opens the dashboard.",
+				);
 				return commandConsumed();
 			}
 			if (verb === "theatre") {

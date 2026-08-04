@@ -35,7 +35,7 @@ import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
 import { LoopNodeBehavior } from "./loop-node-behavior";
 import { PhaseBehaviorNodeAdapter } from "./phase-behavior-adapter";
-import type { GateResult, GateSpec, NodeBehavior, NodeContext, NodeResult } from "./schema";
+import type { NodeBehavior, NodeContext, NodeResult } from "./schema";
 import { SubgraphNodeBehavior } from "./subgraph-behavior";
 
 // ============================================================================
@@ -46,14 +46,16 @@ import { SubgraphNodeBehavior } from "./subgraph-behavior";
  * Default node behavior — spawns a single agent with role + task and waits.
  *
  * This is the simplest behavior and handles the `custom` node type (the
- * default when no type is specified). For v1 it is also the fallback for
- * Script, Stage, and Curtain stubs.
+ * default when no type is specified).
  *
  * Lifecycle:
  *   1. prepare → build one AgentSpec from NodeDefinition
- *   2. execute → spawn via the runtime, wait for SingleResult
- *   3. validate → if gate passed, check for test command; gate result
- *   4. cleanup  → abort any agent still running (no-op when wait() resolved)
+ *   2. execute → spawn via the runtime, wait for SingleResult (exitCode
+ *      included in the NodeResult for conditional routing)
+ *   3. cleanup  → abort any agent still running (no-op when wait() resolved)
+ *
+ * No validate() — gates for custom nodes are run by GraphRunner through
+ * GateController (see execute() in graph-runner.ts).
  */
 export class CustomNodeBehavior implements NodeBehavior {
 	readonly name = "custom";
@@ -153,6 +155,7 @@ export class CustomNodeBehavior implements NodeBehavior {
 				nodeId: ctx.node.id,
 				success,
 				output,
+				exitCode: result?.exitCode,
 				error: result?.error,
 				agentResults: [{ agentId: spec.id, output, error: result?.error }],
 			};
@@ -211,76 +214,14 @@ export class CustomNodeBehavior implements NodeBehavior {
 
 		const output = typeof result?.output === "string" ? result.output : String(result ?? "");
 		const success = !result?.error;
-
 		return {
 			nodeId: ctx.node.id,
 			success,
 			output,
+			exitCode: result?.exitCode,
 			error: result?.error,
 			agentResults: [{ agentId: spec.id, output, error: result?.error }],
 		};
-	}
-
-	// ======================================================================
-	// validate
-	// ======================================================================
-
-	async validate(result: NodeResult, gate?: GateSpec): Promise<GateResult> {
-		if (!gate) {
-			return { passed: true, failures: [], humanReviewRequired: false };
-		}
-
-		const failures: string[] = [];
-
-		switch (gate.type) {
-			case "compile-check": {
-				const cmd = gate.command ?? "bun check";
-				try {
-					const proc = Bun.spawn(["/bin/sh", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-					const exitCode = await proc.exited;
-					const stderr = await new Response(proc.stderr).text();
-					if (exitCode !== 0) {
-						failures.push(`Compile gate failed (exit ${exitCode}): ${stderr.trim()}`);
-					}
-				} catch (err) {
-					failures.push(`Compile gate error: ${String(err)}`);
-				}
-				break;
-			}
-			case "test": {
-				const cmd = gate.command ?? "bun test";
-				try {
-					const proc = Bun.spawn(["/bin/sh", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-					const exitCode = await proc.exited;
-					const stderr = await new Response(proc.stderr).text();
-					if (exitCode !== 0) {
-						failures.push(`Test gate failed (exit ${exitCode}): ${stderr.trim()}`);
-					}
-				} catch (err) {
-					failures.push(`Test gate error: ${String(err)}`);
-				}
-				break;
-			}
-			case "lsp":
-				logger.debug("[CustomNodeBehavior] LSP gate: not yet wired");
-				break;
-			case "human-review":
-				// Handled below via mode check.
-				break;
-			case "script":
-				logger.debug("[CustomNodeBehavior] Script gate: not yet wired");
-				break;
-		}
-
-		// Failure-driven human review via gate mode.
-		if (!result.success && gate.mode !== "never") {
-			failures.push("Agent execution failed");
-		}
-
-		const passed = failures.length === 0;
-		const humanReviewRequired = gate.mode === "always" || (gate.mode !== "never" && !passed);
-
-		return { passed, failures, humanReviewRequired };
 	}
 
 	// ======================================================================

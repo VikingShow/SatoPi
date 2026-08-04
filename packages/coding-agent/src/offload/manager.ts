@@ -16,6 +16,7 @@ import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
 import type { SessionStorage } from "../session/store/session-storage";
 import type { Chapter } from "../types/chapter";
+import type { OffloadCompactStatus } from "./compact";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------
@@ -33,10 +34,14 @@ export interface IOffloadManager {
 	getExperienceContext(agentId: string, taskDescription: string): Promise<string | null>;
 	/** Get a map of agent_id → latest summary for all offloaded agents. */
 	getOffloadSummaries(): Promise<Map<string, string>>;
+	/**
+	 * Record the outcome of an L3 `compactContext` run (offload → session
+	 * coordination signal). Called by the per-request L3 transform callers.
+	 */
+	recordCompactResult(status: OffloadCompactStatus): void;
+	/** Last recorded L3 compaction outcome, or undefined when L3 never ran. */
+	getLastCompactStatus(): OffloadCompactStatus | undefined;
 }
-
-// ---------------------------------------------------------------------------
-// OffloadManager — real implementation backed by OffloadStore
 // ---------------------------------------------------------------------------
 
 export class OffloadManager implements IOffloadManager {
@@ -44,6 +49,8 @@ export class OffloadManager implements IOffloadManager {
 	readonly #sessionId: string;
 	readonly #hookPipeline: HookPipeline | undefined;
 	#iteration = 0;
+	/** Outcome of the most recent L3 compactContext run (session-coordination signal). */
+	#lastCompactStatus: OffloadCompactStatus | undefined;
 
 	constructor(
 		workspace: string,
@@ -143,6 +150,16 @@ export class OffloadManager implements IOffloadManager {
 			map.set(e.agent_id, e.summary);
 		}
 		return map;
+	}
+
+	// -- Session-compaction coordination --------------------------------------
+
+	recordCompactResult(status: OffloadCompactStatus): void {
+		this.#lastCompactStatus = status;
+	}
+
+	getLastCompactStatus(): OffloadCompactStatus | undefined {
+		return this.#lastCompactStatus;
 	}
 
 	// -- Context direction -----------------------------------------------------

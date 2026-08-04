@@ -22,6 +22,8 @@ import type { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
 import { IrcBus } from "../../irc/bus";
 import { type IOffloadManager, OffloadManager } from "../../offload/manager";
+import { createSwarmMnemopiClient } from "../infra/create-mnemopi-client";
+import { createSwarmHindsightClient } from "../infra/hindsight-adapter";
 import { SwarmSessionManager } from "../session/swarm-session-manager";
 import { createOrchestratorRuntime } from "./assembler";
 import { type Chapter, StateTracker } from "./state";
@@ -102,8 +104,13 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 
 	// 9. OffloadManager — L1→L3 context offloading (needed by OffloadHook in the runtime)
 	const offloadManager = new OffloadManager(workspace, swarmName, swarmName, sessionManager.storage);
-
 	// 10. Orchestrator runtime (MarkEnvironment + HookPipeline + builtins + SwarmRuntime)
+	//     Memory clients: mnemopi (semantic memory) + hindsight (cross-session
+	//     recall) — built here so both the hook path (MnemopiHook fan-out) and
+	//     the context pipeline (MnemopiSource/HindsightSource) are live on the
+	//     infra path, not only the CLI path.
+	const mnemopiClient = await createSwarmMnemopiClient(settings, workspace);
+	const hindsightClient = createSwarmHindsightClient(settings, workspace);
 	const orch = createOrchestratorRuntime({
 		modelRegistry,
 		settings,
@@ -114,6 +121,8 @@ export async function createSwarmInfra(opts: CreateSwarmInfraOptions): Promise<S
 		ircBus,
 		activeMmd,
 		offloadManager,
+		mnemopiClient,
+		hindsightClient,
 	});
 
 	return {

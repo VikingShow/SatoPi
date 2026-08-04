@@ -43,6 +43,9 @@ interface TreeNode {
 	agentCount?: number;
 	/** For history session rows: latest persisted agent mtime in ms (once summarized). */
 	agentMtime?: number;
+	/** For collapsible container rows (swarm/crew/history): child count shown even
+	 *  while collapsed, when children are not materialized. */
+	count?: number;
 	children?: TreeNode[];
 	expanded?: boolean;
 	depth: number;
@@ -189,6 +192,7 @@ export class SwarmSidebar implements Component {
 				id: "swarms",
 				label: "Swarms",
 				expanded: swarmsExpanded,
+				count: subRefs.length,
 				depth: 0,
 				children: [],
 			};
@@ -216,6 +220,7 @@ export class SwarmSidebar implements Component {
 				label: crew.name,
 				crewId: crew.id,
 				expanded,
+				count: crew.memberCount,
 				depth: 0,
 				children: [],
 			};
@@ -259,6 +264,7 @@ export class SwarmSidebar implements Component {
 				id: "history",
 				label: "History",
 				expanded: historyExpanded,
+				count: this.#otherSessions.length,
 				depth: 0,
 				children: [],
 			};
@@ -414,7 +420,10 @@ export class SwarmSidebar implements Component {
 		// the frame stops at the tree with blank space below. Fill the viewport
 		// (same idiom as the fullscreen session picker) and size the visible tree
 		// from the terminal height instead of a fixed cap.
-		const termRows = process.stdout.rows || 24;
+		// Mirror ProcessTerminal's own resolution (terminal.ts) so the panel's
+		// height tracks the height the overlay engine actually clamps against:
+		// process.stdout.rows → $LINES → 24.
+		const termRows = process.stdout.rows || Number(Bun.env.LINES) || 24;
 		const panel = swarmPanel(
 			"Agents",
 			({ innerWidth, theme: t }) => {
@@ -430,19 +439,31 @@ export class SwarmSidebar implements Component {
 				const flat = this.#flattenTree(tree);
 				// Tree rows are budgeted from the terminal height: the framed
 				// panel takes 2 rows for its top/bottom bars, the overlay
-				// reserves 2 more for its top/bottom margins, and one row each
-				// goes to the "+N more" overflow marker, the trailing spacer
-				// and the keybinding hint. No fixed cap — the tree grows to
-				// fill the viewport.
-				const treeBudget = Math.max(1, termRows - 7);
+				// reserves 2 more for its top/bottom margins, plus a 1-row
+				// safety margin so a terminal-size discrepancy (in-band resize
+				// reports vs process.stdout.rows) can never push the panel past
+				// the overlay engine's maxHeight and have its top-keep clamp
+				// amputate the bottom border. One row each goes to the "+N
+				// more" overflow marker, the trailing spacer and the keybinding
+				// hint. No fixed cap — the tree grows to fill the viewport.
+				const fillTarget = Math.max(1, termRows - 5);
+				const treeBudget = Math.max(1, fillTarget - 3);
 				const maxVisible = Math.min(flat.length, treeBudget);
+
+				// The viewport follows the selection: keep the cursor row on
+				// screen as j/k navigation walks past the visible window.
+				const selectedId =
+					this.#selectedPath.length > 0 ? this.#selectedPath[this.#selectedPath.length - 1] : undefined;
+				const currentIdx = selectedId ? flat.findIndex(f => f.node.id === selectedId) : -1;
+				const viewportOffset =
+					currentIdx < 0 ? 0 : Math.max(0, Math.min(currentIdx - maxVisible + 1, flat.length - maxVisible));
 
 				if (tree.length === 0) {
 					lines.push(fit(t.fg("dim", "  No active agents or crews")));
 				}
 
 				for (let i = 0; i < maxVisible; i++) {
-					const { node, prefix } = flat[i];
+					const { node, prefix } = flat[viewportOffset + i];
 					const isSelected =
 						this.#selectedPath.length > 0 && this.#selectedPath[this.#selectedPath.length - 1] === node.id;
 
@@ -472,7 +493,7 @@ export class SwarmSidebar implements Component {
 					} else if (node.type === "crew" || node.type === "swarm") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
-						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
+						const countHint = t.fg("dim", ` (${node.count ?? 0})`);
 						lines.push(
 							fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`),
 						);
@@ -481,7 +502,7 @@ export class SwarmSidebar implements Component {
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint =
 							node.type === "history"
-								? t.fg("dim", ` (${node.children?.length ?? 0})`)
+								? t.fg("dim", ` (${node.count ?? 0})`)
 								: node.agentCount !== undefined
 									? t.fg("dim", ` ${node.agentCount} agent${node.agentCount === 1 ? "" : "s"}`)
 									: "";
@@ -500,8 +521,8 @@ export class SwarmSidebar implements Component {
 					}
 				}
 
-				if (flat.length > maxVisible) {
-					lines.push(fit(t.fg("dim", `  +${flat.length - maxVisible} more`)));
+				if (flat.length > viewportOffset + maxVisible) {
+					lines.push(fit(t.fg("dim", `  +${flat.length - viewportOffset - maxVisible} more`)));
 				}
 
 				lines.push("");
@@ -512,17 +533,21 @@ export class SwarmSidebar implements Component {
 
 				// Fill the remaining content rows so the bordered panel spans
 				// the overlay budget: termRows minus the frame's 2 top/bottom
-				// bars and the overlay's 2 vertical margins.
-				for (let i = lines.length; i < termRows - 4; i++) {
+				// bars, the overlay's 2 vertical margins and a 1-row safety
+				// margin. Content is capped one row under the engine's absolute
+				// maximum (termRows - 2) so a one-row terminal-size discrepancy
+				// cannot have the engine's slice(0, maxHeight) amputate the
+				// bottom border.
+				for (let i = lines.length; i < fillTarget; i++) {
 					lines.push("");
 				}
 				// Defensive clamp: the fit() truncation above guarantees each
 				// line is a single row, but if content still exceeds the budget
 				// (e.g. an unexpectedly tall glyph), drop the tail so the framed
-				// panel can never exceed termRows - 2 rows and the overlay
-				// engine's slice(0, maxHeight) cannot amputate the bottom border.
-				if (lines.length > termRows - 4) {
-					lines.length = termRows - 4;
+				// panel can never exceed the overlay engine's maxHeight and its
+				// slice(0, maxHeight) cannot amputate the bottom border.
+				if (lines.length > fillTarget) {
+					lines.length = fillTarget;
 				}
 				return lines;
 			},

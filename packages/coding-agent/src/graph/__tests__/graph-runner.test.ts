@@ -13,6 +13,9 @@
  *      a { agentId, error } payload and a { phase, agentId } ctx.
  */
 import { describe, expect, it, mock } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
 import type { HookContext } from "../../hooks/types";
 import type { AgentSession } from "../../session/agent/agent-session";
 import type { StateTracker } from "../../swarm/core/state";
@@ -215,5 +218,242 @@ describe("GraphRunner hook wiring", () => {
 		// Tear down the pending curtain lifecycle.
 		await runner.dispose();
 		await runPromise;
+	});
+});
+
+// ============================================================================
+// #8 headless hang: script node plan injection + completion timeout
+// ============================================================================
+
+// A headless `stp swarm run` has no human to confirm a plan. These tests
+// drive the REAL lifecycle (ScriptBehavior polls via checkCompletion in the
+// production code, which uses real Bun.sleep timers that fake timers cannot
+// control), asserting the run either auto-confirms an injected plan or fails
+// with a clear error instead of polling forever.
+
+const HEADLESS_GRAPH_YAML = `
+graph:
+  name: headless
+  description: headless run graph
+  version: 1
+  revision: 0
+  nodes:
+    script:
+      label: Plan
+      description: write the implementation plan
+      role: planner
+      type: script
+      tools: []
+      depends_on: []
+    build:
+      label: Build
+      description: build task
+      role: builder
+      tools: []
+      depends_on: [script]
+`;
+
+const TEST_PLAN = [
+	"# Implementation Plan",
+	"",
+	"## Change",
+	"Implement the feature described in the graph definition.",
+	"",
+	"## Files",
+	"- src/foo.ts: add the new module",
+	"- src/bar.ts: wire the new caller",
+	"",
+	"## Acceptance",
+	"Graph tests pass and the feature works end to end without hangs.",
+	"",
+	"## Steps",
+	"1. Add the module to the workspace.",
+	"2. Wire the caller through the existing entry points.",
+	"3. Run the focused test suite and verify the behavior.",
+].join("\n");
+
+interface HeadlessHarness {
+	runner: GraphRunner;
+	agentUpdates: Array<{ id: string; update: { status?: string; error?: string } }>;
+	phases: string[];
+	runDir: string;
+	reporter: EventSession;
+	reflector: EventSession;
+}
+
+interface EventSession {
+	session: AgentSession;
+	emit: (event: unknown) => void;
+	listenerCount: () => number;
+}
+
+/** Agent session whose wait() resolves with a fixed exit code. */
+function makeWorkSession(id: string, role: string, exitCode: number): AgentSession {
+	return {
+		id,
+		role,
+		status: "completed",
+		wait: mock(async () => ({
+			index: 0,
+			id,
+			agent: id,
+			agentSource: "bundled",
+			task: "",
+			exitCode,
+			output: exitCode === 0 ? "ok" : "failed",
+			stderr: "",
+			truncated: false,
+			durationMs: 0,
+			tokens: 0,
+			requests: 0,
+		})),
+		abort: mock(),
+	} as unknown as AgentSession;
+}
+
+/** Agent session whose subscribe callback the test drives manually (curtain). */
+function makeEventSession(id: string, role: string): EventSession {
+	const listeners: Array<(event: unknown) => void> = [];
+	const session = {
+		id,
+		role,
+		status: "idle",
+		subscribe: (cb: (event: unknown) => void): (() => void) => {
+			listeners.push(cb);
+			return () => {
+				const index = listeners.indexOf(cb);
+				if (index >= 0) listeners.splice(index, 1);
+			};
+		},
+		abort: mock(),
+	} as unknown as AgentSession;
+	return {
+		session,
+		emit: event => {
+			for (const cb of [...listeners]) cb(event);
+		},
+		listenerCount: () => listeners.length,
+	};
+}
+
+/**
+ * Build a GraphRunner over a real graph YAML (script → build) with a mocked
+ * runtime. When `planContent` is non-empty it is injected via onPlanUpdated
+ * before the run starts — exactly what the swarm CLI factory does for
+ * `stp swarm run` when a plan.md already exists.
+ */
+async function createHeadlessHarness(opts: { planContent: string; timeoutMs: number }): Promise<HeadlessHarness> {
+	const runDir = await mkdtemp(path.join(tmpdir(), "headless-"));
+	const yamlPath = path.join(runDir, "headless.graph.yaml");
+	await writeFile(yamlPath, HEADLESS_GRAPH_YAML);
+
+	const agentUpdates: HeadlessHarness["agentUpdates"] = [];
+	const phases: string[] = [];
+	const reporter = makeEventSession("reporter", "reporter");
+	const reflector = makeEventSession("reflector", "reflector");
+
+	const stateTracker = {
+		state: { phase: "idle", agents: {} },
+		updatePipeline: mock().mockResolvedValue(undefined),
+		updateAgent: mock((id: string, update: { status?: string; error?: string }) => {
+			agentUpdates.push({ id, update });
+		}),
+		registerAgent: mock(),
+		getBestAgent: mock(),
+	} as unknown as StateTracker;
+
+	const infra = {
+		sessionManager: { appendCustomEntry: mock(), storage: {} },
+		stateTracker,
+		activityLogger: { logPhase: mock(), logCrash: mock(), logNomination: mock() },
+		experienceStore: { close: mock() },
+		hookPipeline: { trigger: mock() },
+		runtime: {
+			spawn: mock(async (specs: Array<{ id: string; role: string }>) => {
+				// CurtainBehavior spawns exactly two (reporter + reflector).
+				if (specs.length >= 2) return [reporter.session, reflector.session];
+				const spec = specs[0]!;
+				return [makeWorkSession(spec.id, spec.role, 0)];
+			}),
+			contextPipeline: {},
+			ircBus: { receiveFromHuman: mock() },
+		},
+		roleAssetManager: {},
+		markEnvironment: {},
+		offloadManager: {},
+		ircBus: {},
+	} as unknown as SwarmInfra;
+
+	const runner = new GraphRunner({
+		workspace: runDir,
+		graphPath: yamlPath,
+		modelRegistry: {} as never,
+		settings: {} as never,
+		infra,
+		autoApplaud: true,
+		phaseCompletionTimeoutMs: opts.timeoutMs,
+		onPhaseChange: phase => phases.push(phase),
+		readSessionEntries: mock().mockResolvedValue([]),
+	});
+	await runner.init();
+
+	if (opts.planContent.trim().length > 0) {
+		runner.onPlanUpdated(opts.planContent);
+	}
+
+	return { runner, agentUpdates, phases, runDir, reporter, reflector };
+}
+
+describe("GraphRunner headless run", () => {
+	it("fails a script node with a clear error instead of polling forever when no plan is injected", async () => {
+		const h = await createHeadlessHarness({ planContent: "", timeoutMs: 150 });
+
+		// No plan content → ScriptBehavior never auto-confirms → the bounded
+		// poll must time out and fail the node (not hang indefinitely).
+		const runPromise = h.runner.confirmScript();
+		await waitFor(() => h.agentUpdates.some(u => u.id === "script" && u.update.status === "failed"));
+		// The failed node records an execution error, then the run proceeds to
+		// the curtain phase — drive it to completion like the plan test does.
+		await waitFor(
+			() => h.phases.includes("curtain") && h.reporter.listenerCount() >= 1 && h.reflector.listenerCount() >= 1,
+		);
+		h.reporter.emit(agentEndEvent([assistantMessage("stop")]));
+		h.reflector.emit(agentEndEvent([assistantMessage("stop")]));
+		await waitFor(() => h.phases.includes("idle"));
+		await runPromise;
+
+		const failure = h.agentUpdates.find(u => u.id === "script" && u.update.status === "failed");
+		expect(failure?.update.error).toContain("did not complete within");
+
+		await h.runner.dispose();
+		await rm(h.runDir, { recursive: true, force: true });
+	});
+
+	it("auto-confirms the script node when an existing plan is injected before the run", async () => {
+		const h = await createHeadlessHarness({ planContent: TEST_PLAN, timeoutMs: 60_000 });
+
+		// Injected plan (via onPlanUpdated, as the CLI factory does) must let
+		// ScriptBehavior auto-confirm on the first poll, so the script node
+		// completes and the run proceeds to the build node and the curtain.
+		const runPromise = h.runner.confirmScript();
+		await waitFor(
+			() => h.phases.includes("curtain") && h.reporter.listenerCount() >= 1 && h.reflector.listenerCount() >= 1,
+		);
+		h.reporter.emit(agentEndEvent([assistantMessage("stop")]));
+		h.reflector.emit(agentEndEvent([assistantMessage("stop")]));
+		await waitFor(() => h.phases.includes("idle"));
+		await runPromise;
+
+		const scriptUpdates = h.agentUpdates.filter(u => u.id === "script");
+		expect(scriptUpdates.some(u => u.update.status === "completed")).toBe(true);
+		expect(scriptUpdates.some(u => u.update.status === "failed")).toBe(false);
+		expect(h.agentUpdates.filter(u => u.id === "build").some(u => u.update.status === "completed")).toBe(true);
+		// The phase label must reflect what the node is waiting on — the
+		// script node's completion poll shows "script", not the "stage"
+		// placeholder pinned at init/confirmScript.
+		expect(h.phases).toContain("script");
+
+		await h.runner.dispose();
+		await rm(h.runDir, { recursive: true, force: true });
 	});
 });

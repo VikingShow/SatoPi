@@ -56,6 +56,7 @@ import {
 	type IOffloadManager,
 	type MmdInjector,
 	OffloadManager,
+	toOffloadCompactStatus,
 } from "./offload";
 import "./discovery";
 import type { CommChannel } from "./comm/comm-channel";
@@ -2594,6 +2595,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 								contextWindow: options.contextWindow,
 							});
 							result = compacted.messages;
+							// Publish the L3 outcome as the offload → session
+							// coordination signal (session compaction defers to it).
+							effectiveOffloadManager.recordCompactResult(
+								toOffloadCompactStatus(compacted, options.contextWindow),
+							);
 						} catch (err) {
 							logger.debug("[createAgentSession] Compact context skipped", { error: String(err) });
 						}
@@ -2830,6 +2836,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			planYolo: options.planYolo,
 			serviceTierByFamily: initialServiceTierByFamily,
 			sessionManager,
+			offloadManager: effectiveOffloadManager,
 			settings,
 			autoApprove: options.autoApprove,
 			evalKernelOwnerId,

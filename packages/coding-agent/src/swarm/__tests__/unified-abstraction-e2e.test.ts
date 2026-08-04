@@ -120,7 +120,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			expect(behavior.name).toBe("custom");
 		});
 
-		it("all behaviors implement NodeBehavior (name + 4 lifecycle methods)", () => {
+		it("all behaviors implement NodeBehavior (name + lifecycle methods)", () => {
 			const config = makeConfig();
 			for (const type of ["script", "stage", "curtain", undefined] as const) {
 				const behavior = selectNodeBehavior(type, config);
@@ -128,8 +128,14 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 				expect(typeof behavior.name).toBe("string");
 				expect(typeof behavior.prepare).toBe("function");
 				expect(typeof behavior.execute).toBe("function");
-				expect(typeof behavior.validate).toBe("function");
 				expect(typeof behavior.cleanup).toBe("function");
+				// validate() is optional — only completion-driven behaviors
+				// (e.g. PhaseBehaviorNodeAdapter) implement it.
+				if (behavior instanceof PhaseBehaviorNodeAdapter) {
+					expect(typeof behavior.validate).toBe("function");
+				} else {
+					expect(typeof behavior.validate).toBe("undefined");
+				}
 			}
 		});
 
@@ -303,7 +309,7 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 	// ── 7. NodeBehavior lifecycle for all types ───────────────────────────
 
 	describe("NodeBehavior lifecycle completeness", () => {
-		it("custom node full lifecycle: prepare → validate → cleanup", async () => {
+		it("custom node full lifecycle: prepare → cleanup", async () => {
 			const config = makeConfig();
 			const ctx = {
 				node: { id: "test", label: "T", description: "D", role: "dev", tools: [], type: "custom", dependsOn: [] },
@@ -320,8 +326,9 @@ describe("Unified Abstraction Layer — End-to-End", () => {
 			const prepared = await behavior.prepare(ctx);
 			expect(Array.isArray(prepared)).toBe(true);
 
-			const result = await behavior.validate({ nodeId: "test", success: true }, undefined);
-			expect(result).toHaveProperty("passed");
+			// CustomNodeBehavior deliberately has no validate() — gates for
+			// custom nodes are run by GraphRunner via GateController.
+			expect("validate" in behavior).toBe(false);
 
 			await behavior.cleanup(ctx);
 		});

@@ -61,8 +61,13 @@ export interface NodeBehavior {
 	/**
 	 * Validate: run gate checks against the execution result.
 	 * Called after execute() regardless of success/failure.
+	 *
+	 * Optional — only completion-driven behaviors (e.g.
+	 * PhaseBehaviorNodeAdapter, LoopNodeBehavior) implement it. Custom-node
+	 * gates are run by GraphRunner via GateController instead, so
+	 * CustomNodeBehavior intentionally has no validate().
 	 */
-	validate(result: NodeResult, gate?: GateSpec): Promise<GateResult>;
+	validate?(result: NodeResult, gate?: GateSpec): Promise<GateResult>;
 
 	/**
 	 * Cleanup: abort any still-running agents and release resources.

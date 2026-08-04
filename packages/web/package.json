@@ -1,6 +1,6 @@
 {
   "name": "@satopi/pi-web",
-  "version": "0.1.0",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "description": "Shared web core for SatoPi — SSE client, Shiki highlighter, design tokens, and generic types",

@@ -94,17 +94,6 @@ async function prepareWorkspace(task: EditTask): Promise<string> {
 
 	await copyDir(task.inputDir, workspace);
 
-	// Git init for snapshots
-	try {
-		const { execSync } = await import("node:child_process");
-		execSync("git init", { cwd: workspace, stdio: "ignore" });
-		execSync("git config user.email 'bench@satopi.local'", { cwd: workspace, stdio: "ignore" });
-		execSync("git config user.name 'Bench Runner'", { cwd: workspace, stdio: "ignore" });
-		execSync("git add -A && git commit --allow-empty -m 'bench-init'", { cwd: workspace, stdio: "ignore" });
-	} catch {
-		// Non-critical
-	}
-
 	return workspace;
 }
 

@@ -23,6 +23,7 @@ import { MmdSource } from "../../context/sources/mmd-source";
 import { MnemopiSource } from "../../context/sources/mnemopi-source";
 import { OffloadSource } from "../../context/sources/offload-source";
 import { PeerRosterSource } from "../../context/sources/peer-roster-source";
+import { ProfileSource } from "../../context/sources/profile-source";
 import { StigmergySource } from "../../context/sources/stigmergy-source";
 import { TaskQueueSource } from "../../context/sources/task-queue-source";
 import { MarkEnvironment } from "../../coordination";
@@ -37,6 +38,7 @@ import type { IOffloadManager } from "../../offload/manager";
 import type { Tool } from "../../tools";
 import type { SwarmHindsightClient } from "../infra/hindsight-adapter";
 import type { MnemopiClient } from "../infra/mnemopi-adapter";
+import { SwarmMnemopiAdapter } from "../infra/mnemopi-adapter";
 import type { SwarmRuntime } from "./swarm-runtime";
 
 // ============================================================================
@@ -77,6 +79,10 @@ export interface CreateOrchestratorRuntimeOptions {
 	ircBus?: IrcBus;
 	toolRegistry?: Map<string, Tool>;
 	activeMmd?: string;
+	/** Semantic memory handle — forwarded to assembleAgentRuntime → MnemopiSource. */
+	mnemopiClient?: MnemopiClient | null;
+	/** Cross-session recall handle — forwarded to assembleAgentRuntime → HindsightSource. */
+	hindsightClient?: SwarmHindsightClient | null;
 }
 
 export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions): {
@@ -95,6 +101,14 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		markEnvironment,
 		offloadManager: opts.offloadManager,
 		experienceStore: opts.experienceStore,
+		mnemopiAdapter: opts.mnemopiClient
+			? new SwarmMnemopiAdapter(opts.mnemopiClient, {
+					enabled: true,
+					topK: 5,
+					deduplicate: true,
+					autoStoreThreshold: 5,
+				})
+			: undefined,
 	};
 	registerBuiltinHooks(hookPipeline, hookDeps);
 
@@ -107,6 +121,8 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		ircBus: opts.ircBus,
 		toolRegistry: opts.toolRegistry,
 		experienceStore: opts.experienceStore,
+		mnemopiClient: opts.mnemopiClient,
+		hindsightClient: opts.hindsightClient,
 		activeMmd: opts.activeMmd,
 		markEnvironment,
 		offloadManager: opts.offloadManager,
@@ -123,6 +139,26 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const roleProvider = new RoleProvider(opts.roleAssetManager, opts.profileRegistry);
 
 	const contextPipeline = new ContextPipeline();
+
+	// ProfileSource is deliberately registered in addition to RoleProvider:
+	// RoleProvider only folds profile identity/credit/expertise into the role
+	// system prompt when spec.roleSource === "profile", while ProfileSource
+	// injects the <agent_profile> block (credit score, praise/criticism counts,
+	// recent violations, low-credit warnings) for ANY agent whose id matches a
+	// registered profile — complementary behavioral context, not a duplicate.
+	// Lookup is by spec.id, which equals the profileId for stage-behavior
+	// workers; graph-node agents miss (getPromptContext → null → {}) and the
+	// source degrades to a harmless no-op.
+	if (opts.profileRegistry) {
+		contextPipeline.register(new ProfileSource(opts.profileRegistry));
+	}
+
+	// MnemopiSource/HindsightSource register only when their clients are
+	// provided. assembleAgentRuntime supports them fully (see opts), but the
+	// CLI chain (createSwarmInfra → createOrchestratorRuntime) does not forward
+	// SharedServices.mnemopiClient/hindsightClient yet — that forwarding is a
+	// mechanical change in src/swarm/core/swarm-infra.ts (outside slice H) and
+	// is the only missing link; MmdSource is already wired via opts.activeMmd.
 	if (opts.experienceStore) {
 		contextPipeline.register(new ExperienceSource(opts.experienceStore));
 	}

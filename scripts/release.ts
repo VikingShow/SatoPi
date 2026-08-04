@@ -216,17 +216,29 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	console.log("  Working directory clean");
 
 	const latestTag = (await git(["describe", "--tags", "--abbrev=0", "--match", "v*"]).text()).trim();
+	// The npm package.json is the canonical version source (0.0.x lockstep);
+	// Cargo.toml and the root catalog must follow it, never lead it.
+	const currentNpmVersion = (await Bun.file("packages/coding-agent/package.json").json()).version;
 	let version = versionOrBump;
 	if (version === "major" || version === "minor" || version === "patch") {
-		version = bumpVersion(latestTag, version);
-		console.log(`Bumping ${versionOrBump} version from ${latestTag} -> ${version}`);
+		version = bumpVersion(currentNpmVersion, version);
+		console.log(`Bumping ${versionOrBump} version from ${currentNpmVersion} -> ${version}`);
 	}
+
+	// Versions may only move upward: never write a version lower than what the
+	// npm package.json already carries (the previous `git describe`-based flow
+	// could derive a version below the Cargo.toml it then rewrote).
+	if (compareVersions(version, currentNpmVersion) <= 0) {
+		console.error(`Error: Version ${version} must be greater than the current npm version ${currentNpmVersion}`);
+		process.exit(1);
+	}
+	console.log(`  Version ${version} > npm ${currentNpmVersion}`);
 
 	if (compareVersions(version, latestTag) <= 0) {
 		console.error(`Error: Version ${version} must be greater than latest tag ${latestTag}`);
 		process.exit(1);
 	}
-	console.log(`  Version ${version} > ${latestTag}\n`);
+	console.log(`  Version ${version} > latest tag ${latestTag}\n`);
 
 	// 2. Update package versions
 	console.log(`Updating package versions to ${version}…`);
@@ -253,12 +265,12 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	}
 	console.log();
 
-	// Update @satopi/* catalog entries in root package.json
+	// Update catalog entries in root package.json (@oh-my-pi/* and @satopi/*)
 	console.log("Updating root catalog versions...");
 	let rootPkgRaw = await Bun.file("package.json").text();
-	rootPkgRaw = rootPkgRaw.replace(/("@satopi\/[^"]+":\s*)"[^"]+"/g, `$1"${version}"`);
+	rootPkgRaw = rootPkgRaw.replace(/("@(?:oh-my-pi|satopi)\/[^"]+":\s*)"[^"]+"/g, `$1"${version}"`);
 	await Bun.write("package.json", rootPkgRaw);
-	console.log("  Updated root catalog @satopi/* entries");
+	console.log("  Updated root catalog entries");
 
 	// 3. Update Rust workspace version
 	console.log(`Updating Rust workspace version to ${version}…`);
@@ -282,33 +294,6 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		}
 	}
 	console.log();
-
-	// 3b. Rename the pi-natives version sentinel so any `.node` left on disk from
-	// a previous release physically cannot expose the symbol the new `index.js`
-	// expects. The JS loader derives `VERSION_SENTINEL_EXPORT` from `package.json`
-	// at runtime, so the only thing that has to move on the Rust side is the
-	// `js_name = "__piNativesV…"` literal. `gen-enums.ts` regenerates the matching
-	// entries in `packages/natives/native/{index.d.ts,index.js}` on the next napi
-	// build, but bump them here too so the committed surface tracks the version
-	// without waiting for a local rebuild on the release host.
-	console.log(`Bumping pi-natives version sentinel to v${version}…`);
-	const sentinelJsId = version.replace(/[^A-Za-z0-9]/g, "_");
-	const sentinelName = `__piNativesV${sentinelJsId}`;
-	const sentinelFiles = [
-		"crates/pi-natives/src/lib.rs",
-		"packages/natives/native/index.d.ts",
-		"packages/natives/native/index.js",
-	];
-	await $`sd '__piNativesV[A-Za-z0-9_]+' ${sentinelName} ${sentinelFiles}`;
-	const libRs = await Bun.file("crates/pi-natives/src/lib.rs").text();
-	if (!libRs.includes(`js_name = "${sentinelName}"`)) {
-		console.error(
-			`Error: pi-natives version sentinel did not move to ${sentinelName} in crates/pi-natives/src/lib.rs. ` +
-				"The `__piNativesV…` literal may have been removed or renamed; restore it before releasing.",
-		);
-		process.exit(1);
-	}
-	console.log(`  sentinel: ${sentinelName}\n`);
 
 	// 4. Regenerate lockfiles
 	console.log("Regenerating lockfiles...");

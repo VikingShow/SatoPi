@@ -168,4 +168,98 @@ describe("TaskQueue.parseFromPlan", () => {
 		expect(queue.allDone).toBe(false);
 		expect(queue.progress).toMatchObject({ total: 2, completed: 0, ready: 2 });
 	});
+
+	// ── Swarm plan format (Slice E #7) ─────────────────────────────────
+
+	test("parses a swarm-format plan with plain-text bullets", () => {
+		// Swarm plan.md structure: ## Phase sections with - [ ] **Task: Name**
+		// checkboxes whose metadata lives in indented Files:/Change:/Acceptance:/
+		// Depends: bullets (see prompts/system/swarm-notice.md plan-format).
+		const plan = [
+			"# Plan: Example",
+			"",
+			"## Overview",
+			"Build the thing.",
+			"",
+			"## Phase 1: Core",
+			"**Contract:** shared interface",
+			"",
+			"- [ ] **Task: Parse plan contract**",
+			"  - Files: `src/graph/task-queue.ts`, `src/graph/behaviors/stage-behavior.ts`",
+			"  - Change: extend parseFromPlan to read plain-text metadata",
+			"  - Acceptance: swarm plan yields non-empty role and deps",
+			"  - Depends: none",
+			"",
+			"- [ ] **Task: Verify stage roles**",
+			"  - Files: `src/graph/behaviors/stage-behavior.ts`",
+			"  - Change: build a multi-agent role set",
+			"  - Acceptance: more than one agent spawns",
+			"  - Depends: Parse plan contract",
+		].join("\n");
+
+		const tasks = TaskQueue.parseFromPlan(plan);
+
+		expect(tasks).toHaveLength(2);
+
+		const first = tasks.find(t => t.id === "parse-plan-contract")!;
+		expect(first).toMatchObject({
+			title: "Parse plan contract",
+			// No Role: bullet → non-empty default so Stage never collapses to worker-.
+			assignedRole: "implementer",
+			dependsOn: [],
+			files: ["src/graph/task-queue.ts", "src/graph/behaviors/stage-behavior.ts"],
+		});
+
+		// "Depends: none" is a no-op; a real dependency maps to the referenced
+		// task's slugified id even when spelled as a full task name.
+		const second = tasks.find(t => t.id === "verify-stage-roles")!;
+		expect(second.dependsOn).toEqual(["parse-plan-contract"]);
+	});
+
+	test("parses Role bullets into distinct assigned roles", () => {
+		const plan = [
+			"## Phase 1",
+			"",
+			"- [ ] **Task: Build api**",
+			"  - Files: `src/api.ts`",
+			"  - Role: implementer",
+			"  - Change: add the endpoint",
+			"  - Acceptance: returns 200",
+			"",
+			"- [ ] **Task: Test api**",
+			"  - Files: `tests/api.test.ts`",
+			"  - Role: tester",
+			"  - Change: cover the endpoint",
+			"  - Acceptance: tests pass",
+		].join("\n");
+
+		const tasks = TaskQueue.parseFromPlan(plan);
+
+		expect(tasks).toHaveLength(2);
+		expect(tasks.map(t => t.assignedRole)).toEqual(["implementer", "tester"]);
+	});
+
+	test("keeps legacy checkbox metadata parsing intact alongside bullets", () => {
+		const plan = planWithTasks([
+			"- [ ] **Task: Migrate data** (type: config) (role: dba) (est: 15m)",
+			"- [ ] **Task: Validate schema**",
+			"  - Depends: Migrate data",
+		]);
+
+		const tasks = TaskQueue.parseFromPlan(plan);
+
+		expect(tasks).toHaveLength(2);
+		expect(tasks[0]).toMatchObject({
+			id: "migrate-data",
+			type: "config",
+			assignedRole: "dba",
+			estimatedMinutes: 15,
+		});
+
+		// Parenthesized metadata wins over bullets; bullets backfill deps for
+		// tasks that carry none.
+		const second = tasks[1]!;
+		expect(second).toMatchObject({ id: "validate-schema", assignedRole: "implementer" });
+		expect(second.dependsOn).toEqual(["migrate-data"]);
+	});
 });

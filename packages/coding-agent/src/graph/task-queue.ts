@@ -341,9 +341,22 @@ export class TaskQueue extends EventEmitter {
 	 * Extracts task items from markdown checkboxes and headings,
 	 * inferring type, role, and dependencies from metadata.
 	 *
+	 * Two metadata forms are supported:
+	 *   - Parenthesized (legacy): `(type: develop) (role: backend) (est: 30m) (depends: task-1)`
+	 *   - Swarm plain-text bullets: indented `- Files:`/`- Role:`/`- Depends:` lines
+	 *     following the checkbox (see prompts/system/swarm-notice.md plan-format).
+	 *
 	 * Format:
 	 *   - [ ] **Task: Name** (type: develop) (role: backend) (est: 30m) (depends: task-1)
 	 *   - [ ] Task Name  (type: test) (role: qa)
+	 *   - [ ] **Task: Name**
+	 *       - Files: `src/a.ts`
+	 *       - Role: tester
+	 *       - Depends: Some other task
+	 *
+	 * Parenthesized metadata wins over bullets. Tasks without a role default
+	 * to "implementer" so Stage always builds a non-empty role set; Depends:
+	 * values are slugified to match task ids and a literal "none" is ignored.
 	 */
 	static parseFromPlan(content: string): Omit<Task, "status">[] {
 		if (!content || content.trim().length === 0) return [];
@@ -359,19 +372,25 @@ export class TaskQueue extends EventEmitter {
 			const fullLine = match[0];
 			const title = match[1].trim();
 
+			// Indented continuation block carrying the swarm-format bullets.
+			const block = TaskQueue.#continuationBlock(content, match.index ?? 0);
+
 			// Parse metadata parens: (type: develop) (role: backend) (est: 30m) (depends: a, b)
 			const type = TaskQueue.#extractMeta(fullLine, "type") ?? "develop";
-			const role = TaskQueue.#extractMeta(fullLine, "role") ?? "";
+			const role =
+				TaskQueue.#extractMeta(fullLine, "role") ||
+				TaskQueue.#stripMarkdown(TaskQueue.#extractBullet(block, "role") ?? "") ||
+				"implementer";
 			const estStr = TaskQueue.#extractMeta(fullLine, "est") ?? "30m";
-			const dependsStr = TaskQueue.#extractMeta(fullLine, "depends");
+			const dependsStr = TaskQueue.#extractMeta(fullLine, "depends") ?? TaskQueue.#extractBullet(block, "depends");
 
 			const estimatedMinutes = TaskQueue.#parseEstimate(estStr);
-			const dependsOn = dependsStr
-				? dependsStr
-						.split(",")
-						.map(s => s.trim())
-						.filter(Boolean)
-				: [];
+			const dependsOn = (dependsStr ? TaskQueue.#stripMarkdown(dependsStr) : "")
+				.split(",")
+				.map(s => slugify(s))
+				.filter(Boolean)
+				.filter(dep => !["none", "n-a", "na"].includes(dep));
+			const files = TaskQueue.#parseFiles(block);
 
 			const id = TaskQueue.#uniqueId(slugify(title), ids);
 			ids.add(id);
@@ -380,6 +399,7 @@ export class TaskQueue extends EventEmitter {
 				id,
 				title,
 				type: type as TaskType,
+				files,
 				dependsOn,
 				estimatedMinutes,
 				assignedRole: role,
@@ -387,6 +407,46 @@ export class TaskQueue extends EventEmitter {
 		}
 
 		return tasks;
+	}
+
+	/**
+	 * Collect the indented continuation block following a task line — the
+	 * swarm plan format's `Files:`/`Change:`/`Acceptance:`/`Depends:` bullets.
+	 */
+	static #continuationBlock(content: string, lineStart: number): string {
+		const rest = content.slice(lineStart);
+		const eol = rest.indexOf("\n");
+		if (eol === -1) return "";
+		const afterTask = rest.slice(eol + 1);
+		const continuationEnd = afterTask.search(/^(?![\t ])/m);
+		return continuationEnd === -1 ? afterTask : afterTask.slice(0, continuationEnd);
+	}
+
+	/** Extract a `Key: value` bullet (raw value) from a continuation block. */
+	static #extractBullet(block: string, key: string): string | undefined {
+		const re = new RegExp(`(?:^|\\n)[ \\t]*-?[ \\t]*(?:\\*\\*)?${key}:\\s*([^\\n]+)`, "i");
+		const m = block.match(re);
+		return m?.[1]?.trim();
+	}
+
+	/** Remove light markdown wrapping (`**`, backticks, `< >`, quotes). */
+	static #stripMarkdown(text: string): string {
+		return text
+			.replace(/\*\*/g, "")
+			.replace(/`/g, "")
+			.replace(/^[<"']+|[>"']+$/g, "")
+			.trim();
+	}
+
+	/** Parse a `Files:` bullet into a list of relative paths. */
+	static #parseFiles(block: string): string[] | undefined {
+		const filesStr = TaskQueue.#extractBullet(block, "files");
+		if (!filesStr) return undefined;
+		const files = filesStr
+			.split(",")
+			.map(s => TaskQueue.#stripMarkdown(s))
+			.filter(Boolean);
+		return files.length > 0 ? files : undefined;
 	}
 
 	static #extractMeta(line: string, key: string): string | undefined {

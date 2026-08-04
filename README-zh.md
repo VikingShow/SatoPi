@@ -282,7 +282,7 @@ sed -i 's/model: .*/model: YOUR-MODEL/' .stp/loop.yaml
 | 文件 | 用途 |
 |------|------|
 | `packages/coding-agent/src/graph/` | GraphRunner DAG 编排引擎（行为层、门控、计划验证） |
-| `packages/coding-agent/src/crew/` | CrewManager + RoundtableSession（圆桌辩论） |
+| `packages/coding-agent/src/crew/` | CrewManager（圆桌辩论在 `graph/behaviors/debate-roundtable.ts`） |
 | `packages/coding-agent/src/context/` | 上下文管道 + 卸载源（L1→L1.5→L2→L3） |
 | `packages/coding-agent/src/swarm/` | Session 管理、提示词模板、Swarm 基础设施 |
 | `packages/coding-agent/src/agent/` | Agent 身份档案、选择算法、角色资产 |
@@ -301,7 +301,7 @@ packages/coding-agent/src/
 │   ├── gate-controller.ts   门控系统
 │   ├── plan-validator.ts    计划验证
 │   └── graph-runner.ts      核心编排器
-├── crew/           CrewManager + RoundtableSession
+├── crew/           CrewManager（圆桌：graph/behaviors/debate-roundtable）
 ├── context/        上下文管道 + 卸载源
 ├── swarm/          Session 管理 + 提示词模板
 │   ├── session/    多会话管理
