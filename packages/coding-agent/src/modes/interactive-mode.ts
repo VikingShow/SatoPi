@@ -261,24 +261,6 @@ function renderWorkingMessage(message: string, accent?: WorkingMessageAccent): s
 	);
 }
 
-const EDITOR_MAX_HEIGHT_MIN = 6;
-const EDITOR_MAX_HEIGHT_MAX = 18;
-const EDITOR_RESERVED_ROWS = 12;
-const EDITOR_FALLBACK_ROWS = 24;
-const EDITOR_MIN_CHROME_ROWS = 4; // rows reserved for transcript + status on small terms
-const EDITOR_MIN_RENDERED_ROWS = 3; // bordered editor floor: top+bottom border + 1 content row
-
-/**
- * Editor max-height cap for a terminal of `terminalRows` rows.
- *
- * Roomy terminals get the comfortable [6, 18] band. Small terminals shrink the
- * cap so the editor leaves at least EDITOR_MIN_CHROME_ROWS rows for the
- * transcript + status line. The editor is bordered, so it never renders fewer
- * than EDITOR_MIN_RENDERED_ROWS rows; once the terminal is too small for both
- * (terminalRows < EDITOR_MIN_RENDERED_ROWS + EDITOR_MIN_CHROME_ROWS) the cap is
- * pinned to that floor — returning a smaller number would not shrink the editor
- * any further, it would only misreport the rows it actually occupies.
- */
 // computeEditorMaxHeight / formatHudNoteMarker / parseGoalSubcommand /
 // formatContextTokenCount / renderAgentHud / renderSubagentHudLines and their
 // constants are extracted to ./controllers/interactive-render-utils.ts (stage 5 split).

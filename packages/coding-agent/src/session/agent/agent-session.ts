@@ -316,7 +316,7 @@ import {
 import { invalidateHostMetadata } from "../../ssh/connection-manager";
 import { setCurrentSwarmPhase } from "../../swarm/core/state";
 import { createSwarmInfra } from "../../swarm/core/swarm-infra";
-import type { SessionFactory, SessionServices, SharedServices } from "../../swarm/session/session-registry";
+import type { SessionServices } from "../../swarm/session/session-registry";
 import { SwarmSessionManager } from "../../swarm/session/swarm-session-manager";
 import { usesCodexTaskPrompt } from "../../task/prompt-policy";
 import type { SingleResult } from "../../task/types";
@@ -396,6 +396,8 @@ import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionEnt
 import { EPHEMERAL_MODEL_CHANGE_ROLE } from "../store/session-entries";
 import { formatSessionHistoryMarkdown } from "../store/session-history-format";
 import { cleanupEmptyMoveSession, type SessionManager } from "../store/session-manager";
+import { AdvisorState } from "./advisor-state";
+import type { ActiveAdvisor } from "./advisor-types";
 import type { ClientBridge, ClientBridgePermissionOption, ClientBridgePermissionOutcome } from "./client-bridge";
 import {
 	type CodexAutoRedeemRedeemDecision,
@@ -412,9 +414,11 @@ import {
 	TOOL_EXECUTION_START_CUSTOM_TYPE,
 	type ToolExecutionStartData,
 } from "./exit-diagnostics";
+import { PlanModeStateContainer } from "./plan-mode-state";
 import { SessionCompactor } from "./session-compactor";
 import { SessionLifecycle } from "./session-lifecycle";
 import { ToolChoiceQueue } from "./tool-choice-queue";
+import { TtsrState } from "./ttsr-state";
 import { planTurnPersistence, sameMessageContent, sessionMessagePersistenceKey } from "./turn-persistence";
 import { classifyUnexpectedStop, isUnexpectedStopCandidate } from "./unexpected-stop-classifier";
 import { YieldQueue } from "./yield-queue";
@@ -1116,25 +1120,7 @@ export interface PerAdvisorStat {
  * primary-scoped state (turn counters, interrupt latches, the shared yield
  * channel) stays on the session.
  */
-interface ActiveAdvisor {
-	/** Display name from config ("default" for the legacy no-YAML advisor). */
-	name: string;
-	/** Slug for the transcript filename/session id; "" → `__advisor.jsonl`. */
-	slug: string;
-	agent: Agent;
-	runtime: AdvisorRuntime;
-	adviseTool: AdviseTool;
-	emissionGuard: AdvisorEmissionGuard;
-	recorder: AdvisorTranscriptRecorder;
-	/** Latest recorder close, awaited by dispose() so the final turn lands on disk. */
-	recorderClosed: Promise<void>;
-	/** Unsubscribe for the advisor agent's event stream feeding the recorder. */
-	agentUnsubscribe?: () => void;
-	model: Model;
-	thinkingLevel: ThinkingLevel;
-	/** Stable key for the resolved runtime inputs that require a rebuild to change. */
-	signature: string;
-}
+// ActiveAdvisor interface moved to ./advisor-types (stage 6a split).
 
 /** Resolved advisor config ready to instantiate as an {@link ActiveAdvisor}. */
 interface AdvisorRuntimeDescriptor {
@@ -1746,31 +1732,10 @@ export class AgentSession {
 	#pendingNextTurnMessages: CustomMessage[] = [];
 	#scheduledHiddenNextTurnGeneration: number | undefined = undefined;
 	#queuedMessageDrainScheduled = false;
-	/** Latched true when the user deliberately interrupts (USER_INTERRUPT_LABEL);
-	 *  suppresses advisor concern/blocker auto-resume until the user next resumes.
-	 *  Advisor advice is still recorded into the transcript, just not auto-run. */
-	#advisorAutoResumeSuppressed = false;
-	#advisorPrimaryTurnsCompleted = 0;
-	#advisorInterruptImmuneTurnStart: number | undefined;
-	#planModeState: PlanModeState | undefined;
+	// Advisor state (container: #advisorState); plan-mode state (container: #planModeStateContainer)
 	#vibeModeState: VibeModeState | undefined;
 	#goalModeState: GoalModeState | undefined;
 	#goalRuntime: GoalRuntime;
-	#advisorEnabled = false;
-	#advisorTools?: AgentTool[];
-	#advisorWatchdogPrompt?: string;
-	#advisorSharedInstructions?: string;
-	#advisorContextPrompt?: string;
-	#advisorYieldQueueUnsubscribe?: () => void;
-	/** Live advisors. Empty when no advisor is active. */
-	#advisors: ActiveAdvisor[] = [];
-	/** Configured advisor roster from WATCHDOG.yml; undefined/empty → single legacy advisor. */
-	#advisorConfigs?: AdvisorConfig[];
-	/** Provider-facing UUIDv7 identities keyed by primary provider session and advisor slug. */
-	#advisorProviderSessionIds = new Map<string, string>();
-	/** Aggregate of the most recent stop's recorder closes; awaited by dispose() and
-	 *  used as the open barrier for the next build so two writers never share a file. */
-	#advisorRecorderClosed: Promise<void> = Promise.resolve();
 	/** Embedded swarm bridge — created when "swarm" magic keyword is detected. */
 	#embeddedSwarm: ISwarmOrchestrator | null = null;
 	/** In-flight #initializeEmbeddedSwarm promise — guards against double init on overlapping swarm prompts. */
@@ -1781,8 +1746,6 @@ export class AgentSession {
 	#swarmPlanCaptureHookInstalled = false;
 	#swarmServices = new Map<string, SessionServices>();
 	#goalTurnCounter = 0;
-	#planReferenceSent = false;
-	#planReferencePath = "local://PLAN.md";
 	#clientBridge: ClientBridge | undefined;
 	#allowAcpAgentInitiatedTurns = false;
 	/** Per-session memory of allow_always / reject_always decisions for gated tools. */
@@ -1793,6 +1756,11 @@ export class AgentSession {
 	#toolContextRuntimeSetter?: (r: unknown) => void;
 
 	readonly #compactor = new SessionCompactor();
+
+	// Stage 6a: state containers (SessionCompactor pattern — orchestration stays in methods)
+	readonly #ttsrState = new TtsrState();
+	readonly #advisorState = new AdvisorState();
+	readonly #planModeStateContainer = new PlanModeStateContainer();
 
 	// Branch summarization state
 	#branchSummaryAbortController: AbortController | undefined = undefined;
@@ -1830,8 +1798,6 @@ export class AgentSession {
 	/** Mid-run nudges fired this prompt cycle; capped by
 	 *  {@link MID_RUN_TODO_NUDGE_MAX_PER_CYCLE}, reset with the counter above. */
 	#midRunNudgeCount = 0;
-	#planModeReminderCount = 0;
-	#planModeReminderAwaitingProgress = false;
 	#todoPhases: TodoPhase[] = [];
 	#replanTitleRefreshInFlight: Promise<void> | undefined = undefined;
 	/** Resolved TITLE_SYSTEM.md override applied to every automatic session-title
@@ -1946,17 +1912,7 @@ export class AgentSession {
 	#defaultSelectedMCPToolNames = new Set<string>();
 	#sessionDefaultSelectedMCPToolNames = new Map<string, string[]>();
 
-	// TTSR manager for time-traveling stream rules
-	#ttsrManager: TtsrManager | undefined = undefined;
-	#pendingTtsrInjections: Rule[] = [];
-	/** Per-tool TTSR rules whose `interruptMode` opted out of aborting the stream.
-	 *  These are folded into the matched tool call's `toolResult` content as an
-	 *  in-band system reminder, instead of spawning a separate follow-up turn. */
-	#perToolTtsrInjections = new Map<string, Rule[]>();
-	#ttsrAbortPending = false;
-	#ttsrRetryToken = 0;
-	#ttsrResumePromise: Promise<void> | undefined = undefined;
-	#ttsrResumeResolve: (() => void) | undefined = undefined;
+	// TTSR state (container: #ttsrState)
 
 	/** One-shot flag for expected internal plan-mode aborts. Approval actions may
 	 *  abort the post-`resolve` continuation before compaction, execution, or
@@ -2097,7 +2053,7 @@ export class AgentSession {
 		// so they neither auto-resume the run the user stopped (a non-empty steer queue
 		// otherwise bypasses the latch in #canAutoContinueForFollowUp) nor linger to
 		// flush at the next prompt. Real user steers/follow-ups are left untouched.
-		if (this.#advisorAutoResumeSuppressed && !this.isStreaming) {
+		if (this.#advisorState.autoResumeSuppressed && !this.isStreaming) {
 			for (const card of this.#extractQueuedAdvisorCards()) {
 				this.#preserveAdvisorCard(card);
 			}
@@ -2118,7 +2074,7 @@ export class AgentSession {
 		const records = [...this.#pendingIrcInterrupts, ...this.#pendingIrcAsides];
 		this.#pendingIrcInterrupts = [];
 		this.#pendingIrcAsides = [];
-		if (this.#planModeState?.enabled) {
+		if (this.#planModeStateContainer.state?.enabled) {
 			// Plan mode: fold stranded IRC asides into context without waking an
 			// autonomous turn. Convergence to ask/resolve stays user-driven.
 			for (const record of records) {
@@ -2508,11 +2464,11 @@ export class AgentSession {
 		// session `serviceTier` that drives `/fast` and OpenAI/Anthropic priority.
 		this.agent.serviceTierResolver = model => this.#effectiveServiceTier(model);
 		this.#serviceTierByFamily = config.serviceTierByFamily ?? {};
-		this.#advisorTools = config.advisorTools;
-		this.#advisorWatchdogPrompt = config.advisorWatchdogPrompt;
-		this.#advisorSharedInstructions = config.advisorSharedInstructions;
-		this.#advisorContextPrompt = config.advisorContextPrompt;
-		this.#advisorConfigs = config.advisorConfigs;
+		this.#advisorState.tools = config.advisorTools;
+		this.#advisorState.watchdogPrompt = config.advisorWatchdogPrompt;
+		this.#advisorState.sharedInstructions = config.advisorSharedInstructions;
+		this.#advisorState.contextPrompt = config.advisorContextPrompt;
+		this.#advisorState.configs = config.advisorConfigs;
 		this.#titleSystemPrompt = config.titleSystemPrompt;
 		this.#pruneToolDescriptions = config.pruneToolDescriptions === true;
 		this.#validateRetryFallbackChains();
@@ -2568,16 +2524,18 @@ export class AgentSession {
 				if (detection) this.#maybeInjectToolCallLoopRedirect(messages, detection);
 			}
 			await this.#advancePrewalk(messages, context);
-			this.#advisorPrimaryTurnsCompleted++;
-			if (this.#advisors.length > 0) {
-				for (const a of this.#advisors) {
+			this.#advisorState.primaryTurnsCompleted++;
+			if (this.#advisorState.advisors.length > 0) {
+				for (const a of this.#advisorState.advisors) {
 					if (!a.runtime.disposed) a.runtime.onTurnEnd(messages);
 				}
 				const syncBacklog = this.settings.get("advisor.syncBacklog");
 				if (syncBacklog !== "off") {
 					const threshold = parseInt(syncBacklog, 10);
 					// Parallel so the 30s catch-up budget is shared across advisors, not summed.
-					await Promise.all(this.#advisors.map(a => a.runtime.waitForCatchup(30000, threshold, signal)));
+					await Promise.all(
+						this.#advisorState.advisors.map(a => a.runtime.waitForCatchup(30000, threshold, signal)),
+					);
 				}
 			}
 			await this.#maintainContextMidRun(messages, signal, context);
@@ -2644,7 +2602,7 @@ export class AgentSession {
 			this.sessionManager.getSessionFile(),
 			this.#getConfiguredDefaultSelectedMCPToolNames(),
 		);
-		this.#ttsrManager = config.ttsrManager;
+		this.#ttsrState.manager = config.ttsrManager;
 		this.#obfuscator = config.obfuscator;
 		this.#agentId = config.agentId;
 		this.kind = config.agentKind ?? "main";
@@ -2710,8 +2668,8 @@ export class AgentSession {
 			this.#recordSessionExit(reason);
 		});
 
-		this.#advisorEnabled = this.settings.get("advisor.enabled") as boolean;
-		if (this.#advisorEnabled) this.#buildAdvisorRuntime();
+		this.#advisorState.enabled = this.settings.get("advisor.enabled") as boolean;
+		if (this.#advisorState.enabled) this.#buildAdvisorRuntime();
 
 		this.#rehydrateCheckpointRewindState();
 
@@ -2721,8 +2679,9 @@ export class AgentSession {
 		// Re-evaluate append-only context mode when the setting changes at runtime.
 		this.#unsubscribeAppendOnly = onAppendOnlyModeChanged(_value => this.#syncAppendOnlyContext(this.model));
 		this.#unsubscribeModelRoles = onModelRolesChanged(() => {
-			if (!this.#advisorEnabled || this.#lifecycle.isDisposed) return;
-			if (this.#advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig()) this.#stopAdvisorRuntime();
+			if (!this.#advisorState.enabled || this.#lifecycle.isDisposed) return;
+			if (this.#advisorState.advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig())
+				this.#stopAdvisorRuntime();
 			this.#buildAdvisorRuntime(true);
 		});
 	}
@@ -2751,8 +2710,8 @@ export class AgentSession {
 
 	#isAdvisorInterruptImmuneTurnActive(): boolean {
 		return isAdvisorInterruptImmuneTurnActive({
-			completedTurns: this.#advisorPrimaryTurnsCompleted,
-			immuneTurnStart: this.#advisorInterruptImmuneTurnStart,
+			completedTurns: this.#advisorState.primaryTurnsCompleted,
+			immuneTurnStart: this.#advisorState.interruptImmuneTurnStart,
 			immuneTurns: this.#advisorImmuneTurnLimit(),
 		});
 	}
@@ -2761,7 +2720,7 @@ export class AgentSession {
 	// interrupting steer is still in flight, completedTurns is lower than this
 	// start, so duplicate concern/blocker advice is also downgraded.
 	#recordAdvisorInterruptDelivered(): void {
-		this.#advisorInterruptImmuneTurnStart = this.#advisorPrimaryTurnsCompleted + 1;
+		this.#advisorState.interruptImmuneTurnStart = this.#advisorState.primaryTurnsCompleted + 1;
 	}
 
 	/**
@@ -2783,7 +2742,7 @@ export class AgentSession {
 		// Mute the recorder across the re-prime: AdvisorRuntime.reset() aborts the advisor
 		// loop, and that abort can emit an `aborted` message_end we must not attribute to
 		// either session's transcript. Detach, reset, then re-attach the live agent's feed.
-		for (const a of this.#advisors) {
+		for (const a of this.#advisorState.advisors) {
 			a.agentUnsubscribe?.();
 			a.agentUnsubscribe = undefined;
 			a.runtime.reset();
@@ -2791,9 +2750,9 @@ export class AgentSession {
 			a.emissionGuard.reset();
 			this.#attachAdvisorRecorderFeed(a);
 		}
-		this.#advisorPrimaryTurnsCompleted = 0;
-		this.#advisorInterruptImmuneTurnStart = undefined;
-		this.#advisorAutoResumeSuppressed = false;
+		this.#advisorState.primaryTurnsCompleted = 0;
+		this.#advisorState.interruptImmuneTurnStart = undefined;
+		this.#advisorState.autoResumeSuppressed = false;
 		this.yieldQueue.clear("advisor");
 		this.#extractQueuedAdvisorCards();
 		if (this.#pendingNextTurnMessages.some(isAdvisorCard)) {
@@ -2802,8 +2761,8 @@ export class AgentSession {
 	}
 
 	#resolveAdvisorRuntimeDescriptors(emitWarnings: boolean): AdvisorRuntimeDescriptor[] {
-		const legacy = !this.#advisorConfigs?.length;
-		const roster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorConfigs!;
+		const legacy = !this.#advisorState.configs?.length;
+		const roster: AdvisorConfig[] = legacy ? [{ name: "default" }] : this.#advisorState.configs!;
 		const descriptors: AdvisorRuntimeDescriptor[] = [];
 		const usedSlugs = new Set<string>();
 		for (const config of roster) {
@@ -2878,17 +2837,17 @@ export class AgentSession {
 
 	#advisorRuntimeMatchesCurrentConfig(): boolean {
 		const descriptors = this.#resolveAdvisorRuntimeDescriptors(false);
-		if (descriptors.length !== this.#advisors.length) return false;
+		if (descriptors.length !== this.#advisorState.advisors.length) return false;
 		for (let i = 0; i < descriptors.length; i++) {
-			if (descriptors[i].signature !== this.#advisors[i].signature) return false;
+			if (descriptors[i].signature !== this.#advisorState.advisors[i].signature) return false;
 		}
 		return true;
 	}
 
 	#buildAdvisorRuntime(seedToCurrent = false): boolean {
 		if (this.#lifecycle.isDisposed) return false;
-		if (this.#advisors.length > 0) return true;
-		if (!this.#advisorEnabled) return false;
+		if (this.#advisorState.advisors.length > 0) return true;
+		if (!this.#advisorState.enabled) return false;
 		if (this.kind !== "main" && !this.settings.get("advisor.subagents")) return false;
 
 		const descriptors = this.#resolveAdvisorRuntimeDescriptors(true);
@@ -2924,20 +2883,20 @@ export class AgentSession {
 			// `#advisorWatchdogPrompt` already carries WATCHDOG.md + YAML shared
 			// instructions; `config.instructions` adds this advisor's specialization.
 			const systemPrompt = [advisorSystemPrompt];
-			if (this.#advisorContextPrompt) systemPrompt.push(this.#advisorContextPrompt);
-			if (this.#advisorWatchdogPrompt) systemPrompt.push(this.#advisorWatchdogPrompt);
-			if (this.#advisorSharedInstructions) systemPrompt.push(this.#advisorSharedInstructions);
+			if (this.#advisorState.contextPrompt) systemPrompt.push(this.#advisorState.contextPrompt);
+			if (this.#advisorState.watchdogPrompt) systemPrompt.push(this.#advisorState.watchdogPrompt);
+			if (this.#advisorState.sharedInstructions) systemPrompt.push(this.#advisorState.sharedInstructions);
 			if (config.instructions?.trim()) systemPrompt.push(config.instructions.trim());
 
 			const names = config.tools === undefined ? ADVISOR_DEFAULT_TOOL_NAMES : new Set(config.tools);
-			const tools = (this.#advisorTools ?? []).filter(t => names.has(t.name));
+			const tools = (this.#advisorState.tools ?? []).filter(t => names.has(t.name));
 
 			const primaryProviderSessionId = this.sessionId;
 			const advisorSessionLabel = slug
 				? `${primaryProviderSessionId}-advisor-${slug}`
 				: `${primaryProviderSessionId}-advisor`;
 			const advisorProviderSessionId = getOrCreateAdvisorProviderSessionId(
-				this.#advisorProviderSessionIds,
+				this.#advisorState.providerSessionIds,
 				primaryProviderSessionId,
 				slug,
 			);
@@ -3021,7 +2980,7 @@ export class AgentSession {
 				advisorTranscriptFilename(slug),
 				// On the advisor on→off→on toggle, wait for the prior recorders' closes
 				// so two SessionManagers never hold the same file at once.
-				this.#advisorRecorderClosed,
+				this.#advisorState.recorderClosed,
 			);
 			const runtime = new AdvisorRuntime(advisorAgentFacade, {
 				snapshotMessages: () => this.agent.state.messages,
@@ -3073,14 +3032,14 @@ export class AgentSession {
 			};
 			this.#attachAdvisorRecorderFeed(advisorRef);
 			if (seedToCurrent) runtime.seedTo(this.agent.state.messages.length);
-			this.#advisors.push(advisorRef);
+			this.#advisorState.advisors.push(advisorRef);
 		}
 
 		// One shared non-blocking aside channel for all advisors; the build callback
 		// aggregates every advisor's queued nits into one card (each entry already
 		// carries its own `advisor` name).
-		if (this.#advisors.length > 0 && !this.#advisorYieldQueueUnsubscribe) {
-			this.#advisorYieldQueueUnsubscribe = this.yieldQueue.register<AdvisorNote>("advisor", {
+		if (this.#advisorState.advisors.length > 0 && !this.#advisorState.yieldQueueUnsubscribe) {
+			this.#advisorState.yieldQueueUnsubscribe = this.yieldQueue.register<AdvisorNote>("advisor", {
 				build: entries =>
 					entries.length === 0
 						? null
@@ -3097,7 +3056,7 @@ export class AgentSession {
 			});
 		}
 
-		return this.#advisors.length > 0;
+		return this.#advisorState.advisors.length > 0;
 	}
 
 	/**
@@ -3121,7 +3080,7 @@ export class AgentSession {
 		const interrupting = isInterruptingSeverity(severity);
 		const channel = resolveAdvisorDeliveryChannel({
 			severity,
-			autoResumeSuppressed: this.#advisorAutoResumeSuppressed,
+			autoResumeSuppressed: this.#advisorState.autoResumeSuppressed,
 			// Key on the live agent-core loop, not session `isStreaming` (which also
 			// counts `#promptInFlightCount` during post-turn unwind). Only a running
 			// loop consumes a steer at its next boundary.
@@ -3149,7 +3108,7 @@ export class AgentSession {
 			return;
 		}
 		this.#recordAdvisorInterruptDelivered();
-		if (this.#planModeState?.enabled) {
+		if (this.#planModeStateContainer.state?.enabled) {
 			// Plan mode: record advice visibly in context but never wake an
 			// autonomous turn — only user-driven turns converge on ask/resolve.
 			this.#preserveAdvisorCard({
@@ -3172,7 +3131,7 @@ export class AgentSession {
 	/** Re-prime every advisor's transcript view (compaction/shake/rewind) without the
 	 *  session-level latch reset {@link #resetAdvisorSessionState} performs. */
 	#resetAllAdvisorRuntimes(): void {
-		for (const a of this.#advisors) a.runtime.reset();
+		for (const a of this.#advisorState.advisors) a.runtime.reset();
 	}
 
 	#stopAdvisorRuntime(): void {
@@ -3180,7 +3139,7 @@ export class AgentSession {
 		// the loop, and an abort emits a final `message_end` we must not enqueue against
 		// a closing recorder (it would reopen and resurrect an already-released file).
 		const closes: Promise<void>[] = [];
-		for (const a of this.#advisors) {
+		for (const a of this.#advisorState.advisors) {
 			a.agentUnsubscribe?.();
 			a.agentUnsubscribe = undefined;
 			a.runtime.dispose();
@@ -3189,10 +3148,10 @@ export class AgentSession {
 			a.recorderClosed = a.recorder.close();
 			closes.push(a.recorderClosed);
 		}
-		this.#advisorRecorderClosed = Promise.all(closes).then(() => {});
-		this.#advisors = [];
-		this.#advisorYieldQueueUnsubscribe?.();
-		this.#advisorYieldQueueUnsubscribe = undefined;
+		this.#advisorState.recorderClosed = Promise.all(closes).then(() => {});
+		this.#advisorState.advisors = [];
+		this.#advisorState.yieldQueueUnsubscribe?.();
+		this.#advisorState.yieldQueueUnsubscribe = undefined;
 	}
 
 	/** Subscribe the advisor agent's finalized messages into the transcript recorder.
@@ -3306,7 +3265,7 @@ export class AgentSession {
 			return true;
 		}
 		const advisorProviderSessionId = getOrCreateAdvisorProviderSessionId(
-			this.#advisorProviderSessionIds,
+			this.#advisorState.providerSessionIds,
 			this.sessionId,
 			advisor.slug,
 		);
@@ -3529,7 +3488,7 @@ export class AgentSession {
 
 	/** TTSR manager for time-traveling stream rules */
 	get ttsrManager(): TtsrManager | undefined {
-		return this.#ttsrManager;
+		return this.#ttsrState.manager;
 	}
 
 	/** Secret obfuscator, when secrets are configured; /share redaction reuses it. */
@@ -3539,7 +3498,7 @@ export class AgentSession {
 
 	/** Whether a TTSR abort is pending (stream was aborted to inject rules) */
 	get isTtsrAbortPending(): boolean {
-		return this.#ttsrAbortPending;
+		return this.#ttsrState.abortPending;
 	}
 
 	/** Whether an expected internal plan-mode abort is pending. Consumed by
@@ -4118,12 +4077,12 @@ export class AgentSession {
 		if (event.type === "turn_start") {
 			this.#resetStreamingEditState();
 			// TTSR: Reset buffer on turn start
-			this.#ttsrManager?.resetBuffer();
+			this.#ttsrState.manager?.resetBuffer();
 		}
 
 		// TTSR: Increment message count on turn end (for repeat-after-gap tracking)
-		if (event.type === "turn_end" && this.#ttsrManager) {
-			this.#ttsrManager.incrementMessageCount();
+		if (event.type === "turn_end" && this.#ttsrState.manager) {
+			this.#ttsrState.manager.incrementMessageCount();
 		}
 		// Finalize the tool-choice queue's in-flight yield after tools have executed.
 		// This must happen at turn_end (not message_end) because onInvoked handlers
@@ -4142,10 +4101,10 @@ export class AgentSession {
 			} else {
 				await this.#goalRuntime.onToolCompleted(event.toolName);
 			}
-			this.#planModeReminderAwaitingProgress = false;
+			this.#planModeStateContainer.reminderAwaitingProgress = false;
 			if (this.#isPlanDecisionTool(event.toolName)) {
-				this.#planModeReminderCount = 0;
-				this.#planModeReminderAwaitingProgress = false;
+				this.#planModeStateContainer.reminderCount = 0;
+				this.#planModeStateContainer.reminderAwaitingProgress = false;
 			}
 		}
 		if (event.type === "tool_execution_end" && this.#isTerminalYieldToolResult(event)) {
@@ -4157,7 +4116,7 @@ export class AgentSession {
 		}
 
 		// TTSR: Check for pattern matches on assistant text/thinking and tool argument deltas
-		if (event.type === "message_update" && this.#ttsrManager?.hasRules()) {
+		if (event.type === "message_update" && this.#ttsrState.manager?.hasRules()) {
 			const assistantEvent = event.assistantMessageEvent;
 			let matchContext: TtsrMatchContext | undefined;
 			let streamingToolCall: ToolCall | undefined;
@@ -4180,7 +4139,7 @@ export class AgentSession {
 				// ast-grep `astCondition` rules match against the reconstructed edit/write
 				// snapshot, which only exists for tool argument streams. The native worker
 				// call is async, so this path is awaited and self-throttled by the manager.
-				if (matchContext.source === "tool" && this.#ttsrManager?.hasAstRules()) {
+				if (matchContext.source === "tool" && this.#ttsrState.manager?.hasAstRules()) {
 					const astMatches = await this.#checkTtsrAstStream(matchContext, streamingToolCall);
 					if (astMatches.length > 0 && this.#handleTtsrMatches(astMatches, matchContext, targetMessageTimestamp)) {
 						return;
@@ -4270,7 +4229,7 @@ export class AgentSession {
 				// Gate on #ttsrAbortPending, not stopReason: a non-TTSR abort (e.g. streaming
 				// edit) also produces stopReason === "aborted" but has no continuation coming.
 				// Only skip when #ttsrAbortPending is true (TTSR continuation is imminent).
-				if (!this.#ttsrAbortPending) {
+				if (!this.#ttsrState.abortPending) {
 					this.#resolveTtsrResume();
 				}
 				this.#queueDeferredTtsrInjectionIfNeeded(assistantMsg);
@@ -4632,18 +4591,18 @@ export class AgentSession {
 
 	/** Create the TTSR resume gate promise if one doesn't already exist. */
 	#ensureTtsrResumePromise(): void {
-		if (this.#ttsrResumePromise) return;
+		if (this.#ttsrState.resumePromise) return;
 		const { promise, resolve } = Promise.withResolvers<void>();
-		this.#ttsrResumePromise = promise;
-		this.#ttsrResumeResolve = resolve;
+		this.#ttsrState.resumePromise = promise;
+		this.#ttsrState.resumeResolve = resolve;
 	}
 
 	/** Resolve and clear the TTSR resume gate. */
 	#resolveTtsrResume(): void {
-		if (!this.#ttsrResumeResolve) return;
-		this.#ttsrResumeResolve();
-		this.#ttsrResumeResolve = undefined;
-		this.#ttsrResumePromise = undefined;
+		if (!this.#ttsrState.resumeResolve) return;
+		this.#ttsrState.resumeResolve();
+		this.#ttsrState.resumeResolve = undefined;
+		this.#ttsrState.resumePromise = undefined;
 	}
 
 	#ensurePostPromptTasksPromise(): void {
@@ -4811,8 +4770,8 @@ export class AgentSession {
 				await this.#retryPromise;
 				continue;
 			}
-			if (this.#ttsrResumePromise) {
-				await this.#ttsrResumePromise;
+			if (this.#ttsrState.resumePromise) {
+				await this.#ttsrState.resumePromise;
 				continue;
 			}
 			if (this.#postPromptTasksPromise) {
@@ -4838,8 +4797,8 @@ export class AgentSession {
 
 	/** Get TTSR injection payload and clear pending injections. */
 	#getTtsrInjectionContent(): { content: string; rules: Rule[] } | undefined {
-		if (this.#pendingTtsrInjections.length === 0) return undefined;
-		const rules = this.#pendingTtsrInjections;
+		if (this.#ttsrState.pendingInjections.length === 0) return undefined;
+		const rules = this.#ttsrState.pendingInjections;
 		const content = rules
 			.map(r =>
 				prompt.render(ttsrInterruptTemplate, {
@@ -4849,7 +4808,7 @@ export class AgentSession {
 				}),
 			)
 			.join("\n\n");
-		this.#pendingTtsrInjections = [];
+		this.#ttsrState.pendingInjections = [];
 		return { content, rules };
 	}
 
@@ -4874,10 +4833,10 @@ export class AgentSession {
 	}
 
 	#addPendingTtsrInjections(rules: Rule[]): void {
-		const seen = new Set(this.#pendingTtsrInjections.map(rule => rule.name));
+		const seen = new Set(this.#ttsrState.pendingInjections.map(rule => rule.name));
 		for (const rule of rules) {
 			if (seen.has(rule.name)) continue;
-			this.#pendingTtsrInjections.push(rule);
+			this.#ttsrState.pendingInjections.push(rule);
 			seen.add(rule.name);
 		}
 	}
@@ -4892,12 +4851,12 @@ export class AgentSession {
 	}
 
 	#addPerToolTtsrInjections(toolCallId: string, rules: Rule[]): void {
-		const bucket = this.#perToolTtsrInjections.get(toolCallId) ?? [];
+		const bucket = this.#ttsrState.perToolInjections.get(toolCallId) ?? [];
 		const seen = new Set(bucket.map(rule => rule.name));
 		// Dedupe against rules already bucketed for other tool calls in this
 		// same assistant message so one rule attaches to exactly one tool call.
 		const claimedElsewhere = new Set<string>();
-		for (const [otherId, otherBucket] of this.#perToolTtsrInjections) {
+		for (const [otherId, otherBucket] of this.#ttsrState.perToolInjections) {
 			if (otherId === toolCallId) continue;
 			for (const rule of otherBucket) claimedElsewhere.add(rule.name);
 		}
@@ -4909,13 +4868,13 @@ export class AgentSession {
 			newlyAdded.push(rule.name);
 		}
 		if (bucket.length === 0) return;
-		this.#perToolTtsrInjections.set(toolCallId, bucket);
+		this.#ttsrState.perToolInjections.set(toolCallId, bucket);
 		// Claim the rules in the TTSR manager so subsequent deltas in this same
 		// turn (e.g. a sibling tool call's argument stream) don't re-match them.
 		// Persistence still happens in #ttsrAfterToolCall when the tool actually
 		// produces a result we can fold the reminder into.
 		if (newlyAdded.length > 0) {
-			this.#ttsrManager?.markInjectedByNames(newlyAdded);
+			this.#ttsrState.manager?.markInjectedByNames(newlyAdded);
 		}
 	}
 
@@ -4937,9 +4896,9 @@ export class AgentSession {
 
 	/** `afterToolCall` hook: fold any per-tool TTSR reminders into the result. */
 	#ttsrAfterToolCall(ctx: AfterToolCallContext): AfterToolCallResult | undefined {
-		const rules = this.#perToolTtsrInjections.get(ctx.toolCall.id);
+		const rules = this.#ttsrState.perToolInjections.get(ctx.toolCall.id);
 		if (!rules || rules.length === 0) return undefined;
-		this.#perToolTtsrInjections.delete(ctx.toolCall.id);
+		this.#ttsrState.perToolInjections.delete(ctx.toolCall.id);
 		const reminder = rules
 			.map(r =>
 				prompt.render(ttsrToolReminderTemplate, {
@@ -5003,7 +4962,7 @@ export class AgentSession {
 		if (uniqueRuleNames.length === 0) {
 			return;
 		}
-		this.#ttsrManager?.markInjectedByNames(uniqueRuleNames);
+		this.#ttsrState.manager?.markInjectedByNames(uniqueRuleNames);
 		this.sessionManager.appendTtsrInjection(uniqueRuleNames);
 	}
 
@@ -5022,7 +4981,7 @@ export class AgentSession {
 	}
 
 	#shouldInterruptForTtsrMatch(matches: Rule[], matchContext: TtsrMatchContext): boolean {
-		const globalMode = this.#ttsrManager?.getSettings().interruptMode ?? "always";
+		const globalMode = this.#ttsrState.manager?.getSettings().interruptMode ?? "always";
 		for (const rule of matches) {
 			const mode = rule.interruptMode ?? globalMode;
 			if (mode === "never") continue;
@@ -5038,13 +4997,13 @@ export class AgentSession {
 		if (assistantMsg.stopReason === "aborted" || assistantMsg.stopReason === "error") {
 			// Tools that hadn't started by abort/error will never produce results to
 			// fold injections into — drop their stale per-tool entries.
-			this.#perToolTtsrInjections.clear();
+			this.#ttsrState.perToolInjections.clear();
 		}
-		if (this.#ttsrAbortPending || this.#pendingTtsrInjections.length === 0) {
+		if (this.#ttsrState.abortPending || this.#ttsrState.pendingInjections.length === 0) {
 			return;
 		}
 		if (assistantMsg.stopReason === "aborted" || assistantMsg.stopReason === "error") {
-			this.#pendingTtsrInjections = [];
+			this.#ttsrState.pendingInjections = [];
 			return;
 		}
 
@@ -5148,7 +5107,7 @@ export class AgentSession {
 	 * tool's wire format (hashline patches, JSON-escaped strings, ...).
 	 */
 	#checkTtsrStream(delta: string, matchContext: TtsrMatchContext, toolCall: ToolCall | undefined): Rule[] {
-		const manager = this.#ttsrManager;
+		const manager = this.#ttsrState.manager;
 		if (!manager) {
 			return [];
 		}
@@ -5217,7 +5176,7 @@ export class AgentSession {
 	 * path argument), so non-digest streams never produce AST matches.
 	 */
 	async #checkTtsrAstStream(matchContext: TtsrMatchContext, toolCall: ToolCall | undefined): Promise<Rule[]> {
-		const manager = this.#ttsrManager;
+		const manager = this.#ttsrState.manager;
 		if (!manager) {
 			return [];
 		}
@@ -5266,7 +5225,7 @@ export class AgentSession {
 		}
 
 		// Abort the stream immediately — do not gate on extension callbacks
-		this.#ttsrAbortPending = true;
+		this.#ttsrState.abortPending = true;
 		this.#ensureTtsrResumePromise();
 		const abortReason = this.#formatTtsrAbortReason(matches);
 		this.agent.abort(
@@ -5281,26 +5240,26 @@ export class AgentSession {
 		// Notify extensions (fire-and-forget, does not block abort)
 		this.#emitSessionEvent({ type: "ttsr_triggered", rules: matches }).catch(() => {});
 		// Schedule retry after a short delay
-		const retryToken = ++this.#ttsrRetryToken;
+		const retryToken = ++this.#ttsrState.retryToken;
 		const generation = this.#promptGeneration;
 		this.#schedulePostPromptTask(
 			async () => {
-				if (this.#ttsrRetryToken !== retryToken) {
+				if (this.#ttsrState.retryToken !== retryToken) {
 					this.#resolveTtsrResume();
 					return;
 				}
 
 				const targetAssistantIndex = this.#findTtsrAssistantIndex(targetMessageTimestamp);
-				if (!this.#ttsrAbortPending || this.#promptGeneration !== generation || targetAssistantIndex === -1) {
-					this.#ttsrAbortPending = false;
-					this.#pendingTtsrInjections = [];
-					this.#perToolTtsrInjections.clear();
+				if (!this.#ttsrState.abortPending || this.#promptGeneration !== generation || targetAssistantIndex === -1) {
+					this.#ttsrState.abortPending = false;
+					this.#ttsrState.pendingInjections = [];
+					this.#ttsrState.perToolInjections.clear();
 					this.#resolveTtsrResume();
 					return;
 				}
-				this.#ttsrAbortPending = false;
-				this.#perToolTtsrInjections.clear();
-				const ttsrSettings = this.#ttsrManager?.getSettings();
+				this.#ttsrState.abortPending = false;
+				this.#ttsrState.perToolInjections.clear();
+				const ttsrSettings = this.#ttsrState.manager?.getSettings();
 				if (ttsrSettings?.contextMode === "discard") {
 					// Remove the partial/aborted assistant turn from agent state
 					this.agent.replaceMessages(this.agent.state.messages.slice(0, targetAssistantIndex));
@@ -6379,7 +6338,7 @@ export class AgentSession {
 		await this.sessionManager.close();
 		// beginDispose() stopped the advisor and captured its recorder close; await
 		// it so the final advisor turn is flushed before the process may exit.
-		await this.#advisorRecorderClosed;
+		await this.#advisorState.recorderClosed;
 		this.#closeAllProviderSessions("dispose");
 		// Disconnect the MCP manager this session OWNS so its stdio servers are
 		// not orphaned at exit. Best-effort: a failure here must never throw out
@@ -7738,7 +7697,7 @@ export class AgentSession {
 
 	/** Prompt templates */
 	getPlanModeState(): PlanModeState | undefined {
-		return this.#planModeState;
+		return this.#planModeStateContainer.state;
 	}
 
 	/** Prewalk state, if armed and active */
@@ -7747,13 +7706,13 @@ export class AgentSession {
 	}
 
 	setPlanModeState(state: PlanModeState | undefined): void {
-		this.#planModeState = state;
+		this.#planModeStateContainer.state = state;
 		if (state?.enabled) {
-			this.#planReferenceSent = false;
-			this.#planReferencePath = state.planFilePath;
+			this.#planModeStateContainer.referenceSent = false;
+			this.#planModeStateContainer.referencePath = state.planFilePath;
 		} else {
-			this.#planModeReminderCount = 0;
-			this.#planModeReminderAwaitingProgress = false;
+			this.#planModeStateContainer.reminderCount = 0;
+			this.#planModeStateContainer.reminderAwaitingProgress = false;
 			// Drop any unconsumed forced decision so a post-plan execution turn
 			// does not inherit a stale `required` tool choice.
 			this.#toolChoiceQueue.removeByLabel("plan-mode-decision");
@@ -7781,15 +7740,15 @@ export class AgentSession {
 	}
 
 	markPlanReferenceSent(): void {
-		this.#planReferenceSent = true;
+		this.#planModeStateContainer.referenceSent = true;
 	}
 
 	setPlanReferencePath(path: string): void {
-		this.#planReferencePath = path;
+		this.#planModeStateContainer.referencePath = path;
 	}
 
 	getPlanReferencePath(): string {
-		return this.#planReferencePath;
+		return this.#planModeStateContainer.referencePath;
 	}
 
 	get clientBridge(): ClientBridge | undefined {
@@ -7972,10 +7931,10 @@ export class AgentSession {
 	 * @returns The plan mode message, or null if plan mode is not enabled.
 	 */
 	async #buildPlanReferenceMessage(): Promise<CustomMessage | null> {
-		if (this.#planModeState?.enabled) return null;
-		if (this.#planReferenceSent) return null;
+		if (this.#planModeStateContainer.state?.enabled) return null;
+		if (this.#planModeStateContainer.referenceSent) return null;
 
-		const planFilePath = this.#planReferencePath;
+		const planFilePath = this.#planModeStateContainer.referencePath;
 		const resolvedPlanPath = resolveLocalUrlToPath(planFilePath, this.#localProtocolOptions());
 		try {
 			await fs.promises.access(resolvedPlanPath, fs.constants.R_OK);
@@ -7990,7 +7949,7 @@ export class AgentSession {
 			planFilePath,
 		});
 
-		this.#planReferenceSent = true;
+		this.#planModeStateContainer.referenceSent = true;
 
 		return {
 			role: "custom",
@@ -8003,7 +7962,7 @@ export class AgentSession {
 	}
 
 	async #buildPlanModeMessage(): Promise<CustomMessage | null> {
-		const state = this.#planModeState;
+		const state = this.#planModeStateContainer.state;
 		if (!state?.enabled) return null;
 		const sessionPlanUrl = "local://PLAN.md";
 		const resolvedPlanPath = state.planFilePath.startsWith("local:")
@@ -8416,9 +8375,9 @@ export class AgentSession {
 		// re-enables advisor auto-resume that a prior user interrupt suppressed.
 		// Agent-initiated synthetic prompts (auto-continue, plan, reminders) do not.
 		if (options?.userInitiated ?? !options?.synthetic) {
-			this.#advisorAutoResumeSuppressed = false;
-			this.#planModeReminderCount = 0;
-			this.#planModeReminderAwaitingProgress = false;
+			this.#advisorState.autoResumeSuppressed = false;
+			this.#planModeStateContainer.reminderCount = 0;
+			this.#planModeStateContainer.reminderAwaitingProgress = false;
 			// A user turn owns the next decision; drop a queued forced choice from
 			// a reminder continuation this prompt just preempted.
 			this.#toolChoiceQueue.removeByLabel("plan-mode-decision");
@@ -8952,7 +8911,7 @@ export class AgentSession {
 		// A queued user message (RPC/SDK/collab steer or follow-up, or a typed message
 		// while streaming) is a deliberate resume; re-enable advisor auto-resume that
 		// a user interrupt suppressed.
-		this.#advisorAutoResumeSuppressed = false;
+		this.#advisorState.autoResumeSuppressed = false;
 		const normalizedImages = await this.#normalizeImagesForModel(images);
 		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
 		if (normalizedImages?.length) {
@@ -9024,7 +8983,7 @@ export class AgentSession {
 		// (#advisorAutoResumeSuppressed, cleared on the next user prompt): the user stopped, so their
 		// queued follow-up waits for an explicit resume — even if an interleaving IRC wake turn has
 		// since left a provider-valid tail.
-		if (this.#advisorAutoResumeSuppressed) return false;
+		if (this.#advisorState.autoResumeSuppressed) return false;
 		// Follow-up-only resume has no steer to inject, so Agent.continue() continues from the
 		// existing context tail — which must itself be a valid provider tail. An injected
 		// non-conversational tail (advisor card → `developer`, bash/python execution) would make
@@ -9529,7 +9488,7 @@ export class AgentSession {
 	}): Promise<void> {
 		const userInterrupt = options?.reason === USER_INTERRUPT_LABEL;
 		this.#pendingAbortErrorId = userInterrupt ? AIError.create(AIError.Flag.UserInterrupt) : undefined;
-		if (userInterrupt) this.#advisorAutoResumeSuppressed = true;
+		if (userInterrupt) this.#advisorState.autoResumeSuppressed = true;
 		// Pull advisor concerns out of the steer/follow-up queues before any await so
 		// the post-abort stranded-message drain can't auto-resume the run on them.
 		// They are re-recorded as visible advice once the agent settles (below).
@@ -9632,7 +9591,7 @@ export class AgentSession {
 			// running advisor turn could otherwise finish, emit `message_end`, and recreate
 			// `<old>/__advisor.jsonl`. #resetAdvisorSessionState (after newSession) re-primes
 			// the advisor and re-attaches the feed at the new session's path.
-			for (const a of this.#advisors) {
+			for (const a of this.#advisorState.advisors) {
 				a.agentUnsubscribe?.();
 				a.agentUnsubscribe = undefined;
 				await a.recorder.close();
@@ -9675,8 +9634,8 @@ export class AgentSession {
 		this.#todoReminderAwaitingProgress = false;
 		this.#mutationsSinceLastTodoTouch = 0;
 		this.#midRunNudgeCount = 0;
-		this.#planReferenceSent = false;
-		this.#planReferencePath = "local://PLAN.md";
+		this.#planModeStateContainer.referenceSent = false;
+		this.#planModeStateContainer.referencePath = "local://PLAN.md";
 		this.#resetAdvisorSessionState();
 		this.#reconnectToAgent();
 
@@ -10346,7 +10305,7 @@ export class AgentSession {
 	 * reference path at match time, so retitled plans are covered.
 	 */
 	#withPlanProtection<T extends { protectedTools: ProtectedToolMatcher[] }>(config: T): T {
-		const planMatcher = createPlanReadMatcher(() => this.#planReferencePath);
+		const planMatcher = createPlanReadMatcher(() => this.#planModeStateContainer.referencePath);
 		return { ...config, protectedTools: [...config.protectedTools, planMatcher] };
 	}
 
@@ -10856,7 +10815,7 @@ export class AgentSession {
 			// Compaction discarded the conversation history that carried the approved
 			// plan reference. Clear the sent-flag so #buildPlanReferenceMessage re-reads
 			// the plan from disk and re-injects it on the next turn (issue #1246).
-			this.#planReferenceSent = false;
+			this.#planModeStateContainer.referenceSent = false;
 			this.#resetAllAdvisorRuntimes();
 			this.#syncTodoPhasesFromBranch();
 			if (codexCompaction) {
@@ -12078,7 +12037,7 @@ export class AgentSession {
 	}
 
 	async #enforcePlanModeDecisionAtSettle(): Promise<boolean> {
-		if (!this.#planModeState?.enabled) {
+		if (!this.#planModeStateContainer.state?.enabled) {
 			return false;
 		}
 		const assistantMessage = this.#findLastAssistantMessage();
@@ -12093,8 +12052,8 @@ export class AgentSession {
 			content => content.type === "toolCall" && this.#isPlanDecisionTool(content.name),
 		);
 		if (calledDecisionTool) {
-			this.#planModeReminderCount = 0;
-			this.#planModeReminderAwaitingProgress = false;
+			this.#planModeStateContainer.reminderCount = 0;
+			this.#planModeStateContainer.reminderAwaitingProgress = false;
 			return false;
 		}
 
@@ -12102,10 +12061,10 @@ export class AgentSession {
 		if (hasToolCall) {
 			return false;
 		}
-		if (this.#planModeReminderAwaitingProgress) {
+		if (this.#planModeStateContainer.reminderAwaitingProgress) {
 			return false;
 		}
-		if (this.#planModeReminderCount >= PLAN_MODE_REMINDER_MAX) {
+		if (this.#planModeStateContainer.reminderCount >= PLAN_MODE_REMINDER_MAX) {
 			logger.debug("Plan mode convergence: reminder cap reached; yielding to user");
 			return false;
 		}
@@ -12117,8 +12076,8 @@ export class AgentSession {
 			return false;
 		}
 
-		this.#planModeReminderCount++;
-		this.#planModeReminderAwaitingProgress = true;
+		this.#planModeStateContainer.reminderCount++;
+		this.#planModeStateContainer.reminderAwaitingProgress = true;
 		this.#toolChoiceQueue.pushOnce("required", { label: "plan-mode-decision" });
 		const reminder = prompt.render(planModeToolDecisionReminderPrompt, {
 			askToolName: "ask",
@@ -12168,7 +12127,7 @@ export class AgentSession {
 			return undefined;
 		}
 
-		if (this.#planModeState?.enabled) {
+		if (this.#planModeStateContainer.state?.enabled) {
 			return undefined;
 		}
 		if (this.getTodoPhases().length > 0) {
@@ -12240,7 +12199,7 @@ export class AgentSession {
 		// resolved agent kind, not the id, so a top-level session with a custom `agentId`
 		// still gets the reminder.
 		if (this.kind === "sub") return undefined;
-		if (this.#planModeState?.enabled) return undefined;
+		if (this.#planModeStateContainer.state?.enabled) return undefined;
 		// First-message-only gates are skipped post-compaction (`promptText === undefined`),
 		// where there is no fresh user message to suppress the reminder for.
 		if (promptText !== undefined) {
@@ -12290,7 +12249,7 @@ export class AgentSession {
 		// Plan mode owns convergence via #enforcePlanModeDecisionAtSettle (remind →
 		// cap → yield). Todo reminders must not re-wake a turn the cap intends to
 		// yield to the user. The label is already consumed above, so no leak.
-		if (this.#planModeState?.enabled) {
+		if (this.#planModeStateContainer.state?.enabled) {
 			return false;
 		}
 
@@ -12430,7 +12389,7 @@ export class AgentSession {
 		if (!this.settings.get("todo.reminders")) return null;
 		// Plan-mode runs are authoring a plan file, not implementing it; todos
 		// don't apply, mirroring {@link #createEagerTodoPrelude}.
-		if (this.#planModeState?.enabled) return null;
+		if (this.#planModeStateContainer.state?.enabled) return null;
 		// Tool discovery / explicit active-tool lists can hide `todo` from this
 		// run while `todo.enabled` remains true (e.g. `setActiveToolsByName`
 		// restricting the slate). Mirror {@link #createEagerTodoPrelude}'s
@@ -13839,7 +13798,7 @@ export class AgentSession {
 			// Compaction discarded the conversation history that carried the approved
 			// plan reference. Clear the sent-flag so #buildPlanReferenceMessage re-reads
 			// the plan from disk and re-injects it on the next turn (issue #1246).
-			this.#planReferenceSent = false;
+			this.#planModeStateContainer.referenceSent = false;
 			this.#resetAllAdvisorRuntimes();
 			this.#syncTodoPhasesFromBranch();
 			if (codexCompaction) {
@@ -15529,7 +15488,7 @@ export class AgentSession {
 		// session cannot produce a real reply turn in time — either mid-turn with
 		// async execution disabled (no step boundary until the sender's own batch
 		// ends), or idle in plan mode (autonomous wake turns are suppressed).
-		const planModeIdle = !this.isStreaming && this.#planModeState?.enabled === true;
+		const planModeIdle = !this.isStreaming && this.#planModeStateContainer.state?.enabled === true;
 		const autoReply =
 			(opts?.expectsReply ?? false) && ((this.isStreaming && !this.settings.get("async.enabled")) || planModeIdle);
 		const record: CustomMessage = {
@@ -15565,7 +15524,7 @@ export class AgentSession {
 			return "injected";
 		}
 		// Plan mode: record into context but do not wake an autonomous turn.
-		if (this.#planModeState?.enabled) {
+		if (this.#planModeStateContainer.state?.enabled) {
 			this.agent.appendMessage(record);
 			this.sessionManager.appendCustomMessageEntry(
 				record.customType,
@@ -17080,9 +17039,10 @@ export class AgentSession {
 	 * @returns true when the advisor is actively running after the call.
 	 */
 	setAdvisorEnabled(enabled: boolean): boolean {
-		this.#advisorEnabled = enabled;
+		this.#advisorState.enabled = enabled;
 		if (enabled) {
-			if (this.#advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig()) this.#stopAdvisorRuntime();
+			if (this.#advisorState.advisors.length > 0 && !this.#advisorRuntimeMatchesCurrentConfig())
+				this.#stopAdvisorRuntime();
 			return this.#buildAdvisorRuntime(true);
 		}
 		this.#stopAdvisorRuntime();
@@ -17095,7 +17055,7 @@ export class AgentSession {
 	 * @returns true when the advisor is actively running after the call.
 	 */
 	toggleAdvisorEnabled(): boolean {
-		return this.setAdvisorEnabled(!this.#advisorEnabled);
+		return this.setAdvisorEnabled(!this.#advisorState.enabled);
 	}
 
 	/**
@@ -17107,19 +17067,19 @@ export class AgentSession {
 	 * @returns the number of advisors active after the rebuild.
 	 */
 	applyAdvisorConfigs(advisors: AdvisorConfig[], sharedInstructions: string | undefined): number {
-		this.#advisorConfigs = advisors;
-		this.#advisorSharedInstructions = sharedInstructions;
-		if (!this.#advisorEnabled) return 0;
+		this.#advisorState.configs = advisors;
+		this.#advisorState.sharedInstructions = sharedInstructions;
+		if (!this.#advisorState.enabled) return 0;
 		this.#stopAdvisorRuntime();
 		this.#buildAdvisorRuntime(true);
-		return this.#advisors.length;
+		return this.#advisorState.advisors.length;
 	}
 
 	/**
 	 * Whether the advisor setting is enabled for this session.
 	 */
 	isAdvisorEnabled(): boolean {
-		return this.#advisorEnabled;
+		return this.#advisorState.enabled;
 	}
 
 	/**
@@ -17129,7 +17089,7 @@ export class AgentSession {
 	 * not merely the setting. Drives the status-line badge and `/dump advisor`.
 	 */
 	isAdvisorActive(): boolean {
-		return this.#advisors.length > 0;
+		return this.#advisorState.advisors.length > 0;
 	}
 
 	/**
@@ -17139,7 +17099,7 @@ export class AgentSession {
 	 * no servers) is absent.
 	 */
 	getAdvisorAvailableToolNames(): string[] {
-		return (this.#advisorTools ?? []).map(tool => tool.name);
+		return (this.#advisorState.tools ?? []).map(tool => tool.name);
 	}
 
 	/**
@@ -17150,15 +17110,15 @@ export class AgentSession {
 	 * (`streamFn`, `promptCacheKey`, `providerSessionState`, ...).
 	 */
 	getAdvisorAgent(): Agent | undefined {
-		return this.#advisors[0]?.agent;
+		return this.#advisorState.advisors[0]?.agent;
 	}
 
 	/**
 	 * Return structured advisor stats for the status command and TUI panel.
 	 */
 	getAdvisorStats(): AdvisorStats {
-		const configured = this.#advisorEnabled;
-		const advisors = this.#advisors.map(a => this.#computeAdvisorStat(a));
+		const configured = this.#advisorState.enabled;
+		const advisors = this.#advisorState.advisors.map(a => this.#computeAdvisorStat(a));
 		if (advisors.length === 0) {
 			return {
 				configured,
@@ -17319,7 +17279,7 @@ export class AgentSession {
 	 * {@link formatSessionAsText}. Returns null when no advisor is active.
 	 */
 	formatAdvisorHistoryAsText(options?: { compact?: boolean }): string | null {
-		if (this.#advisors.length === 0) return null;
+		if (this.#advisorState.advisors.length === 0) return null;
 		const dump = (a: ActiveAdvisor): string =>
 			options?.compact
 				? formatSessionHistoryMarkdown(a.agent.state.messages)
@@ -17330,8 +17290,8 @@ export class AgentSession {
 						thinkingLevel: a.agent.state.thinkingLevel,
 						tools: a.agent.state.tools,
 					});
-		if (this.#advisors.length === 1) return dump(this.#advisors[0]);
-		return this.#advisors
+		if (this.#advisorState.advisors.length === 1) return dump(this.#advisorState.advisors[0]);
+		return this.#advisorState.advisors
 			.map(a => `### Advisor: ${a.name} (${a.agent.state.model.provider}/${a.agent.state.model.id})\n\n${dump(a)}`)
 			.join("\n\n");
 	}
@@ -17357,20 +17317,6 @@ export class AgentSession {
 	// =========================================================================
 	// Swarm Session Management
 	// =========================================================================
-
-	/**
-	 * Create a new swarm session with the full service graph wired up.
-	 * Delegates to the swarm/ session factory for actual construction.
-	 */
-	static async createSwarmSession(
-		shared: SharedServices,
-		factory: SessionFactory,
-		name: string,
-		runtime?: SessionServices["runtime"],
-	): Promise<SessionServices> {
-		const { createSwarmSession } = await import("../../swarm/session/create-swarm-session");
-		return createSwarmSession(shared, factory, name, { runtime });
-	}
 
 	/** Register an active swarm session for disposal tracking. */
 	registerSwarmSession(session: SessionServices): void {
