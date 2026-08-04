@@ -11,11 +11,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, type Mock, mock, vi } from "bun:test";
 import type { AgentToolContext } from "@satopi/pi-agent-core";
-import type { AgentSession } from "../../session/agent/agent-session";
 import { ProfileRegistry } from "../../agent/agent-profile";
 import { AgentRegistry } from "../../registry/agent-registry";
 import type { CreateAgentSessionResult } from "../../sdk";
 import * as sdkModule from "../../sdk";
+import type { AgentSession } from "../../session/agent/agent-session";
 import { agentInvokeTool } from "../../tools/agent-invoke";
 
 let mockCreateAgentSession: Mock<typeof sdkModule.createAgentSession>;

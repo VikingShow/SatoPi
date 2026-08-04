@@ -68,7 +68,9 @@ describe("Phase 9A: Smoke Tests", () => {
 		it("smoke: spawns a new persistent agent session and returns output", async () => {
 			createProfile("smoke-worker");
 			const session = makeSession("Smoke test task completed successfully");
-			mockCreateAgentSession.mockResolvedValue({ session } as unknown as Awaited<ReturnType<typeof sdkModule.createAgentSession>>);
+			mockCreateAgentSession.mockResolvedValue({ session } as unknown as Awaited<
+				ReturnType<typeof sdkModule.createAgentSession>
+			>);
 
 			const result = await agentInvokeTool.execute("call-1", { profileId: "smoke-worker", task: "Run smoke test" });
 
