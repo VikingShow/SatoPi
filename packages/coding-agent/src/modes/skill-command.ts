@@ -1,6 +1,6 @@
 import type { ImageContent, TextContent } from "@satopi/pi-ai";
 import { buildSkillPromptMessage, getSkillSlashCommandName, parseSkillInvocation } from "../extensibility/skills";
-import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE, type SkillPromptDetails } from "../session/messages";
+import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE, type SkillPromptDetails } from "../session/message/messages";
 import type { InteractiveModeContext } from "./types";
 
 type SkillCommandHost = Pick<InteractiveModeContext, "skillCommands" | "session" | "showError">;

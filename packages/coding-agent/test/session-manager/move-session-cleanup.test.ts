@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { cleanupEmptyMoveSession, SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { cleanupEmptyMoveSession, SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 
 import { makeAssistantMessage } from "./helpers";

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { FetchImpl } from "@satopi/pi-ai/types";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import {
 	buildExaRequestBody,
 	ExaProvider,

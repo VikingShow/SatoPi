@@ -15,11 +15,11 @@ import * as path from "node:path";
 import type { Args } from "@satopi/pi-coding-agent/cli/args";
 import type { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createSessionManager } from "@satopi/pi-coding-agent/main";
-import type { SessionHeader } from "@satopi/pi-coding-agent/session/session-entries";
-import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
-import * as sessionListingModule from "@satopi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { SessionHeader } from "@satopi/pi-coding-agent/session/store/session-entries";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
+import * as sessionListingModule from "@satopi/pi-coding-agent/session/store/session-listing";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 
 function buildArgs(resume: string, sessionDir?: string): Args {
 	return {

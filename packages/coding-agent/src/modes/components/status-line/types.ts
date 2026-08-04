@@ -1,6 +1,6 @@
 import type { CollabSessionState } from "../../../collab/protocol";
 import type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "../../../config/settings-schema";
-import type { AgentSession } from "../../../session/agent-session";
+import type { AgentSession } from "../../../session/agent/agent-session";
 import type { ActiveRepoContext } from "../../../utils/active-repo-context";
 
 export type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle };

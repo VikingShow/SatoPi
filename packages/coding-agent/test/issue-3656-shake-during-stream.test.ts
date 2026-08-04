@@ -8,11 +8,11 @@ import { AssistantMessageComponent } from "@satopi/pi-coding-agent/modes/compone
 import { ToolExecutionComponent } from "@satopi/pi-coding-agent/modes/components/tool-execution";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { HistoryStorage } from "@satopi/pi-coding-agent/session/history-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { HistoryStorage } from "@satopi/pi-coding-agent/session/store/history-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 /**

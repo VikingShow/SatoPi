@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import { type AsyncJob, AsyncJobManager } from "@satopi/pi-coding-agent/async";
-import type { CustomMessage } from "@satopi/pi-coding-agent/session/messages";
-import { YieldQueue } from "@satopi/pi-coding-agent/session/yield-queue";
+import { YieldQueue } from "@satopi/pi-coding-agent/session/agent/yield-queue";
+import type { CustomMessage } from "@satopi/pi-coding-agent/session/message/messages";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { JobTool } from "@satopi/pi-coding-agent/tools/job";
 

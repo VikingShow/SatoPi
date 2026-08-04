@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { FileEntry, SessionHeader } from "@satopi/pi-coding-agent/session/session-entries";
-import { findMostRecentSession, resolveResumableSession } from "@satopi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { FileEntry, SessionHeader } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { findMostRecentSession, resolveResumableSession } from "@satopi/pi-coding-agent/session/store/session-listing";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getConfigRootDir, getSessionsDir, removeSyncWithRetries, Snowflake, setAgentDir } from "@satopi/pi-utils";
 
 describe("loadEntriesFromFile", () => {

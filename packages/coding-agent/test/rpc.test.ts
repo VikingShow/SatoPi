@@ -11,7 +11,7 @@ import {
 	type SessionMessageEntry,
 } from "@satopi/pi-coding-agent";
 import { RpcClient } from "@satopi/pi-coding-agent/modes/rpc/rpc-client";
-import type { BashExecutionMessage } from "@satopi/pi-coding-agent/session/messages";
+import type { BashExecutionMessage } from "@satopi/pi-coding-agent/session/message/messages";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { e2eApiKey } from "./utilities";
 

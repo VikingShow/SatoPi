@@ -5,10 +5,10 @@ import type { AssistantMessage, TextContent, ToolCall } from "@satopi/pi-ai";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import type { CustomMessage } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import type { CustomMessage } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TodoTool, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { TempDir } from "@satopi/pi-utils";
 

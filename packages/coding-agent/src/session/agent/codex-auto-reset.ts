@@ -38,8 +38,8 @@
  * read-only views are passed in so the predicate itself stays deterministic.
  */
 import type { OAuthAccountIdentity, ResetCreditTarget, UsageReport } from "@satopi/pi-ai";
-import type { CodexAutoRedeemMode } from "../config/settings-schema";
-import { reportMatchesActiveAccount } from "../slash-commands/helpers/active-oauth-account";
+import type { CodexAutoRedeemMode } from "../../config/settings-schema";
+import { reportMatchesActiveAccount } from "../../slash-commands/helpers/active-oauth-account";
 
 /** Weekly window counts as exhausted at `usedFraction >= 0.999` (used_percent >= 99.9). */
 export const WEEKLY_EXHAUSTED_MIN_FRACTION = 0.999;

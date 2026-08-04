@@ -10,7 +10,7 @@
 
 import type { AgentSpec } from "../../graph/agent-spec";
 import type { IrcBus } from "../../irc/bus";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 
 export interface SwarmRuntime {
 	/** Spawn agents from declarative specs. */

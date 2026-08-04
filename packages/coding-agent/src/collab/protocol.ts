@@ -25,8 +25,8 @@ import {
 	WRITE_TOKEN_BYTES,
 } from "@satopi/pi-wire";
 import type { ContextUsage } from "../extensibility/extensions/types";
-import type { AgentSessionEvent } from "../session/agent-session";
-import type { SessionEntry, SessionHeader } from "../session/session-entries";
+import type { AgentSessionEvent } from "../session/agent/agent-session";
+import type { SessionEntry, SessionHeader } from "../session/store/session-entries";
 
 export type {
 	CollabPromptDetails,

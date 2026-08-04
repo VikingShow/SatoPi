@@ -7,7 +7,7 @@ import {
 	INTERRUPTED_THINKING_MESSAGE_TYPE,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type SkillPromptDetails,
-} from "./messages";
+} from "./message/messages";
 
 function customMessage(customType: string, attribution: "agent" | "user"): CustomMessage<SkillPromptDetails> {
 	return {

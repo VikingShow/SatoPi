@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { type ExecuteHashlineSingleOptions, executeHashlineSingle } from "@satopi/pi-coding-agent/edit";
 import { canonicalSnapshotKey, getFileSnapshotStore } from "@satopi/pi-coding-agent/edit/file-snapshot-store";
-import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/streaming-output";
+import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/message/streaming-output";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { ReadTool } from "@satopi/pi-coding-agent/tools/read";
 import { removeWithRetries } from "@satopi/pi-utils";

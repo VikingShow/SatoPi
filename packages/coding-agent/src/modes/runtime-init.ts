@@ -9,8 +9,8 @@
 import { runExtensionCompact, runExtensionSetModel } from "../extensibility/extensions/compact-handler";
 import { getSessionSlashCommands } from "../extensibility/extensions/get-commands-handler";
 import type { ExtensionError, ExtensionUIContext } from "../extensibility/extensions/types";
-import type { AgentSession } from "../session/agent-session";
-import { USER_INTERRUPT_LABEL } from "../session/messages";
+import type { AgentSession } from "../session/agent/agent-session";
+import { USER_INTERRUPT_LABEL } from "../session/message/messages";
 
 /** Action name for an extension-originated send failure. */
 export type ExtensionSendAction = "extension_send" | "extension_send_user";

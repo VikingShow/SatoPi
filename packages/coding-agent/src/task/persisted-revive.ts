@@ -6,9 +6,9 @@ import { MCPManager } from "../mcp/manager";
 import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
-import type { AgentSession } from "../session/agent-session";
-import type { AuthStorage } from "../session/auth-storage";
-import { SessionManager } from "../session/session-manager";
+import type { AgentSession } from "../session/agent/agent-session";
+import type { AuthStorage } from "../session/auth/auth-storage";
+import { SessionManager } from "../session/store/session-manager";
 import { createMCPProxyTools, createSubagentSettings } from "./executor";
 
 /**

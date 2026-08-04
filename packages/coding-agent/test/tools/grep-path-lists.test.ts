@@ -16,8 +16,8 @@ import type {
 import type { Theme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { SessionEntry, SessionTreeNode } from "@satopi/pi-coding-agent/session/session-entries";
-import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/tool-choice-queue";
+import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/agent/tool-choice-queue";
+import type { SessionEntry, SessionTreeNode } from "@satopi/pi-coding-agent/session/store/session-entries";
 import { createTools, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { Text } from "@satopi/pi-tui";
 import { removeWithRetries } from "@satopi/pi-utils";

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ptree, Snowflake } from "@satopi/pi-utils";
 import { settings } from "../../config/settings";
-import type { AgentStorage } from "../../session/agent-storage";
+import type { AgentStorage } from "../../session/store/agent-storage";
 import { throwIfAborted } from "../../tools/tool-errors";
 import { ensureTool } from "../../utils/tools-manager";
 import { extractWithParallel, findParallelApiKey, getParallelExtractContent } from "../parallel";

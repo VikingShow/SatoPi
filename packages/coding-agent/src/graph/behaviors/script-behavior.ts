@@ -17,7 +17,7 @@
 
 import { logger } from "@satopi/pi-utils";
 import type { CommChannel } from "../../comm/comm-channel";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { Chapter } from "../../swarm/core/state";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
 

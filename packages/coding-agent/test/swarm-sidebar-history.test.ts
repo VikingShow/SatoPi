@@ -20,7 +20,7 @@ import { collectPersistedAgents, type PersistedAgentInfo } from "@satopi/pi-codi
 import { SwarmSidebar } from "@satopi/pi-coding-agent/modes/components/swarm/swarm-sidebar";
 import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { MAIN_AGENT_ID } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
 import { TempDir } from "@satopi/pi-utils";
 
 const strip = (line: string): string => Bun.stripANSI(line);

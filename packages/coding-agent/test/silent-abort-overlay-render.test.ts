@@ -17,7 +17,7 @@ import { AgentTranscriptViewer } from "@satopi/pi-coding-agent/modes/components/
 import type { ObservableSession } from "@satopi/pi-coding-agent/modes/session-observer-registry";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/messages";
+import { SILENT_ABORT_MARKER } from "@satopi/pi-coding-agent/session/message/messages";
 import type { TUI } from "@satopi/pi-tui";
 import { removeSyncWithRetries } from "@satopi/pi-utils";
 

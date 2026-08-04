@@ -11,7 +11,7 @@ import { ProfileRegistry } from "../agent/agent-profile";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import { type AgentProgress, type SingleResult, TASK_SUBAGENT_LIFECYCLE_CHANNEL } from "../task/types";
 
 const agentInvokeSchema = type({

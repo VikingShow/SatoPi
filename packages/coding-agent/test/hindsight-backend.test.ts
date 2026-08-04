@@ -13,7 +13,7 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import { hindsightBackend, reloadMentalModelsForSession } from "@satopi/pi-coding-agent/hindsight/backend";
 import { HindsightApi } from "@satopi/pi-coding-agent/hindsight/client";
 import type { HindsightSessionState } from "@satopi/pi-coding-agent/hindsight/state";
-import type { AgentSessionEventListener } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSessionEventListener } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 interface FakeSessionDeps {
 	sessionId: string | null;

@@ -21,7 +21,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { ContextPipeline } from "../context/context-pipeline";
 import type { HookPipeline } from "../hooks/hook-pipeline";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { AgentSpec } from "./agent-spec";

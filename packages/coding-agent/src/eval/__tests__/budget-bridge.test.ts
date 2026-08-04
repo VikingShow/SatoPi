@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { GoalModeState } from "../../goals/state";
-import type { UsageStatistics } from "../../session/session-entries";
+import type { UsageStatistics } from "../../session/store/session-entries";
 import type { ToolSession } from "../../tools";
 import { runEvalBudget } from "../budget-bridge";
 

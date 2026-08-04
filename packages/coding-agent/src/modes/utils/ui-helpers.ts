@@ -45,8 +45,8 @@ import {
 	LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type SkillPromptDetails,
-} from "../../session/messages";
-import type { SessionContext, StrippedToolCallsMarker } from "../../session/session-context";
+} from "../../session/message/messages";
+import type { SessionContext, StrippedToolCallsMarker } from "../../session/message/session-context";
 import { replaceTabs } from "../../tools/render-utils";
 import { buildSkillCommandPrompt, invokeSkillCommandFromText, isKnownSkillCommand } from "../skill-command";
 import { createAssistantMessageComponent } from "./interactive-context-helpers";

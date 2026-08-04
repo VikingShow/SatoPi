@@ -1,4 +1,4 @@
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import { resolveMemoryBackend } from "./resolve";
 import type {
 	MemoryBackendId,

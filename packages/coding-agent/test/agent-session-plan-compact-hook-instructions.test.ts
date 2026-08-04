@@ -30,10 +30,10 @@ import { TempDir } from "@satopi/pi-utils";
 import { ModelRegistry } from "../src/config/model-registry";
 import { Settings } from "../src/config/settings";
 import type { SessionBeforeCompactEvent } from "../src/extensibility/shared-events";
-import { AgentSession } from "../src/session/agent-session";
-import { AuthStorage } from "../src/session/auth-storage";
-import { convertToLlm } from "../src/session/messages";
-import { SessionManager } from "../src/session/session-manager";
+import { AgentSession } from "../src/session/agent/agent-session";
+import { AuthStorage } from "../src/session/auth/auth-storage";
+import { convertToLlm } from "../src/session/message/messages";
+import { SessionManager } from "../src/session/store/session-manager";
 
 type Harness = {
 	session: AgentSession;

@@ -3,9 +3,9 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { SessionHeader } from "@satopi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { SessionHeader } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getConfigRootDir, setAgentDir } from "@satopi/pi-utils";
 
 describe("SessionManager.createEmptySessionFile", () => {

@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { Api, Model } from "@satopi/pi-ai/types";
 import { buildModel } from "@satopi/pi-catalog/build";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 function stdoutCommand(value: string): string {

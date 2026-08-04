@@ -1,6 +1,6 @@
 import { logger } from "@satopi/pi-utils";
 import { Settings } from "../config/settings";
-import { OutputSink } from "../session/streaming-output";
+import { OutputSink } from "../session/message/streaming-output";
 import type { ToolSession } from "../tools";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../tools/output-meta";
 import { isEvalTimeoutControlEvent } from "./bridge-timeout";

@@ -18,16 +18,16 @@ import * as ai from "@satopi/pi-ai";
 import { encodeTextSignatureV1 } from "@satopi/pi-ai/providers/openai-shared";
 import type { AssistantMessage, Model, ProviderPayload, Usage } from "@satopi/pi-ai/types";
 import { getBundledModel } from "@satopi/pi-catalog/models";
-import { buildSessionContext } from "@satopi/pi-coding-agent/session/session-context";
+import { buildSessionContext } from "@satopi/pi-coding-agent/session/message/session-context";
 import type {
 	CompactionEntry,
 	ModelChangeEntry,
 	SessionEntry,
 	SessionMessageEntry,
 	ThinkingLevelChangeEntry,
-} from "@satopi/pi-coding-agent/session/session-entries";
-import { parseSessionEntries } from "@satopi/pi-coding-agent/session/session-loader";
-import { migrateSessionEntries } from "@satopi/pi-coding-agent/session/session-migrations";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
+import { parseSessionEntries } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { migrateSessionEntries } from "@satopi/pi-coding-agent/session/store/session-migrations";
 import { mockFetch } from "./helpers/fetch-mock";
 import { e2eApiKey } from "./utilities";
 

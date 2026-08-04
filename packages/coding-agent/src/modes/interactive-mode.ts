@@ -104,13 +104,13 @@ import {
 	type AgentSessionEvent,
 	type ResolvedRoleModel,
 	SHUTDOWN_CONSOLIDATE_BUDGET_MS,
-} from "../session/agent-session";
-import type { CompactMode } from "../session/compact-modes";
-import { HistoryStorage } from "../session/history-storage";
-import type { SessionContext } from "../session/session-context";
-import { getRecentSessions } from "../session/session-listing";
-import { SessionManager } from "../session/session-manager";
-import type { ShakeMode } from "../session/shake-types";
+} from "../session/agent/agent-session";
+import type { SessionContext } from "../session/message/session-context";
+import type { CompactMode } from "../session/shared/compact-modes";
+import type { ShakeMode } from "../session/shared/shake-types";
+import { HistoryStorage } from "../session/store/history-storage";
+import { getRecentSessions } from "../session/store/session-listing";
+import { SessionManager } from "../session/store/session-manager";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";

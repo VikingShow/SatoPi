@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import { getBlobsDir, isEnoent, parseJsonlLenient } from "@satopi/pi-utils";
+import { buildSessionContext } from "../message/session-context";
 import { BlobStore, isBlobRef, resolveImageData, resolveImageDataUrl } from "./blob-store";
-import { buildSessionContext } from "./session-context";
 import {
 	type CompactionEntry,
 	type FileEntry,

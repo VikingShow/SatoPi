@@ -1,7 +1,7 @@
 import type { TextContent } from "@satopi/pi-ai";
 import { Container, Markdown, Text } from "@satopi/pi-tui";
 import type { CollabPromptDetails } from "../../collab/protocol";
-import type { CustomMessage } from "../../session/messages";
+import type { CustomMessage } from "../../session/message/messages";
 import { getMarkdownTheme, theme } from "../theme/theme";
 
 /**

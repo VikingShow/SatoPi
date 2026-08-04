@@ -21,11 +21,11 @@ import type { MCPManager } from "../mcp";
 import type { MnemopiSessionState } from "../mnemopi/state";
 import type { PlanModeState } from "../plan-mode/state";
 import type { AgentRegistry } from "../registry/agent-registry";
-import type { ArtifactManager } from "../session/artifacts";
-import type { ClientBridge } from "../session/client-bridge";
-import type { CustomMessage } from "../session/messages";
-import type { UsageStatistics } from "../session/session-entries";
-import type { ToolChoiceQueue } from "../session/tool-choice-queue";
+import type { ClientBridge } from "../session/agent/client-bridge";
+import type { ToolChoiceQueue } from "../session/agent/tool-choice-queue";
+import type { CustomMessage } from "../session/message/messages";
+import type { ArtifactManager } from "../session/shared/artifacts";
+import type { UsageStatistics } from "../session/store/session-entries";
 import { TaskTool } from "../task";
 import type { AgentOutputManager } from "../task/output-manager";
 import { canSpawnAtDepth } from "../task/types";
@@ -81,7 +81,7 @@ import { YieldTool } from "./yield";
 export * from "../edit";
 export * from "../goals";
 export * from "../lsp";
-export * from "../session/streaming-output";
+export * from "../session/message/streaming-output";
 export * from "../task";
 export * from "../web/search";
 export * from "./ask";
@@ -260,7 +260,7 @@ export interface ToolSession {
 	/** Get the session's live per-family service tiers (undefined = none). Source of truth for subagent `tier.subagent: inherit`. */
 	getServiceTierByFamily?: () => ServiceTierByFamily | undefined;
 	/** Auth storage for passing to subagents (avoids re-discovery) */
-	authStorage?: import("../session/auth-storage").AuthStorage;
+	authStorage?: import("../session/auth/auth-storage").AuthStorage;
 	/** Model registry for passing to subagents (avoids re-discovery) */
 	modelRegistry?: import("../config/model-registry").ModelRegistry;
 	/** Agent output manager for unique agent:// IDs across task invocations */

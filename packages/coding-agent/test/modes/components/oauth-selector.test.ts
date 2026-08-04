@@ -3,7 +3,7 @@ import { getOAuthProviders } from "@satopi/pi-ai/oauth";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { OAuthSelectorComponent } from "@satopi/pi-coding-agent/modes/components/oauth-selector";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import type { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 
 beforeAll(async () => {
 	await initTheme();

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { type AssistantMessageEventStream, clearCustomApis, getCustomApi } from "@satopi/pi-ai";
 import { ModelRegistry, type ProviderConfigInput } from "@satopi/pi-coding-agent/config/model-registry";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("ModelRegistry runtime source cleanup", () => {

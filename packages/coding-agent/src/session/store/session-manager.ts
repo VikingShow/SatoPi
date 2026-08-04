@@ -11,8 +11,6 @@ import {
 	stringifyJson,
 	toError,
 } from "@satopi/pi-utils";
-import { ArtifactManager } from "./artifacts";
-import { type BlobPutOptions, type BlobPutResult, BlobStore } from "./blob-store";
 import {
 	type BashExecutionMessage,
 	type CustomMessage,
@@ -22,8 +20,10 @@ import {
 	type PythonExecutionMessage,
 	sanitizeRehydratedOpenAIResponsesAssistantMessage,
 	stripInternalDetailsFields,
-} from "./messages";
-import { type BuildSessionContextOptions, buildSessionContext, type SessionContext } from "./session-context";
+} from "../message/messages";
+import { type BuildSessionContextOptions, buildSessionContext, type SessionContext } from "../message/session-context";
+import { ArtifactManager } from "../shared/artifacts";
+import { type BlobPutOptions, type BlobPutResult, BlobStore } from "./blob-store";
 import {
 	type BranchSummaryEntry,
 	type CompactionEntry,
@@ -49,6 +49,7 @@ import {
 	type TtsrInjectionEntry,
 	type UsageStatistics,
 } from "./session-entries";
+import { SessionEntryIndex } from "./session-entry-index";
 import { findMostRecentSession, listAllSessions, listSessions, type SessionInfo } from "./session-listing";
 import { loadEntriesFromFile, readTitleSlotFromFile, resolveBlobRefsInEntries } from "./session-loader";
 import { generateId, migrateToCurrentVersion } from "./session-migrations";
@@ -66,7 +67,6 @@ import {
 	type SessionStorageWriter,
 } from "./session-storage";
 import { type SessionTitleUpdate, serializeTitleSlot } from "./session-title-slot";
-import { SessionEntryIndex } from "./store/session-entry-index";
 
 const JSONL_SUFFIX_LENGTH = ".jsonl".length;
 const DRAFT_ONLY_SESSION_MARKER = ".draft-only-session";

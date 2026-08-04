@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import type { SessionEntry } from "./session-entries";
+import type { SessionEntry } from "../store/session-entries";
 
 export const TOOL_EXECUTION_START_CUSTOM_TYPE = "tool_execution_start";
 export const SESSION_EXIT_CUSTOM_TYPE = "session_exit";

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import type { Model, Usage } from "@satopi/pi-ai";
-import { formatSessionDumpText } from "@satopi/pi-coding-agent/session/session-dump-format";
+import { formatSessionDumpText } from "@satopi/pi-coding-agent/session/store/session-dump-format";
 import { INTENT_FIELD } from "@satopi/pi-wire";
 import { type } from "arktype";
 

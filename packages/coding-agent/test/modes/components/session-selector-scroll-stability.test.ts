@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { SessionSelectorComponent } from "@satopi/pi-coding-agent/modes/components/session-selector";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
 import { TUI } from "@satopi/pi-tui";
 import { StressRenderScheduler } from "../../../../tui/test/render-stress-scheduler";
 import { VirtualTerminal } from "../../../../tui/test/virtual-terminal";

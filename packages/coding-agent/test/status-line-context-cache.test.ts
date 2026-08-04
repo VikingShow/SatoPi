@@ -18,7 +18,7 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import type { ContextUsage } from "@satopi/pi-coding-agent/extensibility/extensions/types";
 import { StatusLineComponent } from "@satopi/pi-coding-agent/modes/components/status-line";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 beforeAll(async () => {
 	resetSettingsForTest();

@@ -2,7 +2,7 @@ import * as path from "node:path";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { Message, UserMessage } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
-import { SessionManager } from "../session/session-manager";
+import { SessionManager } from "../session/store/session-manager";
 
 /**
  * Reserved transcript stem for advisor session files. Chosen so it cannot

@@ -4,8 +4,12 @@ import type { Skill } from "@satopi/pi-coding-agent/extensibility/skills";
 import * as skillsModule from "@satopi/pi-coding-agent/extensibility/skills";
 import type { CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
-import { SKILL_PROMPT_MESSAGE_TYPE } from "@satopi/pi-coding-agent/session/messages";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	PromptOptions,
+} from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SKILL_PROMPT_MESSAGE_TYPE } from "@satopi/pi-coding-agent/session/message/messages";
 import { runSubprocess } from "@satopi/pi-coding-agent/task/executor";
 import type { AgentDefinition } from "@satopi/pi-coding-agent/task/types";
 import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";

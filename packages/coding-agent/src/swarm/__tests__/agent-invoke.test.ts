@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AgentToolContext } from "@satopi/pi-agent-core";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 
 // ============================================================================
 // Mock createAgentSession at module level before anything imports it

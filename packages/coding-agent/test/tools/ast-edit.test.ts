@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { adaptSchemaForStrict, toolWireSchema } from "@satopi/pi-ai/utils/schema";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/tool-choice-queue";
+import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/agent/tool-choice-queue";
 import { createTools, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { removeWithRetries } from "@satopi/pi-utils";
 

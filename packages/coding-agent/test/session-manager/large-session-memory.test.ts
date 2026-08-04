@@ -3,10 +3,10 @@ import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getBundledModel } from "@satopi/pi-catalog/models";
-import { listSessions } from "@satopi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import { MemorySessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
+import { listSessions } from "@satopi/pi-coding-agent/session/store/session-listing";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
+import { MemorySessionStorage } from "@satopi/pi-coding-agent/session/store/session-storage";
 
 class CountingMemorySessionStorage extends MemorySessionStorage {
 	writeTextSyncCalls = 0;

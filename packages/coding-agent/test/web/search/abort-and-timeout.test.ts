@@ -13,7 +13,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { AuthStorage, FetchImpl } from "@satopi/pi-ai";
-import type { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import type { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { ToolAbortError } from "@satopi/pi-coding-agent/tools/tool-errors";
 import { WebSearchTool } from "@satopi/pi-coding-agent/web/search";

@@ -14,7 +14,7 @@
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
 import type { SingleResult } from "@satopi/pi-coding-agent/task";
 import { logger, prompt } from "@satopi/pi-utils";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { AgentToolRestriction } from "../../swarm/core/schema";
 import type { SwarmRuntime } from "../../swarm/core/swarm-runtime";
 import debateSystemPrompt from "../../swarm/prompts/debate-system.md" with { type: "text" };

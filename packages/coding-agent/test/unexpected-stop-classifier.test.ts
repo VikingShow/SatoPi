@@ -6,7 +6,7 @@ import {
 	classifyUnexpectedStop,
 	isUnexpectedStopCandidate,
 	parseUnexpectedStopClassification,
-} from "@satopi/pi-coding-agent/session/unexpected-stop-classifier";
+} from "@satopi/pi-coding-agent/session/agent/unexpected-stop-classifier";
 
 function makeAssistantMessage(options: {
 	stopReason: AssistantMessage["stopReason"];

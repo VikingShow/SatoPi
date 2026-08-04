@@ -5,7 +5,7 @@ import { scheduler } from "node:timers/promises";
 import { ptree } from "@satopi/pi-utils";
 import type TurndownService from "turndown";
 
-import type { AgentStorage } from "../../session/agent-storage";
+import type { AgentStorage } from "../../session/store/agent-storage";
 import { ToolAbortError } from "../../tools/tool-errors";
 
 export { formatNumber } from "@satopi/pi-utils";

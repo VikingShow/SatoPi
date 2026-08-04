@@ -15,7 +15,12 @@ import type { ImageContent, TextContent } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
 import { getDefault, type Settings } from "../config/settings";
 import type { Theme } from "../modes/theme/theme";
-import { type OutputSummary, type TruncationResult, truncateMiddle, truncateTail } from "../session/streaming-output";
+import {
+	type OutputSummary,
+	type TruncationResult,
+	truncateMiddle,
+	truncateTail,
+} from "../session/message/streaming-output";
 import {
 	formatFullOutputReference,
 	formatOutputNotice,

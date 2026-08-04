@@ -5,8 +5,12 @@ import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import type { ExtensionActions, LoadExtensionsResult } from "@satopi/pi-coding-agent/extensibility/extensions/types";
 import type { CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
-import type { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	PromptOptions,
+} from "@satopi/pi-coding-agent/session/agent/agent-session";
+import type { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import {
 	finalizeSubprocessOutput,
 	runSubprocess,

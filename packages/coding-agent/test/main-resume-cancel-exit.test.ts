@@ -15,7 +15,7 @@ import * as path from "node:path";
 import { parseArgs } from "@satopi/pi-coding-agent/cli/args";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { runRootCommand } from "@satopi/pi-coding-agent/main";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { TempDir } from "@satopi/pi-utils";
 
 class ProcessExitSignal extends Error {

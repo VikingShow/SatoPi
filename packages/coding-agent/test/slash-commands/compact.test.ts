@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import type { CompactOptions } from "@satopi/pi-coding-agent/extensibility/extensions/types";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { CompactMode } from "@satopi/pi-coding-agent/session/compact-modes";
+import type { CompactMode } from "@satopi/pi-coding-agent/session/shared/compact-modes";
 import {
 	ACP_BUILTIN_SLASH_COMMANDS,
 	executeAcpBuiltinSlashCommand,

@@ -7,8 +7,8 @@ import type { PythonKernel as PythonKernelInstance } from "@satopi/pi-coding-age
 import * as pythonKernel from "@satopi/pi-coding-agent/eval/py/kernel";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
 import { createAgentSession, type ExtensionFactory, type WorkspaceTree } from "@satopi/pi-coding-agent/sdk";
-import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { Snowflake, TempDir } from "@satopi/pi-utils";
 
 const OK_EXECUTION = { status: "ok", cancelled: false, timedOut: false, stdinRequested: false } as const;

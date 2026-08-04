@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { runConfigCommand } from "@satopi/pi-coding-agent/cli/config-cli";
 import { resetSettingsForTest } from "@satopi/pi-coding-agent/config/settings";
-import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import { getConfigRootDir, setAgentDir, TempDir } from "@satopi/pi-utils";
 
 let testAgentDir: TempDir | undefined;

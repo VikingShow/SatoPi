@@ -27,10 +27,10 @@ import type { MemoryBackend } from "@satopi/pi-coding-agent/memory-backend/types
 import { type MnemopiSessionState, setMnemopiSessionState } from "@satopi/pi-coding-agent/mnemopi/state";
 import { createAgentSession, type ExtensionFactory } from "@satopi/pi-coding-agent/sdk";
 import { obfuscateProviderContext, SecretObfuscator } from "@satopi/pi-coding-agent/secrets";
-import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { convertToLlm, wrapSteeringForModel } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { convertToLlm, wrapSteeringForModel } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
 

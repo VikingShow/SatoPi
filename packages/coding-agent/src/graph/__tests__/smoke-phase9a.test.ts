@@ -17,7 +17,7 @@ import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
 import { parseInternalUrl } from "../../internal-urls/parse";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { CheckpointStore } from "../checkpoint";
 import { buildExecutionWaves } from "../dag";
 import type { NodeExecutionContext } from "../graph-engine";

@@ -13,7 +13,7 @@
 import type { StreamFn } from "@satopi/pi-agent-core";
 import { type SimpleStreamOptions, streamSimple } from "@satopi/pi-ai";
 import { isAnthropicFableOrMythosModel } from "@satopi/pi-catalog/identity";
-import { type Settings, validateProviderMaxInFlightRequests } from "../config/settings";
+import { type Settings, validateProviderMaxInFlightRequests } from "../../config/settings";
 
 function timeoutSecondsToMs(value: number): number | undefined {
 	if (!Number.isFinite(value) || value < 0) return undefined;

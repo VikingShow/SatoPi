@@ -1,6 +1,6 @@
 import type { AgentToolUpdateCallback } from "@satopi/pi-agent-core";
 import { formatBytes, sanitizeText } from "@satopi/pi-utils";
-import { sanitizeWithOptionalSixelPassthrough } from "../utils/sixel";
+import { sanitizeWithOptionalSixelPassthrough } from "../../utils/sixel";
 
 // =============================================================================
 // Constants

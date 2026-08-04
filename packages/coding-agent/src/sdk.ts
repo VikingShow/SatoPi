@@ -118,23 +118,23 @@ import {
 	obfuscateProviderContext,
 	SecretObfuscator,
 } from "./secrets";
-import { AgentSession, type PlanYolo, type Prewalk } from "./session/agent-session";
-import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
-import type { AuthStorage } from "./session/auth-storage";
+import { AgentSession, type PlanYolo, type Prewalk } from "./session/agent/agent-session";
+import { clampProviderContextImages } from "./session/agent/provider-image-budget";
+import { createSettingsAwareStreamFn } from "./session/agent/settings-stream-fn";
+import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth/auth-broker-config";
+import type { AuthStorage } from "./session/auth/auth-storage";
 import {
 	type CustomMessage,
 	convertToLlm,
 	LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE,
 	USER_INTERRUPT_LABEL,
 	wrapSteeringForModel,
-} from "./session/messages";
-import { clampProviderContextImages } from "./session/provider-image-budget";
-import { getRestorableSessionModels } from "./session/session-context";
-import { SessionManager } from "./session/session-manager";
-import { MemorySessionStorage } from "./session/session-storage";
-import { createSettingsAwareStreamFn } from "./session/settings-stream-fn";
-import { SnapcompactInlineTransformer } from "./session/snapcompact-inline";
-import { createSnapcompactSavingsRecorder } from "./session/snapcompact-savings-journal";
+} from "./session/message/messages";
+import { getRestorableSessionModels } from "./session/message/session-context";
+import { SessionManager } from "./session/store/session-manager";
+import { MemorySessionStorage } from "./session/store/session-storage";
+import { SnapcompactInlineTransformer } from "./session/store/snapcompact-inline";
+import { createSnapcompactSavingsRecorder } from "./session/store/snapcompact-savings-journal";
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
 import type { SwarmRuntime } from "./swarm/core/swarm-runtime";

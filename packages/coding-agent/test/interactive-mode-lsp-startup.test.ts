@@ -6,9 +6,9 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "@satopi/pi-coding-agent/lsp/startup-events";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { LspStartupServerInfo } from "@satopi/pi-coding-agent/tools";
 import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";
 import { TempDir } from "@satopi/pi-utils";

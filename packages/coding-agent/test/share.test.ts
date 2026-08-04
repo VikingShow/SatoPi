@@ -8,8 +8,8 @@ import {
 	shareSession,
 } from "../src/export/share";
 import { SecretObfuscator } from "../src/secrets/obfuscator";
-import type { SessionEntry } from "../src/session/session-entries";
-import type { SessionManager } from "../src/session/session-manager";
+import type { SessionEntry } from "../src/session/store/session-entries";
+import type { SessionManager } from "../src/session/store/session-manager";
 
 const IV_LENGTH = 12;
 

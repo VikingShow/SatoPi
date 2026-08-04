@@ -24,9 +24,9 @@ export type {
 	ActivityBroadcaster,
 	ActivityEntry,
 	ActivityEventType,
-} from "../session/activity-types";
+} from "../session/shared/activity-types";
 
-import type { ActivityBroadcaster, ActivityEntry } from "../session/activity-types";
+import type { ActivityBroadcaster, ActivityEntry } from "../session/shared/activity-types";
 
 // ============================================================================
 // ActivityLogger

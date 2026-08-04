@@ -1,4 +1,4 @@
-import type { UsageStatistics } from "../session/session-entries";
+import type { UsageStatistics } from "../session/store/session-entries";
 
 export type GoalStatus = "active" | "paused" | "budget-limited" | "complete" | "dropped";
 

@@ -23,7 +23,7 @@ import { HookPipeline } from "../../hooks/hook-pipeline";
 import { IrcBus } from "../../irc/bus";
 import { OffloadManager } from "../../offload/manager";
 import { AgentRegistry } from "../../registry/agent-registry";
-import { MemorySessionStorage } from "../../session/session-storage";
+import { MemorySessionStorage } from "../../session/store/session-storage";
 import { discoverAgents } from "../../task/discovery";
 
 const WORKSPACE = path.resolve(import.meta.dir, "../../../../..");

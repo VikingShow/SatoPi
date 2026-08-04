@@ -7,7 +7,11 @@ import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-li
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
 import type { CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	PromptOptions,
+} from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { runSubprocess } from "@satopi/pi-coding-agent/task/executor";
 import type { AgentDefinition } from "@satopi/pi-coding-agent/task/types";
 import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";

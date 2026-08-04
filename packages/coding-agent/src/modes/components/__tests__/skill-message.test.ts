@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "../../../config/settings";
-import type { CustomMessage, SkillPromptDetails } from "../../../session/messages";
+import type { CustomMessage, SkillPromptDetails } from "../../../session/message/messages";
 import { getThemeByName, setThemeInstance, type Theme } from "../../theme/theme";
 import { SkillMessageComponent } from "../skill-message";
 

@@ -11,7 +11,7 @@ import { AgentHubOverlayComponent } from "@satopi/pi-coding-agent/modes/componen
 import { SessionObserverRegistry } from "@satopi/pi-coding-agent/modes/session-observer-registry";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { visibleWidth } from "@satopi/pi-tui/utils";
 
 interface GeometryStub {

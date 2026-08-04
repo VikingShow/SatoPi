@@ -6,9 +6,9 @@ import backgroundTanDispatchPrompt from "../../prompts/system/background-tan-dis
 import tanContextSwitchPrompt from "../../prompts/system/tan-context-switch.md" with { type: "text" };
 import { AgentRegistry, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import * as sdk from "../../sdk";
-import type { AgentSession } from "../../session/agent-session";
-import { BACKGROUND_TAN_DISPATCH_MESSAGE_TYPE } from "../../session/messages";
-import { SessionManager } from "../../session/session-manager";
+import type { AgentSession } from "../../session/agent/agent-session";
+import { BACKGROUND_TAN_DISPATCH_MESSAGE_TYPE } from "../../session/message/messages";
+import { SessionManager } from "../../session/store/session-manager";
 import { createMCPProxyTools, createSubagentSettings } from "../../task/executor";
 import { USER_TODO_EDIT_CUSTOM_TYPE } from "../../tools/todo";
 import type { InteractiveModeContext } from "../types";

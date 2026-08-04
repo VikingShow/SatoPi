@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import type { SessionEntry, SessionTreeNode } from "../session-entries";
+import type { SessionEntry, SessionTreeNode } from "./session-entries";
 import { SessionEntryIndex } from "./session-entry-index";
 
 /** Shape of the usage payload consumed by SessionEntryIndex.addUsage(). */

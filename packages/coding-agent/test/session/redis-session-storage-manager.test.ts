@@ -13,8 +13,8 @@ import type { Usage } from "@satopi/pi-ai";
 import {
 	RedisSessionStorage,
 	type RedisSessionStorageClient,
-} from "@satopi/pi-coding-agent/session/redis-session-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/store/redis-session-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 
 interface FakeRedis extends RedisSessionStorageClient {
 	strings: Map<string, string>;

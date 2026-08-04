@@ -24,8 +24,8 @@ import {
 	LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type SkillPromptDetails,
-} from "../../session/messages";
-import type { SessionMessageEntry } from "../../session/session-entries";
+} from "../../session/message/messages";
+import type { SessionMessageEntry } from "../../session/store/session-entries";
 import { theme } from "../theme/theme";
 import {
 	assistantHasVisibleContent,

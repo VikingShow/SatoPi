@@ -15,8 +15,8 @@ import {
 } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
 import { ExtensionToolWrapper } from "@satopi/pi-coding-agent/extensibility/extensions/wrapper";
 import { Type } from "@satopi/pi-coding-agent/extensibility/typebox";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getProjectAgentDir, logger, TempDir } from "@satopi/pi-utils";
 
 describe("ExtensionRunner", () => {

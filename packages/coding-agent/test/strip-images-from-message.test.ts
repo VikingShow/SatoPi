@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { ImageContent, TextContent } from "@satopi/pi-ai";
-import { stripImagesFromMessage } from "@satopi/pi-coding-agent/session/messages";
+import { stripImagesFromMessage } from "@satopi/pi-coding-agent/session/message/messages";
 
 const png = (data: string = "iVBORw0KGgo"): ImageContent => ({ type: "image", data, mimeType: "image/png" });
 const text = (value: string): TextContent => ({ type: "text", text: value });

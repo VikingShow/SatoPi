@@ -17,7 +17,7 @@ import {
 import { formatAge, formatBytes, formatCount } from "@satopi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
-import type { SessionInfo, SessionStatus } from "../../session/session-listing";
+import type { SessionInfo, SessionStatus } from "../../session/store/session-listing";
 import { shortenPath } from "../../tools/render-utils";
 import { type PersistedAgentInfo, summarizePersistedAgents } from "./agent-hub";
 import { DynamicBorder } from "./dynamic-border";

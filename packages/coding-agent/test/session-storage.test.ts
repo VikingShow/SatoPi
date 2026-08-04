@@ -7,9 +7,9 @@ import {
 	IndexedSessionStorage,
 	type SessionStorageBackend,
 	type SessionStorageIndexEntry,
-} from "@satopi/pi-coding-agent/session/indexed-session-storage";
-import { FileSessionStorage } from "@satopi/pi-coding-agent/session/session-storage";
-import { type SessionTitleUpdate, serializeTitleSlot } from "@satopi/pi-coding-agent/session/session-title-slot";
+} from "@satopi/pi-coding-agent/session/store/indexed-session-storage";
+import { FileSessionStorage } from "@satopi/pi-coding-agent/session/store/session-storage";
+import { type SessionTitleUpdate, serializeTitleSlot } from "@satopi/pi-coding-agent/session/store/session-title-slot";
 
 class ControlledTitleUpdateBackend implements SessionStorageBackend {
 	readonly #sessionPath: string;

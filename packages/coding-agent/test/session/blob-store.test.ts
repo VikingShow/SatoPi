@@ -5,7 +5,7 @@ import {
 	externalizeImageData,
 	parseBlobRef,
 	resolveImageData,
-} from "@satopi/pi-coding-agent/session/blob-store";
+} from "@satopi/pi-coding-agent/session/store/blob-store";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("BlobStore image display paths", () => {

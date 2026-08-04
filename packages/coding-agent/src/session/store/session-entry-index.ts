@@ -8,7 +8,7 @@
  */
 
 import type { Usage } from "@satopi/pi-ai";
-import type { SessionEntry, SessionTreeNode, UsageStatistics } from "../session-entries";
+import type { SessionEntry, SessionTreeNode, UsageStatistics } from "./session-entries";
 
 function emptyUsageStatistics(): UsageStatistics {
 	return {

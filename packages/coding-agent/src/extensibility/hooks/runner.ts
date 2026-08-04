@@ -4,7 +4,7 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { Model } from "@satopi/pi-ai";
 import type { ModelRegistry } from "../../config/model-registry";
-import type { SessionManager } from "../../session/session-manager";
+import type { SessionManager } from "../../session/store/session-manager";
 import { createNoOpUIContext } from "../utils";
 import type {
 	AppendEntryHandler,

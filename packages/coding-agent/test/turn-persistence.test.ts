@@ -16,7 +16,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
-import { planTurnPersistence, sessionMessagePersistenceKey } from "@satopi/pi-coding-agent/session/turn-persistence";
+import {
+	planTurnPersistence,
+	sessionMessagePersistenceKey,
+} from "@satopi/pi-coding-agent/session/agent/turn-persistence";
 
 function assistant(overrides: Partial<Extract<AgentMessage, { role: "assistant" }>> = {}) {
 	return {

@@ -12,7 +12,7 @@ import { OffloadSource } from "../../context/sources/offload-source";
 import { registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityBroadcaster } from "../../infra/activity-logger";
 import { OffloadManager } from "../../offload/manager";
-import { getSwarmDir } from "../../session/session-tree-paths";
+import { getSwarmDir } from "../../session/store/session-tree-paths";
 import type { SessionFactory, SessionServices, SharedServices } from "./session-registry";
 import { SwarmSessionManager } from "./swarm-session-manager";
 

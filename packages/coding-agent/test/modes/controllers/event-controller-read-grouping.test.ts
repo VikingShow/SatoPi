@@ -19,7 +19,7 @@ import { ReadToolGroupComponent } from "@satopi/pi-coding-agent/modes/components
 import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event-controller";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { Container } from "@satopi/pi-tui";
 
 beforeAll(async () => {

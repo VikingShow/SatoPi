@@ -6,7 +6,7 @@ import type {
 	ToolCallLocation,
 	ToolKind,
 } from "@agentclientprotocol/sdk";
-import type { AgentSessionEvent } from "../../session/agent-session";
+import type { AgentSessionEvent } from "../../session/agent/agent-session";
 import { resolveToCwd } from "../../tools/path-utils";
 import type { TodoStatus } from "../../tools/todo";
 import { canonicalizeMessage } from "../../utils/thinking-display";

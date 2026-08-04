@@ -9,9 +9,9 @@ import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { StatusLineComponent } from "@satopi/pi-coding-agent/modes/components/status-line";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { computeContextBreakdown } from "@satopi/pi-coding-agent/modes/utils/context-usage";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("Context usage consolidation", () => {

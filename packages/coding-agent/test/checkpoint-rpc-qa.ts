@@ -7,8 +7,8 @@ import type {
 	BranchSummaryEntry,
 	CustomMessageEntry,
 	SessionMessageEntry,
-} from "@satopi/pi-coding-agent/session/session-entries";
-import { parseSessionEntries } from "@satopi/pi-coding-agent/session/session-loader";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
+import { parseSessionEntries } from "@satopi/pi-coding-agent/session/store/session-loader";
 
 function extractText(message: AgentMessage): string {
 	if (message.role !== "assistant") return "";

@@ -1,6 +1,6 @@
 import type { AgentToolResult } from "@satopi/pi-agent-core";
 import type { ImageContent, TextContent } from "@satopi/pi-ai";
-import type { OutputSummary, TruncationResult } from "../session/streaming-output";
+import type { OutputSummary, TruncationResult } from "../session/message/streaming-output";
 import type { OutputMeta, TruncationOptions, TruncationSummaryOptions, TruncationTextOptions } from "./output-meta";
 import { outputMeta } from "./output-meta";
 

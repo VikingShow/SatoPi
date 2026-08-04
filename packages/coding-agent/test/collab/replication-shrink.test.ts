@@ -32,7 +32,7 @@ import {
 import { CollabSocket } from "@satopi/pi-coding-agent/collab/relay-client";
 import { MAX_REPLICATED_PAYLOAD_BYTES, shrinkForReplication } from "@satopi/pi-coding-agent/collab/replication-shrink";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
 
 interface RelayData {
 	role: "host" | "guest";

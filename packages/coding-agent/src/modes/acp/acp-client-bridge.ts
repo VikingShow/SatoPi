@@ -20,7 +20,7 @@ import type {
 	ClientBridgePermissionOutcome,
 	ClientBridgePermissionToolCall,
 	ClientBridgeTerminalHandle,
-} from "../../session/client-bridge";
+} from "../../session/agent/client-bridge";
 
 export function createAcpClientBridge(
 	connection: AgentSideConnection,

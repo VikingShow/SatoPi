@@ -13,10 +13,10 @@ import type { HookSelectorSlider } from "@satopi/pi-coding-agent/modes/component
 import type { PlanReviewOverlay } from "@satopi/pi-coding-agent/modes/components/plan-review-overlay";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { AUTO_THINKING } from "@satopi/pi-coding-agent/thinking";
 import * as clipboard from "@satopi/pi-coding-agent/utils/clipboard";
 import { setKeybindings, Text } from "@satopi/pi-tui";

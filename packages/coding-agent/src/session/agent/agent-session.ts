@@ -165,15 +165,15 @@ import {
 	isInterruptingSeverity,
 	resolveAdvisorDeliveryChannel,
 	slugifyAdvisorName,
-} from "../advisor";
-import type { AgentProfile } from "../agent/agent-profile";
-import { ProfileRegistry } from "../agent/agent-profile";
-import { type AsyncJob, type AsyncJobDeliveryState, AsyncJobManager } from "../async";
-import { classifyDifficulty } from "../auto-thinking/classifier";
-import { reset as resetCapabilities } from "../capability";
-import type { Rule } from "../capability/rule";
-import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
-import type { ModelRegistry } from "../config/model-registry";
+} from "../../advisor";
+import type { AgentProfile } from "../../agent/agent-profile";
+import { ProfileRegistry } from "../../agent/agent-profile";
+import { type AsyncJob, type AsyncJobDeliveryState, AsyncJobManager } from "../../async";
+import { classifyDifficulty } from "../../auto-thinking/classifier";
+import { reset as resetCapabilities } from "../../capability";
+import type { Rule } from "../../capability/rule";
+import { shouldEnableAppendOnlyContext } from "../../config/append-only-context-mode";
+import type { ModelRegistry } from "../../config/model-registry";
 import {
 	extractExplicitThinkingSelector,
 	filterAvailableModelsByEnabledPatterns,
@@ -186,36 +186,47 @@ import {
 	resolveAdvisorRoleSelection,
 	resolveModelOverride,
 	resolveModelRoleValue,
-} from "../config/model-resolver";
-import { MODEL_ROLE_IDS, MODEL_ROLES } from "../config/model-roles";
-import { expandPromptTemplate, type PromptTemplate } from "../config/prompt-templates";
-import { buildServiceTierByFamily, serviceTierForAllFamilies, serviceTierSettingToTier } from "../config/service-tier";
-import type { Settings, SkillsSettings } from "../config/settings";
+} from "../../config/model-resolver";
+import { MODEL_ROLE_IDS, MODEL_ROLES } from "../../config/model-roles";
+import { expandPromptTemplate, type PromptTemplate } from "../../config/prompt-templates";
+import {
+	buildServiceTierByFamily,
+	serviceTierForAllFamilies,
+	serviceTierSettingToTier,
+} from "../../config/service-tier";
+import type { Settings, SkillsSettings } from "../../config/settings";
 import {
 	getDefault,
 	onAppendOnlyModeChanged,
 	onModelRolesChanged,
 	validateProviderMaxInFlightRequests,
-} from "../config/settings";
-import { MarkEnvironment } from "../coordination";
-import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
-import { loadCapability } from "../discovery";
-import { expandApplyPatchToEntries, normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../edit";
-import { getFileSnapshotStore } from "../edit/file-snapshot-store";
-import { disposeJuliaKernelSessionsByOwner } from "../eval/jl/executor";
-import { namespaceSessionId as namespacePythonSessionId } from "../eval/py";
+} from "../../config/settings";
+import { MarkEnvironment } from "../../coordination";
+import { RawSseDebugBuffer } from "../../debug/raw-sse-buffer";
+import { loadCapability } from "../../discovery";
+import {
+	expandApplyPatchToEntries,
+	normalizeDiff,
+	normalizeToLF,
+	ParseError,
+	previewPatch,
+	stripBom,
+} from "../../edit";
+import { getFileSnapshotStore } from "../../edit/file-snapshot-store";
+import { disposeJuliaKernelSessionsByOwner } from "../../eval/jl/executor";
+import { namespaceSessionId as namespacePythonSessionId } from "../../eval/py";
 import {
 	disposeKernelSessionsByOwner,
 	executePython as executePythonCommand,
 	type PythonResult,
-} from "../eval/py/executor";
-import { disposeRubyKernelSessionsByOwner } from "../eval/rb/executor";
-import { defaultEvalSessionId } from "../eval/session-id";
-import { type BashResult, executeBash as executeBashCommand } from "../exec/bash-executor";
-import type { TtsrManager, TtsrMatchContext } from "../export/ttsr";
-import type { LoadedCustomCommand } from "../extensibility/custom-commands";
-import type { CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
-import { CustomToolAdapter } from "../extensibility/custom-tools/wrapper";
+} from "../../eval/py/executor";
+import { disposeRubyKernelSessionsByOwner } from "../../eval/rb/executor";
+import { defaultEvalSessionId } from "../../eval/session-id";
+import { type BashResult, executeBash as executeBashCommand } from "../../exec/bash-executor";
+import type { TtsrManager, TtsrMatchContext } from "../../export/ttsr";
+import type { LoadedCustomCommand } from "../../extensibility/custom-commands";
+import type { CustomTool, CustomToolContext } from "../../extensibility/custom-tools/types";
+import { CustomToolAdapter } from "../../extensibility/custom-tools/wrapper";
 import type {
 	ExtensionCommandContext,
 	ExtensionRunner,
@@ -234,81 +245,81 @@ import type {
 	TreePreparation,
 	TurnEndEvent,
 	TurnStartEvent,
-} from "../extensibility/extensions";
-import { createExtensionModelQuery } from "../extensibility/extensions/model-api";
-import type { CompactOptions, ContextUsage } from "../extensibility/extensions/types";
-import { ExtensionToolWrapper } from "../extensibility/extensions/wrapper";
-import type { HookCommandContext } from "../extensibility/hooks/types";
-import type { RecoveredRetryError } from "../extensibility/shared-events";
-import type { Skill, SkillWarning } from "../extensibility/skills";
-import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
-import { GoalRuntime } from "../goals/runtime";
-import type { Goal, GoalModeState } from "../goals/state";
-import { DebateRoundtable } from "../graph/behaviors/debate-roundtable";
-import { GraphRunner } from "../graph/graph-runner";
-import type { ISwarmOrchestrator } from "../graph/orchestrator-interface";
-import type { HindsightSessionState } from "../hindsight/state";
-import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
-import { IrcBus, type IrcMessage } from "../irc/bus";
-import { resolveMemoryBackend } from "../memory-backend";
-import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
-import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
-import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../modes/orchestrate";
-import { containsSwarm, SWARM_NOTICE } from "../modes/swarm";
-import { theme } from "../modes/theme/theme";
-import { parseTurnBudget } from "../modes/turn-budget";
-import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
-import { computeNonMessageBreakdown, computeNonMessageTokens } from "../modes/utils/context-usage";
-import { containsWorkflow, renderWorkflowNotice } from "../modes/workflow";
-import { resolveApprovedPlan } from "../plan-mode/approved-plan";
-import { createPlanReadMatcher } from "../plan-mode/plan-protection";
-import type { PlanModeState } from "../plan-mode/state";
-import advisorSystemPrompt from "../prompts/advisor/system.md" with { type: "text" };
-import goalModeContextPrompt from "../prompts/goals/goal-mode-context.md" with { type: "text" };
-import goalTodoContextPrompt from "../prompts/goals/goal-todo-context.md" with { type: "text" };
-import parentIrcSteerTemplate from "../prompts/steering/parent-irc.md" with { type: "text" };
-import autoContinuePrompt from "../prompts/system/auto-continue.md" with { type: "text" };
-import eagerTaskPrompt from "../prompts/system/eager-task.md" with { type: "text" };
-import eagerTodoPrompt from "../prompts/system/eager-todo.md" with { type: "text" };
-import emptyStopRetryTemplate from "../prompts/system/empty-stop-retry.md" with { type: "text" };
-import geminiToolReminderTemplate from "../prompts/system/gemini-tool-call-reminder.md" with { type: "text" };
-import interruptedThinkingTemplate from "../prompts/system/interrupted-thinking.md" with { type: "text" };
-import ircAutoReplyTemplate from "../prompts/system/irc-autoreply.md" with { type: "text" };
-import ircIncomingTemplate from "../prompts/system/irc-incoming.md" with { type: "text" };
-import midRunTodoNudgePrompt from "../prompts/system/mid-run-todo-nudge.md" with { type: "text" };
-import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
-import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
-import planModeToolDecisionReminderPrompt from "../prompts/system/plan-mode-tool-decision-reminder.md" with {
+} from "../../extensibility/extensions";
+import { createExtensionModelQuery } from "../../extensibility/extensions/model-api";
+import type { CompactOptions, ContextUsage } from "../../extensibility/extensions/types";
+import { ExtensionToolWrapper } from "../../extensibility/extensions/wrapper";
+import type { HookCommandContext } from "../../extensibility/hooks/types";
+import type { RecoveredRetryError } from "../../extensibility/shared-events";
+import type { Skill, SkillWarning } from "../../extensibility/skills";
+import { expandSlashCommand, type FileSlashCommand } from "../../extensibility/slash-commands";
+import { GoalRuntime } from "../../goals/runtime";
+import type { Goal, GoalModeState } from "../../goals/state";
+import { DebateRoundtable } from "../../graph/behaviors/debate-roundtable";
+import { GraphRunner } from "../../graph/graph-runner";
+import type { ISwarmOrchestrator } from "../../graph/orchestrator-interface";
+import type { HindsightSessionState } from "../../hindsight/state";
+import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../../internal-urls";
+import { IrcBus, type IrcMessage } from "../../irc/bus";
+import { resolveMemoryBackend } from "../../memory-backend";
+import { shutdownMnemopiEmbedClient } from "../../mnemopi/embed-client";
+import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../../mnemopi/state";
+import { containsOrchestrate, ORCHESTRATE_NOTICE } from "../../modes/orchestrate";
+import { containsSwarm, SWARM_NOTICE } from "../../modes/swarm";
+import { theme } from "../../modes/theme/theme";
+import { parseTurnBudget } from "../../modes/turn-budget";
+import { containsUltrathink, ULTRATHINK_NOTICE } from "../../modes/ultrathink";
+import { computeNonMessageBreakdown, computeNonMessageTokens } from "../../modes/utils/context-usage";
+import { containsWorkflow, renderWorkflowNotice } from "../../modes/workflow";
+import { resolveApprovedPlan } from "../../plan-mode/approved-plan";
+import { createPlanReadMatcher } from "../../plan-mode/plan-protection";
+import type { PlanModeState } from "../../plan-mode/state";
+import advisorSystemPrompt from "../../prompts/advisor/system.md" with { type: "text" };
+import goalModeContextPrompt from "../../prompts/goals/goal-mode-context.md" with { type: "text" };
+import goalTodoContextPrompt from "../../prompts/goals/goal-todo-context.md" with { type: "text" };
+import parentIrcSteerTemplate from "../../prompts/steering/parent-irc.md" with { type: "text" };
+import autoContinuePrompt from "../../prompts/system/auto-continue.md" with { type: "text" };
+import eagerTaskPrompt from "../../prompts/system/eager-task.md" with { type: "text" };
+import eagerTodoPrompt from "../../prompts/system/eager-todo.md" with { type: "text" };
+import emptyStopRetryTemplate from "../../prompts/system/empty-stop-retry.md" with { type: "text" };
+import geminiToolReminderTemplate from "../../prompts/system/gemini-tool-call-reminder.md" with { type: "text" };
+import interruptedThinkingTemplate from "../../prompts/system/interrupted-thinking.md" with { type: "text" };
+import ircAutoReplyTemplate from "../../prompts/system/irc-autoreply.md" with { type: "text" };
+import ircIncomingTemplate from "../../prompts/system/irc-incoming.md" with { type: "text" };
+import midRunTodoNudgePrompt from "../../prompts/system/mid-run-todo-nudge.md" with { type: "text" };
+import planModeActivePrompt from "../../prompts/system/plan-mode-active.md" with { type: "text" };
+import planModeReferencePrompt from "../../prompts/system/plan-mode-reference.md" with { type: "text" };
+import planModeToolDecisionReminderPrompt from "../../prompts/system/plan-mode-tool-decision-reminder.md" with {
 	type: "text",
 };
-import planYoloHandoffPrompt from "../prompts/system/plan-yolo-handoff.md" with { type: "text" };
-import prewalkChecklistPrompt from "../prompts/system/prewalk-checklist.md" with { type: "text" };
-import prewalkContinuePrompt from "../prompts/system/prewalk-continue.md" with { type: "text" };
-import prewalkPlanPrompt from "../prompts/system/prewalk-plan.md" with { type: "text" };
-import rewindReportTemplate from "../prompts/system/rewind-report.md" with { type: "text" };
-import sideChannelNoToolsReminder from "../prompts/system/side-channel-no-tools.md" with { type: "text" };
-import thinkingLoopRedirectTemplate from "../prompts/system/thinking-loop-redirect.md" with { type: "text" };
-import toolCallLoopRedirectTemplate from "../prompts/system/tool-call-loop-redirect.md" with { type: "text" };
-import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
-import ttsrToolReminderTemplate from "../prompts/system/ttsr-tool-reminder.md" with { type: "text" };
-import unexpectedStopRetryTemplate from "../prompts/system/unexpected-stop-retry.md" with { type: "text" };
-import vibeModeActivePrompt from "../prompts/system/vibe-mode-active.md" with { type: "text" };
-import type { AgentKind } from "../registry/agent-registry";
-import { AgentRegistry } from "../registry/agent-registry";
+import planYoloHandoffPrompt from "../../prompts/system/plan-yolo-handoff.md" with { type: "text" };
+import prewalkChecklistPrompt from "../../prompts/system/prewalk-checklist.md" with { type: "text" };
+import prewalkContinuePrompt from "../../prompts/system/prewalk-continue.md" with { type: "text" };
+import prewalkPlanPrompt from "../../prompts/system/prewalk-plan.md" with { type: "text" };
+import rewindReportTemplate from "../../prompts/system/rewind-report.md" with { type: "text" };
+import sideChannelNoToolsReminder from "../../prompts/system/side-channel-no-tools.md" with { type: "text" };
+import thinkingLoopRedirectTemplate from "../../prompts/system/thinking-loop-redirect.md" with { type: "text" };
+import toolCallLoopRedirectTemplate from "../../prompts/system/tool-call-loop-redirect.md" with { type: "text" };
+import ttsrInterruptTemplate from "../../prompts/system/ttsr-interrupt.md" with { type: "text" };
+import ttsrToolReminderTemplate from "../../prompts/system/ttsr-tool-reminder.md" with { type: "text" };
+import unexpectedStopRetryTemplate from "../../prompts/system/unexpected-stop-retry.md" with { type: "text" };
+import vibeModeActivePrompt from "../../prompts/system/vibe-mode-active.md" with { type: "text" };
+import type { AgentKind } from "../../registry/agent-registry";
+import { AgentRegistry } from "../../registry/agent-registry";
 import {
 	deobfuscateAssistantContent,
 	deobfuscateSessionContext,
 	obfuscateMessages,
 	obfuscateProviderContext,
 	type SecretObfuscator,
-} from "../secrets/obfuscator";
-import { invalidateHostMetadata } from "../ssh/connection-manager";
-import { setCurrentSwarmPhase } from "../swarm/core/state";
-import { createSwarmInfra } from "../swarm/core/swarm-infra";
-import type { SessionFactory, SessionServices, SharedServices } from "../swarm/session/session-registry";
-import { SwarmSessionManager } from "../swarm/session/swarm-session-manager";
-import { usesCodexTaskPrompt } from "../task/prompt-policy";
-import type { SingleResult } from "../task/types";
+} from "../../secrets/obfuscator";
+import { invalidateHostMetadata } from "../../ssh/connection-manager";
+import { setCurrentSwarmPhase } from "../../swarm/core/state";
+import { createSwarmInfra } from "../../swarm/core/swarm-infra";
+import type { SessionFactory, SessionServices, SharedServices } from "../../swarm/session/session-registry";
+import { SwarmSessionManager } from "../../swarm/session/swarm-session-manager";
+import { usesCodexTaskPrompt } from "../../task/prompt-policy";
+import type { SingleResult } from "../../task/types";
 import {
 	AUTO_THINKING,
 	type ConfiguredThinkingLevel,
@@ -319,10 +330,10 @@ import {
 	resolveThinkingLevelForModel,
 	shouldDisableReasoning,
 	toReasoningEffort,
-} from "../thinking";
-import { formatTitleConversationContext, type TitleConversationTurn } from "../tiny/message-preproc";
-import { shutdownTinyTitleClient } from "../tiny/title-client";
-import { countToolsForAutoDiscovery, resolveEffectiveToolDiscoveryMode } from "../tool-discovery/mode";
+} from "../../thinking";
+import { formatTitleConversationContext, type TitleConversationTurn } from "../../tiny/message-preproc";
+import { shutdownTinyTitleClient } from "../../tiny/title-client";
+import { countToolsForAutoDiscovery, resolveEffectiveToolDiscoveryMode } from "../../tool-discovery/mode";
 import {
 	buildDiscoverableToolSearchIndex,
 	collectDiscoverableTools,
@@ -331,48 +342,31 @@ import {
 	filterBySource,
 	isMCPToolName,
 	selectDiscoverableToolNamesByServer,
-} from "../tool-discovery/tool-index";
-import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../tools/approval";
-import type { AskToolDetails } from "../tools/ask";
-import { assertEditableFile } from "../tools/auto-generated-guard";
-import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
-import { normalizeToolNames } from "../tools/builtin-names";
-import type { CheckpointState, CompletedRewindState } from "../tools/checkpoint";
-import { outputMeta, wrapToolWithMetaNotice } from "../tools/output-meta";
-import { normalizeLocalScheme, resolveToCwd } from "../tools/path-utils";
-import { isAutoQaEnabled } from "../tools/report-tool-issue";
-import { buildResolveReminderMessage, type ResolveToolDetails, runResolveInvocation } from "../tools/resolve";
-import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo";
-import { ToolAbortError, ToolError } from "../tools/tool-errors";
-import { clampTimeout } from "../tools/tool-timeouts";
-import { parseCommandArgs } from "../utils/command-args";
-import { type EditMode, resolveEditMode } from "../utils/edit-mode";
-import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
-import { normalizeModelContextImages } from "../utils/image-loading";
-import { describeAttachedImagesForTextModel } from "../utils/image-vision-fallback";
-import { formatLocalCalendarDate } from "../utils/local-date";
-import { generateSessionTitle } from "../utils/title-generator";
-import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
-import type { VibeModeState } from "../vibe/state";
-import type { AuthStorage } from "./auth-storage";
-import type { ClientBridge, ClientBridgePermissionOption, ClientBridgePermissionOutcome } from "./client-bridge";
-import {
-	type CodexAutoRedeemRedeemDecision,
-	defaultCodexAutoRedeemCoordinator,
-	evaluateCodexAutoRedeem,
-	shouldEvaluateCodexAutoRedeem,
-	shouldPromptCodexAutoRedeem,
-} from "./codex-auto-reset";
-import { findCompactMode } from "./compact-modes";
-import {
-	collectPendingToolCalls,
-	SESSION_EXIT_CUSTOM_TYPE,
-	type SessionExitData,
-	summarizeToolArguments,
-	TOOL_EXECUTION_START_CUSTOM_TYPE,
-	type ToolExecutionStartData,
-} from "./exit-diagnostics";
+} from "../../tool-discovery/tool-index";
+import { type ApprovalMode, formatApprovalPrompt, requiresApproval } from "../../tools/approval";
+import type { AskToolDetails } from "../../tools/ask";
+import { assertEditableFile } from "../../tools/auto-generated-guard";
+import { releaseTabsForOwner } from "../../tools/browser/tab-supervisor";
+import { normalizeToolNames } from "../../tools/builtin-names";
+import type { CheckpointState, CompletedRewindState } from "../../tools/checkpoint";
+import { outputMeta, wrapToolWithMetaNotice } from "../../tools/output-meta";
+import { normalizeLocalScheme, resolveToCwd } from "../../tools/path-utils";
+import { isAutoQaEnabled } from "../../tools/report-tool-issue";
+import { buildResolveReminderMessage, type ResolveToolDetails, runResolveInvocation } from "../../tools/resolve";
+import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../../tools/todo";
+import { ToolAbortError, ToolError } from "../../tools/tool-errors";
+import { clampTimeout } from "../../tools/tool-timeouts";
+import { parseCommandArgs } from "../../utils/command-args";
+import { type EditMode, resolveEditMode } from "../../utils/edit-mode";
+import { resolveFileDisplayMode } from "../../utils/file-display-mode";
+import { extractFileMentions, generateFileMentionMessages } from "../../utils/file-mentions";
+import { normalizeModelContextImages } from "../../utils/image-loading";
+import { describeAttachedImagesForTextModel } from "../../utils/image-vision-fallback";
+import { formatLocalCalendarDate } from "../../utils/local-date";
+import { generateSessionTitle } from "../../utils/title-generator";
+import { buildNamedToolChoice, isToolChoiceActive } from "../../utils/tool-choice";
+import type { VibeModeState } from "../../vibe/state";
+import type { AuthStorage } from "../auth/auth-storage";
 import {
 	type BashExecutionMessage,
 	type CustomMessage,
@@ -392,17 +386,34 @@ import {
 	SKILL_PROMPT_MESSAGE_TYPE,
 	stripImagesFromMessage,
 	USER_INTERRUPT_LABEL,
-} from "./messages";
+} from "../message/messages";
+import type { BuildSessionContextOptions, SessionContext } from "../message/session-context";
+import { getLatestCompactionEntry, getRestorableSessionModels } from "../message/session-context";
+import { findCompactMode } from "../shared/compact-modes";
+import type { ShakeMode, ShakeResult } from "../shared/shake-types";
+import { formatSessionDumpText } from "../store/session-dump-format";
+import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionEntry } from "../store/session-entries";
+import { EPHEMERAL_MODEL_CHANGE_ROLE } from "../store/session-entries";
+import { formatSessionHistoryMarkdown } from "../store/session-history-format";
+import { cleanupEmptyMoveSession, type SessionManager } from "../store/session-manager";
+import type { ClientBridge, ClientBridgePermissionOption, ClientBridgePermissionOutcome } from "./client-bridge";
+import {
+	type CodexAutoRedeemRedeemDecision,
+	defaultCodexAutoRedeemCoordinator,
+	evaluateCodexAutoRedeem,
+	shouldEvaluateCodexAutoRedeem,
+	shouldPromptCodexAutoRedeem,
+} from "./codex-auto-reset";
+import {
+	collectPendingToolCalls,
+	SESSION_EXIT_CUSTOM_TYPE,
+	type SessionExitData,
+	summarizeToolArguments,
+	TOOL_EXECUTION_START_CUSTOM_TYPE,
+	type ToolExecutionStartData,
+} from "./exit-diagnostics";
 import { SessionCompactor } from "./session-compactor";
-import type { BuildSessionContextOptions, SessionContext } from "./session-context";
-import { getLatestCompactionEntry, getRestorableSessionModels } from "./session-context";
-import { formatSessionDumpText } from "./session-dump-format";
-import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionEntry } from "./session-entries";
-import { EPHEMERAL_MODEL_CHANGE_ROLE } from "./session-entries";
-import { formatSessionHistoryMarkdown } from "./session-history-format";
 import { SessionLifecycle } from "./session-lifecycle";
-import { cleanupEmptyMoveSession, type SessionManager } from "./session-manager";
-import type { ShakeMode, ShakeResult } from "./shake-types";
 import { ToolChoiceQueue } from "./tool-choice-queue";
 import { planTurnPersistence, sameMessageContent, sessionMessagePersistenceKey } from "./turn-persistence";
 import { classifyUnexpectedStop, isUnexpectedStopCandidate } from "./unexpected-stop-classifier";
@@ -16935,7 +16946,7 @@ export class AgentSession {
 		// pink/purple), matching my.omp.sh — not the host's terminal theme.
 		// Callers who want a themed export can pass `palette: "theme"` with
 		// `themeName` directly to `exportSessionToHtml`.
-		const { exportSessionToHtml } = await import("../export/html");
+		const { exportSessionToHtml } = await import("../../export/html");
 		return exportSessionToHtml(this.sessionManager, this.state, { outputPath, palette: "web" });
 	}
 
@@ -17357,7 +17368,7 @@ export class AgentSession {
 		name: string,
 		runtime?: SessionServices["runtime"],
 	): Promise<SessionServices> {
-		const { createSwarmSession } = await import("../swarm/session/create-swarm-session");
+		const { createSwarmSession } = await import("../../swarm/session/create-swarm-session");
 		return createSwarmSession(shared, factory, name, { runtime });
 	}
 
@@ -17375,7 +17386,7 @@ export class AgentSession {
 	async destroySwarmSession(name: string): Promise<void> {
 		const session = this.#swarmServices.get(name);
 		if (!session) return;
-		const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
+		const { destroySwarmSession } = await import("../../swarm/session/create-swarm-session");
 		await destroySwarmSession(session, process.cwd());
 		this.#swarmServices.delete(name);
 	}
@@ -17383,7 +17394,7 @@ export class AgentSession {
 	/** Destroy all active swarm sessions. */
 	async destroyAllSwarmSessions(): Promise<void> {
 		for (const [_name, session] of this.#swarmServices) {
-			const { destroySwarmSession } = await import("../swarm/session/create-swarm-session");
+			const { destroySwarmSession } = await import("../../swarm/session/create-swarm-session");
 			await destroySwarmSession(session, process.cwd());
 		}
 		this.#swarmServices.clear();

@@ -14,7 +14,7 @@ import type { ContextPipeline } from "../../context/context-pipeline";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { LoopSwarmConfig } from "../../swarm/core/schema";
 import type { Chapter, StateTracker } from "../../swarm/core/state";
 import type { SwarmRuntime } from "../../swarm/core/swarm-runtime";
