@@ -81,8 +81,6 @@ export interface CrewTranscriptState {
 	crew: CrewState | CrewSummary;
 	/** Roundtable discussion topic. */
 	topic: string;
-	/** Whether the roundtable reached convergence. */
-	converged: boolean;
 	/** Total number of rounds. */
 	totalRounds: number;
 	/** Chronological transcript entries. */
@@ -403,4 +401,3 @@ export function formatTime(ts: number, t: Theme): string {
 	const mm = String(d.getMinutes()).padStart(2, "0");
 	return t.fg("dim", `${hh}:${mm}`);
 }
-

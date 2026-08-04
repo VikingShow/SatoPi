@@ -55,10 +55,7 @@ function makeDialog(): { dialog: ProfileSelectDialog; items: ProfileSelectItem[]
 }
 
 function renderText(dialog: ProfileSelectDialog): string {
-	return dialog
-		.render(80)
-		.map(strip)
-		.join("\n");
+	return dialog.render(80).map(strip).join("\n");
 }
 
 /** Move the cursor onto the trailing "+ Create new agent" row and confirm. */

@@ -422,7 +422,6 @@ export class SwarmModeController {
 			const state: CrewTranscriptState = {
 				crew: crew.state,
 				topic: crew.state.name,
-				converged: false,
 				totalRounds: 1,
 				entries: [],
 			};

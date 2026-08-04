@@ -33,7 +33,6 @@ function makeState(entries: CrewTranscriptEntry[]): CrewTranscriptState {
 	return {
 		crew: { id: "c1", name: "Test Crew", members: [], createdAt: 0 },
 		topic: "Test topic",
-		converged: false,
 		totalRounds: 1,
 		entries,
 	};
@@ -98,7 +97,10 @@ describe("CrewTranscriptView transcript stream", () => {
 		const tagRow = rows.findIndex(r => r.includes("[alpha]"));
 		expect(tagRow).toBeGreaterThan(-1);
 		const first = rows[tagRow]!.slice(rows[tagRow]!.indexOf("[alpha]") + "[alpha]".length).trim();
-		const rest = rows.slice(tagRow + 1).map(r => r.trim()).filter(w => w.length > 0);
+		const rest = rows
+			.slice(tagRow + 1)
+			.map(r => r.trim())
+			.filter(w => w.length > 0);
 		const reconstructed = [first, ...rest].join(" ");
 		// More than one row proves wrapping happened; the reconstruction proves
 		// no word was split across rows (a hard cut would inject a space inside
@@ -135,5 +137,11 @@ describe("CrewTranscriptView transcript stream", () => {
 		view.handleInput("T");
 		const after = renderedAt(view, 60);
 		expect(after).toEqual(before);
+	});
+
+	it("no longer renders any converged status (B3 field removal)", () => {
+		const view = newView([{ agentId: "alpha", body: "hello crew", timestamp: T, round: 1 }]);
+		const text = renderedAt(view, 60).join("\n");
+		expect(text).not.toMatch(/converged/i);
 	});
 });

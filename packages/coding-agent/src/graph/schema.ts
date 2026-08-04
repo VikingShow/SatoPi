@@ -173,6 +173,8 @@ const VALID_NODE_TYPES: Record<string, true> = {
 	custom: true,
 	subgraph: true,
 	loop: true,
+	debate: true,
+	"cross-check": true,
 };
 const VALID_STRATEGIES: Record<string, true> = { waves: true, dynamic: true };
 const VALID_GRAPH_NAME = /^[a-zA-Z0-9._-]+$/;

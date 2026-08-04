@@ -8,6 +8,8 @@
 
 - New `/profile` slash command (`/profile list|create|delete`) manages the agent profiles behind `/swarm start`; the crew-start profile dialog gains a self-contained `+ Create new agent` row (inline draft-name input) so users can add agents without hand-editing `.stp/profiles` JSON. `ProfileRegistry` gains `deleteProfile`, exported `validateProfileId`/`deriveProfileId`/`validateProfile`, and a documented on-disk format.
 
+- Phase E — parallel execution, debate, and cross-validation: a runtime-owned `TaskQueue` (created by the assembler, exposed on `SwarmRuntime`) is shared with `StageBehavior` and registered as a `TaskQueueSource` context source, so Stage workers see the live queue state (in-progress/ready/blocked). The builtin theatre graph gains a `debate` node (Script → Debate → Stage → Cross-Check → Curtain) driven by the existing `DebateRoundtable`/`enableDebate` machinery, and a `cross-check` node whose reviewer agents (swarm-reviewer profile) verify every completed deliverable — REWORK verdicts block the task in the shared queue and record a `reviewVerdict` summary plus an activity-log verdict in the run state. The heavy Stage node gains a retry policy (3 attempts, exponential backoff, block on exhaustion). The dead `converged` field was removed from `CrewTranscriptState` and its controller construction.
+
 ### Fixed
 
 - Fixed the Ctrl+B sidebar bottom border still being clipped after the 0.0.4 fit fix: the 69-column footer hint wrapped into two rows at the default 40% width (and some tree rows exceeded the inner width), inflating the framed panel past the overlay budget — the hint now adapts to the panel width, every content row is truncated to the inner width, and a tail clamp keeps the panel at or under `rows − 2`.

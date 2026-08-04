@@ -9,6 +9,7 @@
  */
 
 import type { AgentSpec } from "../../graph/agent-spec";
+import type { TaskQueue } from "../../graph/task-queue";
 import type { IrcBus } from "../../irc/bus";
 import type { AgentSession } from "../../session/agent-session";
 
@@ -21,4 +22,10 @@ export interface SwarmRuntime {
 	readonly ircBus: IrcBus;
 	/** Queue a human steering message for a specific agent. */
 	sendHumanMessage(agentId: string, text: string): Promise<void>;
+	/**
+	 * Runtime-owned task queue shared with StageBehavior (assembler-created).
+	 * Present when the runtime was built by createOrchestratorRuntime — lets
+	 * TaskQueueSource and CrossCheckBehavior observe the live stage queue.
+	 */
+	taskQueue?: TaskQueue;
 }

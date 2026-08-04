@@ -49,10 +49,10 @@ describe("ProfileRegistry — create/list/delete round trip", () => {
 
 	test("createProfile — rejects empty name / archetype (validateProfile early failure)", () => {
 		expect(() => registry.createProfile({ profileId: "no-name", name: "", archetype: "worker" })).toThrow(
-			'missing a name',
+			"missing a name",
 		);
 		expect(() => registry.createProfile({ profileId: "no-arch", name: "X", archetype: "" })).toThrow(
-			'missing an archetype',
+			"missing an archetype",
 		);
 	});
 
@@ -95,7 +95,12 @@ describe("ProfileRegistry — on-disk persistence", () => {
 		expect(await fileExists(path.join(dir, "_index.json"))).toBe(true);
 
 		const loaded = await ProfileRegistry.load(tmp.path());
-		expect(loaded.list().map(p => p.profileId).sort()).toEqual(["demo-agent", "solo"]);
+		expect(
+			loaded
+				.list()
+				.map(p => p.profileId)
+				.sort(),
+		).toEqual(["demo-agent", "solo"]);
 		expect(loaded.get("demo-agent")?.identity.archetype).toBe("reviewer");
 		expect(loaded.get("demo-agent")?.credit.score).toBe(50);
 	});

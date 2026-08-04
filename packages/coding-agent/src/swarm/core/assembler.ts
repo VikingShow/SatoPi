@@ -24,9 +24,11 @@ import { MnemopiSource } from "../../context/sources/mnemopi-source";
 import { OffloadSource } from "../../context/sources/offload-source";
 import { PeerRosterSource } from "../../context/sources/peer-roster-source";
 import { StigmergySource } from "../../context/sources/stigmergy-source";
+import { TaskQueueSource } from "../../context/sources/task-queue-source";
 import { MarkEnvironment } from "../../coordination";
 import type { ExperienceStore } from "../../experience/experience";
 import { spawnAgent } from "../../graph/agent-helpers";
+import { TaskQueue } from "../../graph/task-queue";
 import { HookPipeline } from "../../hooks/hook-pipeline";
 import { type BuiltinHookDeps, registerBuiltinHooks } from "../../hooks/register-builtins";
 import type { ActivityLogger } from "../../infra/activity-logger";
@@ -56,6 +58,8 @@ export interface AssemblerOptions {
 	markEnvironment?: MarkEnvironment;
 	offloadManager?: IOffloadManager;
 	activeMmd?: string;
+	/** Runtime-owned TaskQueue shared with StageBehavior — enables TaskQueueSource. */
+	taskQueue?: TaskQueue;
 }
 
 // ============================================================================
@@ -80,6 +84,9 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 	hookPipeline: HookPipeline;
 	markEnvironment: MarkEnvironment;
 } {
+	// Runtime-owned TaskQueue — StageBehavior adopts it during Stage so workers
+	// (and TaskQueueSource context) see the live shared queue state.
+	const taskQueue = new TaskQueue([]);
 	const markEnvironment = new MarkEnvironment();
 	const hookPipeline = new HookPipeline();
 
@@ -103,6 +110,7 @@ export function createOrchestratorRuntime(opts: CreateOrchestratorRuntimeOptions
 		activeMmd: opts.activeMmd,
 		markEnvironment,
 		offloadManager: opts.offloadManager,
+		taskQueue,
 	});
 
 	return { runtime, hookPipeline, markEnvironment };
@@ -138,6 +146,12 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	// agent sees who it is collaborating with.
 	contextPipeline.register(new PeerRosterSource());
 
+	// TaskQueueSource shows the shared stage task queue (in-progress, ready,
+	// blocked) to Stage workers. Only registered when a runtime queue exists.
+	if (opts.taskQueue) {
+		contextPipeline.register(new TaskQueueSource(opts.taskQueue));
+	}
+
 	if (opts.ircBus) {
 		opts.ircBus.setActivityLogger(opts.activityLogger);
 		opts.ircBus.setHookPipeline(opts.hookPipeline);
@@ -163,6 +177,7 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	const runtime: SwarmRuntime = {
 		contextPipeline,
 		ircBus,
+		taskQueue: opts.taskQueue,
 
 		async spawn(specs) {
 			const sessions = await Promise.all(

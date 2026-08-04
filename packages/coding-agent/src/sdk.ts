@@ -58,6 +58,7 @@ import {
 	OffloadManager,
 } from "./offload";
 import "./discovery";
+import type { CommChannel } from "./comm/comm-channel";
 import { initializeWithSettings } from "./discovery";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
@@ -201,7 +202,6 @@ import {
 	warmupLspServers,
 } from "./tools";
 import { normalizeToolName, normalizeToolNames } from "./tools/builtin-names";
-import type { CommChannel } from "./comm/comm-channel";
 import { ToolContextStore } from "./tools/context";
 import { getImageGenTools } from "./tools/image-gen";
 import { isIrcEnabled } from "./tools/irc";

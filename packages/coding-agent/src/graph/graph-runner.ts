@@ -398,6 +398,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			swarmDir: this.#swarmDir,
 			loopConfig: this.#loopConfig,
 			planContent: this.#planContent,
+			debateRoundtableFactory: this.#config.debateRoundtableFactory,
 		};
 		const behavior = selectNodeBehavior(node.type, behaviorFactoryConfig);
 		const ctx: NodeContext = {
@@ -428,6 +429,9 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			profileRegistry: this.#config.profileRegistry,
 			stateTracker: this.#stateTracker,
 			activityLogger: this.#activityLogger,
+			planContent: this.#planContent,
+			taskQueue: this.#runtime.taskQueue,
+			onPlanUpdated: content => this.onPlanUpdated(content),
 			executeNode: this,
 			graphDir: this.#config.graphPath ? path.dirname(this.#config.graphPath) : this.#config.workspace,
 		};

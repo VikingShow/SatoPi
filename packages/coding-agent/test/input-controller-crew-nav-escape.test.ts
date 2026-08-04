@@ -114,7 +114,6 @@ function makeHarness() {
 		{
 			crew: { id: "c1", name: "Test Crew", members: [], createdAt: Date.now() },
 			topic: "test",
-			converged: false,
 			totalRounds: 1,
 			entries: [],
 		},

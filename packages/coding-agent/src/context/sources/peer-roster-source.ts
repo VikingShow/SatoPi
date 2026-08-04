@@ -16,7 +16,7 @@
  * accessor on CrewManager to consult, so the registry is the roster.
  */
 
-import { AgentRegistry, type AgentRef } from "../../registry/agent-registry";
+import { type AgentRef, AgentRegistry } from "../../registry/agent-registry";
 import type { Chapter } from "../../swarm/core/state";
 import type { AgentSpecLike, BuildContext, ContextFragment, ContextSource } from "../context-pipeline";
 
@@ -25,11 +25,7 @@ export const DEFAULT_PEER_ROSTER_CAP = 32;
 
 /** Escape a string for use inside an XML attribute value. */
 function escapeXml(value: string): string {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;");
+	return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
 export class PeerRosterSource implements ContextSource {
@@ -64,7 +60,9 @@ export class PeerRosterSource implements ContextSource {
 
 		const shown = peers.slice(0, this.#cap);
 		const countNote =
-			shown.length === 1 ? "You are collaborating with 1 other agent" : `You are collaborating with ${shown.length} other agents`;
+			shown.length === 1
+				? "You are collaborating with 1 other agent"
+				: `You are collaborating with ${shown.length} other agents`;
 		lines.push(`  ${countNote}`);
 		for (const ref of shown) {
 			lines.push(`    ${formatPeer(ref)}`);

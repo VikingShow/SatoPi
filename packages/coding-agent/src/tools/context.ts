@@ -1,6 +1,6 @@
 import type { Agent, AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
-import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { CommChannel } from "../comm/comm-channel";
+import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { EventBus } from "../utils/event-bus";

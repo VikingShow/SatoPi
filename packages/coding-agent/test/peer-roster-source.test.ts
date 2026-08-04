@@ -13,15 +13,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-	ContextPipeline,
 	type AgentSpecLike,
 	type BuildContext,
+	ContextPipeline,
 	type PhaseInfo,
 } from "@satopi/pi-coding-agent/context/context-pipeline";
-import {
-	DEFAULT_PEER_ROSTER_CAP,
-	PeerRosterSource,
-} from "@satopi/pi-coding-agent/context/sources/peer-roster-source";
+import { DEFAULT_PEER_ROSTER_CAP, PeerRosterSource } from "@satopi/pi-coding-agent/context/sources/peer-roster-source";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
 
 // ============================================================================
@@ -41,7 +38,12 @@ const BASE: BuildContext = {
 	accumulated: {},
 };
 
-function register(registry: AgentRegistry, id: string, displayName: string, extra: Partial<Record<"kind" | "role" | "status", string>> = {}): void {
+function register(
+	registry: AgentRegistry,
+	id: string,
+	displayName: string,
+	extra: Partial<Record<"kind" | "role" | "status", string>> = {},
+): void {
 	registry.register({
 		id,
 		displayName,

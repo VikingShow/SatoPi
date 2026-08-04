@@ -473,7 +473,9 @@ export class SwarmSidebar implements Component {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
-						lines.push(fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`));
+						lines.push(
+							fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`),
+						);
 					} else if (node.type === "history" || node.type === "history-session") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
@@ -487,7 +489,9 @@ export class SwarmSidebar implements Component {
 							? t.fg("dim", ` \u00b7 ${formatRelativeMtime(node.agentMtime)}`)
 							: "";
 						lines.push(
-							fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}${mtimeHint}`),
+							fit(
+								`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}${mtimeHint}`,
+							),
 						);
 					} else if (node.type === "action") {
 						const actionIcon = node.label.startsWith("+") ? "+" : "-";
@@ -502,7 +506,9 @@ export class SwarmSidebar implements Component {
 
 				lines.push("");
 				const hint = FOOTER_HINTS.find(candidate => visibleWidth(candidate) <= innerWidth);
-				lines.push(t.fg("dim", hint ?? truncateToWidth(FOOTER_HINTS[FOOTER_HINTS.length - 1], innerWidth, Ellipsis.Omit)));
+				lines.push(
+					t.fg("dim", hint ?? truncateToWidth(FOOTER_HINTS[FOOTER_HINTS.length - 1], innerWidth, Ellipsis.Omit)),
+				);
 
 				// Fill the remaining content rows so the bordered panel spans
 				// the overlay budget: termRows minus the frame's 2 top/bottom

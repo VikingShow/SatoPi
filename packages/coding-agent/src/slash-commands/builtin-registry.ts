@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { getOAuthProviders } from "@satopi/pi-ai/oauth";
 import { type AutocompleteItem, Spacer } from "@satopi/pi-tui";
 import { APP_NAME, getProjectDir, setProjectDir } from "@satopi/pi-utils";
+import { deriveProfileId, ensureProfileRegistry, ProfileRegistry, validateProfileId } from "../agent/agent-profile";
 import { COLLAB_GUEST_ALLOWED_COMMANDS, CollabGuestLink } from "../collab/guest";
 import { CollabHost } from "../collab/host";
 import { expandRoleAlias, getModelMatchPreferences, resolveCliModel } from "../config/model-resolver";
@@ -36,7 +37,6 @@ import type { AgentSession, FreshSessionResult } from "../session/agent-session"
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
-import { deriveProfileId, ensureProfileRegistry, ProfileRegistry, validateProfileId } from "../agent/agent-profile";
 import { convertLoopFileToGraph } from "../swarm/loop-converter";
 import { expandTilde, resolveToCwd } from "../tools/path-utils";
 import { urlHyperlinkAlways } from "../tui";
@@ -53,11 +53,11 @@ import { formatDuration } from "./helpers/format";
 import { createMarketplaceManager } from "./helpers/marketplace-manager";
 import { handleMcpAcp } from "./helpers/mcp";
 import { commandConsumed, errorMessage, parseSlashCommand, parseSubcommand, usage } from "./helpers/parse";
+import { PROFILE_USAGE, parseProfileCreateArgs, renderProfileTable } from "./helpers/profile";
 import { describeRedeemOutcome, type ResetUsageAccount, toResetUsageAccounts } from "./helpers/reset-usage";
 import { handleSshAcp } from "./helpers/ssh";
 import { launchStatsDashboard, parseStatsDashboardArgs } from "./helpers/stats-dashboard";
 import { handleTodoAcp } from "./helpers/todo";
-import { parseProfileCreateArgs, PROFILE_USAGE, renderProfileTable } from "./helpers/profile";
 import { buildUsageReportText } from "./helpers/usage-report";
 import { parseMarketplaceInstallArgs, parsePluginScopeArgs } from "./marketplace-install-parser";
 import type {

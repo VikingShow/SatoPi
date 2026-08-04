@@ -45,7 +45,12 @@ export function parseProfileCreateArgs(rest: string): ProfileCreateArgs {
 			continue;
 		}
 		if (token === "--domains" && value && !value.startsWith("-")) {
-			args.domains.push(...value.split(",").map(s => s.trim()).filter(Boolean));
+			args.domains.push(
+				...value
+					.split(",")
+					.map(s => s.trim())
+					.filter(Boolean),
+			);
 			i += 2;
 			continue;
 		}
@@ -67,7 +72,10 @@ export function renderProfileTable(profiles: readonly AgentProfile[]): string {
 	const widths = header.map((h, col) => Math.max(h.length, ...rows.map(r => r[col]!.length)));
 
 	const line = (cells: readonly string[]): string =>
-		cells.map((cell, col) => cell.padEnd(widths[col]!)).join("  ").trimEnd();
+		cells
+			.map((cell, col) => cell.padEnd(widths[col]!))
+			.join("  ")
+			.trimEnd();
 
 	const sorted = [...rows].sort((a, b) => Number(b[3]) - Number(a[3]));
 	return [line(header), line(widths.map(w => "-".repeat(w))), ...sorted.map(line)].join("\n");

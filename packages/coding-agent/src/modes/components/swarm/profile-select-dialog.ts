@@ -268,7 +268,7 @@ export class ProfileSelectDialog implements Component {
 		} catch (err) {
 			this.#draftError = err instanceof Error ? err.message : String(err);
 		}
- 	}
+	}
 
 	focus(): void {
 		// Overlay system manages focus.
