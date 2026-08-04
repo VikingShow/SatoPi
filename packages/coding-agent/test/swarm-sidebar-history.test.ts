@@ -19,7 +19,7 @@ import * as path from "node:path";
 import { collectPersistedAgents, type PersistedAgentInfo } from "@satopi/pi-coding-agent/modes/components/agent-hub";
 import { SwarmSidebar } from "@satopi/pi-coding-agent/modes/components/swarm/swarm-sidebar";
 import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { MAIN_AGENT_ID } from "@satopi/pi-coding-agent/registry/agent-registry";
+import { AgentRegistry, MAIN_AGENT_ID } from "@satopi/pi-coding-agent/registry/agent-registry";
 import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
 import { TempDir } from "@satopi/pi-utils";
 
@@ -160,6 +160,30 @@ describe("SwarmSidebar history", () => {
 		return h;
 	}
 
+	/**
+	 * Register enough root-level (kind "main") agents that the flat tree
+	 * overflows the treeBudget (termRows - 7) at any terminal height. Returns
+	 * the registered ids so the caller can unregister them afterwards — the
+	 * global registry is shared across tests in this file.
+	 */
+	function registerOverflowAgents(prefix: string): string[] {
+		const termRows = process.stdout.rows || 24;
+		const fakes: string[] = [];
+		const count = termRows + 8; // flat tree = count + 1 > treeBudget = termRows - 7
+		for (let i = 0; i < count; i++) {
+			const id = `${prefix}-${i}`;
+			fakes.push(id);
+			AgentRegistry.global().register({
+				id,
+				displayName: `Fake Agent ${i}`,
+				kind: "main",
+				session: null,
+				status: "idle",
+			});
+		}
+		return fakes;
+	}
+
 	it("renders other sessions with an agent-count badge once summarized", async () => {
 		const h = await newHarness();
 		await expandHistory(h);
@@ -225,5 +249,42 @@ describe("SwarmSidebar history", () => {
 		expect(lines.length).toBeLessThanOrEqual(termRows - 2);
 		const lastNonEmpty = [...lines].reverse().find(l => strip(l).trim() !== "");
 		expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+	});
+
+	it("keeps the framed panel within budget at narrow widths with an overflowing tree", async () => {
+		const h = await newHarness();
+		const termRows = process.stdout.rows || 24;
+		const fakes = registerOverflowAgents("sidebar-narrow");
+		try {
+			const lines = h.sidebar.render(40);
+			expect(lines.length).toBeLessThanOrEqual(termRows - 2);
+			const lastNonEmpty = [...lines].reverse().find(l => strip(l).trim() !== "");
+			expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+			// The 69-column hint cannot fit innerWidth 36 — the short hint is
+			// used instead, and it must stay on a single row.
+			const text = lines.map(strip).join("\n");
+			expect(text).not.toContain("r resume");
+			expect(text).toContain("j/k Enter");
+		} finally {
+			for (const id of fakes) AgentRegistry.global().unregister(id);
+		}
+	});
+
+	it("survives the overlay engine's tail clamp so the bottom border is never amputated", async () => {
+		const h = await newHarness();
+		const termRows = process.stdout.rows || 24;
+		const fakes = registerOverflowAgents("sidebar-clamp");
+		try {
+			const overlayLines = h.sidebar.render(40);
+			const maxHeight = termRows - 2;
+			// Same tail clip #compositeOverlaysIntoWindow applies to overlays
+			// that are not bottom-anchored (packages/tui/src/tui.ts).
+			const clamped = overlayLines.length > maxHeight ? overlayLines.slice(0, maxHeight) : overlayLines;
+			expect(clamped.length).toBeLessThanOrEqual(maxHeight);
+			const lastNonEmpty = [...clamped].reverse().find(l => strip(l).trim() !== "");
+			expect(strip(lastNonEmpty ?? "")).toMatch(/╰|└/);
+		} finally {
+			for (const id of fakes) AgentRegistry.global().unregister(id);
+		}
 	});
 });

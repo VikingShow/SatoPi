@@ -58,6 +58,7 @@ import {
 	OffloadManager,
 } from "./offload";
 import "./discovery";
+import type { CommChannel } from "./comm/comm-channel";
 import { initializeWithSettings } from "./discovery";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
@@ -520,6 +521,8 @@ export interface CreateAgentSessionOptions {
 	skipPythonPreflight?: boolean;
 	/** Tool names explicitly requested (enables disabled-by-default tools) */
 	toolNames?: string[];
+	/** Optional CommChannel for swarm communication tools (agent_peers/agent_broadcast/...). */
+	commChannel?: CommChannel;
 	/** Tool names to block — removed from the available set (config-as-constraint). */
 	blockedTools?: string[];
 	/** Write allowlist — restrict the write tool to only these file paths. */
@@ -2268,6 +2271,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			autoApprove: options.autoApprove ?? false,
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
+		toolContextStore.setCommChannel(options.commChannel);
 		toolContextStore.setEventBus(eventBus);
 		toolContextStore.setForkMaxDepth((settings.get("magicKeywords.swarm.maxForkDepth") as number | undefined) ?? 1);
 

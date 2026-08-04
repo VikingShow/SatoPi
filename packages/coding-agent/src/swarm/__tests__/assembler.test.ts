@@ -16,6 +16,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { MarkEnvironment } from "../../coordination";
 import type { ExperienceStore } from "../../experience/experience";
+import { TaskQueue } from "../../graph/task-queue";
 import type { HookPipeline } from "../../hooks/hook-pipeline";
 import type { ActivityLogger } from "../../infra/activity-logger";
 import type { IrcBus } from "../../irc/bus";
@@ -126,5 +127,38 @@ describe("assembleAgentRuntime", () => {
 
 		expect(runtime).toBeTruthy();
 		expect(typeof runtime.spawn).toBe("function");
+	});
+
+	// ── E1a: TaskQueueSource registration ─────────────────────────────────
+
+	test("registers TaskQueueSource and exposes the runtime task queue when one is provided", () => {
+		const queue = new TaskQueue([]);
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+			taskQueue: queue,
+		});
+
+		// The same queue instance flows through to the runtime so StageBehavior
+		// and CrossCheckBehavior observe the identical queue the source reads.
+		expect(runtime.taskQueue).toBe(queue);
+		const sources = runtime.contextPipeline.listSources();
+		expect(sources.some(s => s.name === "task-queue" && s.priority === 7)).toBe(true);
+	});
+
+	test("does not register TaskQueueSource without a runtime task queue", () => {
+		const runtime = assembleAgentRuntime({
+			modelRegistry: mockModelRegistry,
+			settings: mockSettings,
+			activityLogger: mockActivityLogger,
+			roleAssetManager: mockRoleAssetManager,
+			hookPipeline: mockHookPipeline,
+		});
+
+		expect(runtime.taskQueue).toBeUndefined();
+		expect(runtime.contextPipeline.listSources().some(s => s.name === "task-queue")).toBe(false);
 	});
 });

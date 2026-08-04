@@ -422,7 +422,6 @@ export class SwarmModeController {
 			const state: CrewTranscriptState = {
 				crew: crew.state,
 				topic: crew.state.name,
-				converged: false,
 				totalRounds: 1,
 				entries: [],
 			};
@@ -562,6 +561,12 @@ export class SwarmModeController {
 			logger.warn("[SwarmModeController] Cannot spawn crew members: missing modelRegistry or settings");
 			return;
 		}
+		// The active crew's CommChannel: crew-member agent-channel tools
+		// (agent_peers, irc, ...) resolve this channel from context.commChannel,
+		// so they operate on the real crew membership instead of falling back to
+		// the global default channel.
+		const crew = this.#activeCrewId ? this.#crewManager.getCrew(this.#activeCrewId) : undefined;
+		const commChannel = crew?.channel;
 
 		const availableModels = modelRegistry.getAvailable();
 		if (availableModels.length === 0) {
@@ -610,9 +615,11 @@ Your role in this crew: ${profile.identity.description}.
 
 Rules:
 - Reply concisely; no preamble or filler.
-- Use your tools (read, grep, glob, edit, write, bash, todo) whenever the task requires inspecting or changing files.
-- Watch for @mentions of your agent id; when replying to a specific crewmate, address them by @mention.`,
-					toolNames: ["read", "grep", "glob", "edit", "write", "bash", "todo"],
+- Use your tools (read, grep, glob, edit, write, bash, todo, irc, agent_peers) whenever the task requires inspecting or changing files.
+- Watch for @mentions of your agent id; when replying to a specific crewmate, address them by @mention.
+- Your crew roster appears as a <peer_roster> block in your context; address crewmates by @agent-id.`,
+					toolNames: ["read", "grep", "glob", "edit", "write", "bash", "todo", "irc", "agent_peers"],
+					commChannel,
 					modelRegistry,
 					settings,
 					hasIrcInterrupts: true,

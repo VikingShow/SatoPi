@@ -70,8 +70,25 @@ export class TaskQueue extends EventEmitter {
 	 */
 	constructor(tasks: Omit<Task, "status">[]) {
 		super();
-		const ids = new Set<string>();
+		this.load(tasks);
+	}
 
+	/**
+	 * Replace the queue contents with a new task set (shared-queue adoption).
+	 *
+	 * Lets a runtime-owned TaskQueue (assembler → SwarmRuntime) adopt the
+	 * tasks parsed by StageBehavior instead of building a private queue, so
+	 * context sources like TaskQueueSource observe the live queue state.
+	 * Reuses the constructor validation (duplicates, unknown deps, cycles).
+	 */
+	load(tasks: Omit<Task, "status">[]): void {
+		this.#tasks.clear();
+		this.#readyQueue.length = 0;
+		this.#inProgress.clear();
+		this.#completed.length = 0;
+		this.#blocked.length = 0;
+
+		const ids = new Set<string>();
 		for (const task of tasks) {
 			if (ids.has(task.id)) {
 				throw new Error(`Duplicate task id: ${task.id}`);

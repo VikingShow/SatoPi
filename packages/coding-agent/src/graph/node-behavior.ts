@@ -19,13 +19,18 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { ModelRegistry } from "../config/model-registry";
+import type { Settings } from "../config/settings";
 import type { ContextPipeline } from "../context/context-pipeline";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { AgentSession } from "../session/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { AgentSpec } from "./agent-spec";
+import { CrossCheckBehavior } from "./behaviors/cross-check-behavior";
 import { CurtainBehavior } from "./behaviors/curtain-behavior";
+import { DebateNodeBehavior } from "./behaviors/debate-node-behavior";
+import type { DebateRoundtableResult } from "./behaviors/debate-roundtable";
 import { ScriptBehavior } from "./behaviors/script-behavior";
 import { StageBehavior } from "./behaviors/stage-behavior";
 import { LoopNodeBehavior } from "./loop-node-behavior";
@@ -316,6 +321,21 @@ export interface NodeBehaviorFactoryConfig {
 	loopConfig: LoopSwarmConfig;
 	/** Current plan.md content from the Script phase (if already produced). */
 	planContent: string;
+	/** Factory for plan-debate roundtables — drives `debate` nodes. */
+	debateRoundtableFactory?: (config: {
+		agentCount: number;
+		maxRounds: number;
+		convergenceThreshold: number;
+		runtime: SwarmRuntime;
+	}) => {
+		debate(
+			planContent: string,
+			workspace: string,
+			modelRegistry: ModelRegistry,
+			settings: Settings,
+			signal?: AbortSignal,
+		): Promise<DebateRoundtableResult>;
+	};
 }
 
 /**
@@ -335,6 +355,8 @@ const behaviorRegistry: Map<string, NodeBehaviorFactory> = new Map<string, NodeB
 	["script", config => new PhaseBehaviorNodeAdapter(new ScriptBehavior(), config)],
 	["stage", config => new PhaseBehaviorNodeAdapter(new StageBehavior(), config)],
 	["curtain", config => new PhaseBehaviorNodeAdapter(new CurtainBehavior(), config)],
+	["debate", config => new DebateNodeBehavior(config)],
+	["cross-check", _config => new CrossCheckBehavior()],
 	["subgraph", _config => new SubgraphNodeBehavior()],
 	["loop", _config => new LoopNodeBehavior()],
 ]);

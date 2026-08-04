@@ -151,4 +151,21 @@ describe("TaskQueue.parseFromPlan", () => {
 		expect(queue.readyQueue).toContain("validate-schemas");
 		expect(queue.readyQueue).toContain("generate-report");
 	});
+
+	// ── Shared-queue adoption (Phase E1a) ────────────────────────────────
+
+	test("load() replaces the queue contents for shared-queue adoption", () => {
+		const queue = new TaskQueue(TaskQueue.parseFromPlan(planWithTasks(["- [ ] first-task"])));
+		queue.complete("first-task");
+		expect(queue.allDone).toBe(true);
+
+		// StageBehavior adopts the runtime queue: load() swaps in the parsed
+		// tasks and resets every status back to pending.
+		queue.load(TaskQueue.parseFromPlan(planWithTasks(["- [ ] second-task", "- [ ] third-task"])));
+
+		expect(queue.tasks.size).toBe(2);
+		expect(queue.get("first-task")).toBeUndefined();
+		expect(queue.allDone).toBe(false);
+		expect(queue.progress).toMatchObject({ total: 2, completed: 0, ready: 2 });
+	});
 });

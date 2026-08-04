@@ -92,7 +92,13 @@ export class StageBehavior implements PhaseBehavior {
 		const tasks =
 			execTasks.length > 0 ? execTasks : allTasks.map(t => ({ ...t, assignedRole: "implementer" as const }));
 
-		this.#taskQueue = new TaskQueue(tasks);
+		// Adopt the runtime-owned shared queue when present (assembler wiring)
+		// so TaskQueueSource context and CrossCheckBehavior observe the live
+		// queue state; otherwise build a private queue as before.
+		this.#taskQueue = ctx.runtime.taskQueue ?? new TaskQueue(tasks);
+		if (ctx.runtime.taskQueue) {
+			ctx.runtime.taskQueue.load(tasks);
+		}
 
 		logger.info("[StageBehavior] Parsed tasks from plan", {
 			taskCount: allTasks.length,
