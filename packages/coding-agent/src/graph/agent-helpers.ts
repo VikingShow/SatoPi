@@ -191,6 +191,7 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentSession>
 		hasUI: false,
 		autoApprove: true,
 		hasIrcInterrupts: true,
+		commChannel,
 		getSteeringMessages: async () => {
 			if (steeringQueue.length === 0) return [];
 			return steeringQueue.splice(0);

@@ -1,5 +1,6 @@
 import type { Agent, AgentToolContext, ToolCallContext } from "@satopi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
+import type { CommChannel } from "../comm/comm-channel";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { EventBus } from "../utils/event-bus";
@@ -25,6 +26,7 @@ export class ToolContextStore {
 	#eventBus: EventBus | undefined;
 	#parentAgent: Agent | undefined;
 	#forkMaxDepth: number | undefined;
+	#commChannel: CommChannel | undefined;
 
 	constructor(private readonly getBaseContext: () => CustomToolContext) {}
 
@@ -32,6 +34,7 @@ export class ToolContextStore {
 		return {
 			...this.getBaseContext(),
 			agentRuntime: this.#agentRuntime,
+			commChannel: this.#commChannel,
 			ui: this.#uiContext,
 			hasUI: this.#hasUI,
 			toolNames: this.#toolNames,
@@ -40,6 +43,9 @@ export class ToolContextStore {
 			parentAgent: this.#parentAgent,
 			forkMaxDepth: this.#forkMaxDepth,
 		};
+	}
+	setCommChannel(channel: CommChannel | undefined): void {
+		this.#commChannel = channel;
 	}
 
 	setForkMaxDepth(depth: number | undefined): void {

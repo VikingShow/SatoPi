@@ -4,6 +4,8 @@
 
 ### Added
 
+- Peer discovery: a new `PeerRosterSource` context source injects a `<peer_roster>` block (id/name/role/status, capped, self-excluded) into every spawned swarm/crew agent's context, and the runtime `CommChannel` is now wired into crew-member and graph-agent tool contexts — the `agent_peers`/`agent_broadcast`/`agent_query_all`/`agent_query_majority`/`agent_roundtable` tools resolve the real crew membership instead of an empty default channel. Crew members gain `irc` + `agent_peers` in their tool whitelist and a roster pointer in their system prompt.
+
 - New `/profile` slash command (`/profile list|create|delete`) manages the agent profiles behind `/swarm start`; the crew-start profile dialog gains a self-contained `+ Create new agent` row (inline draft-name input) so users can add agents without hand-editing `.stp/profiles` JSON. `ProfileRegistry` gains `deleteProfile`, exported `validateProfileId`/`deriveProfileId`/`validateProfile`, and a documented on-disk format.
 
 ### Fixed

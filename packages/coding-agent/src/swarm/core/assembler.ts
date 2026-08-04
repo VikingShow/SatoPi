@@ -22,6 +22,7 @@ import { HindsightSource } from "../../context/sources/hindsight-source";
 import { MmdSource } from "../../context/sources/mmd-source";
 import { MnemopiSource } from "../../context/sources/mnemopi-source";
 import { OffloadSource } from "../../context/sources/offload-source";
+import { PeerRosterSource } from "../../context/sources/peer-roster-source";
 import { StigmergySource } from "../../context/sources/stigmergy-source";
 import { MarkEnvironment } from "../../coordination";
 import type { ExperienceStore } from "../../experience/experience";
@@ -132,6 +133,10 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 	if (opts.offloadManager) {
 		contextPipeline.register(new OffloadSource(opts.offloadManager));
 	}
+
+	// PeerRosterSource needs no dependencies — always inject so every spawned
+	// agent sees who it is collaborating with.
+	contextPipeline.register(new PeerRosterSource());
 
 	if (opts.ircBus) {
 		opts.ircBus.setActivityLogger(opts.activityLogger);
