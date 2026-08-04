@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- New `/profile` slash command (`/profile list|create|delete`) manages the agent profiles behind `/swarm start`; the crew-start profile dialog gains a self-contained `+ Create new agent` row (inline draft-name input) so users can add agents without hand-editing `.stp/profiles` JSON. `ProfileRegistry` gains `deleteProfile`, exported `validateProfileId`/`deriveProfileId`/`validateProfile`, and a documented on-disk format.
+
+### Fixed
+
+- Fixed the Ctrl+B sidebar bottom border still being clipped after the 0.0.4 fit fix: the 69-column footer hint wrapped into two rows at the default 40% width (and some tree rows exceeded the inner width), inflating the framed panel past the overlay budget — the hint now adapts to the panel width, every content row is truncated to the inner width, and a tail clamp keeps the panel at or under `rows − 2`.
+- Crew transcript now renders as blocks with exactly one blank row between messages, bodies wrap at word boundaries instead of hard-slicing mid-word, prefixes are shortened to `HH:MM R<n> [agent]`, and the height budget derives from the host overlay target so the panel bottom border survives the engine clamp; the dead `[tools]/[msg-only]` toggle was removed.
+
 ## [0.0.4] - 2026-08-03
 
 ### Added

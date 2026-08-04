@@ -14,23 +14,88 @@
  */
 
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { getProfilesDir } from "../offload/paths";
 import { SWARM_ROLE_PROFILES } from "./role-profiles";
 
 // ============================================================================
 // Validation
 // ============================================================================
-
 /** Profile IDs must be path-safe: alphanumeric, hyphens, and underscores only. */
 const SAFE_PROFILE_ID = /^[a-zA-Z0-9_-]+$/;
 
+/**
+ * Validate a profileId against the path-safe rule that also governs on-disk
+ * file names (`{workspace}/.stp/profiles/{profileId}.json`).
+ *
+ * Exported so user-facing entry points (the `/profile` slash command and the
+ * profile-select dialog) can reject bad ids before `createProfile` throws.
+ */
+export function validateProfileId(profileId: string): boolean {
+	return !!profileId && SAFE_PROFILE_ID.test(profileId);
+}
+
+/**
+ * Derive a path-safe profileId from a display name, e.g. `"Demo Agent!"` →
+ * `"demo-agent"`. Non-alphanumeric runs collapse to a single hyphen and the
+ * result is lowercased (underscores are preserved — they are legal in ids).
+ * Returns `""` when the name has no usable characters; callers MUST check
+ * `validateProfileId` before persisting.
+ */
+export function deriveProfileId(name: string): string {
+	return name
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-zA-Z0-9_]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+}
+
 function requireSafeProfileId(profileId: string): void {
-	if (!profileId || !SAFE_PROFILE_ID.test(profileId)) {
+	if (!validateProfileId(profileId)) {
 		throw new Error(
 			`Invalid profileId "${profileId}": must contain only alphanumeric characters, hyphens, and underscores`,
 		);
 	}
 }
+
+/**
+ * Early-failure validation for a complete AgentProfile: rejects unsafe or
+ * missing ids and empty name/archetype. Called by `createProfile` before a new
+ * profile enters the registry (see C3 of the crew-discovery TUI plan).
+ */
+export function validateProfile(profile: AgentProfile): void {
+	requireSafeProfileId(profile.profileId);
+	if (!profile.identity?.name?.trim()) {
+		throw new Error(`Profile "${profile.profileId}" is missing a name`);
+	}
+	if (!profile.identity?.archetype?.trim()) {
+		throw new Error(`Profile "${profile.profileId}" is missing an archetype`);
+	}
+}
+
+// ============================================================================
+// On-disk format (per-workspace persistence)
+// ============================================================================
+//
+// Profiles persist under `{workspace}/.stp/profiles/` (see `offload/paths.ts`
+// `getProfilesDir`):
+//
+//   {workspace}/.stp/profiles/_index.json       — summary entries for fast
+//       scanning: [{ profileId, archetype, score, lastActive }]
+//   {workspace}/.stp/profiles/{profileId}.json  — full AgentProfile snapshot
+//
+// `load(workspaceDir)` reads only index-listed files (path-safe ids only;
+// missing/corrupt files are skipped) and falls back to a legacy
+// `{workspace}/profiles.json` array. `save(workspaceDir)` atomically rewrites
+// every profile file plus the index, and mirrors the legacy file for one
+// migration cycle. Profiles absent from the registry are dropped from the
+// index on save but their `{profileId}.json` files are NOT removed —
+// `deleteProfile(profileId, workspaceDir)` unlinks the file explicitly.
+//
+// Field defaults from `createProfile`: credit.score = 50; credit totals,
+// counts and violationHistory = 0/[]; social and stats zeroed; offloadRefs
+// empty; identity.description = `Agent of archetype <archetype>`;
+// expertise.{domains,proficiency,specialties} = []/{}/[].
 
 // ============================================================================
 // Types
@@ -204,11 +269,13 @@ export class ProfileRegistry {
 				.save(workspaceDir)
 				.catch(() => {});
 		}
+		globalInitialized = true;
 		return ProfileRegistry.global();
 	}
 
 	static resetGlobalForTests(): void {
 		ProfileRegistry.#global = undefined;
+		globalInitialized = false;
 	}
 
 	// ── Create ────────────────────────────────────────────────────────
@@ -273,6 +340,7 @@ export class ProfileRegistry {
 			},
 		};
 
+		validateProfile(profile);
 		this.#profiles.set(opts.profileId, profile);
 		this.#versions.set(opts.profileId, 1);
 		return profile;
@@ -294,6 +362,28 @@ export class ProfileRegistry {
 		const existing = this.#profiles.get(opts.profileId);
 		if (existing) return existing;
 		return this.createProfile(opts);
+	}
+
+	// ── Delete ────────────────────────────────────────────────────────
+
+	/**
+	 * Remove a profile from the registry.
+	 *
+	 * When `workspaceDir` is provided, also best-effort unlinks the on-disk
+	 * `{profileId}.json` file (path-safe ids only). The `_index.json` entry is
+	 * dropped by the next `save(workspaceDir)` — `save` rewrites the index from
+	 * the current registry contents and never resurrects absent profiles.
+	 *
+	 * @returns true when a profile was removed, false when it did not exist.
+	 */
+	deleteProfile(profileId: string, workspaceDir?: string): boolean {
+		if (!this.#profiles.delete(profileId)) return false;
+		this.#versions.delete(profileId);
+		this.invalidateRankCache();
+		if (workspaceDir && validateProfileId(profileId)) {
+			void fs.unlink(path.join(getProfilesDir(workspaceDir), `${profileId}.json`)).catch(() => {});
+		}
+		return true;
 	}
 
 	// ── Read ──────────────────────────────────────────────────────────
@@ -694,6 +784,31 @@ export class ProfileRegistry {
 		const current = this.#versions.get(profileId) ?? 0;
 		this.#versions.set(profileId, current + 1);
 	}
+}
+
+// ============================================================================
+// Global initialization
+// ============================================================================
+
+/**
+ * Tracks whether `ProfileRegistry.initGlobal` has run in this process. The
+ * ACP/RPC dispatchers do not initialize the profile registry themselves, so
+ * user-facing entry points (e.g. the `/profile` slash command) call
+ * `ensureProfileRegistry` before touching the singleton. A dedicated flag
+ * (rather than `global().list().length === 0`) avoids re-seeding the builtin
+ * profiles when a user deletes every profile mid-session.
+ */
+let globalInitialized = false;
+
+/**
+ * Ensure the global ProfileRegistry is loaded for `workspaceDir`.
+ * Cheap no-op once `ProfileRegistry.initGlobal` has already run.
+ */
+export async function ensureProfileRegistry(workspaceDir: string): Promise<ProfileRegistry> {
+	if (!globalInitialized) {
+		await ProfileRegistry.initGlobal(workspaceDir);
+	}
+	return ProfileRegistry.global();
 }
 
 // ============================================================================
