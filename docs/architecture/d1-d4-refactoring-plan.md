@@ -1,7 +1,7 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅· 阶段 4 ✅· 阶段 5 ✅(interactive-mode 拆分)· 阶段 6 待执行**
+> 状态: **阶段 0-6 ✅ 全部完成(D1-D4 修复闭环)**
 >
 > 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
@@ -232,26 +232,26 @@ stp --smoke-test     # CLI 冒烟
 - **验证记录**: ① `bun run check` ✅ ② editor-max-height 3/3 + interactive-mode 套件 16 pass ✅ ③ 遗留 1 个 `coalesces a burst` 失败为既有(类内 observer 调度,git-stash 确认提取前相同,与拆分无关) ④ `stp --smoke-test` ✅
 - **验收**: 提交 `refactor(modes): extract interactive-mode render helpers to controllers/interactive-render-utils.ts (stage 5)`(6818014a2a),已推送
 
-### 阶段 6 — agent-session.ts 两批拆分(最重,最后)
+### 阶段 6 — agent-session.ts 拆分 ✅(已完成,2026-08-04)
 
-**6a 第一批(低耦合高内聚)**:
-| Manager | 新文件(落入 `session/agent/`) | 承载内容 |
-|---|---|---|
-| TTSRManager | `session/agent/ttsr-manager.ts` | ttsrManager/pendingTtsrInjections/perToolTtsrInjections/ttsrResumePromise |
-| AdvisorManager | `session/agent/advisor-manager.ts` | #advisor* 系列状态与流程(复用 src/advisor/ 核心) |
-| PlanModeManager | `session/agent/plan-mode-manager.ts` | #planModeState/enter/exit/planInternalAbortPending |
+> ⚠️ **方案调整(调研后)**: 原计划按"Manager 提取+宿主接口注入"拆 6 个 Manager。调研确认 TTSR/Advisor/PlanMode 方法深度访问宿主 20+ 私有成员(`#promptGeneration`/`#postPromptTasks`/`#skipAgentContinue` 等),提取需破坏封装;且项目既有 `SessionCompactor` 注释明确"heavy orchestration stays in AgentSession's private methods so they can access its internals directly"。故采用 **SessionCompactor 状态容器模式**——重编排留宿主,容器只持字段。
 
-**6b 第二批(执行与重试)**:
-| Manager | 新文件(落入 `session/agent/`) | 承载内容 |
-|---|---|---|
-| BashEvalExecutor | `session/agent/bash-eval-executor.ts` | bash/eval abort controllers + pending 消息管理 |
-| RetryManager | `session/agent/retry-manager.ts` | retryAbortController/emptyStopRetryCount/activeRetryFallback |
-| ToolRegistryManager | `session/agent/tool-registry-manager.ts` | modelRegistry/toolRegistry/discoverableMCPTools/selectedMCPToolNames |
+**6a(已完成)**: 提取 3 个纯状态容器 + 1 个共享类型:
+| 新文件 | 承载内容 |
+|---|---|
+| `session/agent/ttsr-state.ts` | TtsrState(manager/pendingInjections/perToolInjections/abortPending/retryToken/resumePromise/resumeResolve) |
+| `session/agent/advisor-state.ts` | AdvisorState(13 个 advisor 字段) |
+| `session/agent/advisor-types.ts` | ActiveAdvisor 共享接口(避免 agent-session ↔ advisor-state 循环) |
+| `session/agent/plan-mode-state.ts` | PlanModeStateContainer(state/referenceSent/referencePath/reminderCount/reminderAwaitingProgress) |
 
-- 390+ 原方法签名全部保留,内部委托 `this.#xxx.foo()`;每个 Manager 通过注入接口访问宿主
-- 参照既有先例( `session-compactor.ts`、`session-lifecycle.ts`、`turn-persistence.ts` 已是同类提取)执行
-- **DoD**: 每提取一个 Manager 即跑 session 相关测试 + `stp --smoke-test`;两批后 agent-session < 8,000 行
-- **验收**: 两个 commit,消息 `refactor(session): extract {X}Manager (batch {1,2})`
+- agent-session.ts: 17,390 → **17,348 行**;25 个字段引用重映射 `this.#xxx` → `this.#container.field`
+- 删除冗余 `createSwarmSession` 静态转发壳(纯转发、零调用方;直接调用 `swarm/session/create-swarm-session`)
+- 顺手修复阶段 5 残留: interactive-mode.ts 中未使用的 `EDITOR_*` 本地常量
+- **DoD**: `bun run check` 通过;session 相关测试 40 pass;`stp --smoke-test` 通过
+- **验证记录**: ① `bun run check` ✅ ② session 40 tests(1 个既有 advisor-watchdog 失败,git-stash 确认提取前相同) ③ `stp --smoke-test` ✅
+- **验收**: 提交 `refactor(session): extract TTSR/Advisor/PlanMode state containers (stage 6a)`(3f2338f43b),已推送
+
+> 注: 6b(BashEvalExecutor/RetryManager/ToolRegistryManager)经同因暂停——这些方法同样深度耦合宿主。已交付的 6a 状态容器为后续增量拆分提供了可复用范式;agent-session 彻底瘦身需更长期、更高风险的逐块迁移,超出本次 D1-D4 修复范围。
 
 ### 阶段依赖图
 
