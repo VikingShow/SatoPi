@@ -5,7 +5,7 @@
 
 import type { Component } from "@satopi/pi-tui";
 import { AgentRegistry } from "../../../registry/agent-registry";
-import type { AgentSession } from "../../../session/agent-session";
+import type { AgentSession } from "../../../session/agent/agent-session";
 import type { Theme } from "../../theme/theme";
 import { swarmPanel } from "./swarm-panel-block";
 

@@ -20,7 +20,7 @@ import { initTheme, theme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { setProjectDir, TempDir } from "@satopi/pi-utils";
 
 const model = { provider: "anthropic", id: "claude-sonnet-4-5" } as Model;

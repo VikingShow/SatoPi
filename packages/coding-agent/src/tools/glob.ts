@@ -11,7 +11,7 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter } from "../internal-urls";
 import type { Theme } from "../modes/theme/theme";
 import globDescription from "../prompts/tools/glob.md" with { type: "text" };
-import { type TruncationResult, truncateHead } from "../session/streaming-output";
+import { type TruncationResult, truncateHead } from "../session/message/streaming-output";
 import { Ellipsis, fileHyperlink, renderFileList, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";

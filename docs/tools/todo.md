@@ -8,7 +8,7 @@
 - Key collaborators:
   - `packages/coding-agent/src/tools/index.ts` — registers tool, exposes session hooks, gates availability.
   - `packages/coding-agent/src/modes/controllers/event-controller.ts` — updates the visible todo UI on tool completion.
-  - `packages/coding-agent/src/session/agent-session.ts` — stores cached phases, strips done/dropped tasks on session resume, emits failure reminders.
+  - `packages/coding-agent/src/session/agent/agent-session.ts` — stores cached phases, strips done/dropped tasks on session resume, emits failure reminders.
   - `packages/coding-agent/src/modes/controllers/todo-command-controller.ts` — `/todo` command path, custom-entry persistence, transcript reminder injection.
   - `packages/coding-agent/src/tools/render-utils.ts` — collapsed-preview cap for renderer trees.
 
@@ -70,7 +70,7 @@ The TUI renderer (`todoToolRenderer`) merges call and result into one transcript
    - if none are `in_progress`, the first `pending` task in phase/task order is auto-promoted to `in_progress`.
 6. `execute(...)` stores the updated phases with `session.setTodoPhases?.(...)` only when the op produced no errors and was not a `view`; a failed op is discarded (persisting a half-applied mutation would make the natural retry hit "already exists"). `storage` is `"session"` when `session.getSessionFile()` exists, else `"memory"`.
 7. `getCompletionTransitions(...)` compares the previous and updated phases (skipped for failed or `view` calls); newly completed tasks are returned in `details.completedTasks`.
-8. The agent runtime also watches `todo` tool results in `packages/coding-agent/src/session/agent-session.ts`; successful results refresh cached todos, failed results inject a hidden next-turn reminder telling the model that todo progress is not visible until it retries.
+8. The agent runtime also watches `todo` tool results in `packages/coding-agent/src/session/agent/agent-session.ts`; successful results refresh cached todos, failed results inject a hidden next-turn reminder telling the model that todo progress is not visible until it retries.
 9. The event controller updates the visible todo UI from `result.details.phases` on success, or shows a warning on error (`packages/coding-agent/src/modes/controllers/event-controller.ts`).
 
 ## Modes / Variants

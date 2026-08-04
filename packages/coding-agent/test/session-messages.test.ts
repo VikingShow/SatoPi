@@ -6,7 +6,7 @@ import {
 	convertToLlm,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	wrapSteeringForModel,
-} from "@satopi/pi-coding-agent/session/messages";
+} from "@satopi/pi-coding-agent/session/message/messages";
 
 function expectAttribution(message: Message | undefined, expected: "user" | "agent" | undefined): void {
 	expect(message).toBeDefined();

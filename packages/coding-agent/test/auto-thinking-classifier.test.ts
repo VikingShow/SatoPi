@@ -12,7 +12,7 @@ import {
 } from "@satopi/pi-coding-agent/auto-thinking/classifier";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import {
 	AUTO_THINKING,
 	clampAutoThinkingEffort,

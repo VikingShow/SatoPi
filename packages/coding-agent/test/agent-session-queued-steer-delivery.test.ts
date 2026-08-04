@@ -20,10 +20,10 @@ import { createMockModel, type MockModel, type MockResponse } from "@satopi/pi-a
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { USER_INTERRUPT_LABEL } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 const COLLAB_PROMPT_TYPE = "collab-prompt";

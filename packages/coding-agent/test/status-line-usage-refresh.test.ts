@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { StatusLineComponent } from "@satopi/pi-coding-agent/modes/components/status-line";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 async function flushMicrotasks(): Promise<void> {
 	await Promise.resolve();

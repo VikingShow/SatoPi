@@ -11,13 +11,13 @@
  *   4. checkCompletion() → detect when report is done and human has applauded
  *   5. exit() → clean up agent handles and channel
  *
- * This behavior does NOT import CurtainRunner — it uses AgentRuntime,
+ * This behavior does NOT import CurtainRunner — it uses the runtime's spawn,
  * IrcBus, and HookPipeline directly.
  */
 
 import { logger } from "@satopi/pi-utils";
 import type { CommChannel } from "../../comm/comm-channel";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { Chapter } from "../../swarm/core/state";
 import type { PhaseBehavior, PhaseCompletion, PhaseContext, PhaseEnterResult } from "./index";
 

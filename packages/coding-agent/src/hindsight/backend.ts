@@ -11,7 +11,7 @@ import type { AgentMessage } from "@satopi/pi-agent-core";
 import { logger } from "@satopi/pi-utils";
 import { onHindsightScopeChanged, type Settings } from "../config/settings";
 import type { MemoryBackend, MemoryBackendStartOptions } from "../memory-backend/types";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import { type BankScope, computeBankScope } from "./bank";
 import { createHindsightClient } from "./client";
 import { isHindsightConfigured, loadHindsightConfig } from "./config";

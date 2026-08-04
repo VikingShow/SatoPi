@@ -4,7 +4,7 @@ import { prompt } from "@satopi/pi-utils";
 import { extractTextContent, extractToolCall, parseJsonPayload } from "../commit/utils";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import guidedGoalSystemPrompt from "../prompts/goals/guided-goal-system.md" with { type: "text" };
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import { concreteThinkingLevel, shouldDisableReasoning, toReasoningEffort } from "../thinking";
 
 const RESPOND_TOOL_NAME = "respond";

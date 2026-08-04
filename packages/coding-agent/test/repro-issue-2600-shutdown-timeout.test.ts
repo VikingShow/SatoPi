@@ -27,8 +27,8 @@ import {
 	testSetExtensionHandlerTimeoutMs,
 	testSetSessionShutdownHandlerTimeoutMs,
 } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getProjectAgentDir, logger, TempDir } from "@satopi/pi-utils";
 
 const HANG_EXTENSION_SRC = `

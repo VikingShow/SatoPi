@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 
 describe("SessionManager usage statistics", () => {
 	it("accumulates premium requests from assistant messages and task tool results", () => {

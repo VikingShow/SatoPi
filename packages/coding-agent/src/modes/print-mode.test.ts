@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import type { AssistantMessage } from "@satopi/pi-ai";
-import type { AgentSessionEvent } from "../session/agent-session";
+import type { AgentSessionEvent } from "../session/agent/agent-session";
 import { printableEvent } from "./print-mode";
 
 const assistant: AssistantMessage = {

@@ -12,8 +12,6 @@ import type {
 } from "@satopi/pi-agent-core";
 import type { ImageContent, TextContent } from "@satopi/pi-ai";
 import { glob, type SummaryResult, summarizeCode } from "@satopi/pi-natives";
-import type { Component } from "@satopi/pi-tui";
-import { Text } from "@satopi/pi-tui";
 import {
 	getRemoteDir,
 	type ImageMetadata,
@@ -35,12 +33,10 @@ import {
 } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
 import { isNotebookPath, readEditableNotebookText } from "../edit/notebook";
-import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter, resolveLocalUrlToFile } from "../internal-urls";
 import { type ResolvedArtifactFile, resolveArtifactFile } from "../internal-urls/artifact-protocol";
 import { parseInternalUrl } from "../internal-urls/parse";
 import type { InternalUrl } from "../internal-urls/types";
-import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import {
@@ -51,9 +47,7 @@ import {
 	truncateHead,
 	truncateHeadBytes,
 	truncateLine,
-} from "../session/streaming-output";
-import { fileHyperlink, renderCodeCell, renderMarkdownCell, renderStatusLine, tryResolveInternalUrlSync } from "../tui";
-import { CachedOutputBlock, markFramedBlockComponent } from "../tui/output-block";
+} from "../session/message/streaming-output";
 import { buildLineEntriesWithBlockContext, type LineEntry, lineEntriesToPlainText } from "../utils/block-context";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import {
@@ -76,28 +70,13 @@ import {
 	scanConflictLines,
 	scanFileForConflicts,
 } from "./conflict-detect";
-import {
-	executeReadUrl,
-	loadReadUrlCacheEntry,
-	parseReadUrlTarget,
-	type ReadUrlToolDetails,
-	renderReadUrlCall,
-	renderReadUrlResult,
-} from "./fetch";
+import { executeReadUrl, loadReadUrlCacheEntry, parseReadUrlTarget } from "./fetch";
 import { applyListLimit } from "./list-limit";
-import {
-	formatFullOutputReference,
-	formatStyledTruncationWarning,
-	type OutputMeta,
-	resolveOutputMaxColumns,
-	stripOutputNotice,
-} from "./output-meta";
+import { resolveOutputMaxColumns } from "./output-meta";
 import {
 	expandPath,
 	formatPathRelativeToCwd,
-	isReadableUrlPath,
 	type LineRange,
-	parseLineRanges,
 	pathTargetsSsh,
 	probeLiteralPathExists,
 	resolveReadPath,
@@ -106,7 +85,16 @@ import {
 	splitPathAndSel,
 	splitPathAndSelPreferringLiteral,
 } from "./path-utils";
-import { formatBytes, replaceTabs, shortenPath, wrapBrackets } from "./render-utils";
+import {
+	invalidSelector,
+	isMultiRange,
+	isRawSelector,
+	type ParsedSelector,
+	parseSel,
+	type ReadToolDetails,
+	selToOffsetLimit,
+} from "./read/shared";
+import { formatBytes, shortenPath } from "./render-utils";
 import {
 	executeReadQuery,
 	getRowByKey,
@@ -126,6 +114,8 @@ import {
 } from "./sqlite-reader";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
+
+export type { ReadToolDetails } from "./read/shared";
 
 // Per-session memo for tree-sitter summaries. `summarizeCode` is a pure function
 // of (code, path, fold settings) but costs ~12-18ms for a ~1500-line file, and a
@@ -757,116 +747,10 @@ const readSchema = type({
 
 export type ReadToolInput = typeof readSchema.infer;
 
-export interface ReadToolDetails {
-	kind?: "file" | "url";
-	truncation?: TruncationResult;
-	isDirectory?: boolean;
-	resolvedPath?: string;
-	suffixResolution?: { from: string; to: string };
-	url?: string;
-	finalUrl?: string;
-	contentType?: string;
-	method?: string;
-	notes?: string[];
-	meta?: OutputMeta;
-	/** Raw text + start line for user-visible TUI rendering, set when content is text-like.
-	 * Mirrors the same lines the model receives but without hashline/line-number prefixes,
-	 * so the TUI can render the file content with its own gutter without re-parsing the formatted text. */
-	displayContent?: {
-		text: string;
-		startLine: number;
-		lineNumbers?: Array<number | null>;
-	};
-	summary?: { lines: number; elidedSpans: number; elidedLines: number };
-	/** Number of unresolved git conflicts surfaced by this read (TUI uses for inline `⚠ N` badge). */
-	conflictCount?: number;
-	/** Paths recovered from a delimited read argument; used only by the TUI to render one call as multiple read rows. */
-	displayReadTargets?: string[];
-}
-
 type ReadParams = ReadToolInput;
 
-/** Parsed representation of a path-embedded selector. */
-type ParsedSelector =
-	| { kind: "none" }
-	| { kind: "raw" }
-	| { kind: "conflicts" }
-	| { kind: "lines"; ranges: [LineRange, ...LineRange[]]; raw?: boolean };
-
-/** Returns true when the selector requested verbatim/raw output (alone or combined with a range). */
-function isRawSelector(parsed: ParsedSelector): boolean {
-	return parsed.kind === "raw" || (parsed.kind === "lines" && parsed.raw === true);
-}
-
-/** Returns true when the selector requested multiple line ranges. */
-function isMultiRange(parsed: ParsedSelector): boolean {
-	return parsed.kind === "lines" && parsed.ranges.length > 1;
-}
-
-function selectorChunkLooksReadLike(chunk: string): boolean {
-	const lower = chunk.toLowerCase();
-	return (
-		lower === "raw" || lower === "conflicts" || /^-\d+(?:[-+]\d+)?$/.test(chunk) || parseLineRanges(chunk) !== null
-	);
-}
-
-function invalidSelector(sel: string): ToolError {
-	return new ToolError(
-		`Invalid selector ':${sel}'. Use :N, :N-M, :N+K, :N- (open-ended), a comma-separated list of ranges, :raw, or a range combined with raw (e.g. :raw:50-100).`,
-	);
-}
-
-function parseSel(sel: string | undefined): ParsedSelector {
-	if (!sel || sel.length === 0) return { kind: "none" };
-
-	// Compound selector: `1-50:raw` or `raw:1-50`. Split into chunks and accept
-	// exactly one line range (possibly multi) plus the literal `raw`. Selector-like
-	// compounds that are not in that accepted set are invalid rather than "none";
-	// otherwise `read` can silently widen a malformed selector like
-	// `artifact://5:conflicts:1-1` while `grep` rejects it.
-	if (sel.includes(":")) {
-		const chunks = sel.split(":");
-		if (chunks.length === 2) {
-			const [a, b] = chunks as [string, string];
-			const aIsRaw = a.toLowerCase() === "raw";
-			const bIsRaw = b.toLowerCase() === "raw";
-			const rangeChunk = aIsRaw ? b : bIsRaw ? a : null;
-			const rawChunk = aIsRaw ? a : bIsRaw ? b : null;
-			if (rangeChunk !== null && rawChunk !== null) {
-				const ranges = parseLineRanges(rangeChunk);
-				if (ranges) {
-					return { kind: "lines", ranges, raw: true };
-				}
-			}
-		}
-		if (chunks.every(selectorChunkLooksReadLike)) throw invalidSelector(sel);
-		// Unrecognized compound — fall through (sqlite/archive/url consume their own colon syntax).
-		return { kind: "none" };
-	}
-
-	if (sel.toLowerCase() === "raw") return { kind: "raw" };
-	if (sel.toLowerCase() === "conflicts") return { kind: "conflicts" };
-	const ranges = parseLineRanges(sel);
-	if (ranges) {
-		return { kind: "lines", ranges };
-	}
-	// Unrecognized selectors fall through; sqlite/archive/url readers consume their own colon syntax.
-	return { kind: "none" };
-}
-
-/**
- * Convert a single-range selector to the offset/limit pair used by internal pagination.
- * Returns the FIRST range only — multi-range callers MUST branch on `isMultiRange` before
- * calling this helper.
- */
-function selToOffsetLimit(parsed: ParsedSelector): { offset?: number; limit?: number } {
-	if (parsed.kind === "lines") {
-		const first = parsed.ranges[0];
-		const limit = first.endLine !== undefined ? first.endLine - first.startLine + 1 : undefined;
-		return { offset: first.startLine, limit };
-	}
-	return {};
-}
+// ReadToolDetails / ParsedSelector / parseSel / isRawSelector / isMultiRange /
+// invalidSelector / selToOffsetLimit are shared in ./shared (stage 3 split).
 
 interface ResolvedArchiveReadPath {
 	absolutePath: string;
@@ -3312,302 +3196,5 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	}
 }
 
-// =============================================================================
-// TUI Renderer
-// =============================================================================
-
-interface ReadRenderArgs {
-	path?: unknown;
-	file_path?: unknown;
-	selector?: unknown;
-	sel?: string;
-	// Legacy fields from old schema — tolerated for in-flight tool calls during transition
-	offset?: number;
-	limit?: number;
-	raw?: boolean;
-}
-
-const INTERNAL_URL_LIKE_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
-
-function splitReadRenderPath(rawPath: string): { path: string; sel?: string } {
-	if (INTERNAL_URL_LIKE_RE.test(rawPath)) {
-		const internal = splitInternalUrlSel(rawPath);
-		if (internal.sel) return internal;
-	}
-	return splitPathAndSel(rawPath);
-}
-
-function firstReadSelectorLine(sel: string | undefined): number | undefined {
-	if (!sel) return undefined;
-	try {
-		const parsed = parseSel(sel);
-		if (parsed.kind !== "lines") return undefined;
-		return parsed.ranges[0].startLine;
-	} catch {
-		return undefined;
-	}
-}
-
-/** Absolute fs path the read result actually resolved to, used as the OSC 8 link
- * target when the structured `resolvedPath` isn't set (the common plain-file and
- * image reads only record the path in `meta.source`). URL/internal sources are
- * not fs paths, so only `type: "path"` qualifies. */
-function readSourceFsPath(details: ReadToolDetails | undefined): string | undefined {
-	const source = details?.meta?.source;
-	return source?.type === "path" ? source.value : undefined;
-}
-
-function formatReadPathLink(
-	rawPath: string,
-	options: {
-		resolvedPath?: string;
-		sourcePath?: string;
-		suffixResolution?: { from: string; to: string };
-		offset?: number;
-		fallbackLabel?: string;
-	},
-): string {
-	const split = splitReadRenderPath(rawPath);
-	const basePath = split.path || rawPath;
-	const selectorSuffix = split.sel ? `:${split.sel}` : "";
-	const plainDisplayPath = options.suffixResolution
-		? shortenPath(options.suffixResolution.to)
-		: shortenPath(basePath || options.resolvedPath || options.fallbackLabel || rawPath);
-	const absoluteInputPath = path.isAbsolute(basePath) ? basePath : undefined;
-	const target =
-		options.resolvedPath ?? options.sourcePath ?? tryResolveInternalUrlSync(basePath) ?? absoluteInputPath;
-	const line = firstReadSelectorLine(split.sel) ?? options.offset;
-	const linkOptions = line !== undefined ? { line } : undefined;
-	const linkedPath = target ? fileHyperlink(target, plainDisplayPath, linkOptions) : plainDisplayPath;
-	return `${linkedPath}${selectorSuffix}`;
-}
-
-export const readToolRenderer = {
-	renderCall(args: ReadRenderArgs, _options: RenderResultOptions, uiTheme: Theme): Component {
-		const baseRawPath =
-			typeof args.file_path === "string" ? args.file_path : typeof args.path === "string" ? args.path : "";
-		const explicitSelector =
-			typeof args.selector === "string"
-				? args.selector.trim().replace(/^:+/, "")
-				: args.sel?.trim().replace(/^:+/, "");
-		const rawPath =
-			explicitSelector && explicitSelector.length > 0 ? `${baseRawPath}:${explicitSelector}` : baseRawPath;
-		if (isReadableUrlPath(baseRawPath)) {
-			return renderReadUrlCall(
-				{ path: rawPath, raw: args.raw || explicitSelector?.toLowerCase() === "raw" },
-				_options,
-				uiTheme,
-			);
-		}
-
-		const offset = args.offset;
-		const limit = args.limit;
-
-		let pathDisplay = formatReadPathLink(rawPath, { offset, fallbackLabel: "…" }) || "…";
-		if (offset !== undefined || limit !== undefined) {
-			const startLine = offset ?? 1;
-			const endLine = limit !== undefined ? startLine + limit - 1 : "";
-			pathDisplay += `:${startLine}${endLine ? `-${endLine}` : ""}`;
-		}
-
-		const text = renderStatusLine({ icon: "pending", title: "Read", description: pathDisplay }, uiTheme);
-		return new Text(text, 0, 0);
-	},
-
-	renderResult(
-		result: { content: Array<{ type: string; text?: string }>; details?: ReadToolDetails; isError?: boolean },
-		options: RenderResultOptions,
-		uiTheme: Theme,
-		args?: ReadRenderArgs,
-	): Component {
-		const urlDetails = result.details as ReadUrlToolDetails | undefined;
-		const baseRawPathForKind =
-			typeof args?.file_path === "string" ? args.file_path : typeof args?.path === "string" ? args.path : "";
-		if (urlDetails?.kind === "url" || isReadableUrlPath(baseRawPathForKind)) {
-			return renderReadUrlResult(
-				result as {
-					content: Array<{ type: string; text?: string }>;
-					details?: ReadUrlToolDetails;
-					isError?: boolean;
-				},
-				options,
-				uiTheme,
-			);
-		}
-
-		if (result.isError) {
-			const rawErrorText = result.content?.find(c => c.type === "text")?.text ?? "";
-			const errorText = (rawErrorText || "Unknown error").replace(/^Error:\s*/, "");
-			const baseRawPath =
-				typeof args?.file_path === "string" ? args.file_path : typeof args?.path === "string" ? args.path : "";
-			const explicitSelector =
-				typeof args?.selector === "string"
-					? args.selector.trim().replace(/^:+/, "")
-					: args?.sel?.trim().replace(/^:+/, "");
-			const rawPath =
-				explicitSelector && explicitSelector.length > 0 ? `${baseRawPath}:${explicitSelector}` : baseRawPath;
-			const filePath =
-				formatReadPathLink(rawPath, { offset: args?.offset, sourcePath: readSourceFsPath(result.details) }) ||
-				shortenPath(rawPath);
-			let title = filePath ? `Read ${filePath}` : "Read";
-			if (args?.offset !== undefined || args?.limit !== undefined) {
-				const startLine = args.offset ?? 1;
-				const endLine = args.limit !== undefined ? startLine + args.limit - 1 : "";
-				title += `:${startLine}${endLine ? `-${endLine}` : ""}`;
-			}
-			const header = renderStatusLine({ icon: "error", title }, uiTheme);
-			const errorLines = errorText.split("\n").map(line => uiTheme.fg("error", replaceTabs(line)));
-			const outputBlock = new CachedOutputBlock();
-			return markFramedBlockComponent({
-				render: (width: number) =>
-					outputBlock.render({ header, state: "error", sections: [{ lines: errorLines }], width }, uiTheme),
-				invalidate: () => outputBlock.invalidate(),
-			});
-		}
-		const details = result.details;
-		const rawText = result.content?.find(c => c.type === "text")?.text ?? "";
-		// Prefer structured `displayContent` from details when available so the TUI
-		// shows clean file content (no model-only hashline anchors) without parsing the formatted text.
-		// Fall back to the raw text, but strip the LLM-facing notice so it doesn't
-		// echo next to the styled warning line below.
-		const contentText = details?.displayContent?.text ?? stripOutputNotice(rawText, details?.meta);
-		const imageContent = result.content?.find(c => c.type === "image");
-		const baseRawPath =
-			typeof args?.file_path === "string" ? args.file_path : typeof args?.path === "string" ? args.path : "";
-		const explicitSelector =
-			typeof args?.selector === "string"
-				? args.selector.trim().replace(/^:+/, "")
-				: args?.sel?.trim().replace(/^:+/, "");
-		const rawPath =
-			explicitSelector && explicitSelector.length > 0 ? `${baseRawPath}:${explicitSelector}` : baseRawPath;
-		const renderPath = splitReadRenderPath(rawPath);
-		const lang = getLanguageFromPath(renderPath.path);
-
-		const warningLines: string[] = [];
-		const truncation = details?.meta?.truncation;
-		const fallback = details?.truncation;
-		if (details?.resolvedPath) {
-			warningLines.push(uiTheme.fg("dim", wrapBrackets(`Resolved path: ${details.resolvedPath}`, uiTheme)));
-		}
-		if (truncation) {
-			if (fallback?.firstLineExceedsLimit) {
-				let warning = `First line exceeds ${formatBytes(fallback.outputBytes ?? fallback.totalBytes)} limit`;
-				if (truncation.artifactId) {
-					warning += `. ${formatFullOutputReference(truncation.artifactId)}`;
-				}
-				warningLines.push(uiTheme.fg("warning", wrapBrackets(warning, uiTheme)));
-			} else {
-				const warning = formatStyledTruncationWarning(details?.meta, uiTheme);
-				if (warning) warningLines.push(warning);
-			}
-		}
-
-		if (imageContent) {
-			const suffix = details?.suffixResolution;
-			const displayPath = formatReadPathLink(rawPath, {
-				resolvedPath: details?.resolvedPath,
-				sourcePath: readSourceFsPath(details),
-				suffixResolution: suffix,
-				fallbackLabel: "image",
-			});
-			const correction = suffix ? ` ${uiTheme.fg("dim", `(corrected from ${shortenPath(suffix.from)})`)}` : "";
-			const header = renderStatusLine(
-				{ icon: suffix ? "warning" : "success", title: "Read", description: `${displayPath}${correction}` },
-				uiTheme,
-			);
-			const detailLines = contentText ? contentText.split("\n").map(line => uiTheme.fg("toolOutput", line)) : [];
-			const lines = [...detailLines, ...warningLines];
-			const outputBlock = new CachedOutputBlock();
-			return markFramedBlockComponent({
-				render: (width: number) =>
-					outputBlock.render(
-						{
-							header,
-							state: "success",
-							sections: [
-								{
-									label: uiTheme.fg("toolTitle", "Details"),
-									lines: lines.length > 0 ? lines : [uiTheme.fg("dim", "(image)")],
-								},
-							],
-							width,
-						},
-						uiTheme,
-					),
-				invalidate: () => outputBlock.invalidate(),
-			});
-		}
-
-		const suffix = details?.suffixResolution;
-		// resolvedPath is the absolute fs path when a read resolved/corrected the
-		// input (suffix match, internal URL, archive/sqlite/notebook); plain file
-		// reads only record the absolute path in meta.source, so fall back to that
-		// (and then to a sync internal-URL resolver) to keep the title clickable.
-		const displayPath = formatReadPathLink(rawPath, {
-			resolvedPath: details?.resolvedPath,
-			sourcePath: readSourceFsPath(details),
-			suffixResolution: suffix,
-			offset: args?.offset,
-		});
-		const correction = suffix ? ` ${uiTheme.fg("dim", `(corrected from ${shortenPath(suffix.from)})`)}` : "";
-		let title = displayPath ? `Read ${displayPath}${correction}` : "Read";
-		if (args?.offset !== undefined || args?.limit !== undefined) {
-			const startLine = args.offset ?? 1;
-			const endLine = args.limit !== undefined ? startLine + args.limit - 1 : "";
-			title += `:${startLine}${endLine ? `-${endLine}` : ""}`;
-		}
-		if (details?.summary) {
-			title += ` (summary: ${details.summary.elidedSpans} elided span${details.summary.elidedSpans === 1 ? "" : "s"})`;
-		}
-		if (details?.conflictCount && details.conflictCount > 0) {
-			const n = details.conflictCount;
-			title += ` ${uiTheme.fg("warning", `(⚠ ${n} conflict${n === 1 ? "" : "s"})`)}`;
-		}
-		const rawRequested = args?.raw === true || isRawSelector(parseSel(renderPath.sel));
-		const isMarkdown = details?.contentType === "text/markdown" && !rawRequested;
-		let cachedWidth: number | undefined;
-		let cachedExpanded: boolean | undefined;
-		let cachedLines: string[] | undefined;
-		return markFramedBlockComponent({
-			render: (width: number) => {
-				const expanded = options.expanded;
-				if (cachedLines && cachedWidth === width && cachedExpanded === expanded) return cachedLines;
-				cachedLines = isMarkdown
-					? renderMarkdownCell(
-							{
-								content: contentText,
-								title,
-								status: "complete",
-								output: warningLines.length > 0 ? warningLines.join("\n") : undefined,
-								expanded,
-								width,
-							},
-							uiTheme,
-						)
-					: renderCodeCell(
-							{
-								code: contentText,
-								language: lang,
-								title,
-								status: "complete",
-								output: warningLines.length > 0 ? warningLines.join("\n") : undefined,
-								expanded,
-								codeStartLine: details?.displayContent?.startLine,
-								codeLineNumbers: details?.displayContent?.lineNumbers,
-								width,
-							},
-							uiTheme,
-						);
-				cachedWidth = width;
-				cachedExpanded = expanded;
-				return cachedLines;
-			},
-			invalidate: () => {
-				cachedWidth = undefined;
-				cachedExpanded = undefined;
-				cachedLines = undefined;
-			},
-		});
-	},
-	mergeCallAndResult: true,
-};
+// TUI renderer extracted to ./read/render.ts (stage 3 split).
+export { readToolRenderer } from "./read/render";

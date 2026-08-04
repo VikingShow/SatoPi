@@ -25,7 +25,7 @@ import type { ActivityLogger } from "../infra/activity-logger";
 import type { IrcBus } from "../irc/bus";
 import type { IOffloadManager } from "../offload/manager";
 import { AgentRegistry } from "../registry/agent-registry";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { Chapter, StateTracker, SwarmState } from "../swarm/core/state";
 import type { SwarmInfra } from "../swarm/core/swarm-infra";

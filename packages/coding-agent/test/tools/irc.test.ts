@@ -5,9 +5,9 @@ import type { SettingPath } from "@satopi/pi-coding-agent/config/settings-schema
 import { IrcBus, type IrcMessage } from "@satopi/pi-coding-agent/irc/bus";
 import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-lifecycle";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import type { CustomMessage } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import type { CustomMessage } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { IrcTool } from "@satopi/pi-coding-agent/tools/irc";
 

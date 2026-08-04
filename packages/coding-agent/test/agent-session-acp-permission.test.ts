@@ -12,14 +12,14 @@ import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { type SettingPath, Settings } from "@satopi/pi-coding-agent/config/settings";
 import { EditTool } from "@satopi/pi-coding-agent/edit";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import type {
 	ClientBridge,
 	ClientBridgePermissionOutcome,
 	ClientBridgePermissionToolCall,
-} from "@satopi/pi-coding-agent/session/client-bridge";
-import { convertToLlm } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/agent/client-bridge";
+import { convertToLlm } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { TempDir } from "@satopi/pi-utils";
 import { type } from "arktype";

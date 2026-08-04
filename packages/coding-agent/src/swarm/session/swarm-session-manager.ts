@@ -42,11 +42,15 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { logger } from "@satopi/pi-utils";
 import type { ActivityEntry } from "../../infra/activity-logger";
-import type { SessionStorage } from "../../session/session-storage";
-import { getSwarmAgentSessionPath, getSwarmAgentsDir, getSwarmSessionDir } from "../../session/session-tree-paths";
+import type { SessionStorage } from "../../session/store/session-storage";
+import {
+	getSwarmAgentSessionPath,
+	getSwarmAgentsDir,
+	getSwarmSessionDir,
+} from "../../session/store/session-tree-paths";
 import type { AgentState, Chapter, SwarmState } from "../core/state";
 
 // ============================================================================

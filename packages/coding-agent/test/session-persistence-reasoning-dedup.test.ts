@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { AssistantMessage, ProviderPayload, Usage } from "@satopi/pi-ai";
-import { BlobStore } from "@satopi/pi-coding-agent/session/blob-store";
-import type { SessionMessageEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { prepareEntryForPersistence } from "@satopi/pi-coding-agent/session/session-persistence";
+import { BlobStore } from "@satopi/pi-coding-agent/session/store/blob-store";
+import type { SessionMessageEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { prepareEntryForPersistence } from "@satopi/pi-coding-agent/session/store/session-persistence";
 import { TempDir } from "@satopi/pi-utils";
 
 const usage = (): Usage => ({

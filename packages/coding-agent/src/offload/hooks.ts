@@ -20,7 +20,7 @@ import type { SingleResult } from "@satopi/pi-coding-agent";
 import { logger } from "@satopi/pi-utils";
 import type { ExperienceStore } from "../experience/experience";
 import type { ExtractedLesson, LoopRunStats } from "../experience/extractor";
-import type { SessionStorage } from "../session/session-storage";
+import type { SessionStorage } from "../session/store/session-storage";
 import type { LoopPipelineHooks, PipelineContext, PipelineResult, ReviewVerdict } from "../types/pipeline-types";
 import { MmdInjector } from "./mermaid/injector";
 import { MermaidSynthesizer } from "./mermaid/synthesizer";

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Process, type PtyRunResult, PtySession } from "@satopi/pi-natives";
 import { isEexist, isEnoent, logger, postmortem, sanitizeText } from "@satopi/pi-utils";
-import { truncateHead, truncateHeadBytes, truncateTail, truncateTailBytes } from "../session/streaming-output";
+import { truncateHead, truncateHeadBytes, truncateTail, truncateTailBytes } from "../session/message/streaming-output";
 import { workerEnvFromParent } from "../subprocess/worker-client";
 import { daemonBrokerEndpoint } from "./paths";
 import { hasLiveDaemonProjectPresence } from "./presence";

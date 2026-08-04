@@ -26,7 +26,7 @@ import { InputController } from "@satopi/pi-coding-agent/modes/controllers/input
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { CompactionQueuedMessage, InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@satopi/pi-coding-agent/modes/utils/ui-helpers";
-import type { RestoredQueuedMessage } from "@satopi/pi-coding-agent/session/agent-session";
+import type { RestoredQueuedMessage } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 beforeAll(() => {
 	initTheme();

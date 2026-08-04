@@ -21,8 +21,8 @@ import {
 	mapAgentSessionEventToAcpSessionUpdates,
 	normalizeReplayToolArguments,
 } from "@satopi/pi-coding-agent/modes/acp/acp-event-mapper";
-import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { expectAcpStructure, expectAcpStructureRejects } from "./helpers/acp-schema";
 
 function makeAssistantMessage(text: string) {

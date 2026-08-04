@@ -25,14 +25,14 @@
 
 import { describe, expect, it } from "bun:test";
 import { getBundledModel } from "@satopi/pi-catalog/models";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import {
 	MemorySessionStorage,
 	type SessionStorage,
 	type SessionStorageWriter,
 	type WriteTextAtomicOptions,
-} from "@satopi/pi-coding-agent/session/session-storage";
-import type { SessionTitleUpdate } from "@satopi/pi-coding-agent/session/session-title-slot";
+} from "@satopi/pi-coding-agent/session/store/session-storage";
+import type { SessionTitleUpdate } from "@satopi/pi-coding-agent/session/store/session-title-slot";
 
 class CloseHoldingStorage implements SessionStorage {
 	readonly #inner = new MemorySessionStorage();

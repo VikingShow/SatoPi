@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { isBlobRef } from "@satopi/pi-coding-agent/session/blob-store";
-import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { isBlobRef } from "@satopi/pi-coding-agent/session/store/blob-store";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 const tempDirs: TempDir[] = [];

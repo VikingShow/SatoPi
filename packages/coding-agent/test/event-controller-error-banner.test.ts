@@ -16,7 +16,7 @@ import { ErrorBannerComponent } from "@satopi/pi-coding-agent/modes/components/e
 import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event-controller";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
 	return {

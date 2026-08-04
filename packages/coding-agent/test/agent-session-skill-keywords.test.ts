@@ -7,14 +7,14 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { WORKFLOW_NOTICE } from "@satopi/pi-coding-agent/modes/workflow";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import {
 	convertToLlm,
 	SKILL_PROMPT_MESSAGE_TYPE,
 	type SkillPromptDetails,
-} from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 import { type } from "arktype";
 import { createAssistantMessage } from "./helpers/agent-session-setup";

@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import { coerceServiceTierByFamily, type ProviderPayload, type ServiceTierByFamily } from "@satopi/pi-ai";
 import * as snapcompact from "@satopi/snapcompact";
+import { type CompactionEntry, EPHEMERAL_MODEL_CHANGE_ROLE, type SessionEntry } from "../store/session-entries";
 import {
 	createBranchSummaryMessage,
 	createCompactionSummaryMessage,
@@ -8,7 +9,6 @@ import {
 	isCustomMessageContent,
 	normalizeCustomMessagePayload,
 } from "./messages";
-import { type CompactionEntry, EPHEMERAL_MODEL_CHANGE_ROLE, type SessionEntry } from "./session-entries";
 
 // #4470 crash artifacts had legacy frames (no shape metadata) with 17 frames,
 // ~306k archive chars, and ~1.5M truncated chars. Current snapcompact frames

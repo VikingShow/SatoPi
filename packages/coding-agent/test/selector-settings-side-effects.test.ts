@@ -5,7 +5,7 @@ import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { SelectorController } from "@satopi/pi-coding-agent/modes/controllers/selector-controller";
 import { getThemeByName, setThemeInstance } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
-import type { ResolvedRoleModel } from "@satopi/pi-coding-agent/session/agent-session";
+import type { ResolvedRoleModel } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
 let settingsState: SettingsTestState | undefined;

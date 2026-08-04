@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { FileEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { migrateSessionEntries } from "@satopi/pi-coding-agent/session/session-migrations";
+import type { FileEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { migrateSessionEntries } from "@satopi/pi-coding-agent/session/store/session-migrations";
 
 describe("migrateSessionEntries", () => {
 	it("should add id/parentId to v1 entries", () => {

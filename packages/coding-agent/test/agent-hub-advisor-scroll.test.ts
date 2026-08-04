@@ -15,7 +15,7 @@ import type { AgentHubRemote } from "@satopi/pi-coding-agent/modes/components/ag
 import { AgentTranscriptViewer } from "@satopi/pi-coding-agent/modes/components/agent-transcript-viewer";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import { CURRENT_SESSION_VERSION } from "@satopi/pi-coding-agent/session/session-entries";
+import { CURRENT_SESSION_VERSION } from "@satopi/pi-coding-agent/session/store/session-entries";
 import { removeSyncWithRetries } from "@satopi/pi-utils";
 
 const TS = new Date().toISOString();

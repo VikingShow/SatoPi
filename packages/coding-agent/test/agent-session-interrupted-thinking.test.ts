@@ -7,16 +7,16 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { ExtensionRuntime, loadExtensionFromFactory } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import {
 	type CustomMessage,
 	convertToLlm,
 	INTERRUPTED_THINKING_MESSAGE_TYPE,
 	USER_INTERRUPT_LABEL,
-} from "@satopi/pi-coding-agent/session/messages";
-import type { SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/message/messages";
+import type { SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";
 import { TempDir } from "@satopi/pi-utils";
 

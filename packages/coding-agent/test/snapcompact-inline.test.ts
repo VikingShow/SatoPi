@@ -6,7 +6,7 @@ import {
 	planInlineSwaps,
 	type SnapcompactInlineOptions,
 	SnapcompactInlineTransformer,
-} from "@satopi/pi-coding-agent/session/snapcompact-inline";
+} from "@satopi/pi-coding-agent/session/store/snapcompact-inline";
 import * as snapcompact from "@satopi/snapcompact";
 
 /**

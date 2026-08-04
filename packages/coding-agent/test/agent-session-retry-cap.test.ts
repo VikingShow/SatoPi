@@ -9,9 +9,9 @@ import { AssistantMessageEventStream } from "@satopi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession, type AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TempDir } from "@satopi/pi-utils";
 
 type AutoRetryEndEvent = Extract<AgentSessionEvent, { type: "auto_retry_end" }>;

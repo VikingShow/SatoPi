@@ -8,8 +8,8 @@
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { AssistantMessage, ImageContent } from "@satopi/pi-ai";
 import { logger, sanitizeText } from "@satopi/pi-utils";
-import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
-import { isSilentAbort } from "../session/messages";
+import type { AgentSession, AgentSessionEvent } from "../session/agent/agent-session";
+import { isSilentAbort } from "../session/message/messages";
 import { flushTelemetryExport } from "../telemetry-export";
 import { initializeExtensions } from "./runtime-init";
 

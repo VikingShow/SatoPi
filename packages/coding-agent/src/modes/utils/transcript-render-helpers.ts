@@ -12,7 +12,7 @@ import {
 	type FileMentionMessage,
 	resolveAbortLabel,
 	shouldRenderAbortReason,
-} from "../../session/messages";
+} from "../../session/message/messages";
 import { createIrcMessageCard } from "../../tools/irc";
 import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
 import { canonicalizeMessage } from "../../utils/thinking-display";

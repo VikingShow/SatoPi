@@ -13,7 +13,7 @@ import { type Skill as CapabilitySkill, loadCapability } from "../discovery";
 import { compareSkillOrder, scanSkillsFromDir } from "../discovery/helpers";
 import autoloadTemplate from "../prompts/skills/autoload.md" with { type: "text" };
 import userInvocationTemplate from "../prompts/skills/user-invocation.md" with { type: "text" };
-import type { SkillPromptDetails } from "../session/messages";
+import type { SkillPromptDetails } from "../session/message/messages";
 import { expandTilde } from "../tools/path-utils";
 export interface Skill {
 	name: string;

@@ -9,7 +9,7 @@
   - `packages/coding-agent/src/irc/bus.ts` — process-global `IrcBus`: per-agent mailboxes, delivery, waiter matching.
   - `packages/coding-agent/src/registry/agent-registry.ts` — process-global agent directory and status.
   - `packages/coding-agent/src/registry/agent-lifecycle.ts` — revival of parked recipients on direct send.
-  - `packages/coding-agent/src/session/agent-session.ts` — `deliverIrcMessage(...)`: recipient-side injection and wake turns.
+  - `packages/coding-agent/src/session/agent/agent-session.ts` — `deliverIrcMessage(...)`: recipient-side injection and wake turns.
   - `packages/coding-agent/src/prompts/system/irc-incoming.md` — incoming-message rendering for the recipient.
   - `packages/coding-agent/src/prompts/system/irc-autoreply.md` — prompt for the ephemeral auto-reply side turn (busy recipient, async disabled).
   - `packages/coding-agent/src/config/settings-schema.ts` — `irc.timeoutMs`.

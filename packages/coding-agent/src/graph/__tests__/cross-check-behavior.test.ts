@@ -12,7 +12,7 @@
  */
 import { describe, expect, test, vi } from "bun:test";
 import type { Settings } from "../../config/settings";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import type { ReviewVerdict } from "../../types/pipeline-types";
 import { CrossCheckBehavior } from "../behaviors/cross-check-behavior";
 import { TaskQueue } from "../task-queue";

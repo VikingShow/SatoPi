@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/tool-choice-queue";
+import { ToolChoiceQueue } from "@satopi/pi-coding-agent/session/agent/tool-choice-queue";
 import { createTools, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { resolveToCwd } from "@satopi/pi-coding-agent/tools/path-utils";
 import { removeWithRetries } from "@satopi/pi-utils";

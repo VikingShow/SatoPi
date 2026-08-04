@@ -12,8 +12,8 @@ import { ExtensionUiController } from "@satopi/pi-coding-agent/modes/controllers
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@satopi/pi-coding-agent/modes/utils/ui-helpers";
-import { buildSessionContext, type SessionContext } from "@satopi/pi-coding-agent/session/session-context";
-import type { CustomMessageEntry, SessionEntry } from "@satopi/pi-coding-agent/session/session-entries";
+import { buildSessionContext, type SessionContext } from "@satopi/pi-coding-agent/session/message/session-context";
+import type { CustomMessageEntry, SessionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
 import { Container } from "@satopi/pi-tui";
 
 /**

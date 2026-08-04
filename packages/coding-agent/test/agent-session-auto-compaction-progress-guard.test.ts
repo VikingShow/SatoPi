@@ -9,10 +9,10 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { loadExtensions } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import type { CompactionEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import type { CompactionEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getProjectAgentDir, TempDir } from "@satopi/pi-utils";
 
 /**

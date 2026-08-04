@@ -1,5 +1,5 @@
 import type { UsageLimit, UsageReport } from "@satopi/pi-ai";
-import type { OAuthAccountIdentity } from "../../session/auth-storage";
+import type { OAuthAccountIdentity } from "../../session/auth/auth-storage";
 
 function normalizeIdentityValue(value: unknown): string | undefined {
 	return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : undefined;

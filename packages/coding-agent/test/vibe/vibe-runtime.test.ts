@@ -21,7 +21,7 @@ import { AsyncJobManager } from "@satopi/pi-coding-agent/async/job-manager";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-lifecycle";
 import { AgentRegistry } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import * as executorModule from "@satopi/pi-coding-agent/task/executor";
 import type { AgentProgress, SingleResult } from "@satopi/pi-coding-agent/task/types";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";

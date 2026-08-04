@@ -1,5 +1,5 @@
 import { Text } from "@satopi/pi-tui";
-import type { BackgroundTanDispatchDetails, CustomMessage } from "../../session/messages";
+import type { BackgroundTanDispatchDetails, CustomMessage } from "../../session/message/messages";
 import { replaceTabs } from "../../tools/render-utils";
 import { theme } from "../theme/theme";
 import { TranscriptBlock } from "./transcript-container";

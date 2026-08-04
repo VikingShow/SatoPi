@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import type { AuthStorage } from "@satopi/pi-ai";
 import type { FetchImpl } from "@satopi/pi-ai/types";
-import { AgentStorage } from "@satopi/pi-coding-agent/session/agent-storage";
+import { AgentStorage } from "@satopi/pi-coding-agent/session/store/agent-storage";
 import type { SearchParams } from "@satopi/pi-coding-agent/web/search/providers/base";
 import { searchCodex } from "@satopi/pi-coding-agent/web/search/providers/codex";
 

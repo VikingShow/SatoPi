@@ -14,7 +14,7 @@ import {
 	truncateMiddle,
 	truncateTail,
 	truncateTailBytes,
-} from "@satopi/pi-coding-agent/session/streaming-output";
+} from "@satopi/pi-coding-agent/session/message/streaming-output";
 import { removeWithRetries } from "@satopi/pi-utils";
 
 const createdTempDirs: string[] = [];

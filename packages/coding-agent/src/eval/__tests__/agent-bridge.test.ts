@@ -7,7 +7,7 @@ import { AgentProtocolHandler } from "../../internal-urls/agent-protocol";
 import { resetRegisteredArtifactDirsForTests } from "../../internal-urls/registry-helpers";
 import type { PlanModeState } from "../../plan-mode/state";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import * as taskDiscovery from "../../task/discovery";
 import type { ExecutorOptions } from "../../task/executor";
 import * as taskExecutor from "../../task/executor";

@@ -38,21 +38,21 @@ export * from "./modes/components";
 export * from "./modes/theme/theme";
 // SDK for programmatic usage
 export * from "./sdk";
-export * from "./session/agent-session";
+export * from "./session/agent/agent-session";
 // Auth and model registry
-export * from "./session/auth-storage";
-export * from "./session/indexed-session-storage";
-export * from "./session/messages";
-export * from "./session/redis-session-storage";
-export * from "./session/session-context";
-export * from "./session/session-dump-format";
-export * from "./session/session-entries";
-export * from "./session/session-listing";
-export * from "./session/session-loader";
-export * from "./session/session-manager";
-export * from "./session/session-migrations";
-export * from "./session/session-storage";
-export * from "./session/sql-session-storage";
+export * from "./session/auth/auth-storage";
+export * from "./session/message/messages";
+export * from "./session/message/session-context";
+export * from "./session/store/indexed-session-storage";
+export * from "./session/store/redis-session-storage";
+export * from "./session/store/session-dump-format";
+export * from "./session/store/session-entries";
+export * from "./session/store/session-listing";
+export * from "./session/store/session-loader";
+export * from "./session/store/session-manager";
+export * from "./session/store/session-migrations";
+export * from "./session/store/session-storage";
+export * from "./session/store/sql-session-storage";
 export * from "./task/executor";
 export type * from "./task/types";
 // Tools (detail types and utilities)

@@ -1,4 +1,4 @@
-import type { AgentStorage } from "../../../session/agent-storage";
+import type { AgentStorage } from "../../../session/store/agent-storage";
 import { SearchProviderError, type SearchProviderId, type SearchSource } from "../../../web/search/types";
 import { dateToAgeSeconds } from "../utils";
 

@@ -19,7 +19,7 @@
  */
 
 import { logger, prompt } from "@satopi/pi-utils";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import crossCheckReviewerPrompt from "../../swarm/prompts/cross-check-reviewer.md" with { type: "text" };
 import type { ReviewVerdict } from "../../types/pipeline-types";
 import type { AgentSpec } from "../agent-spec";

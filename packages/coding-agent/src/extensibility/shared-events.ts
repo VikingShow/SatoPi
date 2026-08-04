@@ -17,7 +17,7 @@ import type { CompactionPreparation, CompactionResult } from "@satopi/pi-agent-c
 import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage } from "@satopi/pi-ai";
 import type { Rule } from "../capability/rule";
 import type { Goal, GoalModeState } from "../goals/state";
-import type { BranchSummaryEntry, CompactionEntry, SessionEntry } from "../session/session-entries";
+import type { BranchSummaryEntry, CompactionEntry, SessionEntry } from "../session/store/session-entries";
 import type { TodoItem } from "../tools/todo";
 
 // ============================================================================

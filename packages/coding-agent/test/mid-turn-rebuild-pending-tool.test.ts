@@ -21,7 +21,7 @@ import { EventController } from "@satopi/pi-coding-agent/modes/controllers/event
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@satopi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@satopi/pi-coding-agent/modes/utils/ui-helpers";
-import type { SessionContext } from "@satopi/pi-coding-agent/session/session-context";
+import type { SessionContext } from "@satopi/pi-coding-agent/session/message/session-context";
 
 const usage = {
 	input: 1,

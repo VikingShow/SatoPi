@@ -1,6 +1,6 @@
 import * as stream from "node:stream";
 import { AgentSideConnection, ndJsonStream, type Stream } from "@agentclientprotocol/sdk";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import { AcpAgent } from "./acp-agent";
 
 export type AcpSessionFactory = (cwd: string) => Promise<AgentSession>;

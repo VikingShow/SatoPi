@@ -8,7 +8,7 @@ import { buildModel } from "@satopi/pi-catalog/build";
 import { writeModelCache } from "@satopi/pi-catalog/model-cache";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/settings";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("ModelRegistry", () => {

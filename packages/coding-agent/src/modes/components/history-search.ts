@@ -18,7 +18,7 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
-import type { HistoryEntry, HistoryStorage } from "../../session/history-storage";
+import type { HistoryEntry, HistoryStorage } from "../../session/store/history-storage";
 import { DynamicBorder } from "./dynamic-border";
 import { rawKeyHint } from "./keybinding-hints";
 import { centeredWindow, contentRowWidth, renderScrollableList } from "./selector-helpers";

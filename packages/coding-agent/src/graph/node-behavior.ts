@@ -23,7 +23,7 @@ import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { ContextPipeline } from "../context/context-pipeline";
 import type { HookPipeline } from "../hooks/hook-pipeline";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import type { SwarmRuntime } from "../swarm/core/swarm-runtime";
 import type { AgentSpec } from "./agent-spec";
@@ -51,7 +51,7 @@ import { SubgraphNodeBehavior } from "./subgraph-behavior";
  *
  * Lifecycle:
  *   1. prepare → build one AgentSpec from NodeDefinition
- *   2. execute → spawn via AgentRuntime, wait for SingleResult
+ *   2. execute → spawn via the runtime, wait for SingleResult
  *   3. validate → if gate passed, check for test command; gate result
  *   4. cleanup  → abort any agent still running (no-op when wait() resolved)
  */

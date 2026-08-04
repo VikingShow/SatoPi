@@ -1,7 +1,7 @@
 import type { Usage } from "@satopi/pi-ai";
 import { $env } from "@satopi/pi-utils";
 import { type BaseType, type } from "arktype";
-import type { AgentSessionEvent } from "../session/agent-session";
+import type { AgentSessionEvent } from "../session/agent/agent-session";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { NestedRepoPatch } from "./worktree";
 

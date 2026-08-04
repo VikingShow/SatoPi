@@ -1,7 +1,7 @@
 import type { Settings } from "../config/settings";
 import type { InteractiveModeContext } from "../modes/types";
-import type { AgentSession } from "../session/agent-session";
-import type { SessionManager } from "../session/session-manager";
+import type { AgentSession } from "../session/agent/agent-session";
+import type { SessionManager } from "../session/store/session-manager";
 
 /** Declarative subcommand definition for commands like /mcp. */
 export interface SubcommandDef {

@@ -15,10 +15,10 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import type { SessionEntry, SessionMessageEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import type { SessionEntry, SessionMessageEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 function createUsage(): Usage {

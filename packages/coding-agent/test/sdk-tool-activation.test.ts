@@ -11,7 +11,7 @@ import {
 	discoverAuthStorage,
 	type ExtensionFactory,
 } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { VIBE_TOOL_NAMES } from "@satopi/pi-coding-agent/tools/vibe";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { type } from "arktype";

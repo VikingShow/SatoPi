@@ -43,7 +43,6 @@ import { isInsideTerminalMultiplexer } from "@satopi/pi-tui/terminal-capabilitie
 import {
 	APP_NAME,
 	adjustHsv,
-	formatNumber,
 	getProjectDir,
 	hsvToRgb,
 	isEnoent,
@@ -104,24 +103,22 @@ import {
 	type AgentSessionEvent,
 	type ResolvedRoleModel,
 	SHUTDOWN_CONSOLIDATE_BUDGET_MS,
-} from "../session/agent-session";
-import type { CompactMode } from "../session/compact-modes";
-import { HistoryStorage } from "../session/history-storage";
-import type { SessionContext } from "../session/session-context";
-import { getRecentSessions } from "../session/session-listing";
-import { SessionManager } from "../session/session-manager";
-import type { ShakeMode } from "../session/shake-types";
+} from "../session/agent/agent-session";
+import type { SessionContext } from "../session/message/session-context";
+import type { CompactMode } from "../session/shared/compact-modes";
+import type { ShakeMode } from "../session/shared/shake-types";
+import { HistoryStorage } from "../session/store/history-storage";
+import { getRecentSessions } from "../session/store/session-listing";
+import { SessionManager } from "../session/store/session-manager";
 import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES, buildTuiBuiltinSlashCommands } from "../slash-commands/builtin-registry";
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import type { LoopSwarmConfig } from "../swarm/core/schema";
 import { currentSwarmPhase } from "../swarm/core/state";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
-import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { LspStartupServerInfo } from "../tools";
 import { normalizeLocalScheme } from "../tools/path-utils";
-import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../tools/render-utils";
 import { setAutoQaConsentHandler } from "../tools/report-tool-issue";
 import { type ResolveToolDetails, runResolveInvocation } from "../tools/resolve";
 import { formatPhaseDisplayName, todoMatchesAnyDescription } from "../tools/todo";
@@ -184,17 +181,13 @@ import {
 	countRunningSubagentBadgeAgents,
 	getRunningSubagentBadgeRegistry,
 } from "./running-subagent-badge";
-import {
-	type ObservableSession,
-	type SessionObserverChangeKind,
-	SessionObserverRegistry,
-} from "./session-observer-registry";
+import { type SessionObserverChangeKind, SessionObserverRegistry } from "./session-observer-registry";
 import { createSessionTeardown, type SessionTeardown } from "./session-teardown";
 import { runProviderSetupWizard } from "./setup-wizard/lazy";
 import { interruptHint } from "./shared";
 import { clearMermaidCache } from "./theme/mermaid-cache";
 import { type ShimmerPalette, shimmerEnabled, shimmerSegments, shimmerText } from "./theme/shimmer";
-import type { Theme, ThemeColor } from "./theme/theme";
+import type { Theme } from "./theme/theme";
 import {
 	getEditorTheme,
 	getMarkdownTheme,
@@ -268,74 +261,9 @@ function renderWorkingMessage(message: string, accent?: WorkingMessageAccent): s
 	);
 }
 
-const EDITOR_MAX_HEIGHT_MIN = 6;
-const EDITOR_MAX_HEIGHT_MAX = 18;
-const EDITOR_RESERVED_ROWS = 12;
-const EDITOR_FALLBACK_ROWS = 24;
-const EDITOR_MIN_CHROME_ROWS = 4; // rows reserved for transcript + status on small terms
-const EDITOR_MIN_RENDERED_ROWS = 3; // bordered editor floor: top+bottom border + 1 content row
-
-/**
- * Editor max-height cap for a terminal of `terminalRows` rows.
- *
- * Roomy terminals get the comfortable [6, 18] band. Small terminals shrink the
- * cap so the editor leaves at least EDITOR_MIN_CHROME_ROWS rows for the
- * transcript + status line. The editor is bordered, so it never renders fewer
- * than EDITOR_MIN_RENDERED_ROWS rows; once the terminal is too small for both
- * (terminalRows < EDITOR_MIN_RENDERED_ROWS + EDITOR_MIN_CHROME_ROWS) the cap is
- * pinned to that floor — returning a smaller number would not shrink the editor
- * any further, it would only misreport the rows it actually occupies.
- */
-export function computeEditorMaxHeight(terminalRows: number): number {
-	const rows = Number.isFinite(terminalRows) && terminalRows > 0 ? terminalRows : EDITOR_FALLBACK_ROWS;
-	const comfortable = Math.max(EDITOR_MAX_HEIGHT_MIN, Math.min(EDITOR_MAX_HEIGHT_MAX, rows - EDITOR_RESERVED_ROWS));
-	return Math.max(EDITOR_MIN_RENDERED_ROWS, Math.min(comfortable, rows - EDITOR_MIN_CHROME_ROWS));
-}
-
-const HUD_NOTE_SUP_DIGITS: Record<string, string> = {
-	"0": "\u2070",
-	"1": "\u00b9",
-	"2": "\u00b2",
-	"3": "\u00b3",
-	"4": "\u2074",
-	"5": "\u2075",
-	"6": "\u2076",
-	"7": "\u2077",
-	"8": "\u2078",
-	"9": "\u2079",
-};
-
-function formatHudNoteMarker(count: number): string {
-	if (count <= 0) return "";
-	const sub = String(count)
-		.split("")
-		.map(d => HUD_NOTE_SUP_DIGITS[d] ?? d)
-		.join("");
-	return theme.fg("dim", chalk.italic(` \u207a${sub}`));
-}
-
-type GoalSubcommand = "set" | "show" | "pause" | "resume" | "drop" | "budget";
-
-const GOAL_SUBCOMMANDS = new Set<GoalSubcommand>(["set", "show", "pause", "resume", "drop", "budget"]);
-const PLAN_KEEP_CONTEXT_OPTION_INDEX = 2;
-const PLAN_KEEP_CONTEXT_DISABLE_THRESHOLD_PERCENT = 95;
-
-function parseGoalSubcommand(args: string): { sub: GoalSubcommand | undefined; rest: string } {
-	const trimmed = args.trim();
-	if (!trimmed) return { sub: undefined, rest: "" };
-	const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(trimmed);
-	if (!match) return { sub: undefined, rest: trimmed };
-	const first = match[1].toLowerCase();
-	if (GOAL_SUBCOMMANDS.has(first as GoalSubcommand)) {
-		return { sub: first as GoalSubcommand, rest: match[2]?.trim() ?? "" };
-	}
-	return { sub: undefined, rest: trimmed };
-}
-
-function formatContextTokenCount(value: number): string {
-	return formatNumber(Math.max(0, Math.round(value))).toLowerCase();
-}
-
+// computeEditorMaxHeight / formatHudNoteMarker / parseGoalSubcommand /
+// formatContextTokenCount / renderAgentHud / renderSubagentHudLines and their
+// constants are extracted to ./controllers/interactive-render-utils.ts (stage 5 split).
 /** Options for creating an InteractiveMode instance (for future API use) */
 export interface InteractiveModeOptions {
 	/** Providers that were migrated during startup */
@@ -365,70 +293,34 @@ class AnchoredLiveContainer extends Container implements NativeScrollbackLiveReg
 	}
 }
 
-/** How long the ctrl+p model-role cycle chip track lingers above the editor
- *  before it auto-clears, mirroring the todo HUD's auto-clear timer. */
-const MODEL_CYCLE_TRACK_CLEAR_MS = 4000;
-const SUBAGENT_HUD_VISIBLE_LIMIT = 8;
-const SUBAGENT_OBSERVER_UI_COALESCE_MS = 100;
+// Stage 5 split: stateless render helpers live in ./controllers/interactive-render-utils.ts.
+import {
+	computeEditorMaxHeight,
+	formatContextTokenCount,
+	formatHudNoteMarker,
+	type GoalSubcommand,
+	MODEL_CYCLE_TRACK_CLEAR_MS,
+	PLAN_KEEP_CONTEXT_DISABLE_THRESHOLD_PERCENT,
+	PLAN_KEEP_CONTEXT_OPTION_INDEX,
+	parseGoalSubcommand,
+	renderSubagentHudLines,
+	SUBAGENT_OBSERVER_UI_COALESCE_MS,
+} from "./controllers/interactive-render-utils";
 
-/** Shared wrapper: bold coloured title + rows, each indented one space. Empty rows → empty array. */
-function renderAgentHud(title: string, titleColor: ThemeColor, rows: string[]): string[] {
-	if (rows.length === 0) return [];
-	return ["", theme.bold(theme.fg(titleColor, title)), ...rows.map(line => ` ${line}`)];
-}
+export {
+	computeEditorMaxHeight,
+	formatContextTokenCount,
+	formatHudNoteMarker,
+	type GoalSubcommand,
+	MODEL_CYCLE_TRACK_CLEAR_MS,
+	PLAN_KEEP_CONTEXT_DISABLE_THRESHOLD_PERCENT,
+	PLAN_KEEP_CONTEXT_OPTION_INDEX,
+	parseGoalSubcommand,
+	renderSubagentHudLines,
+	SUBAGENT_HUD_VISIBLE_LIMIT,
+	SUBAGENT_OBSERVER_UI_COALESCE_MS,
+} from "./controllers/interactive-render-utils";
 
-/**
- * Detached-subagent HUD block above the editor. The panel header dispatches by
- * the kinds of the visible running sessions: all task subagents →
- * "Subagents", all persistent agents (sentinel `persist-` id prefix) →
- * "Persistent Agents", mixed → "Agents".
- */
-export function renderSubagentHudLines(sessions: ObservableSession[], columns: number): string[] {
-	const running = sessions.filter(
-		session => session.kind === "subagent" && session.status === "active" && session.detached === true,
-	);
-	if (running.length === 0) return [];
-
-	const pDot = theme.styledSymbol("status.done", "thinkingMedium");
-	const sDot = theme.styledSymbol("status.done", "accent");
-	const visible = running.slice(0, SUBAGENT_HUD_VISIBLE_LIMIT);
-	const persistentCount = visible.filter(session => session.id.startsWith("persist-")).length;
-	const allPersistent = persistentCount === visible.length;
-	const title = persistentCount === 0 ? "Subagents" : allPersistent ? "Persistent Agents" : "Agents";
-	const titleColor: ThemeColor = allPersistent ? "success" : persistentCount === 0 ? "warning" : "accent";
-	const hiddenCount = running.length - visible.length;
-	const rows = renderTreeList(
-		{
-			items: visible,
-			expanded: true,
-			renderItem: session => {
-				const isPersistent = session.id.startsWith("persist-");
-				const dot = isPersistent ? pDot : sDot;
-				const color: ThemeColor = isPersistent ? "thinkingMedium" : "accent";
-				const displayId = isPersistent
-					? session.description?.trim() || session.id.replace(/^persist-/, "")
-					: formatTaskId(session.id);
-				let line = `${dot} ${theme.fg(color, theme.bold(displayId))}`;
-				const description = session.description?.trim() || session.progress?.description?.trim();
-				if (description && !isPersistent) {
-					const budget = Math.max(TRUNCATE_LENGTHS.SHORT, columns - visibleWidth(displayId) - 10);
-					line += `${theme.fg(color, ":")} ${theme.fg(color, truncateToWidth(replaceTabs(description), budget))}`;
-				} else {
-					const taskPreview = session.progress?.task?.trim();
-					if (taskPreview) {
-						line += ` ${theme.fg("muted", truncateToWidth(replaceTabs(taskPreview), TRUNCATE_LENGTHS.SHORT))}`;
-					}
-				}
-				return line;
-			},
-		},
-		theme,
-	);
-	if (hiddenCount > 0) {
-		rows.push(theme.fg("dim", `… ${hiddenCount} more running — open Agent Hub for full list`));
-	}
-	return renderAgentHud(title, titleColor, rows);
-}
 export class InteractiveMode implements InteractiveModeContext {
 	session: AgentSession;
 	sessionManager: SessionManager;

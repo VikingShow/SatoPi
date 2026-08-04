@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import type { Model } from "@satopi/pi-ai";
 import type { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import type { CustomToolContext } from "@satopi/pi-coding-agent/extensibility/custom-tools";
-import type { ReadonlySessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { ReadonlySessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import {
 	getImageGenTools,
 	getImageGenToolsWithRegistry,

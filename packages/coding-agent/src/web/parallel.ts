@@ -1,5 +1,5 @@
 import { type FetchImpl, getEnvApiKey } from "@satopi/pi-ai";
-import type { AgentStorage } from "../session/agent-storage";
+import type { AgentStorage } from "../session/store/agent-storage";
 import { findCredential, withHardTimeout } from "./search/providers/utils";
 
 const PARALLEL_API_URL = "https://api.parallel.ai";

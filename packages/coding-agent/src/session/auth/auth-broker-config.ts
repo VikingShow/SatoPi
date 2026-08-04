@@ -29,7 +29,7 @@ import {
 	resolveAuthBrokerConfig as resolveAuthBrokerConfigShared,
 } from "@satopi/pi-ai/auth-broker/discover";
 import { getAgentDir } from "@satopi/pi-utils";
-import { resolveConfigValue } from "../config/resolve-config-value";
+import { resolveConfigValue } from "../../config/resolve-config-value";
 import type { AuthStorage } from "./auth-storage";
 
 export { type AuthBrokerClientConfig, getAuthBrokerTokenFilePath };

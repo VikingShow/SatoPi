@@ -6,8 +6,8 @@ This document covers the current Time Traveling Stream Rules (TTSR) runtime path
 
 - [`../src/sdk.ts`](../packages/coding-agent/src/sdk.ts)
 - [`../src/export/ttsr.ts`](../packages/coding-agent/src/export/ttsr.ts)
-- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
-- [`../src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`../src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts)
+- [`../src/session/store/session-manager.ts`](../packages/coding-agent/src/session/store/session-manager.ts)
 - [`../src/prompts/system/ttsr-interrupt.md`](../packages/coding-agent/src/prompts/system/ttsr-interrupt.md)
 - [`../src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
 - [`../src/extensibility/extensions/types.ts`](../packages/coding-agent/src/extensibility/extensions/types.ts)

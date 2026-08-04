@@ -13,7 +13,7 @@ The advisor is not a second executor: it cannot approve actions or change primar
 - [`src/advisor/transcript-recorder.ts`](../packages/coding-agent/src/advisor/transcript-recorder.ts)
 - [`src/prompts/advisor/system.md`](../packages/coding-agent/src/prompts/advisor/system.md)
 - [`src/prompts/advisor/advise-tool.md`](../packages/coding-agent/src/prompts/advisor/advise-tool.md)
-- [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts)
 - [`src/slash-commands/builtin-registry.ts`](../packages/coding-agent/src/slash-commands/builtin-registry.ts)
 - [`src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
 

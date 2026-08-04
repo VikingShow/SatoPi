@@ -5,7 +5,7 @@ import {
 	HandoffSummaryMessageComponent,
 } from "@satopi/pi-coding-agent/modes/components/compaction-summary-message";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { CustomMessage } from "@satopi/pi-coding-agent/session/messages";
+import type { CustomMessage } from "@satopi/pi-coding-agent/session/message/messages";
 
 beforeAll(async () => {
 	resetSettingsForTest();

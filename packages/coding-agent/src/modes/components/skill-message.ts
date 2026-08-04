@@ -2,7 +2,7 @@ import type { TextContent } from "@satopi/pi-ai";
 import type { Component } from "@satopi/pi-tui";
 import { Box, Container, Markdown, Spacer, Text } from "@satopi/pi-tui";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
-import type { CustomMessage, SkillPromptDetails } from "../../session/messages";
+import type { CustomMessage, SkillPromptDetails } from "../../session/message/messages";
 import { shortenPath } from "../../tools/render-utils";
 import { fileHyperlink } from "../../tui";
 

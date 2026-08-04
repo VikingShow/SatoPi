@@ -159,7 +159,7 @@ export function assembleAgentRuntime(opts: AssemblerOptions): SwarmRuntime {
 
 	const ircBus = opts.ircBus!;
 
-	// Runtime-level CommChannel (same role as AgentRuntime.#commChannel)
+	// Runtime-level CommChannel (the runtime's inter-agent communication bus)
 	const commChannel = new CommChannel(
 		ircBus,
 		[], // members added as agents spawn

@@ -9,7 +9,7 @@ import { loadCapability } from "../discovery";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import sshDescriptionBase from "../prompts/tools/ssh.md" with { type: "text" };
-import { DEFAULT_MAX_BYTES, streamTailUpdates, TailBuffer } from "../session/streaming-output";
+import { DEFAULT_MAX_BYTES, streamTailUpdates, TailBuffer } from "../session/message/streaming-output";
 import type { SSHHostInfo } from "../ssh/connection-manager";
 import { ensureHostInfo, getCachedHostInfoSync } from "../ssh/connection-manager";
 import { executeSSH } from "../ssh/ssh-executor";

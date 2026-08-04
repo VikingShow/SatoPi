@@ -10,9 +10,9 @@ import {
 } from "@satopi/pi-coding-agent/mcp/startup-events";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { EventBus } from "@satopi/pi-coding-agent/utils/event-bus";
 import { logger, TempDir } from "@satopi/pi-utils";
 

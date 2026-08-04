@@ -6,7 +6,7 @@ import { AsyncJobManager } from "@satopi/pi-coding-agent/async/job-manager";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("AsyncJobManager singleton across concurrent top-level sessions", () => {

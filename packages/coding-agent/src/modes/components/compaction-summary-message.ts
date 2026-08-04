@@ -1,6 +1,6 @@
 import { Box, type Component, Markdown } from "@satopi/pi-tui";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
-import type { BranchSummaryMessage, CompactionSummaryMessage, CustomMessage } from "../../session/messages";
+import type { BranchSummaryMessage, CompactionSummaryMessage, CustomMessage } from "../../session/message/messages";
 
 interface SummaryDividerOptions {
 	label: () => string;

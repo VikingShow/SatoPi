@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AgentLifecycleManager } from "@satopi/pi-coding-agent/registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "@satopi/pi-coding-agent/registry/agent-registry";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 interface SessionStub {
 	session: AgentSession;

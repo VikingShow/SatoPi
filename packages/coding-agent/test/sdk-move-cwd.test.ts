@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 function textContent(result: { content?: Array<{ type: string; text?: string }> }): string {

@@ -5,7 +5,7 @@ import * as toolsModule from "@satopi/pi-coding-agent/commit/agentic/tools";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import type { CreateAgentSessionResult } from "@satopi/pi-coding-agent/sdk";
 import * as sdkModule from "@satopi/pi-coding-agent/sdk";
-import type { PromptOptions } from "@satopi/pi-coding-agent/session/agent-session";
+import type { PromptOptions } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 describe("commit agent prompt attribution", () => {
 	afterEach(() => {

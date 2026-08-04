@@ -15,7 +15,7 @@ import type * as XtermModule from "@xterm/headless";
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Settings } from "../config/settings";
 import type { Theme } from "../modes/theme/theme";
-import { OutputSink, type OutputSummary } from "../session/streaming-output";
+import { OutputSink, type OutputSummary } from "../session/message/streaming-output";
 import { sanitizeWithOptionalSixelPassthrough } from "../utils/sixel";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "./output-meta";
 import { formatStatusIcon, replaceTabs } from "./render-utils";

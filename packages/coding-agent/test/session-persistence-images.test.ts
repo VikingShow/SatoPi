@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import type { ImageContent, TextContent } from "@satopi/pi-ai";
-import { BlobStore, isBlobRef } from "@satopi/pi-coding-agent/session/blob-store";
-import type { FileEntry, SessionMessageEntry } from "@satopi/pi-coding-agent/session/session-entries";
-import { resolveBlobRefsInEntries } from "@satopi/pi-coding-agent/session/session-loader";
-import { prepareEntryForPersistence } from "@satopi/pi-coding-agent/session/session-persistence";
+import { BlobStore, isBlobRef } from "@satopi/pi-coding-agent/session/store/blob-store";
+import type { FileEntry, SessionMessageEntry } from "@satopi/pi-coding-agent/session/store/session-entries";
+import { resolveBlobRefsInEntries } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { prepareEntryForPersistence } from "@satopi/pi-coding-agent/session/store/session-persistence";
 import { TempDir } from "@satopi/pi-utils";
 
 type ImagePayload = { data: string; mimeType: string; type?: "image" };

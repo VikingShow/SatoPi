@@ -1,6 +1,6 @@
 import type { ImageContent } from "@satopi/pi-ai";
 import { logger } from "@satopi/pi-utils";
-import { type BlobPutResult, blobExtensionForImageMimeType } from "../session/blob-store";
+import { type BlobPutResult, blobExtensionForImageMimeType } from "../session/store/blob-store";
 import { fileHyperlink } from "../tui/hyperlink";
 
 /** Matches `[Image #N]`/`[Image #N, WxH]` and `[Paste #N, +X lines]`/`[Paste #N, Y chars]` tokens.

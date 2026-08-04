@@ -10,7 +10,7 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import type { CustomTool } from "@satopi/pi-coding-agent/extensibility/custom-tools/types";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { TOOL_DISCOVERY_AUTO_THRESHOLD } from "@satopi/pi-coding-agent/tool-discovery/mode";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 import { type } from "arktype";

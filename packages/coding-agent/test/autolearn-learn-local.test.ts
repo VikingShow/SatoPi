@@ -10,7 +10,7 @@ import {
 	saveLearnedLesson,
 } from "@satopi/pi-coding-agent/memories";
 import { localBackend } from "@satopi/pi-coding-agent/memory-backend/local-backend";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { LearnTool } from "@satopi/pi-coding-agent/tools/learn";
 import { removeWithRetries } from "@satopi/pi-utils";

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@satopi/pi-agent-core";
 import { TreeSelectorComponent } from "@satopi/pi-coding-agent/modes/components/tree-selector";
 import * as themeModule from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { SessionEntry, SessionTreeNode } from "@satopi/pi-coding-agent/session/session-entries";
+import type { SessionEntry, SessionTreeNode } from "@satopi/pi-coding-agent/session/store/session-entries";
 
 let counter = 0;
 function makeUserNode(text: string, parentId: string | null = null): SessionTreeNode {

@@ -13,13 +13,13 @@ import type { ImageContent } from "@satopi/pi-ai";
 import { formatAge, formatBytes, isProbablyBinary, readImageMetadata } from "@satopi/pi-utils";
 import { canonicalSnapshotKey } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
-import type { FileMentionMessage } from "../session/messages";
+import type { FileMentionMessage } from "../session/message/messages";
 import {
 	DEFAULT_MAX_BYTES,
 	formatHeadTruncationNotice,
 	truncateHead,
 	truncateHeadBytes,
-} from "../session/streaming-output";
+} from "../session/message/streaming-output";
 import { resolveReadPath } from "../tools/path-utils";
 import { formatDimensionNote, resizeImage } from "./image-resize";
 

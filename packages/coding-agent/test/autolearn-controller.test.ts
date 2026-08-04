@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { AutoLearnController, buildAutoLearnInstructions } from "@satopi/pi-coding-agent/autolearn/controller";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
-import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent-session";
+import type { AgentSession, AgentSessionEvent } from "@satopi/pi-coding-agent/session/agent/agent-session";
 
 interface CapturedNudge {
 	message: { customType: string; content: string; display?: boolean; attribution?: string };

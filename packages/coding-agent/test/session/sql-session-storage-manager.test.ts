@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "bun:test";
 import type { Usage } from "@satopi/pi-ai";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import { SqlSessionStorage } from "@satopi/pi-coding-agent/session/sql-session-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
+import { SqlSessionStorage } from "@satopi/pi-coding-agent/session/store/sql-session-storage";
 import { SQL } from "bun";
 
 function fakeUsage(input: number, output: number): Usage {

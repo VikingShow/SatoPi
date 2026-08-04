@@ -13,7 +13,7 @@
 import { logger } from "@satopi/pi-utils";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
-import type { SessionStorage } from "../session/session-storage";
+import type { SessionStorage } from "../session/store/session-storage";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------

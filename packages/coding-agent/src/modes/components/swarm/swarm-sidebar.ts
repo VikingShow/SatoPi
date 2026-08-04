@@ -4,7 +4,7 @@ import { matchesKey } from "@satopi/pi-tui/keys";
 import { formatAge } from "@satopi/pi-utils";
 import type { CrewManager } from "../../../crew/crew-manager";
 import { AgentRegistry, MAIN_AGENT_ID } from "../../../registry/agent-registry";
-import type { SessionInfo } from "../../../session/session-listing";
+import type { SessionInfo } from "../../../session/store/session-listing";
 import { formatStatusIcon } from "../../../tools/render-utils";
 import { Ellipsis, getTreeBranch, getTreeContinuePrefix, truncateToWidth } from "../../../tui/utils";
 import type { Theme } from "../../theme/theme";

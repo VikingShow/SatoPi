@@ -17,11 +17,11 @@
 import { countTokens } from "@satopi/pi-agent-core";
 import type { Context, ImageContent, Model, TextContent, ToolResultMessage, UserMessage } from "@satopi/pi-ai";
 import * as snapcompact from "@satopi/snapcompact";
-import contextFramesNote from "../prompts/system/snapcompact-context-frames-note.md" with { type: "text" };
-import contextStub from "../prompts/system/snapcompact-context-stub.md" with { type: "text" };
-import systemFramesNote from "../prompts/system/snapcompact-system-frames-note.md" with { type: "text" };
-import systemStub from "../prompts/system/snapcompact-system-stub.md" with { type: "text" };
-import toolResultNote from "../prompts/system/snapcompact-toolresult-note.md" with { type: "text" };
+import contextFramesNote from "../../prompts/system/snapcompact-context-frames-note.md" with { type: "text" };
+import contextStub from "../../prompts/system/snapcompact-context-stub.md" with { type: "text" };
+import systemFramesNote from "../../prompts/system/snapcompact-system-frames-note.md" with { type: "text" };
+import systemStub from "../../prompts/system/snapcompact-system-stub.md" with { type: "text" };
+import toolResultNote from "../../prompts/system/snapcompact-toolresult-note.md" with { type: "text" };
 
 export type SnapcompactSystemPromptMode = "none" | "agents-md" | "all";
 

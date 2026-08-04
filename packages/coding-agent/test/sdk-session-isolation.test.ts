@@ -9,8 +9,8 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
 import { SecretObfuscator } from "@satopi/pi-coding-agent/secrets";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { CONFIG_DIR_NAME, getSessionsDir, removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 function createTtsrRule(name: string): Rule {

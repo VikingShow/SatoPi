@@ -8,10 +8,10 @@ import { resetSettingsForTest, Settings } from "@satopi/pi-coding-agent/config/s
 import { runGuidedGoalTurn } from "@satopi/pi-coding-agent/goals/guided-setup";
 import { InteractiveMode } from "@satopi/pi-coding-agent/modes/interactive-mode";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AgentSession as RealAgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AgentSession as RealAgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { createTools, type Tool, type ToolSession } from "@satopi/pi-coding-agent/tools";
 import { TempDir } from "@satopi/pi-utils";
 

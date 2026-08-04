@@ -31,7 +31,7 @@ import { type Settings as SettingsCapabilityItem, settingsCapability } from "../
 import type { ModelRole } from "../config/model-roles";
 import { loadCapability } from "../discovery";
 import { isLightTheme, setAutoThemeMapping, setColorBlindMode, setSymbolPreset } from "../modes/theme/theme";
-import { AgentStorage } from "../session/agent-storage";
+import { AgentStorage } from "../session/store/agent-storage";
 import { normalizeToolName } from "../tools/builtin-names";
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { withFileLock } from "./file-lock";

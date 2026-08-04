@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { FetchImpl } from "@satopi/pi-ai";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 describe("AuthStorage MiniMax login", () => {

@@ -21,7 +21,7 @@ import { AgentRegistry } from "../../registry/agent-registry";
 // ============================================================================
 // 1. agent_invoke smoke test — mock pattern mirrors existing E2E tests
 import * as sdkModule from "../../sdk";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import { agentInvokeTool } from "../../tools/agent-invoke";
 import type { CheckpointStore } from "../checkpoint";
 import { buildExecutionWaves } from "../dag";

@@ -35,7 +35,7 @@ import {
 	type TruncationResult,
 	truncateHead,
 	truncateTail,
-} from "../session/streaming-output";
+} from "../session/message/streaming-output";
 import type { Tool, ToolSession } from "../tools";
 import { BashTool } from "../tools/bash";
 import { GlobTool } from "../tools/glob";

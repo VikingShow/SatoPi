@@ -5,8 +5,8 @@ import type { Tool as AiTool, Model } from "@satopi/pi-ai";
 import { toolWireSchema } from "@satopi/pi-ai/utils/schema";
 import { formatNumber } from "@satopi/pi-utils";
 import type { Skill } from "../../extensibility/skills";
-import type { AgentSession } from "../../session/agent-session";
-import { estimateInlineSavings, type SnapcompactSavingsEstimate } from "../../session/snapcompact-inline";
+import type { AgentSession } from "../../session/agent/agent-session";
+import { estimateInlineSavings, type SnapcompactSavingsEstimate } from "../../session/store/snapcompact-inline";
 import type { Tool } from "../../tools";
 import type { theme as Theme } from "../theme/theme";
 

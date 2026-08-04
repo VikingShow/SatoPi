@@ -11,7 +11,7 @@ import type { AssistantMessage, Model, ToolExample, TSchema } from "@satopi/pi-a
 import { renderDelimitedThinking, renderToolInventory } from "@satopi/pi-ai/dialect";
 import { INTENT_FIELD } from "@satopi/pi-wire";
 import { YAML } from "bun";
-import { canonicalizeMessage } from "../utils/thinking-display";
+import { canonicalizeMessage } from "../../utils/thinking-display";
 import {
 	type BashExecutionMessage,
 	type BranchSummaryMessage,
@@ -22,7 +22,7 @@ import {
 	type HookMessage,
 	type PythonExecutionMessage,
 	pythonExecutionToText,
-} from "./messages";
+} from "../message/messages";
 
 /** Minimal tool shape for dump output (matches AgentTool fields used by formatSessionDumpText). */
 export interface SessionDumpToolInfo {

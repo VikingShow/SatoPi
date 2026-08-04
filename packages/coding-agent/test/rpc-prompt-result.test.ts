@@ -6,7 +6,7 @@ import {
 } from "@satopi/pi-coding-agent/modes/rpc/rpc-mode";
 import type { ExtensionActions } from "../src/extensibility/extensions/types";
 import { initializeExtensions } from "../src/modes/runtime-init";
-import type { AgentSession } from "../src/session/agent-session";
+import type { AgentSession } from "../src/session/agent/agent-session";
 
 async function waitForPromptHandlers(prompt: Promise<unknown>): Promise<void> {
 	await prompt.catch(() => undefined);

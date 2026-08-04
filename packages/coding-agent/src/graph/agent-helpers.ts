@@ -1,10 +1,9 @@
 /**
- * spawnAgent — Pure function replacement for AgentRuntime.spawn().
+ * spawnAgent — pure function that spawns an AgentSession from an AgentSpec.
  *
  * Takes an AgentSpec and infrastructure services, returns a running AgentSession.
  * No class, no state — all coordination is explicit through parameters.
- *
- * Replaces AgentRuntime.#spawnOne() (Phase 5 refactoring).
+ * (Formerly AgentRuntime.spawn / AgentRuntime.#spawnOne, both removed in Phase 5.)
  */
 
 import type { ModelRegistry, Settings } from "@satopi/pi-coding-agent";
@@ -16,7 +15,7 @@ import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { SwarmModeController } from "../modes/controllers/swarm-mode-controller";
 import { AgentRegistry } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
-import type { AgentSession } from "../session/agent-session";
+import type { AgentSession } from "../session/agent/agent-session";
 import type { AgentSpec } from "./agent-spec";
 
 // ============================================================================

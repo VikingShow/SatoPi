@@ -6,7 +6,7 @@ import { type Component, padding, truncateToWidth, visibleWidth } from "@satopi/
 import { formatNumber, getProjectDir } from "@satopi/pi-utils";
 import { settings } from "../../config/settings";
 import { theme } from "../../modes/theme/theme";
-import type { AgentSession } from "../../session/agent-session";
+import type { AgentSession } from "../../session/agent/agent-session";
 import { shortenPath } from "../../tools/render-utils";
 import * as git from "../../utils/git";
 import { sanitizeStatusText } from "../shared";

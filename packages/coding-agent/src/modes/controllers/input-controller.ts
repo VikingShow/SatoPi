@@ -17,7 +17,7 @@ import { parseQueueShorthand, splitQueuedMessages } from "../../modes/queue-inpu
 import { invokeSkillCommandFromText, isKnownSkillCommand } from "../../modes/skill-command";
 import type { InteractiveModeContext } from "../../modes/types";
 import manualContinuePrompt from "../../prompts/system/manual-continue.md" with { type: "text" };
-import { USER_INTERRUPT_LABEL } from "../../session/messages";
+import { USER_INTERRUPT_LABEL } from "../../session/message/messages";
 import { executeBuiltinSlashCommand } from "../../slash-commands/builtin-registry";
 import { isTinyTitleLocalModelKey } from "../../tiny/models";
 import { isLowSignalTitleInput } from "../../tiny/text";

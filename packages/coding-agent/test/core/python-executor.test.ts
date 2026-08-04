@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { disposeAllKernelSessions, executePythonWithKernel } from "@satopi/pi-coding-agent/eval/py/executor";
-import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/streaming-output";
+import { DEFAULT_MAX_BYTES } from "@satopi/pi-coding-agent/session/message/streaming-output";
 import { TempDir } from "@satopi/pi-utils";
 import { FakeKernel } from "./helpers";
 

@@ -2,7 +2,7 @@ import type { Component } from "@satopi/pi-tui";
 import { Box, Container } from "@satopi/pi-tui";
 import type { HookMessageRenderer } from "../../extensibility/hooks/types";
 import { theme } from "../../modes/theme/theme";
-import type { HookMessage } from "../../session/messages";
+import type { HookMessage } from "../../session/message/messages";
 import { renderFramedMessage } from "./message-frame";
 
 /** Lines of default markdown body shown before the "…" fold when collapsed. */

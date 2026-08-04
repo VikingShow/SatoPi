@@ -9,8 +9,8 @@ import type { CompactionResult } from "@satopi/pi-agent-core/compaction";
 import type { Effort, ImageContent, Model, ToolExample } from "@satopi/pi-ai";
 import type { BashResult } from "../../exec/bash-executor";
 import type { ContextUsage } from "../../extensibility/extensions/types";
-import type { AgentSessionEvent, SessionStats } from "../../session/agent-session";
-import type { FileEntry } from "../../session/session-entries";
+import type { AgentSessionEvent, SessionStats } from "../../session/agent/agent-session";
+import type { FileEntry } from "../../session/store/session-entries";
 import type { AvailableSlashCommandSource } from "../../slash-commands/available-commands";
 import type {
 	AgentProgress,

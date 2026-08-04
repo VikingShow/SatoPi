@@ -9,7 +9,7 @@
 
 import * as path from "node:path";
 import { logger } from "@satopi/pi-utils";
-import type { SessionStorage } from "../../session/session-storage";
+import type { SessionStorage } from "../../session/store/session-storage";
 import { getArchivedMmdPath, getMmdPath, getMmdsDir } from "../paths";
 
 // ============================================================================

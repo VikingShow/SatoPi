@@ -66,11 +66,11 @@ import {
 	discoverAuthStorage,
 	loadSessionExtensions,
 } from "./sdk";
-import type { AgentSession } from "./session/agent-session";
-import type { AuthStorage } from "./session/auth-storage";
-import { describePendingToolCalls } from "./session/exit-diagnostics";
-import { resolveResumableSession, type SessionInfo } from "./session/session-listing";
-import { SessionManager } from "./session/session-manager";
+import type { AgentSession } from "./session/agent/agent-session";
+import { describePendingToolCalls } from "./session/agent/exit-diagnostics";
+import type { AuthStorage } from "./session/auth/auth-storage";
+import { resolveResumableSession, type SessionInfo } from "./session/store/session-listing";
+import { SessionManager } from "./session/store/session-manager";
 import { executeBuiltinSlashCommand } from "./slash-commands/builtin-registry";
 import { shouldShowStartupSplash } from "./startup-splash";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "./system-prompt";

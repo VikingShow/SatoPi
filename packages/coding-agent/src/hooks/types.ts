@@ -85,7 +85,7 @@ export interface AgentBeforeSpawnPayload {
 export interface AgentAfterSpawnPayload {
 	agentId: string;
 	role: string;
-	/** The AgentSession returned by AgentLauncher. */
+	/** The AgentSession returned by spawnAgent(). */
 	session: unknown;
 }
 

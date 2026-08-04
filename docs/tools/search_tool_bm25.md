@@ -7,7 +7,7 @@
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/search-tool-bm25.md`
 - Key collaborators:
   - `packages/coding-agent/src/tool-discovery/tool-index.ts` — discoverable-tool metadata and BM25 index/search.
-  - `packages/coding-agent/src/session/agent-session.ts` — session discovery mode, corpus assembly, activation, cache invalidation.
+  - `packages/coding-agent/src/session/agent/agent-session.ts` — session discovery mode, corpus assembly, activation, cache invalidation.
   - `packages/coding-agent/src/sdk.ts` — initial hiding of discoverable built-ins and prompt-time discoverable summary.
   - `packages/coding-agent/src/tools/index.ts` — tool-session discovery hooks, essential/discoverable load modes, registry wiring.
   - `packages/coding-agent/src/config/settings-schema.ts` — `tools.discoveryMode` and legacy `mcp.discoveryMode` settings.
@@ -74,7 +74,7 @@
 - Session state
   - Adds matched tools to the active session tool set through `activateDiscoveredTools()` / `activateDiscoveredMCPTools()`.
   - Updates discovered-tool selection state so repeated searches accumulate selections instead of replacing them.
-  - Invalidates the cached discoverable search index when newly activated built-ins change the hidden corpus (`packages/coding-agent/src/session/agent-session.ts`).
+  - Invalidates the cached discoverable search index when newly activated built-ins change the hidden corpus (`packages/coding-agent/src/session/agent/agent-session.ts`).
   - Tool availability changes before the next model call in the same turn; the prompt text says this explicitly.
 - User-visible prompts / interactive UI
   - The tool description includes discoverable server summaries and total discoverable-tool count.

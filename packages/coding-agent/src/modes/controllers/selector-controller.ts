@@ -36,10 +36,10 @@ import {
 } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
 import { AgentRegistry } from "../../registry/agent-registry";
-import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome } from "../../session/auth-storage";
-import type { SessionInfo } from "../../session/session-listing";
-import { SessionManager } from "../../session/session-manager";
-import { FileSessionStorage } from "../../session/session-storage";
+import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome } from "../../session/auth/auth-storage";
+import type { SessionInfo } from "../../session/store/session-listing";
+import { SessionManager } from "../../session/store/session-manager";
+import { FileSessionStorage } from "../../session/store/session-storage";
 import { type LogoutAccount, toLogoutAccounts } from "../../slash-commands/helpers/logout";
 import {
 	describeRedeemOutcome,

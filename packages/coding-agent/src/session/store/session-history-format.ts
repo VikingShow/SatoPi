@@ -18,7 +18,7 @@ import type {
 	FileMentionMessage,
 	HookMessage,
 	PythonExecutionMessage,
-} from "./messages";
+} from "../message/messages";
 
 export interface HistoryFormatOptions {
 	/** Optional H1 prepended to the transcript. */

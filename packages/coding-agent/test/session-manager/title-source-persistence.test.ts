@@ -7,11 +7,11 @@ import {
 	SESSION_TITLE_SLOT_BYTES,
 	type SessionHeader,
 	TITLE_CHANGE_ENTRY_TYPE,
-} from "@satopi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import { FileSessionStorage, type WriteTextAtomicOptions } from "@satopi/pi-coding-agent/session/session-storage";
-import type { SessionTitleUpdate } from "@satopi/pi-coding-agent/session/session-title-slot";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
+import { loadEntriesFromFile } from "@satopi/pi-coding-agent/session/store/session-loader";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
+import { FileSessionStorage, type WriteTextAtomicOptions } from "@satopi/pi-coding-agent/session/store/session-storage";
+import type { SessionTitleUpdate } from "@satopi/pi-coding-agent/session/store/session-title-slot";
 import { getConfigRootDir, removeSyncWithRetries, setAgentDir } from "@satopi/pi-utils";
 
 import { makeAssistantMessage } from "./helpers";

@@ -4,7 +4,7 @@
  * Priority: 3 (between ExperienceSource=2 and StigmergySource=4).
  * Applies to: all phases.
  *
- * Previously this was done per-turn inside AgentLauncher's custom
+ * Previously this was done per-turn inside the launcher's custom
  * transformContext. Moving it here means it's injected once at creation
  * time via ContextPipeline.assemble() → assembledContext.injectedMessages.
  */

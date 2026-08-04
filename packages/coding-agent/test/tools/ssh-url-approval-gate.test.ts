@@ -6,8 +6,8 @@ import type { AgentToolContext } from "@satopi/pi-agent-core";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import type { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import type { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { Snowflake } from "@satopi/pi-utils";
 
 // Exercises the real per-tool approval gate (ExtensionToolWrapper) for read/grep/write,

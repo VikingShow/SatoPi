@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { LogoutAccountSelectorComponent } from "@satopi/pi-coding-agent/modes/components/logout-account-selector";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import type { StoredAuthCredential } from "@satopi/pi-coding-agent/session/auth-storage";
+import type { StoredAuthCredential } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { toLogoutAccounts } from "@satopi/pi-coding-agent/slash-commands/helpers/logout";
 
 beforeAll(async () => {

@@ -13,7 +13,7 @@ import {
 import { settings } from "../../config/settings";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
-import type { AuthStorage, CredentialOriginKind } from "../../session/auth-storage";
+import type { AuthStorage, CredentialOriginKind } from "../../session/auth/auth-storage";
 import { DynamicBorder } from "./dynamic-border";
 
 const OAUTH_SELECTOR_MAX_VISIBLE = 10;

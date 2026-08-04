@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { HistoryStorage } from "@satopi/pi-coding-agent/session/history-storage";
+import { HistoryStorage } from "@satopi/pi-coding-agent/session/store/history-storage";
 import { TempDir } from "@satopi/pi-utils";
 
 let tempDir: TempDir | null = null;

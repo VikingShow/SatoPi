@@ -8,9 +8,9 @@ import { SessionSelectorComponent } from "@satopi/pi-coding-agent/modes/componen
 import { TreeSelectorComponent } from "@satopi/pi-coding-agent/modes/components/tree-selector";
 import { UserMessageSelectorComponent } from "@satopi/pi-coding-agent/modes/components/user-message-selector";
 import { initTheme } from "@satopi/pi-coding-agent/modes/theme/theme";
-import { HistoryStorage } from "@satopi/pi-coding-agent/session/history-storage";
-import type { SessionTreeNode } from "@satopi/pi-coding-agent/session/session-entries";
-import type { SessionInfo } from "@satopi/pi-coding-agent/session/session-listing";
+import { HistoryStorage } from "@satopi/pi-coding-agent/session/store/history-storage";
+import type { SessionTreeNode } from "@satopi/pi-coding-agent/session/store/session-entries";
+import type { SessionInfo } from "@satopi/pi-coding-agent/session/store/session-listing";
 import { setKeybindings } from "@satopi/pi-tui";
 import { TempDir } from "@satopi/pi-utils";
 

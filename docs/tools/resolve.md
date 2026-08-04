@@ -9,7 +9,7 @@
   - `docs/resolve-tool-runtime.md` — preview/apply runtime reference
   - `packages/coding-agent/src/extensibility/custom-tools/loader.ts` — forwards custom pending actions into the queue
   - `packages/coding-agent/src/tools/ast-edit.ts` — built-in preview producer example
-  - `packages/coding-agent/src/session/agent-session.ts` — tool-choice queue, standing resolve handler, and invoker access
+  - `packages/coding-agent/src/session/agent/agent-session.ts` — tool-choice queue, standing resolve handler, and invoker access
 
 ## Inputs
 

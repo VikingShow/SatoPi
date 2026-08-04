@@ -7,7 +7,7 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { getAgentDir, removeSyncWithRetries, Snowflake, setAgentDir } from "@satopi/pi-utils";
 import { MANY_TOOL_COUNT } from "./fixtures/many-tools-mcp";
 

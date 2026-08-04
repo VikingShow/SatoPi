@@ -11,7 +11,7 @@
   - `packages/coding-agent/src/ssh/sshfs-mount.ts` — optional `sshfs` mount side effect
   - `packages/coding-agent/src/discovery/ssh.ts` — discovers host configs
   - `packages/coding-agent/src/capability/ssh.ts` — canonical host shape
-  - `packages/coding-agent/src/session/streaming-output.ts` — tail streaming, truncation, artifacts
+  - `packages/coding-agent/src/session/message/streaming-output.ts` — tail streaming, truncation, artifacts
   - `packages/coding-agent/src/tools/tool-timeouts.ts` — timeout clamp rules
   - `packages/utils/src/dirs.ts` — user/project ssh config paths
 
@@ -32,7 +32,7 @@ The tool returns a standard text tool result built in `packages/coding-agent/src
 
 Streaming behavior:
 
-- While the command runs, `onUpdate` receives tail-only text snapshots built from `TailBuffer` in `packages/coding-agent/src/session/streaming-output.ts`.
+- While the command runs, `onUpdate` receives tail-only text snapshots built from `TailBuffer` in `packages/coding-agent/src/session/message/streaming-output.ts`.
 - Final output is single-shot after process exit.
 
 Side-channel artifacts:
@@ -96,7 +96,7 @@ Failure behavior:
 
 ## Limits & Caps
 - Timeout defaults/clamps: `default=60`, `min=1`, `max=3600` in `packages/coding-agent/src/tools/tool-timeouts.ts`.
-- Output tail window: `DEFAULT_MAX_BYTES = 50 * 1024` in `packages/coding-agent/src/session/streaming-output.ts`.
+- Output tail window: `DEFAULT_MAX_BYTES = 50 * 1024` in `packages/coding-agent/src/session/message/streaming-output.ts`.
 - Output sink spill threshold defaults to the same `50 KiB`; once exceeded, only the tail remains in memory.
 - SSH master reuse persistence: `ControlPersist=3600` in `packages/coding-agent/src/ssh/connection-manager.ts` and `packages/coding-agent/src/ssh/sshfs-mount.ts`.
 - SSH host info schema version: `HOST_INFO_VERSION = 2` in `packages/coding-agent/src/ssh/connection-manager.ts`; stale cache entries are reprobed.

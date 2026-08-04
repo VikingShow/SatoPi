@@ -11,7 +11,7 @@ import type { ImageContent, Model } from "@satopi/pi-ai";
 import { isRecord, ptree, readJsonl } from "@satopi/pi-utils";
 import type { FileSink } from "bun";
 import type { BashResult } from "../../exec/bash-executor";
-import type { AgentSessionEvent, SessionStats } from "../../session/agent-session";
+import type { AgentSessionEvent, SessionStats } from "../../session/agent/agent-session";
 import type {
 	RpcAvailableCommandsUpdateFrame,
 	RpcAvailableSlashCommand,

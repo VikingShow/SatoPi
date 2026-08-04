@@ -15,7 +15,7 @@ import type { AgentMessage } from "@satopi/pi-agent-core";
 import { logger } from "@satopi/pi-utils";
 import type { ExperienceStore } from "../experience/experience";
 import type { ExtractedLesson } from "../experience/extractor";
-import type { SessionStorage } from "../session/session-storage";
+import type { SessionStorage } from "../session/store/session-storage";
 import { MmdInjector } from "./mermaid/injector";
 import { MermaidSynthesizer } from "./mermaid/synthesizer";
 import { type AgentOffloadEntry, AgentOffloadSummarizer } from "./pipeline/agent-summarizer";

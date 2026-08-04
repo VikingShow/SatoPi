@@ -9,7 +9,7 @@ import {
 	type StoredAuthCredential,
 } from "@satopi/pi-ai";
 import { AsyncDrain, getAgentDbPath, getStatsDbPath, isRecord, logger } from "@satopi/pi-utils";
-import type { RawSettings as Settings } from "../config/settings";
+import type { RawSettings as Settings } from "../../config/settings";
 
 /** Row shape for settings table queries */
 type SettingsRow = {

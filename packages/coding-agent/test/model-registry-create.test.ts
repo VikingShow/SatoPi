@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { ConfigFile } from "@satopi/pi-coding-agent/config/config-file";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { ModelsConfigSchema } from "@satopi/pi-coding-agent/config/models-config-schema";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
 import { TempDir } from "@satopi/pi-utils";
 
 describe("ModelRegistry.create() factory (F6)", () => {

@@ -10,7 +10,7 @@ import type { Extension, ExtensionError, ExtensionFactory } from "@satopi/pi-cod
 import { ExtensionRunner } from "@satopi/pi-coding-agent/extensibility/extensions";
 import { ExtensionRuntime } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 interface SessionDirs {

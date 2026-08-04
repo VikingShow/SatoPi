@@ -18,7 +18,7 @@
   - `packages/coding-agent/src/eval/py/executor.ts` — kernel session retention, reset, cleanup
   - `packages/coding-agent/src/eval/py/kernel.ts` — subprocess NDJSON runner protocol, display capture
   - `packages/coding-agent/src/eval/py/prelude.py` — Python helper functions and status events
-  - `packages/coding-agent/src/session/streaming-output.ts` — truncation, artifacts, streamed chunks
+  - `packages/coding-agent/src/session/message/streaming-output.ts` — truncation, artifacts, streamed chunks
   - `docs/python-repl.md` — Python kernel/runner internals
 
 ## Inputs
@@ -242,8 +242,8 @@ A single tool call can mix Python and JS cells. Persistence is per language runt
 - Schema-level `timeout` range: integer `1..3600` seconds (enforced by Zod on the cell schema)
 - Timeout clamp at runtime: 1s minimum, 3600s maximum (`TOOL_TIMEOUTS.eval` in `packages/coding-agent/src/tools/tool-timeouts.ts`)
 - Transcript code/output preview: 10 lines by default (`EVAL_DEFAULT_PREVIEW_LINES` in `packages/coding-agent/src/tools/eval-render.ts`, re-exported from `eval.ts`)
-- Output truncation window: 50KB default (`DEFAULT_MAX_BYTES` in `packages/coding-agent/src/session/streaming-output.ts`)
-- Output line cap inside truncation helpers: 3000 lines (`DEFAULT_MAX_LINES` in `packages/coding-agent/src/session/streaming-output.ts`)
+- Output truncation window: 50KB default (`DEFAULT_MAX_BYTES` in `packages/coding-agent/src/session/message/streaming-output.ts`)
+- Output line cap inside truncation helpers: 3000 lines (`DEFAULT_MAX_LINES` in `packages/coding-agent/src/session/message/streaming-output.ts`)
 - Streaming tail buffer for live updates: `DEFAULT_MAX_BYTES * 2` = 100KB (`packages/coding-agent/src/tools/eval.ts`)
 - JS/Python `parallel()` / `pipeline()` helper pool width: the `task.maxConcurrency` setting (default 32; `0` = unbounded), resolved live via the `__concurrency__` bridge (`packages/coding-agent/src/eval/concurrency-bridge.ts`)
 - Eval-driven `agent()` recursion cap: task depth 3 (`EVAL_AGENT_MAX_DEPTH`)

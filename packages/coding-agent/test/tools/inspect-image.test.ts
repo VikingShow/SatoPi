@@ -8,7 +8,7 @@ import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { getThemeByName } from "@satopi/pi-coding-agent/modes/theme/theme";
 import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import type { ToolSession } from "@satopi/pi-coding-agent/tools";
 import { InspectImageTool } from "@satopi/pi-coding-agent/tools/inspect-image";
 import { inspectImageToolRenderer } from "@satopi/pi-coding-agent/tools/inspect-image-renderer";

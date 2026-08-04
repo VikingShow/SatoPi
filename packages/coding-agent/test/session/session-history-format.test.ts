@@ -9,7 +9,7 @@
  * - No system prompt / tool catalog sections.
  */
 import { describe, expect, it } from "bun:test";
-import { formatSessionHistoryMarkdown } from "@satopi/pi-coding-agent/session/session-history-format";
+import { formatSessionHistoryMarkdown } from "@satopi/pi-coding-agent/session/store/session-history-format";
 import { INTENT_FIELD } from "@satopi/pi-wire";
 
 function buildMessages(): unknown[] {

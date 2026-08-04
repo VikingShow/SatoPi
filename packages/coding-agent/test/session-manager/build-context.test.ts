@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import { buildSessionContext } from "@satopi/pi-coding-agent/session/session-context";
+import { buildSessionContext } from "@satopi/pi-coding-agent/session/message/session-context";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
@@ -7,7 +7,7 @@ import type {
 	SessionEntry,
 	SessionMessageEntry,
 	ThinkingLevelChangeEntry,
-} from "@satopi/pi-coding-agent/session/session-entries";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
 import * as snapcompact from "@satopi/snapcompact";
 
 function msg(id: string, parentId: string | null, role: "user" | "assistant", text: string): SessionMessageEntry {

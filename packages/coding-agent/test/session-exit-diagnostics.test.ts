@@ -7,17 +7,17 @@ import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
 import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { createSessionTeardown } from "@satopi/pi-coding-agent/modes/session-teardown";
-import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent/agent-session";
 import {
 	collectPendingToolCalls,
 	describePendingToolCalls,
 	SESSION_EXIT_CUSTOM_TYPE,
 	TOOL_EXECUTION_START_CUSTOM_TYPE,
 	type ToolExecutionStartData,
-} from "@satopi/pi-coding-agent/session/exit-diagnostics";
-import { convertToLlm } from "@satopi/pi-coding-agent/session/messages";
-import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
+} from "@satopi/pi-coding-agent/session/agent/exit-diagnostics";
+import { AuthStorage } from "@satopi/pi-coding-agent/session/auth/auth-storage";
+import { convertToLlm } from "@satopi/pi-coding-agent/session/message/messages";
+import { SessionManager } from "@satopi/pi-coding-agent/session/store/session-manager";
 import { postmortem, TempDir } from "@satopi/pi-utils";
 
 const pendingAssistant: AssistantMessage = {

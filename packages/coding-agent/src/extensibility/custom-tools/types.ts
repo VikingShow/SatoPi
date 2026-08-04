@@ -24,7 +24,7 @@ import type { ExecOptions, ExecResult } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import type * as PiCodingAgent from "../../index";
 import type { Theme } from "../../modes/theme/theme";
-import type { ReadonlySessionManager } from "../../session/session-manager";
+import type { ReadonlySessionManager } from "../../session/store/session-manager";
 import type { TodoItem } from "../../tools/todo";
 import type { RecoveredRetryError } from "../shared-events";
 import type * as TypeBox from "../typebox";

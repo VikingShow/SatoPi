@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { AssistantMessage } from "@satopi/pi-ai";
-import { buildSessionContext } from "@satopi/pi-coding-agent/session/session-context";
+import { buildSessionContext } from "@satopi/pi-coding-agent/session/message/session-context";
 import type {
 	ModelChangeEntry,
 	SessionEntry,
 	SessionMessageEntry,
-} from "@satopi/pi-coding-agent/session/session-entries";
+} from "@satopi/pi-coding-agent/session/store/session-entries";
 
 /**
  * Issue #849: After a user explicitly switches to gpt-5.5, the session reverts
