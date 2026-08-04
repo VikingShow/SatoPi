@@ -1,7 +1,7 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅(巨型工具拆分)· 阶段 4 起待执行**
+> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅(巨型工具拆分)· 阶段 4 ✅(sdk.ts 拆分)· 阶段 5 起待执行**
 >
 > 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
@@ -212,13 +212,15 @@ stp --smoke-test     # CLI 冒烟
 - **验证记录**: ① gh: check ✅,gh.test 77 pass(3 个既有 ENOENT worktree 失败=基线一致),smoke ✅ ② read: check ✅,read 核心 32+renderer 6 pass(1 个既有 omp:// 失败=基线一致),smoke ✅ ③ grep: check ✅,grep 4 文件 68 pass(2 个既有 omp:// 失败=基线一致),smoke ✅
 - **验收**: 3 个 commit — `18d023bdaa`(gh)/`cf06b73162`(read)/`948d0f6257`(grep),均已推送
 
-### 阶段 4 — sdk.ts 拆分
+### 阶段 4 — sdk.ts 拆分 ✅(已完成,2026-08-04)
 
-- 新建 `src/sdk/`: `discovery.ts`(L698-865 的 11 个 discover* 函数)、`system-prompt.ts`(buildSystemPrompt L869-1160)、`factory.ts`(createAgentSession L1160-3349,内部按 resolveSessionDeps/buildAgent/wireTools/attachHooks 拆阶段函数)、`index.ts`(barrel re-export 全部原符号)
-- 原 `sdk.ts` 变薄为兼容 re-export
-- 消费方逐一验证: main.ts、graph/agent-helpers.ts、tools/agent-invoke.ts、task/executor.ts、task/persisted-revive.ts、modes/controllers/swarm-mode-controller.ts、tan-command-controller.ts、agent-dashboard.ts、legacy-pi-coding-agent-shim.ts、web/search/index.ts、tools/fetch/browser/read/write/todo.ts(仅 type)、commands/token.ts、cli/*.ts
-- **DoD**: 所有 `from "./sdk"` 消费方编译通过;导出符号清单与拆分前 diff 为空
-- **验收**: 提交 `refactor(sdk): split into sdk/{index,discovery,system-prompt,factory}`
+- 新建 `src/sdk/discovery.ts`: 提取 11 个 discover* 函数(discoverAuthStorage/discoverExtensions/discoverSessionExtensionPaths/loadSessionExtensions/loadCliExtensionProviders/discoverSkills/discoverContextFiles/discoverPromptTemplates/discoverSlashCommands/discoverCustomTSCommands/discoverMCPServers);用本地 `DiscoverySessionOptions` 结构类型避免对 `CreateAgentSessionOptions` 的循环依赖
+- 新建 `src/sdk/system-prompt.ts`: 提取 `buildSystemPrompt` + `BuildSystemPromptOptions`(委托 `../system-prompt` 内部实现)
+- **方案 B 决策**(用户 2026-08-04 确认): `createAgentSession`(2200 行单体)**保留在 sdk.ts 主文件**——它深度依赖 ~70 个 import 且本质是"工厂函数",与主入口语义一致;提取需复制整个 import 面,风险中高,且 `main.ts` 等以 named import 直接引用。故仅提取 discovery/system-prompt 两个独立分区
+- `sdk.ts`: 3,367 → **3,169 行**(提取约 200 行);全部 export 保留(import + re-export 子模块);17 个消费方零改动
+- **DoD**: 所有 `from "./sdk"` 消费方编译通过;`bun run check` 通过;sdk 相关测试全绿;`stp --smoke-test` 通过
+- **验证记录**: ① `bun run check` ✅ ② sdk 相关测试: agent-session-mcp-discovery/cli-extension-providers/message-pipeline/model-persistence/tool-rebuild-skip/cli-max-time-flag 74 pass, legacy-pi-default-resource/goals/auth-broker/openai-responses/ssh-refresh 44 pass(2 个既有 python-kernel 环境失败,测试文件与 dev 仅 import 路径差异,非 sdk 拆分引入) ③ `stp --smoke-test` ✅ ④ 期间 smoke 出现 `peer-roster-source` 报错,复查确认为瞬时模块缓存问题,重跑即恢复
+- **验收**: 提交 `refactor(sdk): extract discovery and system-prompt into src/sdk/ (stage 4a)`(a367bc78c5),已推送
 
 ### 阶段 5 — interactive-mode.ts 拆分
 
