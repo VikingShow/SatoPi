@@ -318,7 +318,7 @@ describe("readArgsTargetInternalUrl", () => {
 	it.each([
 		["skill://my-skill"],
 		["skill://my-skill/file.md"],
-		["omp://docs/tools/read.md"],
+		["stp://docs/tools/read.md"],
 		["issue://123"],
 		["pr://VikingShow/SatoPi/456"],
 		["agent://abc"],
