@@ -38,7 +38,7 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 		AsyncJobManager.resetForTests();
 	});
 
-	async function spawnTopLevelSession(extraSettings?: Record<string, unknown>) {
+	async function spawnTopLevelSession(extraSettings?: Record<string, unknown>, agentId?: string) {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-sdk-async-singleton-${Snowflake.next()}-`));
 		tempDirs.push(tempDir);
 		const cwd = path.join(tempDir, `project-${Snowflake.next()}`);
@@ -47,6 +47,11 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 		const { session } = await createAgentSession({
 			cwd,
 			agentDir,
+			// Concurrent top-level sessions must use distinct agent ids: the
+			// AgentRegistry disposes the previous session when an id is
+			// re-registered (duplicate-id detection), which would otherwise kill
+			// the primary before its manager-ownership assertions run.
+			agentId,
 			settings: Settings.isolated({ "bash.autoBackground.enabled": true, ...(extraSettings ?? {}) }),
 			disableExtensionDiscovery: true,
 			skills: [],
@@ -66,7 +71,7 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 			const primaryManager = AsyncJobManager.instance();
 			expect(primaryManager).toBeDefined();
 
-			const secondary = await spawnTopLevelSession();
+			const secondary = await spawnTopLevelSession(undefined, "secondary-session");
 			try {
 				// While the secondary is alive the global instance MUST still point at
 				// the primary's manager so background tools keep delivering completions
@@ -96,9 +101,9 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 			expect(primaryManager).toBeDefined();
 
 			// Register a long-running job on the primary's manager under the
-			// MAIN_AGENT_ID owner — the same owner the secondary would inherit by
-			// default. The secondary's dispose-time `cancelOwnAsyncJobs` must NOT
-			// cancel this job (issue #1923).
+			// MAIN_AGENT_ID owner. A secondary top-level session gets no scoped
+			// manager (the singleton stays owned by the primary, issue #1923), so
+			// its dispose-time `cancelOwnAsyncJobs` must NOT cancel this job.
 			const release = Promise.withResolvers<string>();
 			const jobId = primaryManager!.register(
 				"bash",
@@ -113,7 +118,7 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 			);
 			expect(primary.getAsyncJobSnapshot()?.running.some(job => job.id === jobId)).toBe(true);
 
-			const secondary = await spawnTopLevelSession();
+			const secondary = await spawnTopLevelSession(undefined, "secondary-session");
 			try {
 				expect(secondary.getAsyncJobSnapshot()).toBeNull();
 			} finally {
@@ -137,7 +142,7 @@ describe("AsyncJobManager singleton across concurrent top-level sessions", () =>
 			expect(primaryManager).toBeDefined();
 			const primaryJobCountBefore = primaryManager!.getAllJobs().length;
 
-			const secondary = await spawnTopLevelSession({ "async.enabled": true });
+			const secondary = await spawnTopLevelSession({ "async.enabled": true }, "secondary-session");
 			try {
 				const bashTool = secondary.getToolByName("bash");
 				expect(bashTool).toBeDefined();

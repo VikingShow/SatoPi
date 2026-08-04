@@ -203,6 +203,12 @@ describe("AgentSession plan-mode convergence", () => {
 		const registry = AgentRegistry.global();
 		registry.register({ id: "peer", displayName: "peer", kind: "sub", session: null, status: "running" });
 		try {
+			// Rebind the global bus to the CURRENT global registry. The bus caches
+			// the registry it was constructed with, and another test file sharing
+			// this process may have called AgentRegistry.resetGlobalForTests() —
+			// the stale bus then cannot resolve the "peer" ref above, `send` fails
+			// silently, and the parked reply waiter never resolves (test timeout).
+			IrcBus.resetGlobalForTests();
 			const bus = IrcBus.global();
 			// Park the sender's reply waiter first (timeout 0 = no wall-clock timer;
 			// a broken auto-reply path fails via the test runner's own timeout).

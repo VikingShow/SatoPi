@@ -378,8 +378,10 @@ function renderAgentHud(title: string, titleColor: ThemeColor, rows: string[]): 
 }
 
 /**
- * Subagent-only HUD block — accent "Subagents" header. Only lists detached
- * task subagents; persistent agents (sentinel `persist-` id prefix) are excluded.
+ * Detached-subagent HUD block above the editor. The panel header dispatches by
+ * the kinds of the visible running sessions: all task subagents →
+ * "Subagents", all persistent agents (sentinel `persist-` id prefix) →
+ * "Persistent Agents", mixed → "Agents".
  */
 export function renderSubagentHudLines(sessions: ObservableSession[], columns: number): string[] {
 	const running = sessions.filter(
@@ -390,6 +392,10 @@ export function renderSubagentHudLines(sessions: ObservableSession[], columns: n
 	const pDot = theme.styledSymbol("status.done", "thinkingMedium");
 	const sDot = theme.styledSymbol("status.done", "accent");
 	const visible = running.slice(0, SUBAGENT_HUD_VISIBLE_LIMIT);
+	const persistentCount = visible.filter(session => session.id.startsWith("persist-")).length;
+	const allPersistent = persistentCount === visible.length;
+	const title = persistentCount === 0 ? "Subagents" : allPersistent ? "Persistent Agents" : "Agents";
+	const titleColor: ThemeColor = allPersistent ? "success" : persistentCount === 0 ? "warning" : "accent";
 	const hiddenCount = running.length - visible.length;
 	const rows = renderTreeList(
 		{
@@ -421,7 +427,7 @@ export function renderSubagentHudLines(sessions: ObservableSession[], columns: n
 	if (hiddenCount > 0) {
 		rows.push(theme.fg("dim", `… ${hiddenCount} more running — open Agent Hub for full list`));
 	}
-	return renderAgentHud("Agents", "accent", rows);
+	return renderAgentHud(title, titleColor, rows);
 }
 export class InteractiveMode implements InteractiveModeContext {
 	session: AgentSession;
@@ -1744,7 +1750,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			});
 		}
 		const persistentCount = countRunningProfileAgents(registry);
-		this.#updateSwarmModeStatus();
+		this.#updateSwarmModeStatus(options.requestRender !== false);
 		const subCount = countRunningSubagentBadgeAgents(registry);
 		this.statusLine.setSubagentCounts(persistentCount, subCount);
 		if (options.requestRender !== false) this.ui.requestRender();
@@ -2130,7 +2136,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.requestRender();
 	}
 
-	#updateSwarmModeStatus(): void {
+	#updateSwarmModeStatus(requestRender: boolean = true): void {
 		// Check for active crew first (new swarm crew architecture)
 		const activeCrewId = this.swarmModeController?.activeCrewId;
 		if (activeCrewId) {
@@ -2144,14 +2150,14 @@ export class InteractiveMode implements InteractiveModeContext {
 				failedCount: 0,
 				crewName,
 			});
-			this.ui.requestRender();
+			if (requestRender) this.ui.requestRender();
 			return;
 		}
 
 		const phase = currentSwarmPhase;
 		if (phase === "idle" || !this.session.embeddedSwarm) {
 			this.statusLine.setSwarmModeStatus(null);
-			this.ui.requestRender();
+			if (requestRender) this.ui.requestRender();
 			return;
 		}
 
@@ -2183,7 +2189,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				: null,
 		);
 
-		this.ui.requestRender();
+		if (requestRender) this.ui.requestRender();
 	}
 
 	#resetGoalContinuationSuppression(): void {

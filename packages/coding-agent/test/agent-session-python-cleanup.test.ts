@@ -112,12 +112,16 @@ const expectSleepNear = (sleepSpy: Mock<typeof Bun.sleep>, targetMs: number) => 
 const createSession = async (
 	_tempDir: TempDir,
 	cwd: string,
-	options: { extensions?: ExtensionFactory[]; sessionManager?: SessionManager } = {},
+	options: { extensions?: ExtensionFactory[]; sessionManager?: SessionManager; agentId?: string } = {},
 ) =>
 	(
 		await createAgentSession({
 			cwd,
 			agentDir: createAgentDir(),
+			// Distinct agent ids keep concurrent sessions from colliding in the
+			// process-global AgentRegistry: registering a duplicate id disposes
+			// the existing session (agent-registry.ts duplicate-id detection).
+			agentId: options.agentId,
 			sessionManager: options.sessionManager ?? SessionManager.inMemory(cwd),
 			settings: Settings.isolated({ "python.kernelMode": "session" }),
 			model: getModel(),
@@ -337,8 +341,8 @@ describe("AgentSession python cleanup", () => {
 		const startSpy = vi
 			.spyOn(pythonKernel.PythonKernel, "start")
 			.mockResolvedValue(kernel as unknown as PythonKernelInstance);
-		const firstSession = await createSession(tempDir, cwd);
-		const secondSession = await createSession(tempDir, cwd);
+		const firstSession = await createSession(tempDir, cwd, { agentId: "shared-kernel-a" });
+		const secondSession = await createSession(tempDir, cwd, { agentId: "shared-kernel-b" });
 		expect(startSpy).toHaveBeenCalledTimes(0);
 		let firstDisposed = false;
 
@@ -469,8 +473,8 @@ describe("AgentSession python cleanup", () => {
 			.spyOn(pythonKernel.PythonKernel, "start")
 			.mockResolvedValue(kernel as unknown as PythonKernelInstance);
 
-		const firstSession = await createSession(tempDir, cwd);
-		const secondSession = await createSession(tempDir, cwd);
+		const firstSession = await createSession(tempDir, cwd, { agentId: "detach-owner-a" });
+		const secondSession = await createSession(tempDir, cwd, { agentId: "detach-owner-b" });
 
 		await secondSession.executePython("print('owner-b warmup')");
 		const firstExecution = firstSession.executePython("print('blocked')");

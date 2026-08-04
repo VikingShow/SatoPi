@@ -67,8 +67,27 @@ const SCRATCH_ROOTS: readonly string[] = (() => {
 	return [...roots];
 })();
 
+/**
+ * Scratch roots excluded from classification. Test seam: a suite that runs from
+ * a temp worktree (e.g. under `/tmp`) must be able to opt its own directories
+ * out of the scratch-root match, since `os.tmpdir()` swallows everything under
+ * the repo when the repo itself lives in the OS temp dir.
+ */
+let scratchRootExclusions: readonly string[] | undefined;
+
+/** Test seam: exclude additional roots from scratch-path classification. */
+export function setScratchRootExclusionsForTest(roots: readonly string[] | undefined): void {
+	scratchRootExclusions = roots;
+}
+
+function effectiveScratchRoots(): readonly string[] {
+	if (scratchRootExclusions === undefined) return SCRATCH_ROOTS;
+	const exclusions = scratchRootExclusions;
+	return SCRATCH_ROOTS.filter(root => !exclusions.includes(root));
+}
+
 function classifyProjectDir(pwd: string): { scratch: boolean; relative: string | null } {
-	for (const root of SCRATCH_ROOTS) {
+	for (const root of effectiveScratchRoots()) {
 		if (pathIsWithin(root, pwd)) {
 			return { scratch: true, relative: relativePathWithinRoot(root, pwd) };
 		}

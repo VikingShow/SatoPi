@@ -11,7 +11,7 @@ import { createAgentSession } from "@satopi/pi-coding-agent/sdk";
 import { SecretObfuscator } from "@satopi/pi-coding-agent/secrets";
 import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
-import { getSessionsDir, removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
+import { CONFIG_DIR_NAME, getSessionsDir, removeSyncWithRetries, Snowflake } from "@satopi/pi-utils";
 
 function createTtsrRule(name: string): Rule {
 	return {
@@ -176,8 +176,11 @@ describe("createAgentSession session storage isolation", () => {
 				await withoutSecrets.session.dispose();
 			}
 
-			fs.mkdirSync(path.join(cwd, ".omp"), { recursive: true });
-			fs.writeFileSync(path.join(cwd, ".omp", "secrets.yml"), "- type: plain\n  content: sdk-secret-token-123456\n");
+			fs.mkdirSync(path.join(cwd, CONFIG_DIR_NAME), { recursive: true });
+			fs.writeFileSync(
+				path.join(cwd, CONFIG_DIR_NAME, "secrets.yml"),
+				"- type: plain\n  content: sdk-secret-token-123456\n",
+			);
 
 			const withSecrets = await createAgentSession(commonOptions);
 			try {
@@ -194,8 +197,11 @@ describe("createAgentSession session storage isolation", () => {
 			tempDirs.push(tempDir);
 			const cwd = path.join(tempDir, "project");
 			const agentDir = path.join(tempDir, "agent");
-			fs.mkdirSync(path.join(cwd, ".omp"), { recursive: true });
-			fs.writeFileSync(path.join(cwd, ".omp", "secrets.yml"), "- type: plain\n  content: sdk-secret-token-123456\n");
+			fs.mkdirSync(path.join(cwd, CONFIG_DIR_NAME), { recursive: true });
+			fs.writeFileSync(
+				path.join(cwd, CONFIG_DIR_NAME, "secrets.yml"),
+				"- type: plain\n  content: sdk-secret-token-123456\n",
+			);
 
 			const model = getBundledModel("anthropic", "claude-sonnet-4-5");
 			if (!model) throw new Error("Expected anthropic model");

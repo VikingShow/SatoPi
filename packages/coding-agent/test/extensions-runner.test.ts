@@ -5,8 +5,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentMessage, AgentTool } from "@satopi/pi-agent-core";
+import { Agent, type AgentMessage, type AgentTool } from "@satopi/pi-agent-core";
+import { getBundledModel } from "@satopi/pi-catalog/models";
 import { ModelRegistry } from "@satopi/pi-coding-agent/config/model-registry";
+import { Settings } from "@satopi/pi-coding-agent/config/settings";
 import { discoverAndLoadExtensions } from "@satopi/pi-coding-agent/extensibility/extensions/loader";
 import {
 	EXTENSION_HANDLER_TIMEOUT_MS,
@@ -15,6 +17,7 @@ import {
 } from "@satopi/pi-coding-agent/extensibility/extensions/runner";
 import { ExtensionToolWrapper } from "@satopi/pi-coding-agent/extensibility/extensions/wrapper";
 import { Type } from "@satopi/pi-coding-agent/extensibility/typebox";
+import { AgentSession } from "@satopi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@satopi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@satopi/pi-coding-agent/session/session-manager";
 import { getProjectAgentDir, logger, TempDir } from "@satopi/pi-utils";
@@ -1192,6 +1195,45 @@ describe("ExtensionRunner", () => {
 			execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
 		};
 
+		/** Settings that force approval for exec-tier tools via the execute context. */
+		const approvalSettings = (extraSettings: Record<string, unknown> = {}): Settings =>
+			Settings.isolated({ "tools.approvalMode": "always-ask", ...extraSettings });
+
+		/**
+		 * Build a session whose tool registry holds the raw approval tool and whose
+		 * extension runner owns the approval-event handlers. The approval gate runs
+		 * in the session layer (`AgentSession.#wrapToolForApproval`, SP-8) — the
+		 * `ExtensionToolWrapper` no longer gates — so these tests exercise the real
+		 * contract: gate + UI prompt + extension lifecycle events.
+		 */
+		const buildApprovalSession = async (runner: ExtensionRunner, sessionSettings: Record<string, unknown> = {}) => {
+			const cwd = path.join(tempDir.path(), "approval-session");
+			fs.mkdirSync(cwd, { recursive: true });
+			const approvalSessionManager = SessionManager.inMemory(cwd);
+			const agent = new Agent({
+				getApiKey: () => "test-key",
+				initialState: {
+					model: getBundledModel("openai", "gpt-4o-mini")!,
+					systemPrompt: ["Test"],
+					tools: [approvalTool],
+					messages: [],
+				},
+			});
+			return new AgentSession({
+				agent,
+				sessionManager: approvalSessionManager,
+				settings: Settings.isolated({
+					"async.enabled": false,
+					"bash.autoBackground.enabled": false,
+					"bashInterceptor.enabled": false,
+					...sessionSettings,
+				}),
+				modelRegistry,
+				toolRegistry: new Map([[approvalTool.name, approvalTool]]),
+				extensionRunner: runner,
+			});
+		};
+
 		it("emits requested before waiting and resolved after approval", async () => {
 			const events: Array<{ type: string; approved?: boolean }> = [];
 			const extCode = `
@@ -1222,16 +1264,22 @@ describe("ExtensionRunner", () => {
 			});
 			initializeRunner(runner, select);
 
-			const wrapper = new ExtensionToolWrapper(approvalTool, runner);
-			await (wrapper as ExtensionToolWrapper<any>).execute("call-approval", {}, undefined, undefined, {
-				sessionManager,
-				modelRegistry,
-				model: undefined,
-				isIdle: () => true,
-				hasQueuedMessages: () => false,
-				abort: () => {},
-				settings: { get: (key: string) => (key === "tools.approvalMode" ? "always-ask" : {}) } as never,
-			});
+			const session = await buildApprovalSession(runner);
+			try {
+				const tool = session.getToolByName("dangerous_tool");
+				expect(tool).toBeDefined();
+				await tool!.execute("call-approval", {} as never, undefined, undefined, {
+					sessionManager,
+					modelRegistry,
+					model: undefined,
+					isIdle: () => true,
+					hasQueuedMessages: () => false,
+					abort: () => {},
+					settings: approvalSettings(),
+				} as never);
+			} finally {
+				await session.dispose();
+			}
 
 			expect(events).toEqual([
 				{ type: "tool_approval_requested" },
@@ -1275,18 +1323,24 @@ describe("ExtensionRunner", () => {
 			);
 			initializeRunner(runner, async () => "Deny");
 
-			const wrapper = new ExtensionToolWrapper(approvalTool, runner);
-			await expect(
-				(wrapper as ExtensionToolWrapper<any>).execute("call-denied", {}, undefined, undefined, {
-					sessionManager,
-					modelRegistry,
-					model: undefined,
-					isIdle: () => true,
-					hasQueuedMessages: () => false,
-					abort: () => {},
-					settings: { get: (key: string) => (key === "tools.approvalMode" ? "always-ask" : {}) } as never,
-				}),
-			).rejects.toThrow("Tool call denied by user: dangerous_tool");
+			const session = await buildApprovalSession(runner);
+			try {
+				const tool = session.getToolByName("dangerous_tool");
+				expect(tool).toBeDefined();
+				await expect(
+					tool!.execute("call-denied", {} as never, undefined, undefined, {
+						sessionManager,
+						modelRegistry,
+						model: undefined,
+						isIdle: () => true,
+						hasQueuedMessages: () => false,
+						abort: () => {},
+						settings: approvalSettings(),
+					} as never),
+				).rejects.toThrow("Tool call denied by user: dangerous_tool");
+			} finally {
+				await session.dispose();
+			}
 
 			expect(events).toEqual([
 				{ type: "tool_approval_requested", reason: undefined },
@@ -1326,18 +1380,24 @@ describe("ExtensionRunner", () => {
 				throw new Error("dialog aborted");
 			});
 
-			const wrapper = new ExtensionToolWrapper(approvalTool, runner);
-			await expect(
-				(wrapper as ExtensionToolWrapper<any>).execute("call-thrown", {}, undefined, undefined, {
-					sessionManager,
-					modelRegistry,
-					model: undefined,
-					isIdle: () => true,
-					hasQueuedMessages: () => false,
-					abort: () => {},
-					settings: { get: (key: string) => (key === "tools.approvalMode" ? "always-ask" : {}) } as never,
-				}),
-			).rejects.toThrow("dialog aborted");
+			const session = await buildApprovalSession(runner);
+			try {
+				const tool = session.getToolByName("dangerous_tool");
+				expect(tool).toBeDefined();
+				await expect(
+					tool!.execute("call-thrown", {} as never, undefined, undefined, {
+						sessionManager,
+						modelRegistry,
+						model: undefined,
+						isIdle: () => true,
+						hasQueuedMessages: () => false,
+						abort: () => {},
+						settings: approvalSettings(),
+					} as never),
+				).rejects.toThrow("dialog aborted");
+			} finally {
+				await session.dispose();
+			}
 
 			expect(events).toEqual([
 				{ type: "tool_approval_requested", reason: undefined },
@@ -1378,19 +1438,29 @@ describe("ExtensionRunner", () => {
 				sessionManager,
 				modelRegistry,
 			);
-
-			const wrapper = new ExtensionToolWrapper(approvalTool, runner);
-			await expect(
-				(wrapper as ExtensionToolWrapper<any>).execute("call-partial-context", {}, undefined, undefined, {
-					settings: { get: (key: string) => (key === "tools.approvalMode" ? "always-ask" : {}) },
-				} as never),
-			).rejects.toThrow('Tool "dangerous_tool" requires approval but no interactive UI available.');
+			// No initializeRunner: the runner has no UI context, so the approval gate
+			// fails closed with "no interactive UI available". The execute context
+			// carries no sessionManager, so the gate falls back to the session's own
+			// id when emitting the lifecycle events.
+			const session = await buildApprovalSession(runner);
+			const expectedSessionId = session.sessionId;
+			try {
+				const tool = session.getToolByName("dangerous_tool");
+				expect(tool).toBeDefined();
+				await expect(
+					tool!.execute("call-partial-context", {} as never, undefined, undefined, {
+						settings: approvalSettings(),
+					} as never),
+				).rejects.toThrow('Tool "dangerous_tool" requires approval but no interactive UI available.');
+			} finally {
+				await session.dispose();
+			}
 
 			expect(events).toEqual([
-				{ type: "tool_approval_requested", sessionId: "", reason: undefined },
+				{ type: "tool_approval_requested", sessionId: expectedSessionId, reason: undefined },
 				{
 					type: "tool_approval_resolved",
-					sessionId: "",
+					sessionId: expectedSessionId,
 					approved: false,
 					reason: "no interactive UI available",
 				},

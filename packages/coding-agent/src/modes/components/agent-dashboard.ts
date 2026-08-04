@@ -697,6 +697,12 @@ export class AgentDashboard extends Container {
 		const userPrompt = prompt.render(agentCreationUserPrompt, { request: description });
 
 		const { session } = await createAgentSession({
+			// Distinct id: this transient architect session runs inside a live
+			// top-level session, and AgentRegistry re-registering the shared
+			// MAIN_AGENT_ID would dispose the user's session (duplicate-id
+			// detection). It shares the live AsyncJobManager singleton instead
+			// (sdk.ts ownership rule, issue #1923).
+			agentId: "agent-creation-architect",
 			cwd: this.cwd,
 			authStorage: modelRegistry.authStorage,
 			modelRegistry,

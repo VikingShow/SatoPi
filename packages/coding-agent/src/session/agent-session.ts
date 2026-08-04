@@ -6870,16 +6870,7 @@ export class AgentSession {
 	 */
 	#wrapToolForAcpPermission<T extends AgentTool>(tool: T): T {
 		const bridge = this.#clientBridge;
-		// Match the capability+method gating pattern used by read/write/bash.
-		if (!bridge?.capabilities.requestPermission || !bridge.requestPermission) return tool;
-		if (!PERMISSION_REQUIRED_TOOLS.has(tool.name)) return tool;
-		// Skip the gate only on explicit yolo opt-in; honour per-tool policies
-		// that require a prompt or deny (matching the normal approval wrapper).
-		if (this.#isExplicitAutoApproveMode()) {
-			const userPolicies = (this.settings.get("tools.approval") ?? {}) as Record<string, unknown>;
-			const toolPolicy = userPolicies[tool.name];
-			if (!toolPolicy || toolPolicy === "allow") return tool;
-		}
+		if (!this.#isAcpPermissionGated(tool.name) || !bridge) return tool;
 		return new Proxy(tool, {
 			get: (target, prop) => {
 				if (prop !== "execute") return target[prop as keyof T];
@@ -6968,6 +6959,29 @@ export class AgentSession {
 	}
 
 	/**
+	 * Whether the ACP permission gate wraps (and therefore owns approval for)
+	 * this tool. The gate is the interactive approval path when a client bridge
+	 * is connected: it matches the capability+method gating pattern used by
+	 * read/write/bash, only gates `PERMISSION_REQUIRED_TOOLS`, and skips on an
+	 * explicit yolo opt-in unless the per-tool policy requires a prompt or deny
+	 * (matching the normal approval wrapper). Shared by the ACP gate itself and
+	 * the approval wrapper so the two layers agree on who prompts.
+	 */
+	#isAcpPermissionGated(toolName: string): boolean {
+		const bridge = this.#clientBridge;
+		if (!bridge?.capabilities.requestPermission || !bridge.requestPermission) return false;
+		if (!PERMISSION_REQUIRED_TOOLS.has(toolName)) return false;
+		// Skip the gate only on explicit yolo opt-in; honour per-tool policies
+		// that require a prompt or deny (matching the normal approval wrapper).
+		if (this.#isExplicitAutoApproveMode()) {
+			const userPolicies = (this.settings.get("tools.approval") ?? {}) as Record<string, unknown>;
+			const toolPolicy = userPolicies[toolName];
+			if (!toolPolicy || toolPolicy === "allow") return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Wrap every tool (builtin, MCP, or custom) with an approval gate so the
 	 * per-tool approval check always runs, regardless of whether
 	 * `ExtensionToolWrapper` is present (SP-8).
@@ -7010,6 +7024,14 @@ export class AgentSession {
 					const approvalCheck = requiresApproval(target, params, approvalMode, userPolicies);
 
 					if (approvalCheck.required) {
+						// The ACP permission gate (outer wrapper) is the interactive
+						// approval path when a client bridge is connected for a gated
+						// tool: it already asked the client (and would have thrown on
+						// reject) before this wrapper runs. Do not double-prompt via
+						// the extension UI, and do not reject for lack of a UI here.
+						if (this.#isAcpPermissionGated(target.name)) {
+							return await target.execute(toolCallId, params as never, signal, onUpdate, context);
+						}
 						const runner = this.#extensionRunner;
 						const hasApprovalHandlers =
 							runner?.hasHandlers("tool_approval_requested") || runner?.hasHandlers("tool_approval_resolved");
