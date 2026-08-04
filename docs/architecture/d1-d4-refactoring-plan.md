@@ -1,7 +1,7 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 ✅(文档落盘)· 阶段 1 ✅(D4 收尾)· 阶段 2 起待执行**
+> 状态: **阶段 0 ✅(文档落盘)· 阶段 1 ✅(D4 收尾)· 阶段 2 ✅(D2 目录治理)· 阶段 3 起待执行**
 >
 > 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
@@ -172,28 +172,30 @@ stp --smoke-test     # CLI 冒烟
 | 验证记录 | ① `bun run check` ✅ ② `bun test src/graph/` 54 pass/0 fail ✅ ③ 全量 `ci-test-ts.ts coding-agent-heavy --full` 改动后 36/123 vs git-stash 基线 36/123(一致,零新增) |
 | 验收 | 提交 `refactor(graph): remove AgentSpawner residual interface and stale comments` |
 
-### 阶段 2 — D2 目录治理(同批两个子步)
+### 阶段 2 — D2 目录治理 ✅(已完成,2026-08-04)
 
-**2a 斩断循环依赖**:
-- 新建 `src/utils/format.ts`: 提取 `formatBytes`/`wrapBrackets`(来自 tools/render-utils)
-- 新建 `src/utils/output-meta.ts`: 提取 `OutputMeta`/`formatOutputNotice` 公共部分
-- `session/streaming-output.ts`、`session/messages.ts` 改 import 公共模块
-- `tools/render-utils.ts`、`tools/output-meta.ts` 保留 re-export 兼容
+**2a 斩断循环依赖**(提交 `19f359b1f8`):
+- ✅ 实际执行: `formatBytes` 经核实是 `@satopi/pi-utils` 的 re-export,无需新建 `utils/format.ts`;`streaming-output.ts` 直接 import `@satopi/pi-utils`
+- ✅ 新建 `src/utils/output-meta.ts`: 提取 `OutputMeta` 类型族 + `formatOutputNotice`/`formatTruncationMetaNotice`/`formatFullOutputReference`
+- ✅ `tools/output-meta.ts` 保留 re-export 兼容;`messages.ts` 改从 utils/output-meta import
+- ✅ 验证: `bun run check` 通过;grep 确认 session/ 不再 import `tools/render-utils` 与 `tools/output-meta`
 
-**2b 拆分 session-manager.ts**(2,122 → 1,943 行,拆分文件落入 `session/store/`):
-- 提取 `session/store/session-entry-index.ts`(L75-312: SessionEntryIndex + 5 个辅助函数 emptyUsageStatistics/taskUsageFrom/entryUsage/addUsage/orderedByTimestamp)—— ✅ 已完成,该类完全不依赖 SessionManager 私有状态,是干净提取
-- ⚠️ **范围调整**: 持久化子系统(`#drainAndCloseWriter`/`#rewriteSynchronously`/`#rewriteAtomically`/`#runFencedAtomicRewrite`/`#appendToSessionFile`)与静态工厂(`create`/`open`/`forkFrom`/`continueRecent` 等)访问 **TS `#private` 成员**(`#resetToNewSession`/`#writer`/`#diskEpoch`/`#commitGuard`/`#header` 等),提取到独立文件需将私有成员改 public 或建 host 接口,破坏封装且回归风险高 —— **调整为保留在 SessionManager 门面内**(该类本质是内聚的持久化管理器)
-- 主文件保留生命周期门面 + 持久化 + 静态工厂 + append 网关 + 读查询
-- 为 SessionEntryIndex 新增单元测试(验证 getTree/getBranch/pathTo 派生视图)
+**2b 拆分 session-manager.ts**(提交 `457c5d008a` + `21f80317b2` 测试补充):
+- ✅ 提取 `session/store/session-entry-index.ts`(L75-312: SessionEntryIndex + 5 个辅助函数),session-manager.ts 2,122 → 1,943 行
+- ⚠️ **范围调整(已确认)**: 持久化子系统与静态工厂访问 TS `#private` 成员(`#writer`/`#diskEpoch`/`#commitGuard` 等),提取需破坏封装 —— **取消拆分**,保留在 SessionManager 门面内
+- ✅ 新增 `session/store/session-entry-index.test.ts`: 9 项功能测试(insert/get/has/leaf/childrenOf/labelFor/usage 聚合/pathTo/tree/rebuild/clear)
 
-**2c session/ 目录领域分层(方案 B)**:
-- 依据第 5 章目录树,将 session/ 顶层文件按 `agent/store/message/auth/shared` 五领域迁入子目录
-- 迁移策略见第 3.4 节(脚本批量更新 import,分 3 个子步)
+**2c session/ 目录领域分层(方案 B)**(提交 `e8e3f448d1`):
+- ✅ 41 个文件迁入子目录: `agent/`(12)、`store/`(22)、`message/`(3)、`auth/`(2)、`shared/`(4)
+- ✅ 一次性脚本批量重写 504 文件 1123 处相对 import + 318 文件 662 处包路径 `@satopi/pi-coding-agent/session/*`(三批脚本修正: ① basename 映射替换后缀 bug ② 扫描范围扩至 test/ ③ 旧目录解析+新目录重算,区分移动/未移动文件);脚本用后即删
+- ✅ 顶层仅剩 `messages.test.ts`、`session-context.test.ts`;`store/session-entry-index.ts/.test.ts` 保持 2b 位置
+- ✅ git 完美识别为 rename(98-100% 相似度)
 
 | 项 | 内容 |
 |---|---|
-| DoD | `bun run test` 全绿;grep 确认 session/ 不再 import `tools/render-utils` 与 `tools/output-meta`;session-manager.ts 由 2,122 行减至 1,943 行(SessionEntryIndex 已提取);160 个外部引用方编译通过 |
-| 验收 | 提交 `refactor(session): break cycle deps, split session-manager, and reorganize session dir` |
+| DoD | ✅ `bun run check` 零 warning 通过;`stp --smoke-test` ok;session/tools 34/34;eval/task/exec/advisor/mcp/modes 304 pass(1 个既有环境性失败 `runEvalAgent isolation` 经基线对比与本次改动无关);grep 无残留旧路径引用 |
+| 验证记录 | ① `bun run check` ✅ ② `bun run src/cli.ts --smoke-test` → `smoke-test: ok` ✅ ③ `bun test src/session/ src/tools/` 34/34 ✅ ④ `bun test src/eval/ src/task/ src/exec/ src/advisor/ src/mcp/ src/modes/` 304 pass / 1 既有 fail ✅ ⑤ 残留检查 ✅ |
+| 验收 | 提交 `refactor(session): break cycle deps, split session-manager, and reorganize session dir`(实际 3 个 commit: `19f359b1f8`/`457c5d008a`+`21f80317b2`/`e8e3f448d1`) |
 
 ### 阶段 3 — 巨型工具拆分(BUILTIN_TOOLS 注册表不动)
 
