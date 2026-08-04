@@ -289,7 +289,7 @@ export async function applyNestedPatches(
 		// commit only the agent delta, not the user's in-flight work.
 		const stashed =
 			(await git.status(nestedDir)).trim().length > 0
-				? await git.stash.push(nestedDir, `omp-isolation-${Snowflake.next()}`)
+				? await git.stash.push(nestedDir, `stp-isolation-${Snowflake.next()}`)
 				: false;
 		try {
 			for (const { patch } of repoPatches) {

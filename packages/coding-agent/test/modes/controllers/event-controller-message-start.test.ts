@@ -267,7 +267,7 @@ describe("EventController IRC expiry", () => {
 		}
 		// live block + MAX_LIVE_IRC_CARDS (4): the 5th card evicted the 1st.
 		expect(chatContainer.children).toHaveLength(5);
-		const rendered = chatContainer.children.map(child => child.render(80).join("\n"));
+		const rendered = chatContainer.children.map(child => Bun.stripANSI(child.render(80).join("\n")));
 		expect(rendered.some(text => text.includes("100"))).toBe(false);
 		expect(rendered.some(text => text.includes("104"))).toBe(true);
 	});

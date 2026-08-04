@@ -3,8 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-// @ts-expect-error module not exported
-import { listOmpExtensionRoots } from "@satopi/pi-coding-agent/discovery/omp-extension-roots";
+import { listOmpExtensionRoots } from "@satopi/pi-coding-agent/discovery/extension-roots";
 import { getEnabledPlugins } from "@satopi/pi-coding-agent/extensibility/plugins/loader";
 import { PluginManager } from "@satopi/pi-coding-agent/extensibility/plugins/manager";
 import {
@@ -253,9 +252,9 @@ describe("MarketplaceManager", () => {
 	it("installPlugin exposes marketplace package to the runtime loader", async () => {
 		const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "stp-mgr-home-"));
 		try {
-			const pluginsDir = path.join(tmpHome, ".omp", "plugins");
+			const pluginsDir = path.join(tmpHome, ".stp", "plugins");
 			const manager = new MarketplaceManager({
-				marketplacesRegistryPath: path.join(tmpHome, ".omp", "marketplaces.json"),
+				marketplacesRegistryPath: path.join(tmpHome, ".stp", "marketplaces.json"),
 				installedRegistryPath: path.join(pluginsDir, "installed_plugins.json"),
 				marketplacesCacheDir: path.join(pluginsDir, "cache", "marketplaces"),
 				pluginsCacheDir: path.join(pluginsDir, "cache", "plugins"),
@@ -352,9 +351,9 @@ describe("MarketplaceManager", () => {
 	it("installPlugin keeps marketplace packages out of OMP extension roots", async () => {
 		const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "stp-mgr-home-"));
 		try {
-			const pluginsDir = path.join(tmpHome, ".omp", "plugins");
+			const pluginsDir = path.join(tmpHome, ".stp", "plugins");
 			const manager = new MarketplaceManager({
-				marketplacesRegistryPath: path.join(tmpHome, ".omp", "marketplaces.json"),
+				marketplacesRegistryPath: path.join(tmpHome, ".stp", "marketplaces.json"),
 				installedRegistryPath: path.join(pluginsDir, "installed_plugins.json"),
 				marketplacesCacheDir: path.join(pluginsDir, "cache", "marketplaces"),
 				pluginsCacheDir: path.join(pluginsDir, "cache", "plugins"),
@@ -374,11 +373,11 @@ describe("MarketplaceManager", () => {
 		const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "stp-mgr-home-"));
 		const projectAnchor = fs.mkdtempSync(path.join(os.tmpdir(), "stp-mgr-project-"));
 		try {
-			const userPluginsDir = path.join(tmpHome, ".omp", "plugins");
-			const projectPluginsDir = path.join(projectAnchor, ".omp", "plugins");
+			const userPluginsDir = path.join(tmpHome, ".stp", "plugins");
+			const projectPluginsDir = path.join(projectAnchor, ".stp", "plugins");
 			fs.mkdirSync(projectPluginsDir, { recursive: true });
 			const manager = new MarketplaceManager({
-				marketplacesRegistryPath: path.join(tmpHome, ".omp", "marketplaces.json"),
+				marketplacesRegistryPath: path.join(tmpHome, ".stp", "marketplaces.json"),
 				installedRegistryPath: path.join(userPluginsDir, "installed_plugins.json"),
 				projectInstalledRegistryPath: path.join(projectPluginsDir, "installed_plugins.json"),
 				marketplacesCacheDir: path.join(userPluginsDir, "cache", "marketplaces"),

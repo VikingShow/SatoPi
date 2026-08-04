@@ -11,7 +11,7 @@ const bundledModuleKeys = new Set((await collectBundledPiEntries()).map(entry =>
 // `rewriteLegacyPiImports` catch left the original specifier in place and
 // Bun's native resolver couldn't find a peer install. The build plugin now
 // derives every module key from current package exports, so subpaths route to
-// the same `omp-legacy-pi-bundled:` virtual namespace as package roots without
+// the same `stp-legacy-pi-bundled:` virtual namespace as package roots without
 // a generated registry or duplicate key list.
 describe("legacy pi compat compiled-mode subpath overrides (issue #3442)", () => {
 	it("serves @satopi/pi-ai/oauth through the bundled virtual namespace in compiled mode", () => {
@@ -45,7 +45,7 @@ describe("legacy pi compat compiled-mode subpath overrides (issue #3442)", () =>
 
 		for (const key of providerKeys) {
 			expect(bundledModuleKeys.has(key)).toBe(true);
-			expect(overrides[key]).toBe(`omp-legacy-pi-bundled:${key}`);
+			expect(overrides[key]).toBe(`stp-legacy-pi-bundled:${key}`);
 		}
 	});
 
@@ -75,7 +75,7 @@ describe("legacy pi compat compiled-mode subpath overrides (issue #3442)", () =>
 			// (they re-attach `Type`, `defineTool`, etc. dropped from the canonical
 			// package surface); typebox is served via TYPEBOX_SHIM_PATH.
 			if (key === "@satopi/pi-ai" || key === "@satopi/pi-coding-agent" || key === "typebox") continue;
-			if (overrides[key] !== `omp-legacy-pi-bundled:${key}`) {
+			if (overrides[key] !== `stp-legacy-pi-bundled:${key}`) {
 				missing.push(key);
 			}
 		}

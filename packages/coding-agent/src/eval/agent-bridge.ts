@@ -211,7 +211,7 @@ async function getArtifacts(session: ToolSession): Promise<ArtifactPaths> {
 	const sessionFile = session.getSessionFile();
 	const sessionArtifactsDir = sessionFile ? sessionFile.slice(0, -6) : null;
 	const tempArtifactsDir = sessionArtifactsDir === null;
-	const artifactsDir = sessionArtifactsDir ?? path.join(os.tmpdir(), `omp-eval-agent-${Snowflake.next()}`);
+	const artifactsDir = sessionArtifactsDir ?? path.join(os.tmpdir(), `stp-eval-agent-${Snowflake.next()}`);
 	await fs.mkdir(artifactsDir, { recursive: true });
 	const unregisterArtifactsDir = tempArtifactsDir ? registerArtifactsDir(artifactsDir) : undefined;
 	return { sessionFile, artifactsDir, unregisterArtifactsDir, tempArtifactsDir };

@@ -11,12 +11,12 @@ import {
 import { discoverAgents } from "@satopi/pi-coding-agent/task/discovery";
 import { removeWithRetries } from "@satopi/pi-utils";
 
-const OMP_AGENT_MD = [
+const STP_AGENT_MD = [
 	"---",
-	"name: omp-test-agent",
-	"description: OMP-native test agent.",
+	"name: stp-test-agent",
+	"description: STP-native test agent.",
 	"---",
-	"You are an OMP task agent.",
+	"You are an STP task agent.",
 ].join("\n");
 
 const OMP_PLUGIN_AGENT_MD = [
@@ -38,8 +38,8 @@ const CLAUDE_AGENT_MD = [
 	"You are a Claude Code custom subagent.",
 ].join("\n");
 
-async function writeOmpPluginAgent(home: string): Promise<void> {
-	const userPluginsRoot = path.join(home, ".omp", "plugins");
+async function writeStpPluginAgent(home: string): Promise<void> {
+	const userPluginsRoot = path.join(home, ".stp", "plugins");
 	const pluginRoot = path.join(userPluginsRoot, "node_modules", "loom");
 	await fs.mkdir(path.join(pluginRoot, "agents"), { recursive: true });
 	await fs.writeFile(
@@ -74,9 +74,9 @@ describe("discoverAgents", () => {
 		await removeWithRetries(tempHome);
 	});
 
-	test("loads OMP agents but skips Claude Code custom agents", async () => {
-		await fs.mkdir(path.join(projectDir, ".omp", "agents"), { recursive: true });
-		await fs.writeFile(path.join(projectDir, ".omp", "agents", "stp-test-agent.md"), OMP_AGENT_MD);
+	test("loads stp agents but skips Claude Code custom agents", async () => {
+		await fs.mkdir(path.join(projectDir, ".stp", "agents"), { recursive: true });
+		await fs.writeFile(path.join(projectDir, ".stp", "agents", "stp-test-agent.md"), STP_AGENT_MD);
 
 		await fs.mkdir(path.join(tempHome, ".claude", "agents"), { recursive: true });
 		await fs.writeFile(path.join(tempHome, ".claude", "agents", "user-cc-test-agent.md"), CLAUDE_AGENT_MD);
@@ -88,11 +88,11 @@ describe("discoverAgents", () => {
 
 		expect(names).toContain("stp-test-agent");
 		expect(names).not.toContain("cc-test-agent");
-		expect(projectAgentsDir).toBe(path.join(projectDir, ".omp", "agents"));
+		expect(projectAgentsDir).toBe(path.join(projectDir, ".stp", "agents"));
 	});
 
-	test("loads agents from OMP npm plugins under <home>/.stp/plugins/node_modules", async () => {
-		await writeOmpPluginAgent(tempHome);
+	test("loads agents from stp npm plugins under <home>/.stp/plugins/node_modules", async () => {
+		await writeStpPluginAgent(tempHome);
 
 		const { agents } = await discoverAgents(projectDir, tempHome);
 		const names = agents.map(agent => agent.name);
@@ -100,8 +100,8 @@ describe("discoverAgents", () => {
 		expect(names).toContain("loom-verify-spec");
 	});
 
-	test("excludes OMP npm plugin agents when omp-plugins is disabled", async () => {
-		await writeOmpPluginAgent(tempHome);
+	test("excludes stp npm plugin agents when stp-plugins is disabled", async () => {
+		await writeStpPluginAgent(tempHome);
 		disableProvider("stp-plugins");
 
 		const { agents } = await discoverAgents(projectDir, tempHome);
@@ -127,9 +127,8 @@ describe("discoverAgents", () => {
 			path.join(projectExt, "agents", "collide.md"),
 			["---", "name: collide", "description: from-project-settings", "---", "project body"].join("\n"),
 		);
-
-		await fs.mkdir(path.join(projectDir, ".omp"), { recursive: true });
-		await fs.writeFile(path.join(projectDir, ".omp", "settings.json"), JSON.stringify({ extensions: [projectExt] }));
+		await fs.mkdir(path.join(projectDir, ".stp"), { recursive: true });
+		await fs.writeFile(path.join(projectDir, ".stp", "settings.json"), JSON.stringify({ extensions: [projectExt] }));
 		injectOmpExtensionCliRoots([cliExt], tempHome, projectDir);
 
 		const { agents } = await discoverAgents(projectDir, tempHome);
