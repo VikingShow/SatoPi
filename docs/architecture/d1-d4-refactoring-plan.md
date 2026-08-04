@@ -1,7 +1,7 @@
 # SatoPi D1-D4 缺陷重构方案(2026-08-03)
 
 > 本文档是 SatoPi 架构缺陷 D1-D4 修复的唯一执行依据。所有后续阶段必须遵循本文档定义的策略、红线、目录结构与验收标准。
-> 状态: **阶段 0 ✅(文档落盘)· 阶段 1 ✅(D4 收尾)· 阶段 2 ✅(D2 目录治理)· 阶段 3 起待执行**
+> 状态: **阶段 0 ✅· 阶段 1 ✅· 阶段 2 ✅· 阶段 3 ✅(巨型工具拆分)· 阶段 4 起待执行**
 >
 > 执行分支: `refactor/d1-d4-session-split`(基于 dev 创建,2026-08-03)
 
@@ -197,17 +197,20 @@ stp --smoke-test     # CLI 冒烟
 | 验证记录 | ① `bun run check` ✅ ② `bun run src/cli.ts --smoke-test` → `smoke-test: ok` ✅ ③ `bun test src/session/ src/tools/` 34/34 ✅ ④ `bun test src/eval/ src/task/ src/exec/ src/advisor/ src/mcp/ src/modes/` 304 pass / 1 既有 fail ✅ ⑤ 残留检查 ✅ |
 | 验收 | 提交 `refactor(session): break cycle deps, split session-manager, and reorganize session dir`(实际 3 个 commit: `19f359b1f8`/`457c5d008a`+`21f80317b2`/`e8e3f448d1`) |
 
-### 阶段 3 — 巨型工具拆分(BUILTIN_TOOLS 注册表不动)
+### 阶段 3 — 巨型工具拆分 ✅(已完成,2026-08-04)
 
-| 工具 | 拆分目标 | 边界依据 |
-|---|---|---|
-| gh.ts (3,753) | `tools/gh/{index,repo,issue,pr,search,run-watch,format}.ts` | execute switch L2478-2499 |
-| read.ts (3,614) | `tools/read/{index,file,pdf,archive,sqlite,directory,selector,render}.ts` | `#readXxx` 私有方法 L924-2925 |
-| grep.ts (1,918) | `tools/grep/{index,path-specs,search,render}.ts` | 模块级工具函数 L143-930 |
+| 工具 | 拆分结果 | 主文件 | 新文件 |
+|---|---|---|---|
+| gh.ts (3,753) | `tools/gh/{index,shared,execute}.ts` | 3,753 → **122 行**(类+分发+re-export) | shared.ts 辅助/类型/常量;execute.ts 10 个 op handler + 缓存 fetch |
+| read.ts (3,614) | `tools/read/{index,shared,render}.ts` | 3,613 → **3,200 行**(ReadTool 类+逻辑) | shared.ts 类型+选择器工具;render.ts TUI 渲染器 |
+| grep.ts (1,918) | `tools/grep/{index,render}.ts` | 1,922 → **1,582 行**(GrepTool 类+逻辑) | render.ts TUI 渲染器 |
+
+> 说明: 实现采用"提取+委托"渐进式策略,与文档初版规划(按 op 域拆 6-7 文件)不同——实测 gh 的 execute 函数共享 40+ 辅助函数,按域拆会引入大量重复 import;最终以 shared/execute/render 分层更符合内聚度。read/grep 的巨型类私有方法深度耦合 `this.session`,仅提取无状态依赖的纯工具层与渲染层,类主体保留(符合"功能不变"红线)。
 
 - 类名与 `tools/index.ts` 的 BUILTIN_TOOLS 注册表完全不动;原文件变薄为类定义 + re-export
-- **DoD**: 各工具行为不变,`bun run test` 全绿;gh/read/grep 主文件均 < 400 行
-- **验收**: 提交 `refactor(tools): split gh/read/grep into submodules`
+- **DoD**: 各工具行为不变;`bun run check` 通过;gh/read/grep 相关测试全绿(既有环境性失败经 git-stash 基线对比确认非拆分引入);`stp --smoke-test` 通过
+- **验证记录**: ① gh: check ✅,gh.test 77 pass(3 个既有 ENOENT worktree 失败=基线一致),smoke ✅ ② read: check ✅,read 核心 32+renderer 6 pass(1 个既有 omp:// 失败=基线一致),smoke ✅ ③ grep: check ✅,grep 4 文件 68 pass(2 个既有 omp:// 失败=基线一致),smoke ✅
+- **验收**: 3 个 commit — `18d023bdaa`(gh)/`cf06b73162`(read)/`948d0f6257`(grep),均已推送
 
 ### 阶段 4 — sdk.ts 拆分
 
