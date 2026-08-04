@@ -37,6 +37,12 @@ export interface RoundtableOpts {
 	convergenceThreshold?: number;
 	/** Consecutive rounds above threshold before early exit (default 2). */
 	convergenceStreak?: number;
+	/**
+	 * Workflow phase to attach to roundtable hook events (defaults to "stage"
+	 * inside runRoundtable). Lets phase-filtered hooks observe the roundtable
+	 * lifecycle.
+	 */
+	phase?: string;
 }
 
 export interface RoundtableResult {
@@ -215,9 +221,10 @@ export class CommChannel {
 			timeoutMs: opts.timeoutMs ?? 30_000,
 			convergenceThreshold: opts.convergenceThreshold,
 			convergenceStreak: opts.convergenceStreak,
+			phase: opts.phase,
 		};
 
-		return runRoundtable(this.#ircBus, participants, topic, config);
+		return runRoundtable(this.#ircBus, participants, topic, config, this.#hookPipeline);
 	}
 
 	/**

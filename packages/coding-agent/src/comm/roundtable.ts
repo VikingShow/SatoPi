@@ -35,6 +35,12 @@ export interface RoundtableConfig {
 	 * `convergenceThreshold` before early exit (default 2).
 	 */
 	convergenceStreak: number;
+	/**
+	 * Workflow phase associated with this roundtable — carried on the emitted
+	 * hook contexts so phase-filtered hooks (e.g. offload-hook) fire. Defaults
+	 * to {@link DEFAULT_ROUNDTABLE_PHASE} when the caller supplies none.
+	 */
+	phase?: string;
 }
 
 export interface RoundtableResult {
@@ -58,6 +64,9 @@ const DEFAULT_CONFIG: RoundtableConfig = {
 	convergenceThreshold: 0.85,
 	convergenceStreak: 2,
 };
+
+/** Default phase for roundtable hook events when the caller supplies none. */
+const DEFAULT_ROUNDTABLE_PHASE = "stage";
 
 function resolveConfig(partial?: Partial<RoundtableConfig>): RoundtableConfig {
 	return { ...DEFAULT_CONFIG, ...partial };
@@ -91,6 +100,7 @@ export async function runRoundtable(
 	}
 
 	const config = resolveConfig(partial);
+	const phase = config.phase ?? DEFAULT_ROUNDTABLE_PHASE;
 	const facilitatorId = members[0];
 
 	const allResponses: string[] = [];
@@ -117,7 +127,7 @@ export async function runRoundtable(
 		// Hook: roundtable:beforeRound — per-member before each round
 		if (hookPipeline) {
 			for (const memberId of members) {
-				const rtx: HookContext = { phase: undefined, agentId: memberId };
+				const rtx: HookContext = { phase, agentId: memberId };
 				await hookPipeline.trigger("roundtable:beforeRound", { agentId: memberId, round }, rtx);
 			}
 		}
@@ -147,7 +157,7 @@ export async function runRoundtable(
 		// Hook: roundtable:afterRound — per-member after each round
 		if (hookPipeline) {
 			for (const memberId of members) {
-				const rtx: HookContext = { phase: undefined, agentId: memberId };
+				const rtx: HookContext = { phase, agentId: memberId };
 				await hookPipeline.trigger("roundtable:afterRound", { agentId: memberId }, rtx);
 			}
 		}
@@ -178,7 +188,7 @@ export async function runRoundtable(
 				});
 				// Hook: roundtable:converged — early convergence
 				if (hookPipeline) {
-					const rtx: HookContext = { phase: undefined };
+					const rtx: HookContext = { phase };
 					await hookPipeline.trigger("roundtable:converged", { agentIds: members }, rtx);
 				}
 				return {

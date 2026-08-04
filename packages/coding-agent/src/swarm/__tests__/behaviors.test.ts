@@ -609,6 +609,85 @@ describe("StageBehavior", () => {
 			expect(ctx.stateTracker.updateAgent).toHaveBeenCalled();
 		});
 
+		it("emits agent:afterComplete with the last assistant text as summary", async () => {
+			const result = await behavior.enter(ctx);
+			const agentId = result.agents[0].id;
+
+			const agentEnd = {
+				type: "agent_end",
+				messages: [
+					{ role: "user", content: "build the api" },
+					{
+						role: "assistant",
+						content: [
+							{ type: "thinking", thinking: "Let me design this" },
+							{ type: "text", text: "Built the API with tests" },
+						],
+					},
+				],
+			};
+
+			await behavior.handleAgentEvent({ agentId, status: "completed", result: agentEnd }, ctx);
+
+			expect(ctx.hookPipeline.trigger).toHaveBeenCalledWith(
+				"agent:afterComplete",
+				expect.objectContaining({ agentId, success: true, summary: "Built the API with tests" }),
+				expect.anything(),
+			);
+		});
+
+		it("truncates the agent:afterComplete summary to 200 characters", async () => {
+			await behavior.enter(ctx);
+
+			const result = await behavior.enter(ctx);
+			const agentId = result.agents[0].id;
+			const longText = "y".repeat(500);
+
+			await behavior.handleAgentEvent(
+				{
+					agentId,
+					status: "completed",
+					result: {
+						type: "agent_end",
+						messages: [{ role: "assistant", content: [{ type: "text", text: longText }] }],
+					},
+				},
+				ctx,
+			);
+
+			expect(ctx.hookPipeline.trigger).toHaveBeenCalledWith(
+				"agent:afterComplete",
+				expect.objectContaining({ agentId, success: true, summary: "y".repeat(200) }),
+				expect.anything(),
+			);
+		});
+
+		it("emits agent:afterComplete with error text as summary on failure", async () => {
+			await behavior.enter(ctx);
+
+			const result = await behavior.enter(ctx);
+			const agentId = result.agents[0].id;
+
+			const agentEnd = {
+				type: "agent_end",
+				messages: [
+					{
+						role: "assistant",
+						content: [{ type: "text", text: "partial work" }],
+						errorMessage: "provider rate limit exceeded",
+					},
+				],
+			};
+
+			await behavior.handleAgentEvent({ agentId, status: "failed", result: agentEnd }, ctx);
+
+			expect(ctx.hookPipeline.trigger).toHaveBeenCalledWith(
+				"agent:afterComplete",
+				expect.objectContaining({ agentId, success: false, summary: "provider rate limit exceeded" }),
+				expect.anything(),
+			);
+		});
+
 		it("ignores events from unknown agents", async () => {
 			await behavior.enter(ctx);
 

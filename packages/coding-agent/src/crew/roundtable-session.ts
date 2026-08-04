@@ -113,6 +113,7 @@ export class RoundtableSession {
 			convergenceThreshold: config.convergenceThreshold,
 			convergenceStreak: config.convergenceStreak,
 			agentIds,
+			phase: crew.state.activeGraph?.phase,
 		});
 
 		const result: RoundtableResult = {

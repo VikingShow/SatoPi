@@ -14,13 +14,16 @@
  * - Integration:           roundtable/vote use ircBus.collectResponses()
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { CommChannel } from "../../comm/comm-channel";
 import { createEndpoint } from "../../comm/endpoint";
 import { runRoundtable } from "../../comm/roundtable";
 import { parseVote, runVote } from "../../comm/vote";
+import { createOffloadHook } from "../../hooks/builtins/offload-hook";
+import { HookPipeline } from "../../hooks/hook-pipeline";
 import { ActivityLogger } from "../../infra/activity-logger";
 import { IrcBus } from "../../irc/bus";
+import type { IOffloadManager } from "../../offload/manager";
 import { jaccardSimilarity, tokenize } from "../core/convergence";
 
 // ============================================================================
@@ -344,6 +347,39 @@ describe("CommChannel", () => {
 		// No agentIds specified — should default to all members
 		const result = await ch.roundtable("topic", { rounds: 1, timeoutMs: 50 });
 		expect(result.rounds).toBe(1);
+	});
+
+	test("roundtable:afterRound reaches phase-filtered hooks with a real ctx.phase", async () => {
+		const pipeline = new HookPipeline();
+		const seenPhases: Array<string | undefined> = [];
+		pipeline.register({
+			name: "roundtable-phase-probe",
+			priority: 0,
+			events: ["roundtable:afterRound"],
+			phases: ["stage"],
+			handler: async (_args, ctx) => {
+				seenPhases.push(ctx.phase);
+			},
+		});
+
+		const offloadManager: IOffloadManager = {
+			summarizeL1: mock(async (_agentId: string, _content: unknown) => {}),
+			forceFlush: mock(async () => {}),
+			getMmdContext: mock(async () => null),
+			getExperienceContext: mock(async () => null),
+			getOffloadSummaries: mock(async () => new Map<string, string>()),
+		};
+		pipeline.register(createOffloadHook(offloadManager));
+
+		const ch = new CommChannel(bus, ["g1"], [], undefined, pipeline);
+		await ch.roundtable("role discussion", { rounds: 1, timeoutMs: 50, phase: "stage" });
+
+		// The phase-filtered probe fired with the real phase — this fails if
+		// ctx.phase is reverted to undefined (the phase filter would skip it).
+		expect(seenPhases).toEqual(["stage"]);
+		// The real offload-hook (phase-restricted to script/stage/curtain) also
+		// received the event.
+		expect(offloadManager.summarizeL1).toHaveBeenCalledWith("g1", expect.objectContaining({ agentId: "g1" }));
 	});
 
 	// ── vote() ───────────────────────────────────────────────

@@ -39,6 +39,90 @@ interface AgentTracking {
 	/** Whether this agent has been flagged with an error. */
 	hasError: boolean;
 }
+
+// ============================================================================
+// Summary extraction helpers
+// ============================================================================
+
+/** Maximum length for the `agent:afterComplete` summary payload. */
+const MAX_SUMMARY_LENGTH = 200;
+
+/** Truncate text to at most {@link MAX_SUMMARY_LENGTH} characters. */
+function truncateSummary(text: string): string {
+	return text.length > MAX_SUMMARY_LENGTH ? text.slice(0, MAX_SUMMARY_LENGTH) : text;
+}
+
+/** Join the text content of a message payload (string or text content blocks). */
+function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	const parts: string[] = [];
+	for (const block of content) {
+		if (
+			typeof block === "object" &&
+			block !== null &&
+			"type" in block &&
+			block.type === "text" &&
+			"text" in block &&
+			typeof block.text === "string"
+		) {
+			parts.push(block.text);
+		}
+	}
+	return parts.join("\n");
+}
+
+/**
+ * Extract the last assistant message's text from an agent_end event result.
+ *
+ * graph-runner passes the full AgentEndEvent (`{ type: "agent_end", messages }`)
+ * as `result`; when the last assistant message carries no text (e.g. a
+ * tool-call-only turn), earlier assistant messages are scanned.
+ */
+function extractAssistantSummary(result: unknown): string {
+	if (typeof result === "string") return truncateSummary(result);
+	if (typeof result !== "object" || result === null) return "";
+	if (!("type" in result) || !("messages" in result)) return "";
+	if (result.type !== "agent_end") return "";
+	const messages = result.messages;
+	if (!Array.isArray(messages)) return "";
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (typeof message !== "object" || message === null) continue;
+		if (!("role" in message) || !("content" in message)) continue;
+		if (message.role !== "assistant") continue;
+		const text = messageText(message.content);
+		if (text.length > 0) return truncateSummary(text);
+	}
+	return "";
+}
+
+/**
+ * Extract error text from a failed agent event result: explicit `error` field,
+ * then the last assistant message's `errorMessage`, then its text content
+ * (e.g. max_turns), falling back to "unknown error".
+ */
+function extractErrorSummary(result: unknown): string {
+	if (typeof result === "string") return truncateSummary(result);
+	if (typeof result !== "object" || result === null) return "unknown error";
+	if ("error" in result && typeof result.error === "string" && result.error.length > 0) {
+		return truncateSummary(result.error);
+	}
+	if ("messages" in result && Array.isArray(result.messages)) {
+		for (let i = result.messages.length - 1; i >= 0; i--) {
+			const message = result.messages[i];
+			if (typeof message !== "object" || message === null) continue;
+			if (!("role" in message) || !("errorMessage" in message)) continue;
+			if (message.role !== "assistant") continue;
+			if (typeof message.errorMessage === "string" && message.errorMessage.length > 0) {
+				return truncateSummary(message.errorMessage);
+			}
+		}
+		const assistantText = extractAssistantSummary(result);
+		if (assistantText.length > 0) return assistantText;
+	}
+	return "unknown error";
+}
 // ============================================================================
 // Stable profile ID mappings — ensures agent identities survive across swarm runs
 // ============================================================================
@@ -131,6 +215,7 @@ export class StageBehavior implements PhaseBehavior {
 				await channel.roundtable("assign roles for this project", {
 					rounds: ctx.loopConfig.debate.maxRounds ?? 2,
 					agentIds,
+					phase: this.phase,
 				});
 				logger.info("[StageBehavior] Role roundtable complete");
 			} catch (err) {
@@ -262,6 +347,7 @@ export class StageBehavior implements PhaseBehavior {
 					{
 						agentId: event.agentId,
 						success: true,
+						summary: extractAssistantSummary(event.result),
 					},
 					{ phase: "stage", agentId: event.agentId },
 				);
@@ -274,10 +360,7 @@ export class StageBehavior implements PhaseBehavior {
 				await ctx.stateTracker
 					.updateAgent(event.agentId, {
 						status: "failed",
-						error:
-							typeof event.result === "string"
-								? event.result
-								: ((event.result as { error?: string })?.error ?? "unknown error"),
+						error: extractErrorSummary(event.result),
 					})
 					.catch(err => logger.error("StateTracker updateAgent failed (failed)", { error: String(err) }));
 
@@ -302,6 +385,7 @@ export class StageBehavior implements PhaseBehavior {
 					{
 						agentId: event.agentId,
 						success: false,
+						summary: extractErrorSummary(event.result),
 					},
 					{ phase: "stage", agentId: event.agentId },
 				);

@@ -21,6 +21,7 @@ import type { CommChannel } from "../comm/comm-channel";
 import { MarkEnvironment } from "../coordination/mark-environment";
 import type { ExperienceStore } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
+import type { HookContext } from "../hooks/types";
 import type { ActivityLogger } from "../infra/activity-logger";
 import type { IrcBus } from "../irc/bus";
 import type { IOffloadManager } from "../offload/manager";
@@ -276,6 +277,12 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 							: stopReason === "error" || stopReason === "max_turns"
 								? "failed"
 								: "completed";
+					if (status === "failed" || status === "aborted") {
+						const error = (lastAssistant?.errorMessage ?? stopReason ?? "unknown agent error").slice(0, 200);
+						this.#hookPipeline
+							?.trigger("agent:onError", { agentId: agent.id, error }, { phase: this.#phase, agentId: agent.id })
+							.catch(err => logger.error("agent:onError trigger failed", { error: String(err) }));
+					}
 					const ctx = this.#buildPhaseContext();
 					this.#currentBehavior
 						?.handleAgentEvent({ agentId: agent.id, status, result: event }, ctx)
@@ -289,6 +296,37 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	#unwireAgentEvents(): void {
 		for (const unsub of this.#agentUnsubscribes) unsub();
 		this.#agentUnsubscribes = [];
+	}
+
+	// ── Phase transition hook emission ─────────────────────────────────────
+
+	/**
+	 * Transition the workflow to `next`: emit workflow:beforePhase, assign the
+	 * phase, run `onPhaseChange`, then emit workflow:afterPhase. Hook failures
+	 * are logged and never interrupt the transition.
+	 */
+	async #transitionPhase(next: Chapter): Promise<void> {
+		await this.#emitPhaseHook("workflow:beforePhase", next);
+		this.#phase = next;
+		this.#config.onPhaseChange?.(next);
+		await this.#emitPhaseHook("workflow:afterPhase", next);
+	}
+
+	/**
+	 * Fire a workflow phase hook event through the pipeline (no-op when no
+	 * pipeline is wired). Errors are caught and logged — hook isolation.
+	 */
+	async #emitPhaseHook(event: "workflow:beforePhase" | "workflow:afterPhase", phase: Chapter): Promise<void> {
+		const ctx: HookContext = { phase };
+		try {
+			if (event === "workflow:beforePhase") {
+				await this.#hookPipeline?.trigger("workflow:beforePhase", { phase }, ctx);
+			} else {
+				await this.#hookPipeline?.trigger("workflow:afterPhase", { phase }, ctx);
+			}
+		} catch (err) {
+			logger.error(`[GraphRunner] ${event} trigger failed`, { error: String(err) });
+		}
 	}
 
 	// ── Curtain lifecycle (synchronous — called within confirmScript) ──────
@@ -335,8 +373,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 					this.#applaudResolve = null;
 				}
 
-				this.#phase = "idle";
-				this.#config.onPhaseChange?.("idle");
+				await this.#transitionPhase("idle");
 				await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
 				if (this.#crewChannel) {
 					this.#crewChannel.send("system", "Phase: idle — Workflow complete");
@@ -351,8 +388,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 				return;
 			}
 			// Re-plan or unknown — go idle
-			this.#phase = "idle";
-			this.#config.onPhaseChange?.("idle");
+			await this.#transitionPhase("idle");
 			await this.#stateTracker.updatePipeline({ phase: "idle" }).catch(() => {});
 			if (this.#crewChannel) {
 				this.#crewChannel.send("system", "Phase: idle — Workflow complete");
@@ -573,8 +609,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 	}
 
 	async confirmScript(_opts?: { agentType?: "swift" | "main"; agentCount?: number }): Promise<string[]> {
-		this.#phase = "stage";
-		this.#config.onPhaseChange?.("stage");
+		await this.#transitionPhase("stage");
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		if (this.#crewChannel) {
 			this.#crewChannel.send("system", "Phase: stage — Execution phase started — dispatching tasks");
@@ -626,15 +661,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine execution failed", { error: String(err) });
-			this.#phase = "blocked";
-			this.#config.onPhaseChange?.("blocked");
+			await this.#transitionPhase("blocked");
 			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return [];
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		this.#phase = "curtain";
-		this.#config.onPhaseChange?.("curtain");
+		await this.#transitionPhase("curtain");
 		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 		if (this.#crewChannel) {
 			this.#crewChannel.send("system", "Phase: curtain — Reflection phase started — summarizing delivery");
@@ -680,8 +713,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 
 	async pauseStage(): Promise<void> {
 		this.#abortController?.abort();
-		this.#phase = "paused";
-		this.#config.onPhaseChange?.("paused");
+		await this.#transitionPhase("paused");
 		await this.#stateTracker.updatePipeline({ phase: "paused" }).catch(() => {});
 	}
 
@@ -701,8 +733,7 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			currentWave: checkpointState.currentWave,
 		});
 
-		this.#phase = "stage";
-		this.#config.onPhaseChange?.("stage");
+		await this.#transitionPhase("stage");
 		await this.#stateTracker.updatePipeline({ phase: "stage" }).catch(() => {});
 		this.#abortController = new AbortController();
 
@@ -750,15 +781,13 @@ export class GraphRunner implements ISwarmOrchestrator, NodeExecutor {
 			await engine.run(this);
 		} catch (err) {
 			logger.error("[GraphRunner] GraphEngine resume execution failed", { error: String(err) });
-			this.#phase = "blocked";
-			this.#config.onPhaseChange?.("blocked");
+			await this.#transitionPhase("blocked");
 			await this.#stateTracker.updatePipeline({ phase: "blocked" }).catch(() => {});
 			return { success: false, error: String(err) };
 		}
 
 		// Transition to curtain via CurtainBehavior lifecycle
-		this.#phase = "curtain";
-		this.#config.onPhaseChange?.("curtain");
+		await this.#transitionPhase("curtain");
 		await this.#stateTracker.updatePipeline({ phase: "curtain" }).catch(() => {});
 
 		const curtainCtx = this.#buildPhaseContext();

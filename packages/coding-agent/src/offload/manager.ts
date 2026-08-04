@@ -11,9 +11,11 @@
  */
 
 import { logger } from "@satopi/pi-utils";
+import type { ExperienceEntry } from "../experience/experience";
 import type { HookPipeline } from "../hooks/hook-pipeline";
 import type { HookContext } from "../hooks/types";
 import type { SessionStorage } from "../session/store/session-storage";
+import type { Chapter } from "../types/chapter";
 import { type OffloadEntry, OffloadStore } from "./store";
 
 // ---------------------------------------------------------------------------
@@ -24,7 +26,7 @@ export interface IOffloadManager {
 	/** L1 summarization of an agent's output (hook direction). */
 	summarizeL1(agentId: string, content: unknown): Promise<void>;
 	/** Force-flush pending offload data to persistent storage (hook direction). */
-	forceFlush(): Promise<void>;
+	forceFlush(phase?: Chapter): Promise<void>;
 	/** Get MMD context for agent spawn injection (context direction). */
 	getMmdContext(agentId: string, taskDescription: string): Promise<string | null>;
 	/** Get experience context for agent spawn injection (context direction). */
@@ -86,10 +88,10 @@ export class OffloadManager implements IOffloadManager {
 		}
 	}
 
-	async forceFlush(): Promise<void> {
+	async forceFlush(phase?: Chapter): Promise<void> {
 		// Hook: offload:beforeFlush
 		if (this.#hookPipeline) {
-			const ctx: HookContext = { phase: undefined };
+			const ctx: HookContext = { phase };
 			await this.#hookPipeline.trigger("offload:beforeFlush", {}, ctx);
 		}
 
@@ -99,10 +101,37 @@ export class OffloadManager implements IOffloadManager {
 		// writes are visible.
 		logger.debug("[OffloadManager] forceFlush (write-through, no buffered data)");
 
+		// Bridge this session's offload data to the experience store so the
+		// experience-hook can persist a lesson for cross-run learning. The runId
+		// is unique per flush: lessons.run_id is the PRIMARY KEY, and a fixed
+		// sessionId would collide across stage/curtain flushes — the later flush
+		// (carrying the real L1 summary) would be silently dropped.
+		const sessionEntries = await this.#store.readAllFileEntries(this.#sessionId);
+		const latest = sessionEntries[sessionEntries.length - 1];
+		const runId = `${this.#sessionId}-${Date.now()}`;
+		const entry: ExperienceEntry = {
+			runId,
+			timestamp: new Date().toISOString(),
+			lesson: {
+				type: "reflection",
+				summary: latest?.summary ?? "swarm run flush",
+				detail: "",
+				tags: [],
+				confidence: 0.5,
+				source: "offload-flush",
+			},
+			stats: {
+				totalIterations: sessionEntries.length,
+				finalStatus: "completed",
+				reviewApprovalRatio: 0,
+				agentCount: 0,
+			},
+		};
+
 		// Hook: offload:afterFlush
 		if (this.#hookPipeline) {
-			const ctx: HookContext = { phase: undefined };
-			await this.#hookPipeline.trigger("offload:afterFlush", {}, ctx);
+			const ctx: HookContext = { phase };
+			await this.#hookPipeline.trigger("offload:afterFlush", { entry, runId }, ctx);
 		}
 	}
 
