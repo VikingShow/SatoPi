@@ -17,18 +17,18 @@ Does not cover `/tree` UI rendering behavior beyond semantics that affect sessio
 
 ## Implementation Files
 
-- [`src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts) — orchestration: tree/leaf, appends, persistence, blobs, lifecycle factories
-- [`src/session/session-entries.ts`](../packages/coding-agent/src/session/session-entries.ts) — entry/header types, `SessionEntry` union, `CURRENT_SESSION_VERSION`
-- [`src/session/session-migrations.ts`](../packages/coding-agent/src/session/session-migrations.ts) — version migrations
-- [`src/session/session-loader.ts`](../packages/coding-agent/src/session/session-loader.ts) — file load + blob-ref resolution
-- [`src/session/session-context.ts`](../packages/coding-agent/src/session/session-context.ts) — `buildSessionContext`
-- [`src/session/session-persistence.ts`](../packages/coding-agent/src/session/session-persistence.ts) — truncation + image blob externalization
-- [`src/session/session-paths.ts`](../packages/coding-agent/src/session/session-paths.ts) — on-disk layout, dir encoding, terminal breadcrumbs
-- [`src/session/session-listing.ts`](../packages/coding-agent/src/session/session-listing.ts) — discovery (list/recent/resolve)
-- [`src/session/session-storage.ts`](../packages/coding-agent/src/session/session-storage.ts) — storage abstractions
-- [`src/session/messages.ts`](../packages/coding-agent/src/session/messages.ts) — custom-message transformers
-- [`src/session/blob-store.ts`](../packages/coding-agent/src/session/blob-store.ts) — content-addressed blob store
-- [`src/session/history-storage.ts`](../packages/coding-agent/src/session/history-storage.ts) — prompt history (separate subsystem)
+- [`src/session/store/session-manager.ts`](../packages/coding-agent/src/session/store/session-manager.ts) — orchestration: tree/leaf, appends, persistence, blobs, lifecycle factories
+- [`src/session/store/session-entries.ts`](../packages/coding-agent/src/session/store/session-entries.ts) — entry/header types, `SessionEntry` union, `CURRENT_SESSION_VERSION`
+- [`src/session/store/session-migrations.ts`](../packages/coding-agent/src/session/store/session-migrations.ts) — version migrations
+- [`src/session/store/session-loader.ts`](../packages/coding-agent/src/session/store/session-loader.ts) — file load + blob-ref resolution
+- [`src/session/message/session-context.ts`](../packages/coding-agent/src/session/message/session-context.ts) — `buildSessionContext`
+- [`src/session/store/session-persistence.ts`](../packages/coding-agent/src/session/store/session-persistence.ts) — truncation + image blob externalization
+- [`src/session/store/session-paths.ts`](../packages/coding-agent/src/session/store/session-paths.ts) — on-disk layout, dir encoding, terminal breadcrumbs
+- [`src/session/store/session-listing.ts`](../packages/coding-agent/src/session/store/session-listing.ts) — discovery (list/recent/resolve)
+- [`src/session/store/session-storage.ts`](../packages/coding-agent/src/session/store/session-storage.ts) — storage abstractions
+- [`src/session/message/messages.ts`](../packages/coding-agent/src/session/message/messages.ts) — custom-message transformers
+- [`src/session/store/blob-store.ts`](../packages/coding-agent/src/session/store/blob-store.ts) — content-addressed blob store
+- [`src/session/store/history-storage.ts`](../packages/coding-agent/src/session/store/history-storage.ts) — prompt history (separate subsystem)
 
 ## On-Disk Layout
 

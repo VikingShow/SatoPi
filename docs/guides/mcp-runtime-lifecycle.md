@@ -154,7 +154,7 @@ Both return structured tool output and convert remaining transport/tool errors i
 2. `mcpManager.discoverAndConnect()`,
 3. `session.refreshMCPTools(mcpManager.getTools())`.
 
-`session.refreshMCPTools()` (`src/session/agent-session.ts`) removes all `mcp__` tools, re-wraps latest MCP tools, and re-activates tool set so MCP changes apply without restarting session.
+`session.refreshMCPTools()` (`src/session/agent/agent-session.ts`) removes all `mcp__` tools, re-wraps latest MCP tools, and re-activates tool set so MCP changes apply without restarting session.
 
 There is also a follow-up path for late connections: after waiting for a specific server, if status becomes `connected`, it re-runs `session.refreshMCPTools(...)` so newly available tools are rebound in-session.
 
@@ -220,6 +220,6 @@ In current wiring, explicit teardown is used in MCP command flows (for reload/re
 - [`src/sdk.ts`](../packages/coding-agent/src/sdk.ts) — startup wiring into session/tool registry.
 - [`src/mcp/config.ts`](../packages/coding-agent/src/mcp/config.ts) — config discovery/filtering/validation used by manager.
 - [`src/mcp/tool-bridge.ts`](../packages/coding-agent/src/mcp/tool-bridge.ts) — `MCPTool` and `DeferredMCPTool` runtime behavior.
-- [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts) — `refreshMCPTools` live rebinding.
+- [`src/session/agent/agent-session.ts`](../packages/coding-agent/src/session/agent/agent-session.ts) — `refreshMCPTools` live rebinding.
 - [`src/modes/controllers/mcp-command-controller.ts`](../packages/coding-agent/src/modes/controllers/mcp-command-controller.ts) — interactive reload/reconnect flows.
 - [`src/task/executor.ts`](../packages/coding-agent/src/task/executor.ts) — subagent MCP proxying via parent manager connections.

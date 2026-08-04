@@ -12,7 +12,7 @@
   - `packages/coding-agent/src/tools/bash-pty-selection.ts` — `canUseInteractiveBashPty()` decides whether a call may use the local PTY overlay.
   - `packages/coding-agent/src/tools/gh-cache-invalidation.ts` — drops `github-cache` rows for mutating `gh issue`/`gh pr` subcommands.
   - `packages/coding-agent/src/exec/bash-executor.ts` — non-PTY shell execution.
-  - `packages/coding-agent/src/session/streaming-output.ts` — tail buffer, truncation, artifact spill.
+  - `packages/coding-agent/src/session/message/streaming-output.ts` — tail buffer, truncation, artifact spill.
   - `packages/coding-agent/src/tools/tool-timeouts.ts` — timeout clamp bounds.
   - `packages/coding-agent/src/config/settings-schema.ts` — default interceptor rules.
   - `docs/bash-tool-runtime.md` — deeper executor/runtime notes; use as the companion doc for shell-session internals.
@@ -124,7 +124,7 @@ Stdout and stderr are merged before the model sees them. Definite non-zero exit 
 - Timeout clamp: `1..3600s` (`TOOL_TIMEOUTS.bash.min/max`).
 - Auto-background default threshold: `60_000ms` (`DEFAULT_AUTO_BACKGROUND_THRESHOLD_MS` in `packages/coding-agent/src/tools/bash.ts`), further capped to `timeoutMs - 1000` by `#resolveAutoBackgroundWaitMs()`.
 - Non-PTY executor timeout: `executeBash()` arms a host-side timer at `max(1_000, timeoutMs)` that aborts the run and quarantines the persistent shell session; the same timeout is also passed to the native run as `timeoutMs` (`packages/coding-agent/src/exec/bash-executor.ts`).
-- In-memory output tail cap: `50 * 1024` bytes (`DEFAULT_MAX_BYTES` in `packages/coding-agent/src/session/streaming-output.ts`). Once exceeded, the sink keeps only the tail window in memory.
+- In-memory output tail cap: `50 * 1024` bytes (`DEFAULT_MAX_BYTES` in `packages/coding-agent/src/session/message/streaming-output.ts`). Once exceeded, the sink keeps only the tail window in memory.
 - Streaming callback throttle in `executeBash()`: `50ms` between `onChunk` calls when streaming is enabled.
 - TUI collapsed preview: `10` visual lines (`BASH_DEFAULT_PREVIEW_LINES`) when rendered inline in the agent UI; this is a renderer cap, not a tool output cap.
 

@@ -9,7 +9,7 @@ Primary implementation:
 
 - `src/modes/rpc/rpc-mode.ts`
 - `src/modes/rpc/rpc-types.ts`
-- `src/session/agent-session.ts`
+- `src/session/agent/agent-session.ts`
 - `packages/agent/src/agent.ts`
 - `packages/agent/src/agent-loop.ts`
 

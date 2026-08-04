@@ -18,8 +18,8 @@ Primary implementation:
 - `src/modes/controllers/input-controller.ts` (keybinding wiring, double-escape behavior)
 - `src/modes/controllers/selector-controller.ts` (tree UI launch + summary prompt flow)
 - `src/modes/components/tree-selector.ts` (navigation, filters, search, labels, rendering)
-- `src/session/agent-session.ts` (`navigateTree` leaf switching + optional summary)
-- `src/session/session-manager.ts` (`getTree`, `branch`, `branchWithSummary`, `resetLeaf`, label persistence)
+- `src/session/agent/agent-session.ts` (`navigateTree` leaf switching + optional summary)
+- `src/session/store/session-manager.ts` (`getTree`, `branch`, `branchWithSummary`, `resetLeaf`, label persistence)
 
 ## How to open it
 

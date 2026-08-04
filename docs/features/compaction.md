@@ -15,9 +15,9 @@ Both are persisted as session entries and converted back into user-context messa
 - `packages/agent/src/compaction/pruning.ts`
 - `packages/agent/src/compaction/utils.ts`
 - `packages/agent/src/compaction/openai.ts`
-- `packages/coding-agent/src/session/session-manager.ts`
-- `packages/coding-agent/src/session/agent-session.ts`
-- `packages/coding-agent/src/session/messages.ts`
+- `packages/coding-agent/src/session/store/session-manager.ts`
+- `packages/coding-agent/src/session/agent/agent-session.ts`
+- `packages/coding-agent/src/session/message/messages.ts`
 - `packages/coding-agent/src/extensibility/hooks/types.ts`
 - `packages/coding-agent/src/config/settings-schema.ts`
 

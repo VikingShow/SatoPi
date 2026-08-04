@@ -266,23 +266,23 @@ stp --smoke-test     # CLI 冒烟
 
 ---
 
-## 5. 拆分后完整目录结构(目标状态)
+## 5. 拆分后完整目录结构(实际最终状态)
 
 > `[NEW]` = 新建,`[MODIFY]` = 修改,`[MOVE]` = 从 session/ 顶层迁入。每文件一行职责。
 >
 > **组织原则(方案 B 领域分层)**: session/ 按领域分为 5 个子目录——`agent/`(运行时核心)、`store/`(存储与持久化)、`message/`(消息与上下文)、`auth/`(认证)、`shared/`(依赖自由叶子模块,防循环依赖)。顶层只保留 `.test.ts` 测试文件。
+>
+> ⚠️ **规划 vs 实际差异说明(2026-08-04 定稿)**: 本树已更新为**实际最终落地状态**。与初版"目标"规划相比,agent-session/sdk/interactive-mode/巨型工具四处的拆分因"深度耦合宿主私有成员"收敛为更保守方案(详见第 4 章各阶段执行记录):① agent-session 采用 **SessionCompactor 状态容器模式**(4 个 state 容器,非 6 个 Manager),主文件仍 ~17,348 行;② sdk.ts 保留 `createAgentSession` 主体(方案 B),仅提取 discovery/system-prompt 两个独立分区,未变barrel;③ interactive-mode 仅提取 1 个 `interactive-render-utils` 纯函数模块;④ gh/read/grep 采用 `shared/execute/render` 分层,类主体保留在顶层原文件。utils/format.ts 与 executor.createSubagentSessionCore 经复核未落地(前者是 re-export 无需新建,后者随 6b 暂停)。
 
 ```
 packages/coding-agent/src/
 ├── session/
 │   ├── agent/                        # ══ Agent 运行时核心 ══
-│   │   ├── agent-session.ts          # [MOVE+MODIFY] 17,390 → <8,000 行;保留全部 public 签名,委托 6 个 Manager
-│   │   ├── ttsr-manager.ts           # [NEW] TTSR 编排:ttsr 注入状态与 resume 流程
-│   │   ├── advisor-manager.ts        # [NEW] advisor 编排:#advisor* 状态与流程,复用 src/advisor/ 核心
-│   │   ├── plan-mode-manager.ts      # [NEW] plan mode 状态与流程:#planModeState/enter/exit
-│   │   ├── bash-eval-executor.ts     # [NEW] bash/eval 执行态:abort controllers + pending 消息
-│   │   ├── retry-manager.ts          # [NEW] 重试与 fallback:retryAbortController/emptyStopRetryCount
-│   │   ├── tool-registry-manager.ts  # [NEW] 工具/模型注册表:modelRegistry/toolRegistry/MCP 发现
+│   │   ├── agent-session.ts          # [MOVE+MODIFY] 17,390 → 17,348 行;保留全部 public 签名,25 字段委托 4 个状态容器
+│   │   ├── ttsr-state.ts             # [NEW] TtsrState 状态容器(manager/pendingInjections/abortPending/resumePromise 等)
+│   │   ├── advisor-state.ts          # [NEW] AdvisorState 状态容器(13 个 advisor 字段)
+│   │   ├── advisor-types.ts          # [NEW] ActiveAdvisor 共享接口(避免 agent-session ↔ advisor-state 循环)
+│   │   ├── plan-mode-state.ts        # [NEW] PlanModeStateContainer(state/referenceSent/reminderCount 等)
 │   │   ├── client-bridge.ts          # [MOVE] ClientBridge 外部客户端抽象(ACP editor host)
 │   │   ├── tool-choice-queue.ts      # [MOVE] 工具选择强制队列
 │   │   ├── yield-queue.ts            # [MOVE] yield 队列
@@ -328,64 +328,49 @@ packages/coding-agent/src/
 │   │   ├── shake-types.ts            # [MOVE] shake 操作公共类型 + formatShakeSummary
 │   │   ├── activity-types.ts         # [MOVE] ActivityLogger 事件分类类型
 │   │   └── artifacts.ts              # [MOVE] ArtifactManager 产物管理
-│   └── messages.test.ts              # [KEEP] 测试文件(顶层)
+│   ├── messages.test.ts              # [KEEP] 测试文件(顶层)
+│   └── session-context.test.ts       # [KEEP] 测试文件(顶层)
 ├── utils/
-│   ├── format.ts                     # [NEW] formatBytes/wrapBrackets(从 tools/render-utils 提取)
 │   └── output-meta.ts                # [NEW] OutputMeta/formatOutputNotice(从 tools/output-meta 提取)
 ├── sdk/
-│   ├── index.ts                      # [NEW] barrel re-export 全部原 sdk.ts 符号
-│   ├── discovery.ts                  # [NEW] 11 个 discover* 函数(L698-865)
-│   ├── system-prompt.ts              # [NEW] buildSystemPrompt 及类型(L869-1160)
-│   └── factory.ts                    # [NEW] createAgentSession(L1160-3349)+ 内部阶段 helper
-├── sdk.ts                            # [MODIFY] 变薄为兼容 re-export
+│   ├── discovery.ts                  # [NEW] 11 个 discover* 函数(用本地 DiscoverySessionOptions 避免循环依赖)
+│   └── system-prompt.ts              # [NEW] buildSystemPrompt + BuildSystemPromptOptions(委托 ../system-prompt)
+├── sdk.ts                            # [MODIFY] 3,367 → 3,169 行;保留 createAgentSession 主体(方案 B) + import/re-export 子模块
 ├── modes/
-│   ├── interactive-mode.ts           # [MODIFY] 5,135 → <3,000 行;状态机核心 + 事件循环骨架
+│   ├── interactive-mode.ts           # [MODIFY] 5,215 → 5,075 行;类保留全部逻辑,re-export 提取的纯函数(对外 API 不变)
 │   └── controllers/
-│       ├── input-chain.ts            # [NEW] 输入控制链(从 interactive-mode 提取)
-│       ├── keymap.ts                 # [NEW] 键位表(从 interactive-mode 提取)
-│       ├── hud-renderer.ts           # [NEW] HUD 渲染(从 interactive-mode 提取)
-│       └── session-switch.ts         # [NEW] 会话切换逻辑(从 interactive-mode 提取)
+│       └── interactive-render-utils.ts # [NEW] 6 个无状态渲染纯函数 + 14 常量(computeEditorMaxHeight/renderAgentHud等)
 ├── tools/
 │   ├── gh/
-│   │   ├── index.ts                  # [NEW] GithubTool 类定义 + execute switch + re-export
-│   │   ├── repo.ts                   # [NEW] executeRepoView 等 repo 操作
-│   │   ├── issue.ts                  # [NEW] executeIssueXxx 等 issue 操作
-│   │   ├── pr.ts                     # [NEW] executePrXxx 操作(含 getOrFetchPr/PrDiff 缓存)
-│   │   ├── search.ts                 # [NEW] executeSearchXxx 操作
-│   │   ├── run-watch.ts              # [NEW] run_watch 轮询(L3475)
-│   │   └── format.ts                 # [NEW] formatXxxView/API 转换层(L843-904/L2115-2400)
+│   │   ├── index.ts                  # [NEW] GithubTool 类定义 + execute switch 分发 + re-export
+│   │   ├── shared.ts                 # [NEW] 辅助函数/类型/常量(execute 共享的 40+ helper)
+│   │   └── execute.ts                # [NEW] 10 个 op handler + 缓存 fetch(getOrFetchPr/PrDiff)
 │   ├── read/
-│   │   ├── index.ts                  # [NEW] ReadTool 类骨架 + 路由 + re-export
-│   │   ├── file.ts                   # [NEW] 普通文件读取与 #tryReadDelimitedPaths
-│   │   ├── pdf.ts                    # [NEW] PDF 读取(#readPdfImageMember/路径处理)
-│   │   ├── archive.ts                # [NEW] 压缩包读取(#resolveArchiveReadPath/#readArchiveDirectory)
-│   │   ├── sqlite.ts                 # [NEW] SQLite 读取(#resolveSqliteReadPath/#readSqlite)
-│   │   ├── directory.ts              # [NEW] 目录/artifact 读取(#readDirectory/#readArtifactFile)
-│   │   ├── selector.ts               # [NEW] selector 解析(parseSel/selToOffsetLimit)
-│   │   └── render.ts                 # [NEW] readToolRenderer(L3386-3613)
+│   │   ├── shared.ts                 # [NEW] 类型 + selector 工具(parseSel/selToOffsetLimit)
+│   │   └── render.ts                 # [NEW] readToolRenderer TUI 渲染器
 │   ├── grep/
-│   │   ├── index.ts                  # [NEW] GrepTool 类骨架 + re-export
-│   │   ├── path-specs.ts             # [NEW] 路径/selector/range 解析(L143-930)
-│   │   ├── search.ts                 # [NEW] 搜索执行与 virtual resource 搜索
-│   │   └── render.ts                 # [NEW] grepToolRenderer(L1774)
-│   ├── gh.ts / read.ts / grep.ts     # [MODIFY] 变薄为类定义 + re-export(< 400 行)
+│   │   └── render.ts                 # [NEW] grepToolRenderer TUI 渲染器
+│   ├── gh.ts                         # [MODIFY] 3,753 → 122 行(类 + 分发 + re-export)
+│   ├── read.ts                       # [MODIFY] 3,614 → 3,200 行(ReadTool 类主体,私有方法深度耦合 this.session 保留)
+│   ├── grep.ts                       # [MODIFY] 1,918 → 1,582 行(GrepTool 类主体保留)
 │   └── index.ts                      # [MODIFY] 仅 import 类本身,BUILTIN_TOOLS 注册表完全不动
 ├── utils/
-│   ├── format.ts                     # [NEW] formatBytes/wrapBrackets(从 tools/render-utils 提取)
-│   └── output-meta.ts                # [NEW] OutputMeta/formatOutputNotice(从 tools/output-meta 提取)
+│   └── output-meta.ts                # [NEW] OutputMeta/formatOutputNotice(从 tools/output-meta 提取;formatBytes 经核实是 @satopi/pi-utils re-export,无需新建 format.ts)
 ├── graph/
 │   ├── types.ts                      # [MODIFY] 删除 AgentSpawner 残留接口(L429-433)
 │   ├── agent-helpers.ts              # [MODIFY] 清理过时注释
 │   └── assembler.ts                  # [MODIFY] 清理过时注释
 ├── swarm/core/swarm-runtime.ts       # [MODIFY] 过渡注释更新为"AgentRuntime 已删除,SwarmRuntime 为 spawnAgent 接口门面"
-└── task/executor.ts                  # [MODIFY] 提取 createSubagentSessionCore 共享会话构造(L2470-2533)+ 文档化双引擎边界
+└── task/executor.ts                  # [MODIFY] 文档化双引擎边界(createSubagentSessionCore 提取随 6b 暂停,未落地)
 ```
 
 ---
 
 ## 6. 关键代码结构
 
-### 6.1 Manager 提取模式(agent-session 拆分统一范式)
+### 6.1 Manager 提取模式(通用范式参考)
+
+> ⚠️ 实际落地说明: agent-session 拆分最终采用 **SessionCompactor 状态容器模式**(见阶段 6a) —— 容器只持字段、重编排留宿主私有方法,而非下方的"注入 Host 接口 + 方法搬迁"Manager 模式。以下代码作为**通用范式参考**保留(session-lifecycle/session-compactor 等已提取类沿用此思路);TTSR/Advisor/PlanMode 因深度访问宿主 20+ 私有成员,改用了更轻的状态容器变体。
 
 ```typescript
 // session/plan-mode-manager.ts — 只依赖注入接口,禁止 import agent-session.ts
@@ -418,7 +403,9 @@ async enterPlanMode(plan: string): Promise<void> {
 
 > ⚠️ 2026-08-03 决策: 持久化子系统的 `#drainAndCloseWriter`/`#rewriteSynchronously`/`#rewriteAtomically`/`#runFencedAtomicRewrite`/`#appendToSessionFile` 深度访问 `SessionManager` 的 TS `#private` 字段(`#writer`/`#diskEpoch`/`#commitGuard`/`#atomicRewriteActive` 等),提取需破坏封装,故**取消本拆分**,持久化逻辑保留在 `SessionManager` 门面内。`SessionEntryIndex` 提取(不依赖私有状态)已完成。
 
-### 6.3 createSubagentSessionCore 共享核心(阶段 6b 后补)
+### 6.3 createSubagentSessionCore 共享核心(阶段 6b 后补 —— 已暂停,未落地)
+
+> ⚠️ 2026-08-04 状态: 阶段 6b(含本共享核心提取)因方法深度耦合宿主私有成员而暂停,以下为**原设计草案**,当前 `task/executor.ts` 尚未提取该函数,仅完成了双引擎边界的文档化。
 
 ```typescript
 // task/executor.ts — 提取自 L2470-2533 的会话构造 + 模型解析 + auth fallback
