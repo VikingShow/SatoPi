@@ -45,9 +45,9 @@ import {
 	resolveConfiguredModelPatterns,
 	resolveModelRoleValue,
 } from "./config/model-resolver";
-import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
+import type { PromptTemplate } from "./config/prompt-templates";
 import { buildServiceTierByFamily } from "./config/service-tier";
-import { Settings, type SkillsSettings } from "./config/settings";
+import { Settings } from "./config/settings";
 import { MarkEnvironment } from "./coordination";
 import { CursorExecHandlers } from "./cursor";
 import {
@@ -71,8 +71,6 @@ import {
 import { discoverCustomToolPaths, loadCustomTools, type ToolPathWithSource } from "./extensibility/custom-tools";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
 import {
-	discoverAndLoadExtensions,
-	discoverExtensionPaths,
 	type ExtensionContext,
 	type ExtensionFactory,
 	ExtensionRunner,
@@ -84,24 +82,12 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
-import {
-	loadSkills as loadSkillsInternal,
-	type Skill,
-	type SkillWarning,
-	setActiveSkills,
-} from "./extensibility/skills";
-import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal } from "./extensibility/slash-commands";
+import { type Skill, type SkillWarning, setActiveSkills } from "./extensibility/skills";
+import type { FileSlashCommand } from "./extensibility/slash-commands";
 import type { HindsightSessionState } from "./hindsight/state";
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
-import {
-	discoverAndLoadMCPTools,
-	type MCPLoadResult,
-	MCPManager,
-	MCPToolCache,
-	type MCPToolsLoadResult,
-	parseMCPToolName,
-} from "./mcp";
+import { discoverAndLoadMCPTools, type MCPLoadResult, MCPManager, MCPToolCache, parseMCPToolName } from "./mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "./mcp/startup-events";
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import type { MnemopiSessionState } from "./mnemopi/state";
@@ -121,7 +107,6 @@ import {
 import { AgentSession, type PlanYolo, type Prewalk } from "./session/agent/agent-session";
 import { clampProviderContextImages } from "./session/agent/provider-image-budget";
 import { createSettingsAwareStreamFn } from "./session/agent/settings-stream-fn";
-import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth/auth-broker-config";
 import type { AuthStorage } from "./session/auth/auth-storage";
 import {
 	type CustomMessage,
@@ -142,7 +127,6 @@ import {
 	type BuildSystemPromptResult,
 	buildSystemPrompt as buildSystemPromptInternal,
 	buildSystemPromptToolMetadata,
-	loadProjectContextFiles as loadContextFilesInternal,
 } from "./system-prompt";
 import { AgentOutputManager } from "./task/output-manager";
 import { wrapStreamFnWithProviderConcurrency } from "./task/provider-concurrency";
@@ -671,9 +655,12 @@ export type * from "./extensibility/extensions";
 export type { Skill } from "./extensibility/skills";
 export type { FileSlashCommand } from "./extensibility/slash-commands";
 export type { MCPManager, MCPServerConfig, MCPServerConnection, MCPToolsLoadResult } from "./mcp";
+export {
+	type BuildSystemPromptOptions,
+	buildSystemPrompt,
+} from "./sdk/system-prompt";
 export type { Tool } from "./tools";
 export { buildDirectoryTree, buildWorkspaceTree, type DirectoryTree, type WorkspaceTree } from "./workspace-tree";
-
 export {
 	// Individual tool classes (for custom usage)
 	BashTool,
@@ -693,212 +680,28 @@ export {
 	WriteTool,
 };
 
-// Helper Functions
+import {
+	discoverAuthStorage,
+	discoverContextFiles,
+	discoverPromptTemplates,
+	discoverSessionExtensionPaths,
+	discoverSkills,
+	discoverSlashCommands,
+} from "./sdk/discovery";
 
-// Discovery Functions
-
-/**
- * Create an AuthStorage instance.
- *
- * Default: local SQLite store at `<agentDir>/agent.db`.
- *
- * Broker mode: when `STP_AUTH_BROKER_URL` is set, credentials are pulled from
- * a remote auth-broker over the wire. Refresh tokens never leave the broker;
- * the client receives access tokens with `refresh = "__remote__"` and calls
- * back into the broker through the {@link AuthStorageOptions.refreshOAuthCredential}
- * override to re-mint access tokens when needed.
- *
- * Delegates to {@link ./session/auth-broker-config} so the TUI and the catalog
- * generator share the same credential-discovery logic.
- */
-export async function discoverAuthStorage(agentDir: string = getAgentDir()): Promise<AuthStorage> {
-	return discoverAuthStorageFromConfig(agentDir);
-}
-
-/**
- * Discover extensions from cwd.
- */
-export async function discoverExtensions(cwd?: string): Promise<LoadExtensionsResult> {
-	const resolvedCwd = cwd ?? getProjectDir();
-
-	return discoverAndLoadExtensions([], resolvedCwd);
-}
-
-/**
- * Path-only counterpart of {@link loadSessionExtensions}: the FS-heavy scan
- * without the per-session module load. Subagents reuse the parent's path list
- * (cached on {@link ToolSession.extensionPaths}) and rebuild Extension
- * instances themselves so each session's `ExtensionAPI` (cwd, eventBus,
- * runtime) is its own.
- */
-export async function discoverSessionExtensionPaths(
-	options: Pick<CreateAgentSessionOptions, "disableExtensionDiscovery" | "additionalExtensionPaths">,
-	cwd: string,
-	settings: Settings,
-): Promise<string[]> {
-	if (options.disableExtensionDiscovery) {
-		return options.additionalExtensionPaths ?? [];
-	}
-	const configuredPaths = [...(options.additionalExtensionPaths ?? []), ...(settings.get("extensions") ?? [])];
-	const disabledExtensionIds = settings.get("disabledExtensions") ?? [];
-	return discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds);
-}
-
-/**
- * Load the discovered/configured extensions for a session — everything {@link
- * createAgentSession} would load except the inline factory extensions it appends
- * itself. Extracted so the CLI can resolve extension-registered flags (and thus
- * classify `@file` arguments extension-aware) *before* a session — and its
- * terminal breadcrumb — is created, then hand the result back through
- * {@link CreateAgentSessionOptions.preloadedExtensions} so the work is not
- * repeated. Keep this the single source of the discovery branch logic.
- */
-export async function loadSessionExtensions(
-	options: Pick<CreateAgentSessionOptions, "disableExtensionDiscovery" | "additionalExtensionPaths">,
-	cwd: string,
-	settings: Settings,
-	eventBus: EventBus,
-): Promise<LoadExtensionsResult> {
-	const paths = await discoverSessionExtensionPaths(options, cwd, settings);
-	const result = await logger.time("loadExtensions", loadExtensions, paths, cwd, eventBus);
-	for (const { path, error } of result.errors) {
-		logger.error("Failed to load extension", { path, error });
-	}
-	return result;
-}
-
-/**
- * Load discovered/configured extensions and register their providers into
- * `modelRegistry`, then discover the dynamic provider catalogs. One-shot CLIs
- * (`stp bench`, dry-balance) build a bare {@link ModelRegistry} that only knows
- * built-in catalog providers; without this, providers contributed by an
- * extension (e.g. a custom OpenAI-compatible provider under
- * `~/.stp/agent/extensions/`) never reach model resolution. Mirrors the
- * session / `stp models` path: drain the queued provider registrations, then
- * `refreshRuntimeProviders` so dynamically-discovered models exist before
- * selectors are resolved.
- */
-export async function loadCliExtensionProviders(
-	modelRegistry: ModelRegistry,
-	settings: Settings,
-	cwd: string,
-	options: Pick<CreateAgentSessionOptions, "disableExtensionDiscovery" | "additionalExtensionPaths"> = {},
-): Promise<void> {
-	const eventBus = new EventBus();
-	const extensionsResult = await loadSessionExtensions(options, cwd, settings, eventBus);
-	const activeSources = extensionsResult.extensions.map(extension => extension.path);
-	modelRegistry.syncExtensionSources(activeSources);
-	for (const sourceId of new Set(activeSources)) {
-		modelRegistry.clearSourceRegistrations(sourceId);
-	}
-	for (const { name, config, sourceId } of extensionsResult.runtime.pendingProviderRegistrations) {
-		modelRegistry.registerProvider(name, config, sourceId);
-	}
-	extensionsResult.runtime.pendingProviderRegistrations = [];
-	await modelRegistry.refreshRuntimeProviders();
-}
-
-/**
- * Discover skills from cwd and agentDir.
- */
-export async function discoverSkills(
-	cwd?: string,
-	_agentDir?: string,
-	settings?: SkillsSettings,
-): Promise<{ skills: Skill[]; warnings: SkillWarning[] }> {
-	return await loadSkillsInternal({
-		...settings,
-		cwd: cwd ?? getProjectDir(),
-	});
-}
-
-/**
- * Discover context files (AGENTS.md) walking up from cwd.
- * Returns files sorted by depth (farther from cwd first, so closer files appear last/more prominent).
- */
-export async function discoverContextFiles(
-	cwd?: string,
-	_agentDir?: string,
-): Promise<Array<{ path: string; content: string; depth?: number }>> {
-	return await loadContextFilesInternal({
-		cwd: cwd ?? getProjectDir(),
-	});
-}
-
-/**
- * Discover prompt templates from cwd and agentDir.
- */
-export async function discoverPromptTemplates(cwd?: string, agentDir?: string): Promise<PromptTemplate[]> {
-	return await loadPromptTemplatesInternal({
-		cwd: cwd ?? getProjectDir(),
-		agentDir: agentDir ?? getAgentDir(),
-	});
-}
-
-/**
- * Discover file-based slash commands from commands/ directories.
- */
-export async function discoverSlashCommands(cwd?: string): Promise<FileSlashCommand[]> {
-	return loadSlashCommandsInternal({ cwd: cwd ?? getProjectDir() });
-}
-
-/**
- * Discover custom commands (TypeScript slash commands) from cwd and agentDir.
- */
-export async function discoverCustomTSCommands(cwd?: string, agentDir?: string): Promise<CustomCommandsLoadResult> {
-	const resolvedCwd = cwd ?? getProjectDir();
-	const resolvedAgentDir = agentDir ?? getAgentDir();
-
-	return loadCustomCommandsInternal({
-		cwd: resolvedCwd,
-		agentDir: resolvedAgentDir,
-	});
-}
-
-/**
- * Discover MCP servers from .mcp.json files.
- * Returns the manager and loaded tools.
- */
-export async function discoverMCPServers(cwd?: string): Promise<MCPToolsLoadResult> {
-	const resolvedCwd = cwd ?? getProjectDir();
-	return discoverAndLoadMCPTools(resolvedCwd);
-}
-
-// API Key Helpers
-
-// System Prompt
-
-export interface BuildSystemPromptOptions {
-	tools?: Tool[];
-	skills?: Skill[];
-	contextFiles?: Array<{ path: string; content: string }>;
-	cwd?: string;
-	customPrompt?: string;
-	appendPrompt?: string;
-	inlineToolDescriptors?: boolean;
-	includeWorkspaceTree?: boolean;
-}
-
-/**
- * Build the default provider-facing system prompt blocks.
- *
- * The returned `systemPrompt` preserves the stable harness prompt and dynamic project context
- * as separate entries so providers can cache prompt prefixes without concatenating blocks.
- */
-export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}): Promise<BuildSystemPromptResult> {
-	const toolMap = options.tools ? new Map(options.tools.map(tool => [tool.name, tool])) : undefined;
-	return await buildSystemPromptInternal({
-		cwd: options.cwd,
-		customPrompt: options.customPrompt,
-		skills: options.skills,
-		contextFiles: options.contextFiles,
-		appendSystemPrompt: options.appendPrompt,
-		inlineToolDescriptors: options.inlineToolDescriptors,
-		includeWorkspaceTree: options.includeWorkspaceTree,
-		toolNames: options.tools?.map(tool => tool.name),
-		tools: toolMap ? buildSystemPromptToolMetadata(toolMap) : undefined,
-	});
-}
+export {
+	discoverAuthStorage,
+	discoverContextFiles,
+	discoverCustomTSCommands,
+	discoverExtensions,
+	discoverMCPServers,
+	discoverPromptTemplates,
+	discoverSessionExtensionPaths,
+	discoverSkills,
+	discoverSlashCommands,
+	loadCliExtensionProviders,
+	loadSessionExtensions,
+} from "./sdk/discovery";
 
 // Internal Helpers
 
