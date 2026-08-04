@@ -1,12 +1,12 @@
 import * as path from "node:path";
-import type { Component } from "@satopi/pi-tui";
+import { type Component, visibleWidth } from "@satopi/pi-tui";
 import { matchesKey } from "@satopi/pi-tui/keys";
 import { formatAge } from "@satopi/pi-utils";
 import type { CrewManager } from "../../../crew/crew-manager";
 import { AgentRegistry, MAIN_AGENT_ID } from "../../../registry/agent-registry";
 import type { SessionInfo } from "../../../session/session-listing";
 import { formatStatusIcon } from "../../../tools/render-utils";
-import { getTreeBranch, getTreeContinuePrefix } from "../../../tui/utils";
+import { Ellipsis, getTreeBranch, getTreeContinuePrefix, truncateToWidth } from "../../../tui/utils";
 import type { Theme } from "../../theme/theme";
 import { type PersistedAgentInfo, summarizePersistedAgents } from "../agent-hub";
 import { swarmPanel } from "./swarm-panel-block";
@@ -55,6 +55,18 @@ const MAX_SIDEBAR_WIDTH_PCT = 60;
 const RESIZE_STEP_PCT = 5;
 const DEFAULT_SIDEBAR_WIDTH_PCT = 40;
 const HISTORY_SESSION_CAP = 10;
+/**
+ * Keybinding hint variants, longest first. render() picks the first whose
+ * visible width fits the sidebar's innerWidth so the hint never wraps onto a
+ * second terminal row — a wrapped hint inflates the framed panel past the
+ * overlay budget and the engine's clip amputates the bottom border.
+ */
+const FOOTER_HINTS: readonly string[] = [
+	` j/k nav  Enter open  r resume  Space select  Ctrl+B close  \u2190\u2192 resize`,
+	` j/k Enter  Esc close  \u2190\u2192 resize`,
+	` j/k \u2190\u2192 resize`,
+	` q close`,
+];
 
 export interface SwarmSidebarConfig {
 	onSelectAgent?: (agentId: string) => void;
@@ -409,6 +421,12 @@ export class SwarmSidebar implements Component {
 				const tree = this.#buildTree();
 				const lines: string[] = [];
 
+				// Every content line is truncated to innerWidth so it occupies
+				// exactly one terminal row (renderOutputBlock re-wraps anything
+				// wider than width - 3, inflating the panel past the overlay
+				// budget and getting the bottom border clipped).
+				const fit = (line: string): string => truncateToWidth(line, innerWidth);
+
 				const flat = this.#flattenTree(tree);
 				// Tree rows are budgeted from the terminal height: the framed
 				// panel takes 2 rows for its top/bottom bars, the overlay
@@ -420,7 +438,7 @@ export class SwarmSidebar implements Component {
 				const maxVisible = Math.min(flat.length, treeBudget);
 
 				if (tree.length === 0) {
-					lines.push(t.fg("dim", "  No active agents or crews"));
+					lines.push(fit(t.fg("dim", "  No active agents or crews")));
 				}
 
 				for (let i = 0; i < maxVisible; i++) {
@@ -430,7 +448,7 @@ export class SwarmSidebar implements Component {
 
 					if (node.type === "session") {
 						const cursor = isSelected ? t.fg("accent", "*") : " ";
-						lines.push(`${cursor}${t.bold(node.label)}`);
+						lines.push(fit(`${cursor}${t.bold(node.label)}`));
 						continue;
 					}
 
@@ -450,12 +468,12 @@ export class SwarmSidebar implements Component {
 						const maxName = Math.max(4, innerWidth - 20);
 						const name = node.label.length > maxName ? `${node.label.slice(0, maxName - 1)}\u2026` : node.label;
 						const unreadDot = this.#unreadAgents.has(node.agentId ?? "") ? t.fg("accent", "\u25cf ") : "";
-						lines.push(`${prefix}${cursor}${multiMark}${glyph} ${unreadDot}${name}`);
+						lines.push(fit(`${prefix}${cursor}${multiMark}${glyph} ${unreadDot}${name}`));
 					} else if (node.type === "crew" || node.type === "swarm") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
 						const countHint = t.fg("dim", ` (${node.children?.length ?? 0})`);
-						lines.push(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`);
+						lines.push(fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}`));
 					} else if (node.type === "history" || node.type === "history-session") {
 						const expandIcon = node.expanded ? "\u25bc" : "\u25b6";
 						const expandGlyph = t.fg("dim", expandIcon);
@@ -469,27 +487,36 @@ export class SwarmSidebar implements Component {
 							? t.fg("dim", ` \u00b7 ${formatRelativeMtime(node.agentMtime)}`)
 							: "";
 						lines.push(
-							`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}${mtimeHint}`,
+							fit(`${prefix}${cursor}${multiMark}${expandGlyph} ${t.fg("accent", node.label)}${countHint}${mtimeHint}`),
 						);
 					} else if (node.type === "action") {
 						const actionIcon = node.label.startsWith("+") ? "+" : "-";
 						const icon = t.fg("accent", `${actionIcon} `);
-						lines.push(`${prefix}${cursor}${multiMark}${icon}${t.fg("dim", node.label.slice(2).trim())}`);
+						lines.push(fit(`${prefix}${cursor}${multiMark}${icon}${t.fg("dim", node.label.slice(2).trim())}`));
 					}
 				}
 
 				if (flat.length > maxVisible) {
-					lines.push(t.fg("dim", `  +${flat.length - maxVisible} more`));
+					lines.push(fit(t.fg("dim", `  +${flat.length - maxVisible} more`)));
 				}
 
 				lines.push("");
-				lines.push(t.fg("dim", ` j/k nav  Enter open  r resume  Space select  Ctrl+B close  \u2190\u2192 resize`));
+				const hint = FOOTER_HINTS.find(candidate => visibleWidth(candidate) <= innerWidth);
+				lines.push(t.fg("dim", hint ?? truncateToWidth(FOOTER_HINTS[FOOTER_HINTS.length - 1], innerWidth, Ellipsis.Omit)));
 
 				// Fill the remaining content rows so the bordered panel spans
 				// the overlay budget: termRows minus the frame's 2 top/bottom
 				// bars and the overlay's 2 vertical margins.
 				for (let i = lines.length; i < termRows - 4; i++) {
 					lines.push("");
+				}
+				// Defensive clamp: the fit() truncation above guarantees each
+				// line is a single row, but if content still exceeds the budget
+				// (e.g. an unexpectedly tall glyph), drop the tail so the framed
+				// panel can never exceed termRows - 2 rows and the overlay
+				// engine's slice(0, maxHeight) cannot amputate the bottom border.
+				if (lines.length > termRows - 4) {
+					lines.length = termRows - 4;
 				}
 				return lines;
 			},
