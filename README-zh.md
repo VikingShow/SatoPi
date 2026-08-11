@@ -7,7 +7,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/VikingShow/SatoPi"><img src="https://img.shields.io/badge/license-MIT-58A6FF?style=flat&colorA=222222" alt="License"></a>
+  <a href="https://github.com/VikingShow/SatoPi/actions/workflows/binary-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/VikingShow/SatoPi/binary-build.yml?style=flat&colorA=222222&colorB=3FB950" alt="Build"></a>
+  <a href="https://github.com/VikingShow/SatoPi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/VikingShow/SatoPi?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-DEA584?style=flat&colorA=222222&logo=rust&logoColor=white" alt="Rust"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
@@ -180,8 +181,18 @@ stp swarm resume <session-name>
 ### stp CLI（从源码运行）
 
 ```sh
-bun dev            # 交互式 TUI
-bun dev -- -p "list .ts files"  # 单次提示
+cd packages/coding-agent
+bun src/cli.ts            # 交互式 TUI
+bun src/cli.ts -p "list .ts files"  # 单次提示
+```
+
+### 构建二进制文件
+
+```sh
+cd packages/coding-agent
+bun scripts/build-binary.ts           # 当前平台
+CROSS_TARGET=linux-x64 bun scripts/build-binary.ts   # 交叉编译
+# -> dist/stp
 ```
 
 ### 检查与测试
@@ -282,64 +293,76 @@ sed -i 's/model: .*/model: YOUR-MODEL/' .stp/loop.yaml
 | 文件 | 用途 |
 |------|------|
 | `packages/coding-agent/src/graph/` | GraphRunner DAG 编排引擎（行为层、门控、计划验证） |
-| `packages/coding-agent/src/crew/` | CrewManager（圆桌辩论在 `graph/behaviors/debate-roundtable.ts`） |
-| `packages/coding-agent/src/context/` | 上下文管道 + 卸载源（L1→L1.5→L2→L3） |
-| `packages/coding-agent/src/swarm/` | Session 管理、提示词模板、Swarm 基础设施 |
+| `packages/coding-agent/src/crew/` | CrewManager（Agent 群聊；圆桌辩论：`graph/behaviors/debate-roundtable.ts`） |
+| `packages/coding-agent/src/context/` | ContextPipeline + 上下文卸载源（L1→L1.5→L2→L3） |
+| `packages/coding-agent/src/swarm/` | Session 管理、状态机、提示词模板 |
 | `packages/coding-agent/src/agent/` | Agent 身份档案、选择算法、角色资产 |
 | `packages/coding-agent/src/comm/` | IRC 通信总线、投票、端点 |
 | `packages/coding-agent/src/modes/` | TUI + 交互模式（含 Swarm 面板组件） |
+| `packages/coding-agent/src/tools/` | 全部 32 个内置工具 |
 | `.stp/loop.yaml` | Swarm 配置 |
 | `.stp/plan.md` | Script 阶段生成的执行计划 |
+| `.stp/roles/` | Agent 角色定义（YAML） |
+| `profiles.json` | 持久化 Agent 信用档案 |
 
 ## 架构总览
 
 ```
 packages/coding-agent/src/
 ├── graph/          GraphRunner + DAG 编排引擎
-│   ├── behaviors/   Script/Stage/Curtain 行为实现
+│   ├── behaviors/   Script/Stage/Curtain/Debate 行为实现
 │   ├── builtin/     内置 theatre.graph.yaml
 │   ├── gate-controller.ts   门控系统
 │   ├── plan-validator.ts    计划验证
 │   └── graph-runner.ts      核心编排器
-├── crew/           CrewManager（圆桌：graph/behaviors/debate-roundtable）
-├── context/        上下文管道 + 卸载源
-├── swarm/          Session 管理 + 提示词模板
-│   ├── session/    多会话管理
-│   ├── core/       状态跟踪、基础设施、Schema
-│   ├── infra/      钩子系统、记忆适配器
-│   ├── stage/      StageController、角色协商
-│   └── prompts/    提示词模板（Handlebars）
-├── agent/          Agent 身份档案 + 角色定义
-├── comm/           IRC 通信总线、投票、端点
-└── modes/          TUI + 交互模式（含 Swarm 仪表板）
+├── crew/           CrewManager（Agent 群聊；圆桌辩论：graph/behaviors/debate-roundtable）
+├── context/        ContextPipeline + 上下文卸载源
+├── swarm/          Session 管理 + 状态机 + 提示词模板
+├── agent/          Agent 身份档案 + 角色定义 + 选择算法
+├── tools/          全部 32 个内置工具
+├── modes/          TUI + 交互模式
+├── task/           子进程任务执行器
+├── session/        Agent 会话管理
+├── offload/        上下文卸载管道（L1→L3）
+├── coordination/   Stigmergy 环境标记
+├── experience/     Curtain 阶段：经验提取 + 根因分析
+├── comm/           Agent 间通信频道
+├── hooks/          生命周期钩子 + ActivityLogger
+└── infra/          基础设施：活动日志、MnemoPi 记忆引擎、hindsight
 ```
 
 ---
 
-## 安装 stp
+## 安装
 
-**macOS · Linux**
+### 下载二进制文件
 
-```sh
-curl -fsSL https://omp.sh/install | sh
-```
-
-**Homebrew**
+从 [GitHub Releases](https://github.com/VikingShow/SatoPi/releases) 获取预构建的二进制文件：
 
 ```sh
-brew install can1357/tap/omp
+# Linux x64
+curl -LO https://github.com/VikingShow/SatoPi/releases/latest/download/stp-linux-x64
+chmod +x stp-linux-x64 && sudo mv stp-linux-x64 /usr/local/bin/stp
+
+# macOS Apple Silicon
+curl -LO https://github.com/VikingShow/SatoPi/releases/latest/download/stp-darwin-arm64
+chmod +x stp-darwin-arm64 && sudo mv stp-darwin-arm64 /usr/local/bin/stp
+
+# Windows
+curl -LO https://github.com/VikingShow/SatoPi/releases/latest/download/stp-windows-x64.exe
 ```
 
-**Bun（推荐）**
+### Shell 补全
 
 ```sh
-bun install -g @oh-my-pi/pi-coding-agent
-```
+# zsh
+eval "$(stp completions zsh)"
 
-**Windows (PowerShell)**
+# bash
+eval "$(stp completions bash)"
 
-```powershell
-irm https://omp.sh/install.ps1 | iex
+# fish
+stp completions fish > ~/.config/fish/completions/stp.fish
 ```
 
 ---
