@@ -2,10 +2,10 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getOverviewStats } from "@satopi/omp-stats/aggregator";
-import { getStatsByAgentType, initDb, insertMessageStats } from "@satopi/omp-stats/db";
-import { classifyAgentType } from "@satopi/omp-stats/parser";
-import type { AgentType, MessageStats } from "@satopi/omp-stats/types";
+import { getOverviewStats } from "@satopi/stp-stats/aggregator";
+import { getStatsByAgentType, initDb, insertMessageStats } from "@satopi/stp-stats/db";
+import { classifyAgentType } from "@satopi/stp-stats/parser";
+import type { AgentType, MessageStats } from "@satopi/stp-stats/types";
 import { getConfigRootDir, getSessionsDir, getStatsDbPath } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
