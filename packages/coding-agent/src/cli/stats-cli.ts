@@ -113,7 +113,7 @@ function normalizePremiumRequests(n: number): number {
 export async function runStatsCommand(cmd: StatsCommandArgs): Promise<void> {
 	// Lazy import to avoid loading stats module when not needed
 	const { getDashboardStats, syncAllSessions, getTotalMessageCount, startServer, closeDb } = await import(
-		"@satopi/omp-stats"
+		"@satopi/stp-stats"
 	);
 
 	// Sync session files first
@@ -157,7 +157,7 @@ export async function runStatsCommand(cmd: StatsCommandArgs): Promise<void> {
 }
 
 async function printStatsSummary(): Promise<void> {
-	const { getDashboardStats } = await import("@satopi/omp-stats");
+	const { getDashboardStats } = await import("@satopi/stp-stats");
 	const stats = await getDashboardStats();
 	const { overall, byModel, byFolder } = stats;
 

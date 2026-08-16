@@ -53,7 +53,7 @@
     "@babel/parser": "catalog:",
     "@mozilla/readability": "catalog:",
     "@satopi/hashline": "workspace:*",
-    "@satopi/omp-stats": "workspace:*",
+    "@satopi/stp-stats": "workspace:*",
     "@satopi/pi-agent-core": "workspace:*",
     "@satopi/pi-ai": "workspace:*",
     "@satopi/pi-catalog": "workspace:*",

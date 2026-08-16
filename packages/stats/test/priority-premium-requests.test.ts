@@ -2,9 +2,9 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { syncAllSessions } from "@satopi/omp-stats/aggregator";
-import { closeDb, getOverallStats, getRecentRequests } from "@satopi/omp-stats/db";
-import { parseSessionFile } from "@satopi/omp-stats/parser";
+import { syncAllSessions } from "@satopi/stp-stats/aggregator";
+import { closeDb, getOverallStats, getRecentRequests } from "@satopi/stp-stats/db";
+import { parseSessionFile } from "@satopi/stp-stats/parser";
 import { getSessionsDir, getStatsDbPath } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { initDb, insertMessageStats, insertToolCalls } from "@satopi/omp-stats/db";
-import { parseSessionFile } from "@satopi/omp-stats/parser";
+import { initDb, insertMessageStats, insertToolCalls } from "@satopi/stp-stats/db";
+import { parseSessionFile } from "@satopi/stp-stats/parser";
 import { getSessionsDir } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

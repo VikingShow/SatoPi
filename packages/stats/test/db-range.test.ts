@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { getDashboardStats } from "@satopi/omp-stats/aggregator";
-import { initDb, insertMessageStats } from "@satopi/omp-stats/db";
-import type { MessageStats } from "@satopi/omp-stats/types";
+import { getDashboardStats } from "@satopi/stp-stats/aggregator";
+import { initDb, insertMessageStats } from "@satopi/stp-stats/db";
+import type { MessageStats } from "@satopi/stp-stats/types";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-db-range-");

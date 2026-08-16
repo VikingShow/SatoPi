@@ -1,4 +1,4 @@
-import * as stats from "@satopi/omp-stats";
+import * as stats from "@satopi/stp-stats";
 import * as openUtils from "../../utils/open";
 
 export const DEFAULT_STATS_DASHBOARD_PORT = 3847;
