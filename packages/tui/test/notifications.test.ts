@@ -122,7 +122,7 @@ describe("terminal notifications", () => {
 		});
 
 		expect(out).toBe(
-			"\x1b]99;i=complete-1:f=T2ggTXkgUGk=:a=focus:u=1:t=Y29tcGxldGlvbg==:n=aW5mbw==:s=aW5mbw==:w=5000:d=0;Session\x1b\\" +
+			"\x1b]99;i=complete-1:f=U2F0b1Bp:a=focus:u=1:t=Y29tcGxldGlvbg==:n=aW5mbw==:s=aW5mbw==:w=5000:d=0;Session\x1b\\" +
 				"\x1b]99;i=complete-1:p=body;Complete\x1b\\",
 		);
 	});
@@ -131,7 +131,7 @@ describe("terminal notifications", () => {
 		setOsc99Supported(true);
 		const terminal = getTerminalInfo("kitty");
 		const out = terminal.formatNotification({ title: "Line 1\nLine 2", id: "unsafe" });
-		expect(out).toBe("\x1b]99;i=unsafe:f=T2ggTXkgUGk=:e=1;TGluZSAxCkxpbmUgMg==\x1b\\");
+		expect(out).toBe("\x1b]99;i=unsafe:f=U2F0b1Bp:e=1;TGluZSAxCkxpbmUgMg==\x1b\\");
 	});
 
 	it("queries and confirms OSC 99 support before rich notifications", () => {
@@ -139,7 +139,7 @@ describe("terminal notifications", () => {
 		mutableTerminal.notifyProtocol = NotifyProtocol.Osc99;
 		const { terminal, writes, received } = setupProcessTerminal();
 		try {
-			const query = writes.find(w => w.startsWith("\x1b]99;i=omp-probe-") && w.endsWith("\x1b\\\x1b[c"));
+			const query = writes.find(w => w.startsWith("\x1b]99;i=stp-probe-") && w.endsWith("\x1b\\\x1b[c"));
 			expect(query).toBeDefined();
 			const id = query!.match(/i=([^:;]+):p=\?/u)?.[1];
 			expect(id).toBeDefined();
@@ -298,7 +298,7 @@ describe("terminal notifications", () => {
 		const { terminal, writes } = setupProcessTerminal();
 		try {
 			const probe = writes.find(
-				w => w.startsWith("\x1bPtmux;\x1b\x1b]99;i=omp-probe-") && w.endsWith("\x1b\x1b\\\x1b\\\x1b[c"),
+				w => w.startsWith("\x1bPtmux;\x1b\x1b]99;i=stp-probe-") && w.endsWith("\x1b\x1b\\\x1b\\\x1b[c"),
 			);
 			expect(probe).toBeDefined();
 		} finally {
