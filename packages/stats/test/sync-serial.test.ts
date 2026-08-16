@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getSessionsDir } from "@satopi/pi-utils";
 import { syncAllSessions } from "@satopi/stp-stats/aggregator";
 import { getOverallStats } from "@satopi/stp-stats/db";
-import { getSessionsDir } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-sync-serial-");

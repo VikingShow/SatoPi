@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getSessionsDir } from "@satopi/pi-utils";
 import { getToolDashboardStats, syncAllSessions } from "@satopi/stp-stats/aggregator";
 import { getToolStats, getToolStatsByModel } from "@satopi/stp-stats/db";
 import type { ToolUsageStats } from "@satopi/stp-stats/types";
-import { getSessionsDir } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-tool-stats-");
