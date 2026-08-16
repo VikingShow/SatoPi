@@ -2,10 +2,10 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getSessionsDir, getStatsDbPath } from "@satopi/pi-utils";
 import { syncAllSessions } from "@satopi/stp-stats/aggregator";
 import { closeDb, getOverallStats, getRecentRequests, initDb, insertMessageStats } from "@satopi/stp-stats/db";
 import type { MessageStats } from "@satopi/stp-stats/types";
-import { getSessionsDir, getStatsDbPath } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-fork-dedup-");

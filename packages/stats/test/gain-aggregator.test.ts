@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { getStatsDbPath } from "@satopi/pi-utils";
 import { initDb, insertMessageStats } from "@satopi/stp-stats/db";
 import { dedupeProjects, getGainDashboardStats, normalizeProjectPath } from "@satopi/stp-stats/gain-aggregator";
 import type { MessageStats } from "@satopi/stp-stats/types";
-import { getStatsDbPath } from "@satopi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-gain-");

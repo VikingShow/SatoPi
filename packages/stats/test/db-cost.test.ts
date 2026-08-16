@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { closeDb, getRecentRequests, initDb, insertMessageStats } from "@satopi/stp-stats/db";
-import type { MessageStats } from "@satopi/stp-stats/types";
 import { getBundledModel } from "@satopi/pi-catalog/models";
 import { getStatsDbPath } from "@satopi/pi-utils";
+import { closeDb, getRecentRequests, initDb, insertMessageStats } from "@satopi/stp-stats/db";
+import type { MessageStats } from "@satopi/stp-stats/types";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-db-");
