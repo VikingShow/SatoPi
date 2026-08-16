@@ -293,6 +293,10 @@ static TOKIO_RUNTIME_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// spawnable, patched Rayon callsites stay sequential rather than registering a
 /// current-thread-only global pool that cannot steal work from later native
 /// calls. Idempotent.
+///
+/// TODO(satopi): stale `omp` name carried over from oh-my-pi. Renaming to `stp`
+/// requires a coordinated change in the JS loader (`packages/natives`) and the
+/// generated napi surface, so it was left as-is during the omp→stp migration.
 #[napi(js_name = "__ompInstallTokioRuntime")]
 #[allow(clippy::missing_const_for_fn, reason = "napi macro is incompatible with const fn")]
 pub fn omp_install_tokio_runtime() {

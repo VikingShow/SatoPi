@@ -19,6 +19,24 @@ function git(args: readonly string[]) {
 	return $`git -c core.fsmonitor=false -c core.untrackedCache=false -c fetch.pruneTags=false ${args}`;
 }
 
+/** Replace the first regex match in a file, preserving surrounding formatting. */
+async function replaceInFile(path: string, pattern: RegExp, replacement: string): Promise<void> {
+	const raw = await Bun.file(path).text();
+	const updated = raw.replace(pattern, replacement);
+	if (updated !== raw) {
+		await Bun.write(path, updated);
+	}
+}
+
+/** Replace every occurrence of a literal string in a file. */
+async function replaceAllInFile(path: string, search: string, replacement: string): Promise<void> {
+	const raw = await Bun.file(path).text();
+	const updated = raw.split(search).join(replacement);
+	if (updated !== raw) {
+		await Bun.write(path, updated);
+	}
+}
+
 // =============================================================================
 // Shared functions
 // =============================================================================
@@ -240,26 +258,17 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	}
 	console.log(`  Version ${version} > latest tag ${latestTag}\n`);
 
-	// 2. Update package versions
+	// 2. Update package versions (every workspace package — private included — for lockstep)
 	console.log(`Updating package versions to ${version}…`);
 	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
 
-	// Filter out private packages
-	const publicPkgPaths: string[] = [];
 	for (const pkgPath of pkgJsonPaths) {
-		const pkgJson = await Bun.file(pkgPath).json();
-		if (pkgJson.private) {
-			console.log(`  Skipping ${pkgJson.name} (private)`);
-			continue;
-		}
-		publicPkgPaths.push(pkgPath);
+		await replaceInFile(pkgPath, /"version": "[^"]+"/, `"version": "${version}"`);
 	}
-
-	await $`sd '"version": "[^"]+"' ${`"version": "${version}"`} ${publicPkgPaths}`;
 
 	// Verify
 	console.log("  Verifying versions:");
-	for (const pkgPath of publicPkgPaths) {
+	for (const pkgPath of pkgJsonPaths) {
 		const pkgJson = await Bun.file(pkgPath).json();
 		console.log(`    ${pkgJson.name}: ${pkgJson.version}`);
 	}
@@ -274,7 +283,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 
 	// 3. Update Rust workspace version
 	console.log(`Updating Rust workspace version to ${version}…`);
-	await $`sd '^version = "[^"]+"' ${`version = "${version}"`} Cargo.toml`;
+	await replaceInFile("Cargo.toml", /^version = "[^"]+"/m, `version = "${version}"`);
 
 	// Verify
 	const cargoToml = await Bun.file("Cargo.toml").text();
@@ -295,11 +304,15 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	}
 	console.log();
 
-	// 4. Regenerate lockfiles
-	console.log("Regenerating lockfiles...");
-	await $`rm -f bun.lock`;
-	await $`bun install`;
-	await $`cargo generate-lockfile`;
+	// 4. Bump lockfile versions in-place — do NOT re-resolve dependencies.
+	//    `bun install` and `cargo generate-lockfile` re-resolve `^`/`*` ranges and
+	//    churn the lockfiles with unrelated dependency updates. We only need the
+	//    workspace/catalog version fields to move oldVersion -> newVersion, so a
+	//    literal replacement does that with zero dependency drift. (Assumes no
+	//    external dependency is pinned to exactly the workspace version string.)
+	console.log("Bumping lockfile versions (no re-resolution)...");
+	await replaceAllInFile("bun.lock", `"${currentNpmVersion}"`, `"${version}"`);
+	await replaceAllInFile("Cargo.lock", `version = "${currentNpmVersion}"`, `version = "${version}"`);
 	console.log();
 
 	// 5. Update changelogs

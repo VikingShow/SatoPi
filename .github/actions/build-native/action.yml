@@ -2,7 +2,7 @@ name: Build native addon
 description: >
    Build the pi_natives cdylib for one platform/arch/variant and upload it as a
    hash-tagged artifact. Self-detects the runner via $SCCACHE_BUCKET (injected
-   only on the self-hosted omp-kata pods): on-infra it uses the image's baked
+   only on the self-hosted pods): on-infra it uses the image's baked
    toolchains + the RustFS-backed sccache; on GitHub-hosted runners it installs
    the toolchains and uses Swatinem target/ cache + the GitHub Actions sccache
    backend. PRs run on GitHub-hosted runners, so the on-infra path only ever
@@ -50,14 +50,14 @@ runs:
         id: detect
         shell: bash
         run: |
-           # $SCCACHE_BUCKET is injected only on the self-hosted omp-kata runner
+           # $SCCACHE_BUCKET is injected only on the self-hosted runner
            # pods (envFrom sccache-s3); its presence is the repo's single
            # "on can.internal infra?" signal. On-infra: baked toolchains, RustFS
            # sccache, no GitHub target/ cache. Off-infra (GitHub-hosted): install
            # toolchains, Swatinem target/ cache, GitHub Actions sccache backend.
            if [ -n "${SCCACHE_BUCKET:-}" ]; then
              echo "on_infra=true" >> "$GITHUB_OUTPUT"
-             echo "runner: self-hosted omp-kata (baked tools + RustFS sccache)"
+             echo "runner: self-hosted (baked tools + RustFS sccache)"
            else
              echo "on_infra=false" >> "$GITHUB_OUTPUT"
              echo "runner: GitHub-hosted (install tools + Swatinem cache + GHA sccache)"
@@ -101,7 +101,7 @@ runs:
            echo "Resolved cross_target='$cross_target' bare_target='$bare_target'"
 
       # --- Rust toolchain -----------------------------------------------------
-      - name: Ensure baked Rust toolchain (omp-kata)
+      - name: Ensure baked Rust toolchain (self-hosted)
         if: steps.detect.outputs.on_infra == 'true'
         uses: ./.github/actions/ensure-rust-toolchain
         with:
@@ -128,7 +128,7 @@ runs:
            # Homebrew on macOS runners ships rustup-init with shadow proxies for
            # `cargo`/`rustc`/etc. that error out as the installer ("unexpected
            # argument 'metadata' found"). Force the real toolchain binaries to win
-           # on PATH. (ensure-rust-toolchain already does this on omp-kata.)
+           # on PATH. (ensure-rust-toolchain already does this on self-hosted.)
            toolchain_bin="$(dirname "$(rustup which cargo)")"
            echo "$toolchain_bin" >> "$GITHUB_PATH"
            echo "Prepended $toolchain_bin to PATH"
@@ -172,7 +172,7 @@ runs:
       # forever). The native source hash is in the shared key too: rust-cache's
       # lockfile scan misses the workspace-root Cargo.toml version Cargo
       # fingerprints, so a version bump could otherwise get an exact hit for
-      # artifacts Cargo must rebuild. On omp-kata the mounted Cargo registry +
+      # artifacts Cargo must rebuild. On self-hosted the mounted Cargo registry +
       # RustFS sccache are the reuse layers, so there is no second cache restore.
       - name: Cache Rust target/ (GitHub-hosted)
         if: steps.detect.outputs.on_infra == 'false'
@@ -184,7 +184,7 @@ runs:
            cache-workspace-crates: true
 
       # --- sccache ------------------------------------------------------------
-      - name: Ensure baked sccache (omp-kata)
+      - name: Ensure baked sccache (self-hosted)
         if: steps.detect.outputs.on_infra == 'true'
         uses: ./.github/actions/ensure-sccache
         with:
@@ -195,7 +195,7 @@ runs:
       - name: Enable sccache for cargo
         # CARGO_INCREMENTAL=0 is required: sccache silently skips caching when
         # incremental is enabled, turning the wrapper into a no-op. The backend is
-        # conditional: omp-kata reads the shared S3 (RustFS) config from the
+        # conditional: self-hosted reads the shared S3 (RustFS) config from the
         # inherited pod env; GitHub-hosted runners use the GHA cache backend.
         shell: bash
         run: |
@@ -211,7 +211,7 @@ runs:
            fi
 
       # --- cargo-nextest (native test runner; non-cross builds only) ----------
-      - name: Ensure baked cargo-nextest (omp-kata)
+      - name: Ensure baked cargo-nextest (self-hosted)
         if: steps.detect.outputs.on_infra == 'true' && inputs.target == ''
         uses: ./.github/actions/ensure-cargo-tool
         with:
@@ -230,9 +230,14 @@ runs:
       # cargo-zigbuild (needs zig); MSVC targets (e.g. x86_64-pc-windows-msvc)
       # build with cargo-xwin (needs clang/lld/llvm). The napi CLI's
       # --cross-compile flag picks the backend; we just install what it needs.
-      # Cross builds only run on push/main + release (omp-kata), so the
-      # GitHub-hosted cross branches exist for portability and never fire here.
-      - name: Ensure baked zig (omp-kata, non-MSVC cross)
+      # Cross builds run on push/main + release. With the self-hosted runner gone,
+      # the GitHub-hosted install branches below are the live path; the
+      # self-hosted "baked" branches predate the migration and never fire.
+      # TODO(satopi): the GitHub-hosted zig/cargo-zigbuild/cargo-xwin install
+      # steps were written "for portability, never fired here" and are now live
+      # for the first time — confirm `native_cross_platform` passes on its first
+      # run (arm64 via zigbuild, win32 via xwin).
+      - name: Ensure baked zig (self-hosted, non-MSVC cross)
         if: steps.detect.outputs.on_infra == 'true' && steps.resolve.outputs.cross_target != '' && !endsWith(steps.resolve.outputs.cross_target, '-msvc')
         uses: ./.github/actions/ensure-zig
         with:
@@ -242,7 +247,7 @@ runs:
         uses: mlugg/setup-zig@v2
         with:
            version: 0.16.0
-      - name: Ensure baked cargo-zigbuild (omp-kata, non-MSVC cross)
+      - name: Ensure baked cargo-zigbuild (self-hosted, non-MSVC cross)
         if: steps.detect.outputs.on_infra == 'true' && steps.resolve.outputs.cross_target != '' && !endsWith(steps.resolve.outputs.cross_target, '-msvc')
         uses: ./.github/actions/ensure-cargo-tool
         with:
@@ -259,7 +264,7 @@ runs:
         run: |
            sudo apt-get update
            sudo apt-get install -y clang lld llvm
-      - name: Ensure baked cargo-xwin (omp-kata, MSVC cross)
+      - name: Ensure baked cargo-xwin (self-hosted, MSVC cross)
         if: steps.detect.outputs.on_infra == 'true' && endsWith(steps.resolve.outputs.cross_target, '-msvc')
         uses: ./.github/actions/ensure-cargo-tool
         with:
