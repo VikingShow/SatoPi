@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@satopi/collab-web",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "Browser guest client and local relay tools for omp collab live sessions",
   "homepage": "https://omp.sh",

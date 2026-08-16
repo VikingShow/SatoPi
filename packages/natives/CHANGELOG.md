@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-08-16
+
 ### Changed
 
 - Decoupled the native addon version sentinel from the package version: the Rust export is now the fixed name `__piNativesSatoPi` (previously `__piNativesV{major}_{minor}_{patch}`, renamed in lock-step with every release), and the JS loader looks up the same constant. Release bumps no longer require a lock-step rename across `lib.rs`, the loader, and the generated surface.
